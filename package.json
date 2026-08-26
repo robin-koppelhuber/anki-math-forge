@@ -1,0 +1,8 @@
+{
+  "name": "anki-forge-tooling",
+  "private": true,
+  "description": "KaTeX, so `anki-forge check` can use the real strict-mode parser instead of its structural fallback. Not needed to run the tool.",
+  "dependencies": {
+    "katex": "0.16.11"
+  }
+}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% set view = "units" %}
+{% block title %}units · {{ source }} · anki-forge{% endblock %}
+
+{% block filters %}
+<span class="filters">
+  {% if sources|length > 1 %}
+  <select onchange="location.search = '?source=' + this.value + '&state={{ state }}'">
+    {% for name in sources %}
+    <option value="{{ name }}" {{ 'selected' if name == source }}>{{ name }}</option>
+    {% endfor %}
+  </select>
+  {% else %}<span class="source-name">{{ source }}</span>{% endif %}
+
+  {% for name, count in counts.items() %}
+  <a class="chip {{ 'on' if state == name }}"
+     href="?source={{ source }}&state={{ name }}{% if section %}&section={{ section }}{% endif %}">{{ name }} <b>{{ count }}</b></a>
+  {% endfor %}
+  <a class="chip {{ 'on' if state == 'all' }}" href="?source={{ source }}&state=all">all</a>
+
+  {% if sections %}
+  <select onchange="location.search = '?source={{ source }}&state={{ state }}&section=' + this.value">
+    <option value="">all sections</option>
+    {% for name in sections %}
+    <option value="{{ name }}" {{ 'selected' if name == section }}>§{{ name }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+</span>
+{% endblock %}
+
+{% block main %}
+<div id="deck" data-source="{{ source }}" data-mtime="{{ mtime }}">
+  {% for unit in units %}
+  <article class="unit item" data-id="{{ unit.id }}" data-state="{{ unit.state }}" hidden>
+    <div class="unit-head">
+      <span class="locator">{{ unit.locator or unit.id }}</span>
+      <span class="badge state-{{ unit.state }}">{{ unit.state }}</span>
+      {% if unit.authoritative %}<span class="badge src">tex source</span>
+      {% elif unit.transcription == 'ok' %}<span class="badge ocr">transcribed</span>
+      {% elif unit.transcription == 'failed' %}<span class="badge bad">transcription failed</span>
+      {% else %}<span class="badge bad">not transcribed</span>{% endif %}
+      {% if unit.uids %}<span class="badge carded">{{ unit.uids|join(', ') }}</span>{% endif %}
+    </div>
+
+    <div class="side-by-side">
+      {% if unit.image %}
+      <figure class="crop">
+        <img src="{{ unit.image }}" alt="crop of {{ unit.id }}" loading="lazy" data-crop>
+        <figcaption class="crop-missing" hidden>
+          source document not available — crops are rendered from it on demand
+        </figcaption>
+      </figure>
+      {% endif %}
+      <div class="transcription">
+        {% if unit.tex and unit.transcription == 'ok' %}
+        <div class="math">$${{ unit.tex }}$$</div>
+        {% elif unit.tex %}
+        <pre class="raw">{{ unit.tex }}</pre>
+        <p class="muted">does not parse under KaTeX — the crop is the authority</p>
+        {% else %}
+        <p class="muted">no transcription; read the crop</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if unit.context %}<p class="context">{{ unit.context }}</p>{% endif %}
+    {% if unit.reason %}<p class="reason">skipped: {{ unit.reason }}</p>{% endif %}
+    {% if unit.notes %}<ul class="notes">{% for note in unit.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+    <p class="unit-id">{{ unit.id }}</p>
+  </article>
+  {% endfor %}
+</div>
+<p class="empty-filter" id="empty-filter" hidden>nothing here with this filter.</p>
+{% endblock %}
+
+{% block keys %}
+<span><b>q</b> queue</span>
+<span><b>s</b> skip</span>
+<span><b>n</b> annotate</span>
+<span><b>u</b> back to new</span>
+<span><b>j</b>/<b>k</b> next/prev</span>
+{% endblock %}
+
+{% block scripts %}<script defer src="/static/units.js"></script>{% endblock %}

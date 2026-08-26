@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --extra pdf --frozen
+
+      - name: lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: types
+        run: uv run mypy
+
+      - name: tests
+        # No network: AnkiConnect and OCR are both faked in-process.
+        run: uv run pytest
+
+      - name: lint the deck itself
+        run: uv run anki-forge check

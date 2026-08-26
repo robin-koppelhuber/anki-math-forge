@@ -1,0 +1,36 @@
+# anki-forge configuration. One file, all knobs (DESIGN.md ss11).
+
+[repo]
+cards_dir = "cards"
+sources_dir = "sources"
+
+[cards]
+# DESIGN.md ss15.1 / ss15.2 -- declared once, mixing is the failure mode.
+language = "en"          # prose sections are written in English
+layout = "denominator"   # d(scalar)/dX has the shape of X^T ... see CLAUDE.md
+front_char_cap = 160     # rendered `## front` length cap, enforced by `check`
+
+[anki]
+url = "http://127.0.0.1:8765"
+deck = "Mathematics::Matrix Calculus"   # DESIGN.md ss15.5
+note_type_version = 1
+tag_prefix = "forge"
+
+[check]
+# Extra macros the builtin LaTeX validator should accept beyond its allowlist.
+extra_macros = []
+
+[app]
+host = "127.0.0.1"
+port = 8000
+# KaTeX assets. Point this at a local directory (served from static/vendor) if
+# you want the app to work offline; the default is a CDN.
+katex_base = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist"
+
+[sources.matrix-cookbook]
+title = "The Matrix Cookbook"
+# Either a .tex file (authoritative) or a .pdf (crops, transcribed later).
+# tex wins. Paths are relative to the repo root.
+tex = ""
+pdf = "sources/matrix-cookbook/matrixcookbook.pdf"
+citation = "Matrix Cookbook"

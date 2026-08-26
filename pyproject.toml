@@ -1,0 +1,64 @@
+[project]
+name = "anki-forge"
+version = "0.1.0"
+description = "Turn mathematical source material into reviewed Anki cards."
+readme = "CLAUDE.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+# PDF segmentation. Kept optional: the wheel is chunky and the tex path does not
+# need it. NOTE: PyMuPDF is AGPL-3.0 (or commercial) -- fine for a private repo,
+# worth knowing before this is ever redistributed.
+pdf = ["pymupdf>=1.24"]
+# NOTE: there is deliberately no `ocr` extra. Transcription is a Claude Code
+# skill (`/transcribe`) reading crops, not a local vision model -- which is
+# what keeps torch, and a 4 GB dependency tree, out of this project entirely.
+
+[project.scripts]
+anki-forge = "anki_forge.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "types-pyyaml>=6.0",
+    "pre-commit>=3.8",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/anki_forge"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["B008"]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["src"]
+strict = true
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = ["fitz.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,10 @@
+# The source document itself is not ours to redistribute.
+*.pdf
+*.tex
+
+# ...and neither is its text layer, which `extract` regenerates anyway.
+text.md
+
+# Crops are rendered from the source document on demand; any assets/ left
+# over from an older version of the tool is a stale cache.
+assets/

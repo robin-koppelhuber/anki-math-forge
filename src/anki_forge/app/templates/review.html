@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% set view = "review" %}
+{% block title %}review · anki-forge{% endblock %}
+
+{% block filters %}
+<span class="filters">
+  {% for name, count in counts.items() %}
+  <a class="chip {{ 'on' if status == name }}" href="?status={{ name }}">{{ name }} <b>{{ count }}</b></a>
+  {% endfor %}
+  <a class="chip {{ 'on' if status == 'all' }}" href="?status=all">all <b>{{ total }}</b></a>
+</span>
+{% endblock %}
+
+{% block main %}
+<div id="deck">
+  {% for card in cards %}
+  <article class="card item" data-uid="{{ card.uid }}" data-mtime="{{ card.mtime }}" hidden>
+    <div class="card-body">
+      {% for section in card.sections %}
+      <section class="sec sec-{{ section.name }}">
+        {% if section.name not in ('front', 'back') %}<h2>{{ section.name }}</h2>{% endif %}
+        <div class="math">{{ section.body }}</div>
+        {% if section.name == 'front' %}<hr class="answer-rule">{% endif %}
+      </section>
+      {% endfor %}
+    </div>
+
+    <aside class="meta">
+      <div class="row"><span class="badge state-{{ card.status }}">{{ card.status }}</span>
+        <code>{{ card.uid }}</code>
+        {% if card.verify %}<span class="badge verify">verify</span>{% endif %}
+      </div>
+      {% if card.source %}<p class="src">{{ card.source }}</p>{% endif %}
+      {% if card.tags %}<p class="tags">{% for tag in card.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</p>{% endif %}
+      <p class="path"><code>{{ card.path }}</code></p>
+
+      {% if card.findings %}
+      <ul class="findings">
+        {% for finding in card.findings %}
+        <li class="level-{{ finding.level }}"><b>{{ finding.code }}</b> {{ finding.message }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="checks-ok">check: clean</p>
+      {% endif %}
+
+      {% if card.notes %}<pre class="notes">{{ card.notes }}</pre>{% endif %}
+
+      {% if card.unit_image %}
+      <figure class="crop small">
+        <img src="{{ card.unit_image }}" alt="source crop for {{ card.unit }}" loading="lazy">
+        <figcaption>{{ card.unit }}</figcaption>
+      </figure>
+      {% elif card.unit %}
+      <p class="muted">unit {{ card.unit }} (no crop)</p>
+      {% endif %}
+    </aside>
+  </article>
+  {% endfor %}
+</div>
+<p class="empty-filter" id="empty-filter" hidden>nothing here with this filter.</p>
+{% endblock %}
+
+{% block keys %}
+<span><b>a</b> approve</span>
+<span><b>r</b> reject</span>
+<span><b>e</b> $EDITOR</span>
+<span><b>n</b> annotate</span>
+<span><b>j</b>/<b>k</b> next/prev</span>
+{% endblock %}
+
+{% block scripts %}<script defer src="/static/review.js"></script>{% endblock %}

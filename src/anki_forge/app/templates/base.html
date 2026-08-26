@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}anki-forge{% endblock %}</title>
+<link rel="stylesheet" href="{{ config.katex_base }}/katex.min.css">
+<link rel="stylesheet" href="/static/app.css">
+<script defer src="{{ config.katex_base }}/katex.min.js"></script>
+<script defer src="{{ config.katex_base }}/contrib/auto-render.min.js"></script>
+<script defer src="/static/app.js"></script>
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="bar">
+  <nav class="views">
+    <a href="/units" class="{{ 'on' if view == 'units' }}">units</a>
+    <a href="/review" class="{{ 'on' if view == 'review' }}">review</a>
+  </nav>
+  {% block filters %}{% endblock %}
+  <span class="position" id="position"></span>
+</header>
+
+<main id="main">{% block main %}{% endblock %}</main>
+
+<footer class="bar keys">{% block keys %}{% endblock %}</footer>
+
+<div class="toast" id="toast" hidden></div>
+<dialog class="prompt" id="prompt">
+  <form method="dialog">
+    <label id="prompt-label">annotation</label>
+    <input type="text" id="prompt-input" autocomplete="off" spellcheck="false">
+    <div class="prompt-actions">
+      <button value="cancel">cancel</button>
+      <button value="ok" id="prompt-ok">ok</button>
+    </div>
+  </form>
+</dialog>
+{% block scripts %}{% endblock %}
+</body>
+</html>
