@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 
 from anki_forge import cli, model, sync
 from anki_forge.config import Config
-from anki_forge.ledger import Ledger
+from anki_forge.ledger import Ledger, Locator, Unit
 from conftest import FakeAnki
 
 
@@ -309,3 +310,131 @@ def test_crops_can_select_only_what_still_needs_reading(
     run(repo, "crops", "--source", "book", "--untranscribed", "--out", str(tmp_path), "--json")
     remaining = json.loads(capsys.readouterr().out)
     assert [e["unit"] for e in remaining] == [units[1].id]
+
+
+# -- suggestions -----------------------------------------------------------
+
+
+def test_a_suggestion_is_recorded_but_not_applied(
+    repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run(repo, "extract")
+    drain(capsys)
+    assert (
+        run(
+            repo,
+            "units",
+            "--id",
+            "demo:1:1",
+            "--suggest",
+            "skipped",
+            "fragment",
+            "--detail",
+            "the equation continues above this box",
+            "--by",
+            "claude",
+        )
+        == 0
+    )
+    assert "not applied" in out(capsys)
+
+    unit = Ledger.load(config.units_path("demo")).get("demo:1:1")
+    assert unit.state == "new", "a suggestion must never move a unit on its own"
+    assert unit.suggestion.reason == "fragment"
+    assert unit.suggestion.by == "claude"
+
+
+def test_accept_applies_a_suggestion(
+    repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run(repo, "extract")
+    run(repo, "units", "--id", "demo:1:1", "--suggest", "skipped", "fragment")
+    drain(capsys)
+    assert run(repo, "units", "--id", "demo:1:1", "--accept") == 0
+
+    unit = Ledger.load(config.units_path("demo")).get("demo:1:1")
+    assert unit.state == "skipped"
+    assert unit.reason == "fragment"
+    assert unit.suggestion is None
+
+
+def test_dismiss_discards_a_suggestion(
+    repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run(repo, "extract")
+    run(repo, "units", "--id", "demo:1:1", "--suggest", "skipped", "fragment")
+    drain(capsys)
+    assert run(repo, "units", "--id", "demo:1:1", "--dismiss") == 0
+
+    unit = Ledger.load(config.units_path("demo")).get("demo:1:1")
+    assert unit.state == "new"
+    assert unit.suggestion is None
+
+
+def test_suggested_filters_to_open_proposals(
+    repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run(repo, "extract")
+    run(repo, "units", "--id", "demo:1:1", "--suggest", "skipped", "fragment")
+    drain(capsys)
+    run(repo, "units", "--state", "all", "--suggested", "--json")
+    assert [r["id"] for r in json.loads(out(capsys))] == ["demo:1:1"]
+
+
+def test_resolving_one_audience_leaves_the_other(tmp_path: Path) -> None:
+    """Claude clearing its own request must not delete a decision parked for me.
+
+    Both live in the same `notes` list, so a resolve that took everything
+    would throw away the human's note without ever saying so.
+    """
+    led = Ledger(tmp_path / "units.jsonl")
+    led.units.append(Unit(id="s:eq:1"))
+    led.annotate("s:eq:1", "fix the transcription")           # defaults to @claude
+    led.annotate("s:eq:1", "@me decide whether this is worth carding")
+    assert len(led.units[0].notes) == 2
+
+    cleared = led.resolve_notes("s:eq:1", "claude")
+    assert cleared == 1
+    assert led.units[0].notes == ["@me decide whether this is worth carding"]
+
+    assert led.resolve_notes("s:eq:1") == 1
+    assert led.units[0].notes == []
+
+
+def test_one_card_can_be_built_from_several_units(tmp_path: Path, config: Config) -> None:
+    """A multi-line display is several units and one identity.
+
+    Splitting already worked -- a unit carries a list of uids. Merging needed
+    `unit` to accept more than one, or the pieces of a torn equation could
+    only ever become separate cards.
+    """
+    led = Ledger(config.units_path("demo"))
+    led.units.extend(
+        [
+            Unit(id="demo:2.5:p13y636", locator=Locator(section="2.5", page=13)),
+            Unit(id="demo:2.5:123", locator=Locator(section="2.5", equation=123, page=13)),
+        ]
+    )
+    led.save()
+
+    args = argparse.Namespace(
+        unit=["demo:2.5:p13y636", "demo:2.5:123"],
+        front="$a$",
+        back="$b$",
+        type="identity",
+        tag=[],
+        source="",
+        json=False,
+    )
+    assert cli.cmd_new(args, config) == cli.OK
+
+    card = next(iter(model.load_all(config.cards_dir)))
+    assert card.units == ["demo:2.5:p13y636", "demo:2.5:123"]
+    assert card.unit == "demo:2.5:p13y636", "one unit for the crop and the src:: tag"
+
+    after = Ledger.load(config.units_path("demo"))
+    for unit_id in card.units:
+        unit = after.get(unit_id)
+        assert unit is not None
+        assert unit.state == "carded", f"{unit_id} was left untouched"
+        assert unit.uids == [card.uid]

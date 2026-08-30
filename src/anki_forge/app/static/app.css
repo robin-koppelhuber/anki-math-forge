@@ -94,9 +94,9 @@ select {
 
 main {
   flex: 1;
-  width: min(1080px, 100%);
-  margin: 0 auto;
-  padding: 1.6rem 1rem 2.5rem;
+  width: 100%;
+  margin: 0;
+  padding: 0;
 }
 
 /* -- units --------------------------------------------------------------- */
@@ -120,13 +120,42 @@ main {
 .badge.bad { color: var(--bad); border-color: var(--bad); }
 .badge.ocr, .badge.verify { color: var(--warn); border-color: var(--warn); }
 
+/* Crop beside transcription, with a draggable split. What you want to be
+   looking at changes: a dense matrix wants the picture wide, a long identity
+   wants the text wide, and the right ratio is not the same for two crops in
+   a row. The position is remembered. */
 .side-by-side {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.2rem;
-  align-items: center;
+  grid-template-columns: var(--split, 1fr) 18px var(--split-right, 1fr);
+  gap: 0;
+  align-items: start;
 }
-@media (max-width: 760px) { .side-by-side { grid-template-columns: 1fr; } }
+.side-by-side > * { min-width: 0; }
+/* The handle IS the grid track. It used to carry a 0.6rem margin inside a 6px
+   track, which collapsed its box to nothing -- present in the markup, and
+   impossible to grab. */
+.splitter {
+  cursor: col-resize;
+  align-self: stretch;
+  position: relative;
+  min-height: 2.5rem;
+  margin: 0;
+  touch-action: none;
+}
+.splitter::before {
+  content: "";
+  position: absolute;
+  inset: 0 7px;
+  border-radius: 3px;
+  background: var(--line);
+  opacity: 0.55;
+}
+.splitter:hover::before,
+.splitter.dragging::before { background: var(--accent); opacity: 1; }
+@media (max-width: 760px) {
+  .side-by-side { grid-template-columns: 1fr; }
+  .splitter { display: none; }
+}
 
 .crop {
   margin: 0;
@@ -266,3 +295,474 @@ main {
 #prompt-ok { border-color: var(--accent); color: var(--accent); }
 
 .crop-missing { color: var(--bad); font-size: 12px; padding: 0.6rem; }
+
+/* -- the legend ---------------------------------------------------------- */
+
+.legend {
+  margin-bottom: 1.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+.legend summary {
+  padding: 0.55rem 0.9rem;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  user-select: none;
+}
+.legend summary:hover { color: var(--ink); }
+.legend .hint { opacity: 0.7; }
+.legend .hint b {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 0.25em;
+  background: var(--bg);
+}
+.legend-body { padding: 0 1.1rem 0.9rem; font-size: 13.5px; line-height: 1.55; }
+.legend-body h3 {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 1.2rem 0 0.4rem;
+}
+.legend-body dl { margin: 0; display: grid; grid-template-columns: 11rem 1fr; gap: 0.35rem 1rem; }
+@media (max-width: 700px) { .legend-body dl { grid-template-columns: 1fr; gap: 0.1rem; } }
+.legend-body dt { font-weight: 600; color: var(--ink); }
+.legend-body dt b {
+  display: inline-block;
+  min-width: 1.1em;
+  text-align: center;
+  padding: 0 0.28em;
+  margin-right: 0.3em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+}
+.legend-body dd { margin: 0; color: var(--muted); }
+.legend-body dd b { color: var(--ink); }
+.legend-body code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  padding: 0 0.25em;
+  background: var(--bg);
+  border-radius: 3px;
+}
+.chip.readable.on { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+
+.suggestion {
+  margin-top: 1.1rem;
+  padding: 0.6rem 0.8rem;
+  font-size: 13.5px;
+  color: var(--ink);
+  border-left: 3px solid var(--warn);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.suggestion .by, .suggestion .how { display: block; font-size: 12px; color: var(--muted); margin-top: 0.2rem; }
+.suggestion .how b {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 0.25em;
+  background: var(--bg);
+}
+.chip.suggested.on { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+
+.nothing { font-size: 17px; color: var(--ink); margin-bottom: 0.3rem; }
+
+/* -- the state machine diagram ------------------------------------------ */
+
+.fsm { margin: 0.4rem 0 1.2rem; }
+.fsm svg { width: 100%; height: auto; color: var(--muted); }
+.fsm figcaption { font-size: 12.5px; color: var(--muted); margin-top: 0.5rem; line-height: 1.5; }
+.fsm figcaption b { color: var(--ink); }
+.fsm figcaption b.you-key { color: var(--accent); }
+
+.fsm .lane { font-size: 11px; letter-spacing: 0.09em; fill: var(--muted); opacity: 0.8; }
+.fsm .lane-rule { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 4; }
+
+.fsm .state rect { fill: var(--bg); stroke: var(--line); stroke-width: 1.5; }
+.fsm .state text { font-size: 13px; fill: var(--ink); text-anchor: middle; font-weight: 600; }
+.fsm .state.ok rect { stroke: var(--accent); }
+.fsm .state.ok text { fill: var(--accent); }
+.fsm .state.out rect { stroke-dasharray: 4 3; opacity: 0.75; }
+.fsm .state.out text { fill: var(--muted); font-weight: 400; }
+
+.fsm .source text { font-size: 12px; fill: var(--muted); font-style: italic; }
+
+.fsm .edge { stroke: var(--line); stroke-width: 1.5; fill: none; color: var(--line); }
+.fsm .edge.you { stroke: var(--accent); color: var(--accent); }
+.fsm .edge.dash { stroke-dasharray: 3 3; }
+.fsm .edge.back { stroke-dasharray: 4 3; }
+.fsm .edge.cycle { stroke: var(--warn); color: var(--warn); stroke-dasharray: 5 3; }
+.fsm .edge.warn { stroke: var(--warn); color: var(--warn); }
+
+.fsm .lbl { font-size: 10.5px; fill: var(--muted); text-anchor: middle; font-family: ui-monospace, monospace; }
+.fsm .lbl.you { fill: var(--accent); font-weight: 700; font-size: 12px; }
+.fsm .lbl.cycle { fill: var(--warn); font-family: inherit; }
+.fsm .who { font-size: 9px; fill: var(--accent); text-anchor: middle; letter-spacing: 0.08em; opacity: 0.85; }
+
+.fsm .overlay rect { fill: color-mix(in srgb, var(--accent) 7%, transparent); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 3; }
+.fsm .overlay text { font-size: 11px; fill: var(--ink); }
+.fsm .overlay .sub { font-size: 10px; fill: var(--muted); }
+.fsm .overlay.warn rect { fill: color-mix(in srgb, var(--warn) 8%, transparent); stroke: var(--warn); }
+
+/* -- the sticky footer -------------------------------------------------
+   The keys are the interface. Scrolling a long deck used to hide them, so
+   the one thing that tells you what you can press disappeared exactly when
+   you were deepest in the work. */
+footer.bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  background: var(--panel);
+}
+
+/* -- the filter-rail -------------------------------------------------------
+   Sixty-four sections do not fit in a filter bar. Toggled with `t`, and its
+   open/closed groups persist, because a triage session is long. */
+.filter-rail {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--left-rail);
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  transition: transform 0.12s ease-out;
+}
+body.filters-off .filter-rail { transform: translateX(-100%); }
+
+.filter-rail-scroll {
+  overflow-y: auto;
+  padding: 0.7rem 0.6rem 2.6rem;
+  font-size: 13px;
+}
+
+
+.filter-group > summary,
+.filter-chapter > summary {
+  cursor: pointer;
+  padding: 0.3rem 0.4rem;
+  border-radius: 5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.filter-group > summary { text-transform: uppercase; font-size: 11px; margin-top: 0.5rem; }
+.filter-chapter > summary { color: var(--ink); }
+.filter-group > summary:hover,
+.filter-chapter > summary:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); }
+
+.filter-tally { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+
+.filter-list { list-style: none; margin: 0.1rem 0 0.4rem; padding: 0 0 0 0.5rem; }
+.filter-list a {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.22rem 0.4rem;
+  border-radius: 5px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.filter-list a:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); }
+.filter-list a.on { background: var(--accent); color: var(--panel); }
+.filter-list a b { font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.7; }
+.filter-clear { margin: 0.2rem 0 0.5rem 0.5rem; font-size: 12px; }
+.filter-clear a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.18rem 0.4rem;
+  border-radius: 5px;
+  display: inline-block;
+}
+.filter-clear a:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); color: var(--ink); }
+
+@media (max-width: 900px) {
+  .filter-rail { transform: translateX(-100%); }
+  body { --left-rail: 0rem; }
+  body.filters-on .filter-rail { transform: translateX(0); }
+}
+
+/* Transcription is a property a unit gains, not a state it enters -- drawn
+   solid-bordered but neutral, so it reads as neither a state nor a proposal. */
+.fsm .prop rect { fill: var(--panel); stroke: var(--line); stroke-width: 1; }
+.fsm .prop text { font-size: 11px; fill: var(--ink); }
+.fsm .prop .sub { font-size: 10px; fill: var(--muted); }
+/* `who` is used for a left-aligned note beside the transcription edge too. */
+.fsm .who.at-left { text-anchor: start; }
+
+/* Absence of a suggestion is a result, not a gap in the UI -- said quietly,
+   because it is the common case (571 of 751 units are numbered equations,
+   which nothing is permitted to propose a skip for). */
+.no-suggestion {
+  margin: 0.6rem 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* The sync gate: an open annotation stops a card leaving, whatever its
+   status. Drawn on the sync edge itself, because that is where it acts. */
+.fsm .gate { stroke: var(--warn); stroke-width: 3; fill: none; }
+.fsm .lbl.warn { fill: var(--warn); text-anchor: start; }
+
+/* -- annotations on a unit ---------------------------------------------
+   Untitled lines of "@claude ..." under a crop read as stray text. They are
+   addressed instructions, so they say who they are for -- and the ones for
+   Claude collapse, because during triage they are provenance rather than
+   anything you act on. */
+.notes h3,
+.notes > summary {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0.9rem 0 0.3rem;
+  font-weight: 600;
+}
+.notes > summary { cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; }
+.notes > summary .hint { font-weight: 400; opacity: 0.75; }
+.notes ul { margin: 0.2rem 0 0; padding-left: 1.1rem; font-size: 13px; line-height: 1.5; }
+.notes li { margin-bottom: 0.25rem; }
+
+.notes.for-me {
+  border-left: 3px solid var(--warn);
+  padding-left: 0.7rem;
+}
+.notes.for-me h3 { color: var(--warn); }
+.notes.for-claude ul { color: var(--muted); }
+
+/* A unit that no longer matches the active filter stays in the deck rather
+   than vanishing, so `k` can still reach it after a mis-pressed key. */
+.settled {
+  margin: 0 0 0.8rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 5px;
+  background: var(--hover, rgba(127, 127, 127, 0.12));
+  color: var(--muted);
+  font-size: 12px;
+}
+.item[data-settled] .crop img { opacity: 0.55; }
+
+/* The pipeline as counts, in the filter-rail. It replaced a top strip that had
+   drifted out of date and rendered "ayou" where a pseudo-element ran into its
+   own label -- and that had to be read against a second, differently-shaped
+   set of filters underneath it. One column, one set of numbers. */
+.filter-list.flow { position: relative; }
+.filter-list.flow .step {
+  padding: 0.1rem 0.4rem 0.1rem 1.1rem;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-family: ui-monospace, monospace;
+  position: relative;
+}
+.filter-list.flow .step::before {
+  content: "↓";
+  position: absolute;
+  left: 0.35rem;
+  opacity: 0.55;
+}
+.filter-list.flow .step.you { color: var(--accent); }
+.filter-list a.out { color: var(--muted); }
+.filter-list a.out b { opacity: 0.55; }
+.filter-list .flat {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.22rem 0.4rem;
+  color: var(--muted);
+}
+.filter-list .flat b { font-weight: 500; opacity: 0.7; }
+
+/* The legend lives in the filter-rail now, so it gets the column's width. */
+.filter-group.legend > summary { text-transform: none; font-size: 12.5px; }
+.filter-group.legend .legend-body { padding: 0.3rem 0.2rem 0.6rem; font-size: 12.5px; }
+.filter-group.legend .legend-body dt { margin-top: 0.55rem; }
+.filter-group.legend .legend-body dd { margin: 0.15rem 0 0; }
+
+/* -- the guide: what am I looking at, at three sizes ----------------
+   hidden / normal (counts only) / expanded (everything). Three sizes rather
+   than two because the question changes: mid-session you want the numbers,
+   and only occasionally the whole explanation. */
+.guide {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--right-rail);
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.12s ease-out, transform 0.12s ease-out;
+}
+.guide-scroll { overflow: auto; padding: 0.6rem 0.7rem 2.6rem; }
+
+.guide-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.guide-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.guide-cycle {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 5px;
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+}
+.guide-cycle:hover { color: var(--ink); border-color: var(--muted); }
+
+/* default (no class yet) behaves as normal */
+.in-full { display: none; }
+body.guide-full .in-full { display: block; }
+body.guide-full .at-a-glance { display: none; }
+body.guide-off .guide { transform: translateX(100%); }
+
+
+.in-full h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 1rem 0 0.3rem;
+}
+.in-full dl { font-size: 12.5px; margin: 0; }
+.in-full dt { margin-top: 0.55rem; font-weight: 600; }
+.in-full dd { margin: 0.15rem 0 0; color: var(--muted); }
+
+/* the compact diagram */
+.fsm.mini { margin: 0; }
+.fsm.mini svg { width: 100%; height: auto; }
+.fsm.mini .lane { font-size: 9px; letter-spacing: 0.1em; fill: var(--muted); }
+.fsm.mini .name { font-size: 11px; fill: var(--ink); text-anchor: start; }
+.fsm.mini .count {
+  font-size: 17px;
+  fill: var(--ink);
+  text-anchor: end;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.fsm.mini .count.small { font-size: 13px; }
+.fsm.mini .state.out .name,
+.fsm.mini .state.out .count { fill: var(--muted); }
+.fsm.mini .state.ok .name, .fsm.mini .state.ok .count { fill: var(--accent); }
+.fsm.mini .key { font-size: 11px; text-anchor: middle; font-weight: 700; }
+.fsm.mini .key.you { fill: var(--accent); }
+.fsm.mini .step { font-size: 9px; fill: var(--muted); text-anchor: start; font-family: ui-monospace, monospace; }
+.fsm.mini .anki { font-size: 11px; fill: var(--muted); }
+.fsm.mini .blocked { font-size: 9.5px; fill: var(--warn); }
+
+@media (max-width: 1200px) {
+  .guide { transform: translateX(100%); }
+  body { --right-rail: 0rem; }
+  body.guide-counts .guide,
+  body.guide-full .guide { transform: translateX(0); }
+}
+
+/* The always-present handle for the guide. The button inside the panel is
+   unreachable once the panel is hidden, which is precisely when you need it. */
+.guide-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 31;
+  width: 1.4rem;
+  height: 3rem;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 6px 0 0 6px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+}
+.guide-tab:hover { color: var(--ink); }
+body:not(.guide-off) .guide-tab { display: none; }
+
+/* A hair of space before each group of keys, so the footer reads as
+   decide / repair / move / view rather than as one undifferentiated row. */
+.keys .key-group.sep { margin-left: 0.7rem; padding-left: 0.9rem; border-left: 1px solid var(--line); }
+
+/* -- the middle column --------------------------------------------------
+   It spans rail to rail. It used to be capped at 1080px and centred in the
+   window, which with two fixed rails left a narrow strip pushed off-centre
+   -- the crop and its transcription competing for half of what was already
+   half the screen. */
+/* One number per rail, driving both the panel's own width and the room the
+   deck leaves for it -- so dragging a rail cannot leave the two disagreeing.
+   The `-size` variables are what a drag writes; the state classes override
+   them, because a hidden rail is 0 whatever width you last chose. */
+body {
+  --left-rail: var(--rail-left-size, 15rem);
+  --right-rail: var(--rail-right-size, 15rem);
+  --gutter: 1.8rem;
+}
+body.filters-off { --left-rail: 0rem; }
+body.guide-off { --right-rail: 0rem; }
+body.guide-full { --right-rail: var(--rail-right-full, 38rem); }
+
+.deck-column {
+  padding: 1.6rem calc(var(--right-rail) + var(--gutter)) 2.5rem
+    calc(var(--left-rail) + var(--gutter));
+  transition: padding 0.12s ease-out;
+}
+
+/* Rail grips: a thin strip on each rail's inner edge. Wide enough to hit
+   without hunting for it, invisible until pointed at. */
+.rail-grip {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+}
+.rail-grip.left { right: -5px; }
+.rail-grip.right { left: -5px; }
+.rail-grip::before {
+  content: "";
+  position: absolute;
+  inset: 0 4px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+.rail-grip:hover::before, .rail-grip.dragging::before { opacity: 0.8; }
+body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: none; }
+
+/* The full diagram has a 960-unit viewBox. Below roughly 620px its 10.5px
+   labels land under 7px on screen, so it stops shrinking and the panel
+   scrolls instead -- an unreadable diagram that fits is worse than a readable
+   one you have to pan. Drag the rail wider and the scrolling stops. */
+.in-full .fsm svg { min-width: 620px; }
+.in-full { overflow-x: auto; }
+
+/* The compact diagram is the opposite case: it is built to be narrow, so it
+   should track the rail exactly. */
+.at-a-glance .fsm svg { min-width: 0; }

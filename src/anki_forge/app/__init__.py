@@ -53,16 +53,37 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/units", response_class=HTMLResponse)
     def units_view(
-        request: Request, source: str = "", state: str = "new", section: str = ""
+        request: Request,
+        source: str = "",
+        state: str = "new",
+        section: str = "",
+        transcribed: bool = False,
+        readable: bool = False,  # the old name for the same filter; kept for links
+        suggested: bool = False,
     ) -> Any:
         ledgers = _ledgers(config)
         if not ledgers:
             return templates.TemplateResponse(
-                request, "empty.html", {"what": "units", "hint": "run `anki-forge extract`"}
+                request,
+                "empty.html",
+                {
+                    "what": "units",
+                    "hint": "run `anki-forge extract`",
+                    "view": "units",
+                    "config": config,
+                    "pipeline": pipeline_counts(config),
+                },
             )
         name = source if source in ledgers else next(iter(ledgers))
         ledger = ledgers[name]
         units = ledger.select(state=state or "all", section=section or None)
+        if suggested:
+            units = [u for u in units if u.suggestion is not None]
+        transcribed = transcribed or readable
+        if transcribed:
+            # Triage is much faster when you can read the maths rather than
+            # squint at a picture of it.
+            units = [u for u in units if u.transcription == "ok"]
         return templates.TemplateResponse(
             request,
             "units.html",
@@ -73,8 +94,30 @@ def create_app(config: Config) -> FastAPI:
                 "units": [_unit_payload(u, config) for u in units],
                 "counts": ledger.counts(),
                 "sections": ledger.sections(),
+                "section_tree": section_tree(ledger),
+                "transcribed_by_section": {
+                    name: sum(
+                        1
+                        for u in ledger.select(state=state or "all", section=name)
+                        if u.transcription == "ok"
+                    )
+                    for name in ledger.sections()
+                },
                 "state": state,
                 "section": section,
+                "pipeline": pipeline_counts(config),
+                "transcribed": transcribed,
+                "suggested": suggested,
+                "suggested_count": sum(
+                    1
+                    for u in ledger.select(state=state or "all", section=section or None)
+                    if u.suggestion is not None
+                ),
+                "transcribed_count": sum(
+                    1
+                    for u in ledger.select(state=state or "all", section=section or None)
+                    if u.transcription == "ok"
+                ),
                 "mtime": _mtime(ledger.path),
             },
         )
@@ -86,7 +129,13 @@ def create_app(config: Config) -> FastAPI:
             return templates.TemplateResponse(
                 request,
                 "empty.html",
-                {"what": "cards", "hint": "write one by hand, or run `/extract-cards`"},
+                {
+                    "what": "cards",
+                    "hint": ("queue some units in the units view, then run `/extract-cards`"),
+                    "view": "review",
+                    "config": config,
+                    "pipeline": pipeline_counts(config),
+                },
             )
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         counts = {s: sum(1 for c in cards if c.effective_status == s) for s in model.STATUSES}
@@ -97,6 +146,7 @@ def create_app(config: Config) -> FastAPI:
                 "config": config,
                 "cards": [_card_payload(c, findings, config) for c in selected],
                 "counts": counts,
+                "pipeline": pipeline_counts(config),
                 "total": len(cards),
                 "status": status,
             },
@@ -111,7 +161,26 @@ def create_app(config: Config) -> FastAPI:
                 unit_id, str(body.get("state", "")), reason=str(body.get("reason", "")).strip()
             )
 
-        return _mutate_ledger(config, source, body, act)
+        return _mutate_ledger(config, source, body, act, unit_id)
+
+    @app.post("/api/units/{source}/{unit_id:path}/accept")
+    def accept_suggestion(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Act on a proposed decision. The human is the one who decides."""
+        return _mutate_ledger(config, source, body, lambda led: led.accept(unit_id), unit_id)
+
+    @app.post("/api/units/{source}/{unit_id:path}/dismiss")
+    def dismiss_suggestion(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+        return _mutate_ledger(config, source, body, lambda led: led.dismiss(unit_id), unit_id)
+
+    @app.post("/api/units/{source}/{unit_id:path}/restore")
+    def restore_unit(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Undo: put a unit back exactly as it was before the last action."""
+        snapshot = body.get("snapshot") or {}
+
+        def act(ledger: Ledger) -> Unit:
+            return ledger.restore(unit_id, dict(snapshot))
+
+        return _mutate_ledger(config, source, body, act, unit_id)
 
     @app.post("/api/units/{source}/{unit_id:path}/annotate")
     def annotate_unit(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -129,6 +198,24 @@ def create_app(config: Config) -> FastAPI:
     @app.post("/api/cards/{uid}/reject")
     def reject(uid: str, body: dict[str, Any] = Body(...)) -> Any:
         return _mutate_card(config, uid, body, lambda card: card.reject())
+
+    @app.post("/api/cards/{uid}/restore")
+    def restore_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Undo: put a card's status back, with the hash that went with it."""
+        snapshot = body.get("snapshot") or {}
+        status = str(snapshot.get("status", ""))
+        if status not in model.STATUSES:
+            raise HTTPException(400, f"unknown status {status!r}")
+
+        def act(card: Card) -> None:
+            card.frontmatter["status"] = status
+            digest = str(snapshot.get("content_hash", ""))
+            if digest:
+                card.frontmatter["content_hash"] = digest
+            else:
+                card.frontmatter.pop("content_hash", None)
+
+        return _mutate_card(config, uid, body, act)
 
     @app.post("/api/cards/{uid}/annotate")
     def annotate_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -183,6 +270,81 @@ def create_app(config: Config) -> FastAPI:
 # -- payloads --------------------------------------------------------------
 
 
+
+def section_tree(ledger: Ledger) -> list[dict[str, Any]]:
+    """Sections grouped by chapter, with what is in each.
+
+    The filter rail's data. Sixty-four sections is too many for a flat list,
+    and the thing you want to know before opening one is whether there is
+    anything left to do in it -- so every row carries its own counts and the
+    chapter carries their sum.
+    """
+    chapters: dict[str, dict[str, Any]] = {}
+    for name in ledger.sections():
+        units = list(ledger.select(state="all", section=name))
+        row = {
+            "name": name,
+            "total": len(units),
+            "transcribed": sum(1 for u in units if u.transcription == "ok"),
+            "suggested": sum(1 for u in units if u.suggestion is not None),
+            "annotated": sum(1 for u in units if u.notes),
+            "undecided": sum(1 for u in units if u.state == "new"),
+        }
+        chapter = name.split(".", 1)[0]
+        group = chapters.setdefault(
+            chapter,
+            {"chapter": chapter, "sections": [], "total": 0, "undecided": 0, "suggested": 0},
+        )
+        group["sections"].append(row)
+        for key in ("total", "undecided", "suggested"):
+            group[key] += row[key]
+    return list(chapters.values())
+
+
+
+def _note_text(note: str) -> str:
+    """An annotation without its `@claude` / `@me` prefix.
+
+    The view already says who a note is for, so repeating it on every line is
+    noise. Slicing a fixed width would mangle a hand-edited note that does not
+    carry the exact prefix, so strip only what is actually there.
+    """
+    audience = model.annotation_audience(note)
+    if not audience:
+        return note.strip()
+    return note.strip()[len(audience) + 1 :].strip()
+
+
+def pipeline_counts(config: Config) -> dict[str, int]:
+    """Where everything currently sits, across both halves of the pipeline.
+
+    Units and cards are separate objects with separate gates, and that is the
+    single most confusing thing about this tool -- `skipped` is a unit that
+    will never be carded, `rejected` is a card that will never be synced, and
+    nothing about the words says so. Counting them side by side, in order, is
+    the cheapest way to make the shape visible.
+    """
+    counts = dict.fromkeys(
+        ("new", "queued", "skipped", "carded", "draft", "approved", "rejected"), 0
+    )
+    # The two overlays. Not states -- they sit on top of one and change what
+    # is allowed next -- but they are live and actionable, so they belong in
+    # the strip beside the states rather than only in the diagram.
+    counts["suggested"] = 0
+    counts["annotated"] = 0
+
+    for ledger in open_ledgers(config.sources_dir).values():
+        for state, number in ledger.counts().items():
+            counts[state] += number
+        for unit in ledger:
+            counts["suggested"] += unit.suggestion is not None
+            counts["annotated"] += bool(unit.notes)
+    for card in model.load_all(config.cards_dir):
+        counts[card.effective_status] = counts.get(card.effective_status, 0) + 1
+        counts["annotated"] += bool(card.annotations())
+    return counts
+
+
 def _ledgers(config: Config) -> dict[str, Ledger]:
     return open_ledgers(config.sources_dir)
 
@@ -225,8 +387,20 @@ def _unit_payload(unit: Unit, config: Config) -> dict[str, Any]:
         "context": unit.context,
         "locator": unit.locator.label(),
         "section": unit.locator.section,
+        # The view distinguishes "nothing proposed a skip" from "nothing was
+        # allowed to": a numbered equation is off limits to the classifier.
+        "equation": unit.locator.equation,
         "uids": unit.uids,
         "notes": unit.notes,
+        # Split by audience. During triage most annotations are provenance
+        # left for whoever writes the card -- "line 3 of 6, follows p67y189".
+        # Useful there, noise here, so they collapse; anything addressed to
+        # the human does not.
+        "notes_mine": [_note_text(n) for n in unit.notes if model.annotation_audience(n) == "me"],
+        "notes_claude": [
+            _note_text(n) for n in unit.notes if model.annotation_audience(n) != "me"
+        ],
+        "suggestion": vars(unit.suggestion) if unit.suggestion else None,
     }
 
 
@@ -276,16 +450,32 @@ def _mutate_card(config: Config, uid: str, body: dict[str, Any], action: Any) ->
     if card is None or card.path is None:
         raise HTTPException(404, f"no card {uid}")
     expected = _expected_mtime(body)
+    # What undo needs: approving stamps `content_hash` and rejecting drops it,
+    # so restoring the status alone would leave the card in a state it was
+    # never actually in.
+    before = {
+        "status": card.status,
+        "content_hash": card.frontmatter.get("content_hash", ""),
+    }
     action(card)
     try:
         card.save(expect_mtime_ns=expected)
     except StaleFileError as exc:
         return JSONResponse({"error": str(exc), "stale": True}, status_code=409)
     _, findings = check.check_repo(config)
-    return {"card": _card_payload(model.load(card.path), findings, config)}
+    return {
+        "card": _card_payload(model.load(card.path), findings, config),
+        "before": before,
+    }
 
 
-def _mutate_ledger(config: Config, source: str, body: dict[str, Any], action: Any) -> Any:
+def _mutate_ledger(
+    config: Config,
+    source: str,
+    body: dict[str, Any],
+    action: Any,
+    unit_id: str = "",
+) -> Any:
     path = config.units_path(source)
     if not path.exists():
         raise HTTPException(404, f"no ledger for source {source!r}")
@@ -295,13 +485,19 @@ def _mutate_ledger(config: Config, source: str, body: dict[str, Any], action: An
             {"error": f"{path.name} changed on disk; reload and retry", "stale": True},
             status_code=409,
         )
-    ledger = Ledger.load(path)
-    try:
-        unit = action(ledger)
-    except (KeyError, ValueError) as exc:
-        raise HTTPException(400, str(exc)) from exc
-    ledger.save()
-    return {"unit": _unit_payload(unit, config), "mtime": _mtime(path)}
+    with Ledger.edit(path) as ledger:
+        # Captured inside the lock, before the action, so undo restores what
+        # was actually there rather than what the browser last happened to see.
+        before = ledger.snapshot(unit_id) if unit_id else {}
+        try:
+            unit = action(ledger)
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+    return {
+        "unit": _unit_payload(unit, config),
+        "mtime": _mtime(path),
+        "before": before,
+    }
 
 
 def _expected_mtime(body: dict[str, Any]) -> int | None:

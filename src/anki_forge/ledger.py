@@ -14,11 +14,15 @@ incrementally resumable queue rather than a one-shot dump.
 from __future__ import annotations
 
 import json
+import os
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .model import write_atomic
+from .model import ANNOTATION_PREFIX, annotation_audience, write_atomic
 
 STATES = ("new", "queued", "skipped", "carded")
 
@@ -60,6 +64,22 @@ class Locator:
 
 
 @dataclass
+class Suggestion:
+    """A proposed triage decision, and who proposed it.
+
+    A suggestion is *not* a decision. Nothing acts on it until a human accepts
+    it, because the thing making it -- a regex over a mangled text layer, or a
+    model looking at a picture -- is guessing, and a guess that silently
+    changes state is indistinguishable from a bug to whoever meets it later.
+    """
+
+    state: str = ""  # the state being proposed, e.g. "skipped"
+    reason: str = ""  # short, machine-ish: "no-relation"
+    detail: str = ""  # the argument, for a human deciding
+    by: str = ""  # what proposed it: "classify" | "claude" | ...
+
+
+@dataclass
 class Unit:
     id: str
     locator: Locator = field(default_factory=Locator)
@@ -71,6 +91,7 @@ class Unit:
     reason: str = ""  # why it was skipped
     uids: list[str] = field(default_factory=list)  # cards produced from it
     notes: list[str] = field(default_factory=list)  # @claude annotations
+    suggestion: Suggestion | None = None  # proposed, never applied
 
     @property
     def source(self) -> str:
@@ -105,6 +126,8 @@ class Unit:
     def to_json(self) -> dict[str, Any]:
         data = asdict(self)
         data["locator"] = {k: v for k, v in data["locator"].items() if v not in ("", None)}
+        if data.get("suggestion") is None:
+            data.pop("suggestion", None)
         return data
 
     @classmethod
@@ -112,9 +135,18 @@ class Unit:
         raw_locator = data.get("locator") or {}
         known = {f for f in cls.__dataclass_fields__ if f != "locator"}
         fields = Locator.__dataclass_fields__
+        raw_suggestion = data.get("suggestion") or None
+        suggestion = (
+            Suggestion(
+                **{k: v for k, v in raw_suggestion.items() if k in Suggestion.__dataclass_fields__}
+            )
+            if isinstance(raw_suggestion, dict)
+            else None
+        )
         return cls(
             locator=Locator(**{k: v for k, v in raw_locator.items() if k in fields}),
-            **{k: v for k, v in data.items() if k in known},
+            suggestion=suggestion,
+            **{k: v for k, v in data.items() if k in known and k != "suggestion"},
         )
 
 
@@ -143,6 +175,23 @@ class Ledger:
     def save(self) -> None:
         lines = [json.dumps(u.to_json(), ensure_ascii=False, sort_keys=True) for u in self.units]
         write_atomic(self.path, "\n".join(lines) + ("\n" if lines else ""))
+
+    @classmethod
+    @contextmanager
+    def edit(cls, path: Path) -> Iterator[Ledger]:
+        """Load, mutate, save -- with nobody else in the file meanwhile.
+
+        Every write rewrites the whole ledger, so two processes that each
+        load, change one unit and save produce last-writer-wins: the earlier
+        change vanishes with no error anywhere. That is not hypothetical --
+        six classifier agents running in parallel destroyed 45 of 61
+        suggestions this way. Anything that mutates a ledger goes through
+        here; `load` alone is for readers.
+        """
+        with lock(path):
+            led = cls.load(path)
+            yield led
+            led.save()
 
     # -- access -----------------------------------------------------------
     def __len__(self) -> int:
@@ -199,6 +248,36 @@ class Ledger:
                 refreshed += 1
         return added, refreshed
 
+    def suggest(self, unit_id: str, state: str, reason: str, detail: str, by: str) -> Unit:
+        """Record a proposed decision. Changes no state."""
+        if state not in STATES:
+            raise ValueError(f"unknown state {state!r}; expected one of {', '.join(STATES)}")
+        unit = self.get(unit_id)
+        if unit is None:
+            raise KeyError(f"no unit {unit_id!r} in {self.path}")
+        unit.suggestion = Suggestion(state=state, reason=reason, detail=detail, by=by)
+        return unit
+
+    def accept(self, unit_id: str) -> Unit:
+        """Act on a suggestion, and clear it."""
+        unit = self.get(unit_id)
+        if unit is None:
+            raise KeyError(f"no unit {unit_id!r} in {self.path}")
+        if unit.suggestion is None or not unit.suggestion.state:
+            raise ValueError(f"{unit_id} has nothing suggested")
+        proposed = unit.suggestion
+        self.set_state(unit_id, proposed.state, reason=proposed.reason)
+        unit.suggestion = None
+        return unit
+
+    def dismiss(self, unit_id: str) -> Unit:
+        """Reject a suggestion, leaving the unit as it was."""
+        unit = self.get(unit_id)
+        if unit is None:
+            raise KeyError(f"no unit {unit_id!r} in {self.path}")
+        unit.suggestion = None
+        return unit
+
     def set_state(self, unit_id: str, state: str, *, reason: str = "") -> Unit:
         if state not in STATES:
             raise ValueError(f"unknown state {state!r}; expected one of {', '.join(STATES)}")
@@ -208,7 +287,40 @@ class Ledger:
         unit.state = state
         if state == "skipped" or reason:
             unit.reason = reason
+        # Deciding for yourself overrules anything that was proposed.
+        unit.suggestion = None
         return unit
+
+    def restore(self, unit_id: str, snapshot: dict[str, Any]) -> Unit:
+        """Put a unit back exactly as it was, for undo.
+
+        `set_state` is not an undo: it clears any suggestion and cannot tell
+        you what the reason used to be. Mis-pressing `q` on a unit that was
+        `skipped` with a proposal on it has to restore all three, or undo
+        quietly loses work of its own.
+        """
+        unit = self.get(unit_id)
+        if unit is None:
+            raise KeyError(f"no unit {unit_id!r} in {self.path}")
+        state = str(snapshot.get("state", unit.state))
+        if state not in STATES:
+            raise ValueError(f"unknown state {state!r}; expected one of {', '.join(STATES)}")
+        unit.state = state
+        unit.reason = str(snapshot.get("reason", ""))
+        proposed = snapshot.get("suggestion")
+        unit.suggestion = Suggestion(**proposed) if proposed else None
+        return unit
+
+    def snapshot(self, unit_id: str) -> dict[str, Any]:
+        """What `restore` needs to undo whatever happens next."""
+        unit = self.get(unit_id)
+        if unit is None:
+            return {}
+        return {
+            "state": unit.state,
+            "reason": unit.reason,
+            "suggestion": asdict(unit.suggestion) if unit.suggestion else None,
+        }
 
     def mark_carded(self, unit_id: str, uids: list[str]) -> Unit:
         unit = self.set_state(unit_id, "carded")
@@ -228,25 +340,39 @@ class Ledger:
         self.save()
         return unit.transcription, unit.tex_auto
 
-    def resolve_notes(self, unit_id: str) -> int:
+    def resolve_notes(self, unit_id: str, audience: str = "") -> int:
         """Clear a unit's annotations once they have been acted on.
 
         Card annotations resolve by deleting the line from `## notes`; without
         this, a unit annotation would have no way out and would sit in `todo`
         for ever.
+
+        `audience` limits it to one side's notes. That matters: Claude
+        resolving its own request must not delete a `@me` decision parked on
+        the same unit, which clearing everything would do silently.
         """
         unit = self.get(unit_id)
         if unit is None:
             raise KeyError(f"no unit {unit_id!r} in {self.path}")
-        cleared = len(unit.notes)
-        unit.notes = []
+        before = len(unit.notes)
+        if audience:
+            unit.notes = [n for n in unit.notes if annotation_audience(n) != audience]
+        else:
+            unit.notes = []
+        cleared = before - len(unit.notes)
         self.save()
         return cleared
 
     def annotate(self, unit_id: str, text: str) -> Unit:
+        """Record an instruction for the next pass over this unit.
+
+        Addressed: `@claude` is work for the model, `@me` is a decision only
+        the human can make. An unaddressed note is assumed to be for Claude,
+        which is what `n` in the triage view has always meant.
+        """
         text = " ".join(text.split())
-        if not text.lower().startswith("@claude"):
-            text = f"@claude {text}"
+        if not annotation_audience(text):
+            text = f"{ANNOTATION_PREFIX} {text}"
         unit = self.get(unit_id)
         if unit is None:
             raise KeyError(f"no unit {unit_id!r} in {self.path}")
@@ -260,6 +386,59 @@ def _section_key(section: str) -> tuple[float, ...]:
     except ValueError:
         return (float("inf"),)
 
+
+
+# -- the write lock -------------------------------------------------------
+#
+# A lock *file* rather than an OS advisory lock: it is the one mechanism that
+# behaves the same on Windows and POSIX, and it is visible in a directory
+# listing when something goes wrong.
+
+LOCK_TIMEOUT = 30.0   # give up rather than hang a batch of agents forever
+LOCK_STALE = 120.0    # a lock older than this belonged to a process that died
+LOCK_POLL = 0.05
+
+
+class LockTimeout(RuntimeError):
+    """Somebody held the ledger lock for longer than LOCK_TIMEOUT."""
+
+
+@contextmanager
+def lock(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
+    """Hold an exclusive lock on `path` for the body of the `with`.
+
+    `os.open(..., O_CREAT | O_EXCL)` is atomic on every platform we care
+    about: exactly one process creates the file, everyone else gets EEXIST
+    and waits.
+    """
+    lockfile = path.with_suffix(path.suffix + ".lock")
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fd = os.open(str(lockfile), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            # A holder that died leaves the file behind. Break it, but only
+            # once it is old enough that no live writer could still own it.
+            try:
+                age = time.time() - lockfile.stat().st_mtime
+            except FileNotFoundError:
+                continue  # released while we looked; go round again
+            if age > LOCK_STALE:
+                lockfile.unlink(missing_ok=True)
+                continue
+            if time.monotonic() > deadline:
+                raise LockTimeout(
+                    f"{lockfile} held for over {timeout:g}s -- another "
+                    f"anki-forge is writing, or a stale lock needs deleting"
+                ) from None
+            time.sleep(LOCK_POLL)
+    try:
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        yield
+    finally:
+        lockfile.unlink(missing_ok=True)
 
 def open_ledgers(sources_dir: Path) -> dict[str, Ledger]:
     """Every units.jsonl under the sources directory, keyed by source name."""

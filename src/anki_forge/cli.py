@@ -21,6 +21,7 @@ from typing import Any
 
 from . import audit as audit_mod
 from . import check as check_mod
+from . import classify as classify_mod
 from . import extract as extract_mod
 from . import latex, model, todo, verify
 from . import ledger as ledger_mod
@@ -82,6 +83,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--port", type=int, default=None)
     p.set_defaults(run=cmd_serve)
 
+    p = subs.add_parser(
+        "context",
+        help="the page an equation was printed on, for writing its card",
+    )
+    p.add_argument("unit", help="unit id, e.g. matrix-cookbook:2.4:61")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_context)
+
     p = subs.add_parser("units", help="view or re-state the ledger")
     p.add_argument("--source", default=None)
     p.add_argument("--state", default="all", help=f"one of: {', '.join(ledger_mod.STATES)}, all")
@@ -104,6 +113,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="clear the @claude annotations on --id, once you have acted on them",
     )
     p.add_argument("--flagged", action="store_true", help="only units the audit is unsure about")
+    p.add_argument("--suggested", action="store_true", help="only units with an open suggestion")
+    p.add_argument(
+        "--suggest",
+        nargs=2,
+        default=None,
+        metavar=("STATE", "REASON"),
+        help="propose a decision for --id; records it, applies nothing",
+    )
+    p.add_argument("--detail", default="", help="the argument for a --suggest, for a human")
+    p.add_argument("--by", default="claude", help="who is proposing (with --suggest)")
+    p.add_argument("--accept", action="store_true", help="act on --id's suggestion")
+    p.add_argument("--dismiss", action="store_true", help="discard --id's suggestion")
     p.set_defaults(run=cmd_units)
 
     p = subs.add_parser("crops", help="render unit crops to a directory, for transcription")
@@ -116,9 +137,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="only units that still need reading (transcription: none or failed)",
     )
     p.add_argument("--limit", type=int, default=0)
-    p.add_argument("--out", required=True, help="directory to write PNGs into (working files)")
+    p.add_argument(
+        "--out",
+        default=None,
+        help="directory to write PNGs into (working files). "
+        "Default: a fresh directory under the configured work_dir.",
+    )
+    p.add_argument(
+        "--context",
+        type=float,
+        default=None,
+        help="points of surrounding page to show around each crop "
+        "(default: the same as the triage view). 0 for a bare crop.",
+    )
+    p.add_argument(
+        "--no-outline",
+        action="store_true",
+        help="do not draw the unit's own box on the crop",
+    )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_crops)
+
+    p = subs.add_parser(
+        "classify", help="skip units that were never going to be cards, with a reason"
+    )
+    p.add_argument("--source", default=None)
+    p.add_argument(
+        "--dry-run", action="store_true", help="report the proposals without recording them"
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_classify)
 
     p = subs.add_parser("audit", help="mechanical confidence checks over a ledger")
     p.add_argument("--source", default=None)
@@ -130,7 +178,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_source_text)
 
     p = subs.add_parser("new", help="scaffold a stub card from a queued unit")
-    p.add_argument("--unit", default=None, help="unit id; the card is marked carded on success")
+    p.add_argument(
+        "--unit",
+        action="append",
+        default=None,
+        metavar="UNIT",
+        help="unit id; repeat to build one card from several units, which is "
+        "what a multi-line display cut into pieces needs. Each is marked carded.",
+    )
     p.add_argument("--front", required=True)
     p.add_argument("--back", required=True)
     p.add_argument("--source", default=None, help="citation text (defaults to the unit's)")
@@ -196,6 +251,26 @@ def cmd_serve(args: argparse.Namespace, config: Config) -> int:
     return OK
 
 
+def cmd_context(args: argparse.Namespace, config: Config) -> int:
+    """The page an equation was printed on.
+
+    Conditions are usually printed around an identity rather than inside it,
+    so the crop cannot carry them. Whether the identity needs a condition the
+    page never states is mathematics, and stays with whoever writes the card.
+    """
+    from . import context as context_mod
+
+    found = context_mod.assemble(config, args.unit)
+    if found is None:
+        print(f"no unit {args.unit!r}", file=sys.stderr)
+        return FAILED
+    if args.json:
+        print(json.dumps(found.as_dict(), indent=2, ensure_ascii=False))
+    else:
+        print(found.format())
+    return OK
+
+
 def cmd_units(args: argparse.Namespace, config: Config) -> int:
     ledgers = ledger_mod.open_ledgers(config.sources_dir)
     if args.source:
@@ -204,7 +279,15 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
         print("no units ledger yet; run `anki-forge extract`", file=sys.stderr)
         return FAILED
 
-    if args.id and (args.set_state or args.annotate or args.tex_auto or args.resolve_notes):
+    if args.id and (
+        args.set_state
+        or args.annotate
+        or args.tex_auto
+        or args.resolve_notes
+        or args.suggest
+        or args.accept
+        or args.dismiss
+    ):
         return _mutate_unit(args, ledgers, config)
 
     flagged: dict[str, set[str]] = {}
@@ -215,6 +298,8 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
     for name, led in ledgers.items():
         for unit in led.select(state=args.state, section=args.section):
             if args.flagged and unit.id not in flagged.get(name, set()):
+                continue
+            if args.suggested and unit.suggestion is None:
                 continue
             row = unit.to_json()
             row["source"] = name
@@ -248,26 +333,42 @@ def _mutate_unit(
     if not args.id:
         print("--set-state/--annotate/--tex-auto need --id", file=sys.stderr)
         return MISUSE
-    for led in ledgers.values():
-        if led.get(args.id) is None:
+    for probe in ledgers.values():
+        if probe.get(args.id) is None:
             continue
-        if args.tex_auto is not None:
-            state, stored = led.transcribe(
-                args.id, args.tex_auto, latex.checker(config.extra_macros)
-            )
-            print(f"{args.id} transcription: {state}" + (f"  {stored[:80]}" if stored else ""))
-            if state == "failed":
-                print("  (did not parse under KaTeX; nothing stored)", file=sys.stderr)
-        if args.resolve_notes:
-            cleared = led.resolve_notes(args.id)
-            print(f"{args.id}: {cleared} annotation(s) resolved")
-        if args.set_state:
-            unit = led.set_state(args.id, args.set_state, reason=args.reason)
-            print(f"{unit.id} -> {unit.state}" + (f" ({unit.reason})" if unit.reason else ""))
-        if args.annotate:
-            led.annotate(args.id, args.annotate)
-            print(f"{args.id} annotated")
-        led.save()
+        # Re-read under the lock: `ledgers` was loaded before we knew we were
+        # writing, and another process may have moved on since.
+        with ledger_mod.Ledger.edit(probe.path) as led:
+            if args.suggest:
+                state, reason = args.suggest
+                led.suggest(args.id, state, reason, args.detail, args.by)
+                print(f"{args.id}: suggested {state} ({reason}) -- not applied")
+            if args.accept:
+                unit = led.accept(args.id)
+                print(f"{args.id} -> {unit.state}" + (f" ({unit.reason})" if unit.reason else ""))
+            if args.dismiss:
+                led.dismiss(args.id)
+                print(f"{args.id}: suggestion dismissed")
+            if args.tex_auto is not None:
+                state, stored = led.transcribe(
+                    args.id, args.tex_auto, latex.checker(config.extra_macros)
+                )
+                print(f"{args.id} transcription: {state}" + (f"  {stored[:80]}" if stored else ""))
+                if state == "failed":
+                    print("  (did not parse under KaTeX; nothing stored)", file=sys.stderr)
+            if args.resolve_notes:
+                cleared = led.resolve_notes(args.id, getattr(args, "audience", ""))
+                print(f"{args.id}: {cleared} annotation(s) resolved")
+            if args.set_state:
+                unit = led.set_state(args.id, args.set_state, reason=args.reason)
+                print(f"{unit.id} -> {unit.state}" + (f" ({unit.reason})" if unit.reason else ""))
+            if args.annotate:
+                text = args.annotate
+                audience = getattr(args, "audience", "")
+                if audience and not text.lstrip().startswith("@"):
+                    text = f"@{audience} {text}"
+                led.annotate(args.id, text)
+                print(f"{args.id} annotated")
         return OK
     print(f"no unit {args.id!r} in any ledger", file=sys.stderr)
     return FAILED
@@ -290,7 +391,14 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
         print("no units ledger yet; run `anki-forge extract`", file=sys.stderr)
         return FAILED
 
-    out = Path(args.out)
+    # Context by default. A bare crop cannot show that an equation continues
+    # outside it, so a reader of bare crops cannot tell a fragment from a whole
+    # identity -- which is exactly the judgement the crop is being read for.
+    context = render_mod.TRIAGE_CONTEXT if args.context is None else args.context
+
+    # Default under work_dir so intermediates land in one disposable place
+    # instead of whatever name the caller invents.
+    out = Path(args.out) if args.out else config.scratch("crops", args.section or "all")
     out.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, Any]] = []
 
@@ -313,7 +421,11 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
                 if geometry is None:
                     continue
                 path = out / (re.sub(r"[^A-Za-z0-9._-]+", "_", unit.id) + ".png")
-                path.write_bytes(renderer.render(*geometry))
+                path.write_bytes(
+                    renderer.render(
+                        *geometry, context=context, outline=not args.no_outline
+                    )
+                )
                 manifest.append(
                     {
                         "unit": unit.id,
@@ -331,6 +443,52 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
         for entry in manifest:
             print(f"{entry['unit']:<34} {entry['file']}")
         print(f"\n{len(manifest)} crops written to {out}")
+    return OK
+
+
+def cmd_classify(args: argparse.Namespace, config: Config) -> int:
+    ledgers = ledger_mod.open_ledgers(config.sources_dir)
+    if args.source:
+        ledgers = {k: v for k, v in ledgers.items() if k == args.source}
+    if not ledgers:
+        print("no units ledger yet; run `anki-forge extract`", file=sys.stderr)
+        return FAILED
+
+    reports = []
+    for name, probe in ledgers.items():
+        if args.dry_run:
+            reports.append(classify_mod.classify(probe, config.source(name).pdf, name, write=False))
+            continue
+        with ledger_mod.Ledger.edit(probe.path) as led:
+            reports.append(classify_mod.classify(led, config.source(name).pdf, name, write=True))
+
+    if args.json:
+        print(
+            json.dumps(
+                [
+                    {
+                        "source": r.source,
+                        "considered": r.considered,
+                        "kept": r.kept,
+                        "dry_run": args.dry_run,
+                        "classified": [vars(c) for c in r.classified],
+                    }
+                    for r in reports
+                ],
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return OK
+
+    for report in reports:
+        for item in report.classified:
+            print(f"  {item.unit_id:<34} {item.reason:<13} {item.detail}")
+        print(report.summary())
+        if args.dry_run:
+            print("  (dry run -- nothing changed)")
+        elif report.classified:
+            print(f"  review them with: anki-forge units --state skipped --source {report.source}")
     return OK
 
 
@@ -386,36 +544,40 @@ def cmd_new(args: argparse.Namespace, config: Config) -> int:
     existing = model.load_all(config.cards_dir)
     taken = {c.uid for c in existing}
 
-    unit = None
+    units: list[ledger_mod.Unit] = []
+    unit_ids: list[str] = list(args.unit or [])
     source_text = args.source or ""
     ledgers = ledger_mod.open_ledgers(config.sources_dir)
-    if args.unit:
-        source_name = args.unit.split(":", 1)[0]
+    for unit_id in unit_ids:
+        source_name = unit_id.split(":", 1)[0]
         led = ledgers.get(source_name)
-        unit = led.get(args.unit) if led else None
-        if unit is None:
-            print(f"no unit {args.unit!r} in {source_name}/units.jsonl", file=sys.stderr)
+        found = led.get(unit_id) if led else None
+        if found is None:
+            print(f"no unit {unit_id!r} in {source_name}/units.jsonl", file=sys.stderr)
             return FAILED
-        if not source_text:
-            source_text = unit.citation(config.source(source_name).citation)
+        units.append(found)
+    if units and not source_text:
+        # One citation, from the first unit: the pieces of a split display are
+        # the same equation, so citing each of them would just be noise.
+        first = unit_ids[0].split(":", 1)[0]
+        source_text = units[0].citation(config.source(first).citation)
 
-    uid = model.mint_uid(args.unit or args.front, taken)
+    uid = model.mint_uid((unit_ids[0] if unit_ids else "") or args.front, taken)
     card = model.stub(
         uid=uid,
         front=args.front,
         back=args.back,
         source=source_text,
-        unit=args.unit or "",
+        unit=", ".join(unit_ids),
         card_type=args.type,
         tags=list(args.tag),
     )
     path = config.cards_dir / f"{uid}-{model.slugify(args.front)}.md"
     card.save(path)
 
-    if args.unit and unit is not None:
-        led = ledgers[args.unit.split(":", 1)[0]]
-        led.mark_carded(args.unit, [uid])
-        led.save()
+    for unit_id in unit_ids:
+        with ledger_mod.Ledger.edit(ledgers[unit_id.split(":", 1)[0]].path) as led:
+            led.mark_carded(unit_id, [uid])
 
     findings = check_mod.check_card(card, config)
     if args.json:
@@ -424,7 +586,7 @@ def cmd_new(args: argparse.Namespace, config: Config) -> int:
                 {
                     "uid": uid,
                     "path": str(path.relative_to(config.root)),
-                    "unit": args.unit or "",
+                    "unit": ", ".join(unit_ids),
                     "findings": [f.as_dict() for f in findings],
                 },
                 indent=2,

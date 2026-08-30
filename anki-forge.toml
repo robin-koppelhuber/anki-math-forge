@@ -3,6 +3,9 @@
 [repo]
 cards_dir = "cards"
 sources_dir = "sources"
+# Intermediate files: crops, page renders, scratch LaTeX. Disposable,
+# gitignored, and the one place a pass is allowed to write working files.
+work_dir = ".forge"
 
 [cards]
 # DESIGN.md ss15.1 / ss15.2 -- declared once, mixing is the failure mode.

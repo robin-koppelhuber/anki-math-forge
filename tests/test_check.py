@@ -211,3 +211,51 @@ def test_an_edited_approval_returns_to_the_review_queue(
     reloaded = model.load(card_path)
     assert reloaded.status == "approved", "the file is untouched; nothing rewrites it silently"
     assert reloaded.effective_status == "draft", "but it counts as a draft again"
+
+
+def test_a_typo_in_frequency_is_an_error(config: Config) -> None:
+    """Optional, but not free-form.
+
+    An unrecognised value would become its own Anki tag and quietly split the
+    deck in two -- `freq::core` and `freq::cores` reviewed separately, with
+    nothing to notice it.
+    """
+    card = model.Card(
+        frontmatter={
+            "uid": "aa11bb",
+            "type": "identity",
+            "status": "draft",
+            "frequency": "cores",
+        },
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    codes = {f.code for f in check.check_card(card, config)}
+    assert "frequency-unknown" in codes
+
+    card.frontmatter["frequency"] = "core"
+    assert "frequency-unknown" not in {f.code for f in check.check_card(card, config)}
+
+
+def test_both_judgements_are_optional(config: Config) -> None:
+    card = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity", "status": "draft"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    codes = {f.code for f in check.check_card(card, config)}
+    assert "frequency-unknown" not in codes
+    assert "derivation-unknown" not in codes
+
+
+def test_definitional_is_a_derivation_value(config: Config) -> None:
+    """Some facts are true by definition; "how hard to derive" does not apply."""
+    assert "definitional" in model.DERIVATIONS
+    card = model.Card(
+        frontmatter={
+            "uid": "aa11bb",
+            "type": "identity",
+            "status": "draft",
+            "derivation": "definitional",
+        },
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    assert "derivation-unknown" not in {f.code for f in check.check_card(card, config)}

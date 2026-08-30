@@ -66,6 +66,13 @@ def tags_for(card: Card, config: Config) -> list[str]:
     The `src::` tag is what makes a bad batch suspendable wholesale.
     """
     tags = {config.tag_prefix, *card.tags}
+    # Both optional, both coarse. As tags they are filterable in Anki, which
+    # is where the decision they inform actually gets made -- "drill the core
+    # ones", "leave the definitional ones on a longer interval".
+    if card.frequency:
+        tags.add(f"freq::{card.frequency}")
+    if card.derivation:
+        tags.add(f"derive::{card.derivation}")
     if card.unit:
         parts = [p for p in card.unit.split(":") if p][:2]
         tags.add("src::" + "::".join(parts))

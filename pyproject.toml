@@ -2,7 +2,7 @@
 name = "anki-forge"
 version = "0.1.0"
 description = "Turn mathematical source material into reviewed Anki cards."
-readme = "CLAUDE.md"
+readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "pyyaml>=6.0",

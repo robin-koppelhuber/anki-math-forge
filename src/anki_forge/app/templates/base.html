@@ -21,7 +21,18 @@
   <span class="position" id="position"></span>
 </header>
 
-<main id="main">{% block main %}{% endblock %}</main>
+
+<main id="main">
+  {% if pipeline is defined %}{% include "_filters.html" %}{% endif %}
+  <div class="deck-column">{% block main %}{% endblock %}</div>
+  {% if pipeline is defined %}{% include "_guide.html" %}
+  {# Always on screen, including when the guide is hidden -- the button
+     inside it slides away with it, which left no way back. #}
+  <button type="button" class="guide-tab" id="guide-tab"
+          title="what am I looking at? — cycles counts / everything / hidden (?)"
+          aria-controls="guide">?</button>
+  {% endif %}
+</main>
 
 <footer class="bar keys">{% block keys %}{% endblock %}</footer>
 

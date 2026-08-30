@@ -60,6 +60,38 @@ That unit is already `skipped` in the ledger with the reason recorded, so it
 will not be offered for carding again. Treat everything else as unverified:
 that is what `verify: true` and the `## verify` section are for.
 
+### Suspected, not confirmed
+
+Found by the transcribe pass reading crops. These are **not** covered by the
+Lean formalisation, and nobody has checked them. They are recorded here so the
+suspicion is not lost, and annotated on the unit so it reaches whoever writes
+the card:
+
+- **eq (302)** — printed as `A = LDL^T = L^T D L`. The standard LDL identity
+  pairs `LDL^T` with `U^T D U` for a *distinct* unit upper-triangular `U`, not
+  a repeated `L`. Transcribed as printed.
+- **eq (95)** — first denominator printed `x^T B B x`, where every other term
+  in the same identity uses `x^T B^T B x`. Likely a dropped transpose.
+- **eq (154) and eq (545)** — an unmatched closing parenthesis after
+  `max(eig(A^{-1})`, in both places. Two independent agents found it
+  separately, which makes it a repeated typo in the book rather than a
+  misread. Fix both or neither.
+- **§6.2, the last line of `E[(Ax+a)b^T(Cx+c)(Dx+d)^T]`** — a *minus* before
+  `(Am+a)(Dm+d)^T`, where the analogous term in every sibling cubic-form
+  identity on the same page carries a plus. Checked at 8x zoom and transcribed
+  as printed; it may well be correct, since the sign genuinely differs between
+  these identities.
+- **eq (559)** — the density line prints `exp[-(s-mu)^2 / 2 sigma^2]`, with `s`
+  where the surrounding line uses `x`. Transcribed as printed.
+- **eq (202)** — the right-hand side `(A^+)^*` is set in non-bold `A` while the
+  left-hand side is bold. Typography, not mathematics, but it will look like a
+  different object on a card.
+
+Each was transcribed **as printed**. Do not silently correct any of them when
+writing a card: state the book's form, and put the correction in
+`## notes` -- the deck is a record of this book, not of what it should have
+said.
+
 ## Files
 
 - `units.jsonl` — the ledger, and the only thing here worth committing. Triage

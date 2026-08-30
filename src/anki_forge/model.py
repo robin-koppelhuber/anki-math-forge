@@ -12,6 +12,7 @@ import hashlib
 import os
 import re
 import tempfile
+import time
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -27,9 +28,26 @@ FRONTMATTER_ORDER = (
     "content_hash",
     "source",
     "unit",
+    "frequency",
+    "derivation",
     "tags",
     "verify",
 )
+
+# Two optional judgements about a card, both coarse on purpose.
+#
+# `frequency` -- how often this identity actually turns up. It decides what is
+# worth carding at all, and what deserves to come back often.
+#
+# `derivation` -- what it would take to reconstruct it. `definitional` is the
+# one that matters: some facts are true by definition and have nothing to
+# derive, so "how hard to derive" is the wrong question for them. They are
+# recognised, not reconstructed, and that is a different kind of review.
+#
+# Three values each, and no numbers: a 1-10 scale here would be invented
+# precision that no two sessions would apply the same way.
+FREQUENCIES = ("core", "common", "rare")
+DERIVATIONS = ("definitional", "short", "long")
 
 # Canonical section order. Unknown sections keep file order and land after.
 SECTION_ORDER = ("front", "back", "conditions", "proof", "prose", "verify", "notes")
@@ -50,7 +68,21 @@ UNHASHED_FRONTMATTER = frozenset({"status", "content_hash"})
 
 STATUSES = ("draft", "approved", "rejected")
 
+# An annotation is an instruction for the next pass over this thing, and it
+# is addressed. `@claude` is work for the model -- fix this, check that.
+# `@me` is a decision only the human can make, parked where it will be found
+# again. Both block sync, because both mean "this is not finished".
 ANNOTATION_PREFIX = "@claude"
+ANNOTATION_PREFIXES = ("@claude", "@me")
+
+
+def annotation_audience(line: str) -> str:
+    """`claude`, `me`, or "" if this line is not an annotation at all."""
+    head = line.strip().lower()
+    for prefix in ANNOTATION_PREFIXES:
+        if head.startswith(prefix):
+            return prefix[1:]
+    return ""
 UID_RE = re.compile(r"^[0-9a-f]{6}$")
 _SECTION_RE = re.compile(r"^##[ \t]+([A-Za-z][A-Za-z0-9_-]*)[ \t]*$")
 _FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)(?:\n)---[ \t]*(?:\n|\Z)", re.DOTALL)
@@ -96,8 +128,34 @@ class Card:
         return str(self.frontmatter.get("status", "draft") or "draft")
 
     @property
+    def frequency(self) -> str:
+        return str(self.frontmatter.get("frequency", "") or "")
+
+    @property
+    def derivation(self) -> str:
+        return str(self.frontmatter.get("derivation", "") or "")
+
+    @property
+    def units(self) -> list[str]:
+        """Every unit this card came from.
+
+        A card is not one-to-one with a unit in either direction. One unit
+        splits into several cards -- that already worked, because a unit
+        carries a list of uids. Several units merge into one card, which is
+        the common case for a multi-line display the segmenter cut into
+        pieces, and that needs `unit` to accept a list.
+        """
+        raw = self.frontmatter.get("unit", "")
+        if isinstance(raw, list):
+            return [str(u).strip() for u in raw if str(u).strip()]
+        return [u.strip() for u in str(raw or "").split(",") if u.strip()]
+
+    @property
     def unit(self) -> str:
-        return str(self.frontmatter.get("unit", "") or "")
+        """The first unit, for the things that need exactly one: the crop
+        shown beside the card, and the `src::` tag."""
+        units = self.units
+        return units[0] if units else ""
 
     @property
     def source(self) -> str:
@@ -141,13 +199,9 @@ class Card:
 
     # -- annotations (DESIGN.md §8) ---------------------------------------
     def annotations(self) -> list[str]:
-        """Open `@claude ...` lines from `## notes`, verbatim."""
+        """Open `@claude ...` / `@me ...` lines from `## notes`, verbatim."""
         body = self.section("notes") or ""
-        return [
-            line.strip()
-            for line in body.split("\n")
-            if line.strip().lower().startswith(ANNOTATION_PREFIX)
-        ]
+        return [line.strip() for line in body.split(chr(10)) if annotation_audience(line)]
 
     def add_annotation(self, text: str) -> None:
         """Append an annotation, byte-identical to one typed by hand."""
@@ -309,13 +363,33 @@ def find(cards_dir: Path, uid: str) -> Card | None:
     return None
 
 
+REPLACE_ATTEMPTS = 20
+REPLACE_POLL = 0.05
+
+
 def write_atomic(path: Path, text: str) -> None:
+    """Write `text` to `path` so a reader sees either the old file or the new.
+
+    On Windows `os.replace` fails with PermissionError while *any* other
+    process holds the destination open -- and the app re-reads the ledger on
+    every request, so a reader can break a writer even when writers are
+    serialised among themselves. Retry the rename rather than raise: the
+    reader's handle is short-lived, and failing here would throw away work
+    that has already been done.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-", suffix=".md")
     try:
         with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
-        os.replace(tmp, path)
+        for attempt in range(REPLACE_ATTEMPTS):
+            try:
+                os.replace(tmp, path)
+                return
+            except PermissionError:
+                if attempt == REPLACE_ATTEMPTS - 1:
+                    raise
+                time.sleep(REPLACE_POLL)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise

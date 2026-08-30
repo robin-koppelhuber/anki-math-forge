@@ -1,15 +1,9 @@
 {% extends "base.html" %}
 {% set view = "review" %}
+{% set state = "" %}
 {% block title %}review · anki-forge{% endblock %}
 
-{% block filters %}
-<span class="filters">
-  {% for name, count in counts.items() %}
-  <a class="chip {{ 'on' if status == name }}" href="?status={{ name }}">{{ name }} <b>{{ count }}</b></a>
-  {% endfor %}
-  <a class="chip {{ 'on' if status == 'all' }}" href="?status=all">all <b>{{ total }}</b></a>
-</span>
-{% endblock %}
+{% block filters %}{% endblock %}
 
 {% block main %}
 <div id="deck">
@@ -62,11 +56,14 @@
 {% endblock %}
 
 {% block keys %}
-<span><b>a</b> approve</span>
-<span><b>r</b> reject</span>
-<span><b>e</b> $EDITOR</span>
-<span><b>n</b> annotate</span>
-<span><b>j</b>/<b>k</b> next/prev</span>
+<span class="key-group"><b>a</b> approve</span>
+<span class="key-group"><b>r</b> reject</span>
+<span class="key-group sep"><b>z</b> undo</span>
+<span class="key-group"><b>e</b> $EDITOR</span>
+<span class="key-group"><b>n</b> annotate</span>
+<span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
+<span class="key-group"><b>f</b> filters</span>
+<span class="key-group"><b>?</b> guide</span>
 {% endblock %}
 
 {% block scripts %}<script defer src="/static/review.js"></script>{% endblock %}

@@ -17,6 +17,7 @@ suspect ones rather than eyeballing seven hundred.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from itertools import pairwise
 
@@ -162,14 +163,59 @@ def _check_geometry(report: Report, units: list[Unit]) -> None:
                 )
 
 
+# A row separator eaten by a tool layer that collapses backslashes leaves a
+# control space behind: `\\` becomes `\ `, which KaTeX accepts, so a
+# two-row matrix silently becomes one. Look for that residue rather than for a
+# missing separator -- a crop holding one row of a bigger matrix is legitimate
+# and has no separator either. Five of the eight matrices in the first
+# transcribe pass arrived corrupted this way; the check is the residue.
+ROW_SEPARATOR = '\\\\'
+ROW_ENVIRONMENTS = ("array", "matrix", "bmatrix", "pmatrix", "cases", "aligned")
+# A lone control space -- one not part of a "\\" separator. `(?<!\\)`
+# matters: without it every correct separator followed by a space matches.
+LONE_CONTROL_SPACE = re.compile(r"(?<!\\)\\ ")
+
+
 def _check_transcription(report: Report, units: list[Unit]) -> None:
+    for unit in units:
+        tex = unit.tex_auto or ""
+        # Both conditions matter. A crop holding one row of a bigger matrix
+        # has no separator and is fine; `\mathbf{A}\ n\times n` uses a control space and is
+        # fine. Only the two together mean a matrix that lost every row it
+        # had -- which is how all five real cases arrived. A *partial*
+        # collapse (some separators surviving) slips through; catching that
+        # needs the crop, not the text.
+        if not tex or ROW_SEPARATOR in tex or not LONE_CONTROL_SPACE.search(tex):
+            continue
+        if any(f"begin{{{env}}}" in tex for env in ROW_ENVIRONMENTS):
+            _flag(
+                report,
+                "transcription-rowsep",
+                "multi-row environment whose row separator looks like it "
+                "collapsed to a control space -- check it against the crop",
+                unit.id,
+            )
     failed = [u for u in units if u.transcription == "failed"]
     for unit in failed:
         _flag(report, "transcription-failed", "transcription did not parse under KaTeX", unit.id)
-    missing = [u for u in units if u.transcription == "none" and u.state in ("new", "queued")]
+    # A unit with an annotation and no transcription is a *decision*, not a
+    # gap: somebody read the crop and declined to guess at it. Counting those
+    # as outstanding work sends the next pass back to re-guess exactly where
+    # refusing was right.
+    untriaged = [u for u in units if u.transcription == "none" and u.state in ("new", "queued")]
+    missing = [u for u in untriaged if not u.notes]
+    declined = len(untriaged) - len(missing)
     if missing:
         _flag(
             report,
             "transcription-missing",
             f"{len(missing)} untriaged units have no transcription -- run `/transcribe`",
+        )
+    if declined:
+        _flag(
+            report,
+            "transcription-declined",
+            f"{declined} units were read and deliberately left untranscribed "
+            f"(fragments, prose, unreadable crops) -- see their annotations, "
+            f"and do not re-run `/transcribe` over them",
         )

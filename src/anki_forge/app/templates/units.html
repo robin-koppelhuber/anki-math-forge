@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% set view = "units" %}
+{% set status = "" %}
 {% block title %}units · {{ source }} · anki-forge{% endblock %}
 
 {% block filters %}
@@ -11,21 +12,6 @@
     {% endfor %}
   </select>
   {% else %}<span class="source-name">{{ source }}</span>{% endif %}
-
-  {% for name, count in counts.items() %}
-  <a class="chip {{ 'on' if state == name }}"
-     href="?source={{ source }}&state={{ name }}{% if section %}&section={{ section }}{% endif %}">{{ name }} <b>{{ count }}</b></a>
-  {% endfor %}
-  <a class="chip {{ 'on' if state == 'all' }}" href="?source={{ source }}&state=all">all</a>
-
-  {% if sections %}
-  <select onchange="location.search = '?source={{ source }}&state={{ state }}&section=' + this.value">
-    <option value="">all sections</option>
-    {% for name in sections %}
-    <option value="{{ name }}" {{ 'selected' if name == section }}>§{{ name }}</option>
-    {% endfor %}
-  </select>
-  {% endif %}
 </span>
 {% endblock %}
 
@@ -51,7 +37,10 @@
           source document not available — crops are rendered from it on demand
         </figcaption>
       </figure>
+      {% else %}
+      <p class="crop-missing">no crop geometry for this unit</p>
       {% endif %}
+      <div class="splitter" data-splitter title="drag to resize — double-click to reset"></div>
       <div class="transcription">
         {% if unit.tex and unit.transcription == 'ok' %}
         <div class="math">$${{ unit.tex }}$$</div>
@@ -64,9 +53,39 @@
       </div>
     </div>
 
+    {% if unit.suggestion %}
+    <p class="suggestion">
+      <b>suggested: {{ unit.suggestion.state }}</b> &mdash; {{ unit.suggestion.detail or unit.suggestion.reason }}
+      <span class="by">proposed by {{ unit.suggestion.by }}; nothing has been applied</span>
+      <span class="how"><b>a</b> accept &middot; <b>d</b> dismiss &middot; or just decide yourself</span>
+    </p>
+    {% elif unit.state == 'new' %}
+    {# Silence here used to look like a missing feature. It is a result: for a
+       numbered equation nothing is *allowed* to propose a skip. #}
+    <p class="no-suggestion">
+      no suggestion &mdash;
+      {% if unit.equation %}the book numbered this one, so nothing proposed skipping it{% else %}nothing had an opinion about this one{% endif %}.
+      Yours to decide.
+    </p>
+    {% endif %}
     {% if unit.context %}<p class="context">{{ unit.context }}</p>{% endif %}
     {% if unit.reason %}<p class="reason">skipped: {{ unit.reason }}</p>{% endif %}
-    {% if unit.notes %}<ul class="notes">{% for note in unit.notes %}<li>{{ note }}</li>{% endfor %}</ul>{% endif %}
+    {% if unit.notes_mine %}
+    <div class="notes for-me">
+      <h3>for you to decide</h3>
+      <ul>{% for note in unit.notes_mine %}<li>{{ note }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    {% if unit.notes_claude %}
+    {# Collapsed: these are mostly provenance for whoever writes the card
+       ("line 3 of 6, follows p67y189"), which is not what you need while
+       deciding queue-or-skip. #}
+    <details class="notes for-claude">
+      <summary>{{ unit.notes_claude | length }} note{{ '' if unit.notes_claude|length == 1 else 's' }} for Claude
+        <span class="hint">— context for card-writing, not for this decision</span></summary>
+      <ul>{% for note in unit.notes_claude %}<li>{{ note }}</li>{% endfor %}</ul>
+    </details>
+    {% endif %}
     <p class="unit-id">{{ unit.id }}</p>
   </article>
   {% endfor %}
@@ -75,11 +94,18 @@
 {% endblock %}
 
 {% block keys %}
-<span><b>q</b> queue</span>
-<span><b>s</b> skip</span>
-<span><b>n</b> annotate</span>
-<span><b>u</b> back to new</span>
-<span><b>j</b>/<b>k</b> next/prev</span>
+{# Ordered by how often a hand reaches for it: decide, repair, move, then the
+   view itself. The old order put `?` in the middle of the decision keys. #}
+<span class="key-group"><b>q</b> queue</span>
+<span class="key-group"><b>s</b> skip</span>
+<span class="key-group"><b>a</b>/<b>d</b> accept/dismiss</span>
+<span class="key-group sep"><b>z</b> undo</span>
+<span class="key-group"><b>n</b> annotate</span>
+<span class="key-group"><b>S</b> skip + reason</span>
+<span class="key-group"><b>u</b> back to new</span>
+<span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
+<span class="key-group"><b>f</b> filters</span>
+<span class="key-group"><b>?</b> guide</span>
 {% endblock %}
 
 {% block scripts %}<script defer src="/static/units.js"></script>{% endblock %}

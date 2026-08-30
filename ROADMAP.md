@@ -56,12 +56,131 @@ one, in the same horizontal band, with a gap smaller than a line height, is
 almost certainly a continuation of it. That is an audit check
 (`fragment-suspected`) before it is a segmentation fix.
 
+**Also detectable mechanically.** `anki-forge classify` flags unnumbered
+units whose text contains no relation symbol, which is exactly what a
+continuation fragment looks like — it caught the eq-48 middle line and 52
+others without being told about them. Those are skipped with reason
+`no-relation`, so they are reviewable rather than lost.
+
 **Partly mitigated already.** The triage view now renders each crop with 40pt
 of surrounding page and the unit's own box drawn on it, so a split equation
 shows its missing lines just outside the box and a merged one shows two
 numbers inside it. The human meets the problem while deciding, instead of it
 surviving into a card. The eq-48 units are also annotated and its fragments
 skipped.
+
+### Measured, over the whole book (the `/classify` pass)
+
+Six classifier agents read all 117 unnumbered units. Of the ~100 skips they
+proposed, the large majority are this one defect. It is not a long tail — it
+is concentrated:
+
+| where | what |
+|---|---|
+| §8.2.4 quartic forms | **25 of §8.2's 36 units** are fragments, from **seven** identities of 2-5 lines each (the classify pass, seeing only unnumbered units, undercounted this as three) |
+| §6.2 cubic forms | one equation into three units, another into two |
+| §7.7–7.9 | Student-t / Wishart / inverse-Wishart densities, cut mid-formula |
+| §2.8 | a four-crop chain, all of it equation 143 |
+| §2.4, §2.5 | number on the *last* line, continuations orphaned above it |
+
+The number attaches to whichever line carries it, so orphans appear **both**
+above and below the numbered unit. Any fix must handle both directions.
+
+**A merge signal that is free.** Every continuation line in §6.2 and §7.7–7.9
+ends in a trailing binary operator — `×`, `+`. A line ending in an operator
+cannot be the end of an equation. That is mechanical, needs no model, and
+would merge most of these before a human ever sees them.
+
+**The worst variant: a bbox that clips mid-glyph.** Unit `9.2:409` has a box
+tight enough to shave the left stroke off `W_N`, so the crop reads `V_N` --
+a different, perfectly legible symbol. Every other defect here announces
+itself as *missing* something. This one does not: a transcriber reading only
+the crop records a wrong symbol with full confidence, the KaTeX gate accepts
+it, and the card is wrong forever. It was caught only because the agent
+distrusted the shape and rendered a wider region to compare.
+
+This is the strongest argument for the coverage oracle below, and for keeping
+the crop visible next to the transcription in the triage view: no check on the
+*text* can catch a faithful transcription of a corrupted *picture*.
+
+**A second, distinct failure: the bbox clips the relation.** §9.1.5 produced
+~77pt-wide boxes that cut `C1 =` off the front and the trailing subscript off
+the back. The same page has an LDU identity whose `=` may be outside its box.
+This is not line-splitting — it is a too-tight box on a short line, and it is
+worse than a split, because the crop still *looks* complete.
+
+**One outright bug.** `matrix-cookbook:3.2:178` contains nothing but the
+number `(178)`; the equation's content is in its unnumbered sibling
+`3.2:p20y147`. The contiguity oracle is satisfied — 178 exists — so nothing
+mechanical catches an empty numbered unit. **A numbered unit whose crop holds
+no relation symbol is an audit check worth adding**, and it is the mirror of
+the `no-relation` rule already used on unnumbered ones.
+
+**Not everything unnumbered is a bug.** §11.1/§11.2 have a high unnumbered
+rate because the book genuinely states long runs of unnumbered moment
+identities. There the agent found only row-splitting of aligned blocks, where
+each row *is* a complete identity — a consolidation question for the human,
+not a segmentation defect.
+
+### Worse than splitting: content dropped entirely (eq 27)
+
+Found by the transcribe pass. Equation 27 is a three-line display. Two of its
+lines survive, spread across `1.2:p7y169` and `1.2:27`. **The remaining line
+is in no unit at all** -- it was never extracted.
+
+This is a different severity from everything above. A split equation is
+annoying but recoverable, because every piece is on file and a human sees the
+neighbours in the crop. A dropped line is *invisible*: the numbering oracle is
+satisfied (27 exists), no crop overlaps, and nothing in the units view hints
+that a third of the identity is missing. It was caught only because a model
+read the crop and compared it against the page.
+
+**It recurs, and by a second mechanism.** In §6.2 the unit `p36y310` has a
+bbox whose *left edge* starts after the `=` sign, so the entire left-hand side
+`E[(Ax+a)b^T(Cx+c)(Dx+d)^T] =` appears in no crop anywhere. Confirmed by
+rendering the full page width straight from the PDF. So content is lost both
+vertically (a line between two units) and horizontally (a bbox that begins
+mid-line). Two confirmed cases in the first 355 units read.
+
+**A third mechanism: multi-column layout.** The page-5 notation table is two
+columns, symbol | description. Some units' bboxes cover only the description
+column, so the symbol -- the entire point of the row -- is in no unit; others
+merge two or three table rows into one. `anchored_regions` reasons about
+vertical bands and has no notion of a column. It costs nothing here (all eight
+are front-matter skips anyway), but the same heuristic runs over §5.1's
+Condition/Solution table and §10.4's norm-relation table, which are real
+content.
+
+**What would catch it mechanically.** Extraction knows every text block on
+the page. A block -- or part of one -- that ends up inside no unit's bbox is
+dropped, and measuring that is cheap and exact: a **coverage oracle** to sit
+beside the contiguity one. Contiguity asks "is every equation number present";
+coverage asks "is every mark on the page inside some unit". The second
+question is the one that catches this, and neither the audit nor the KaTeX
+gate asks it today.
+
+Build it *before* the pdf.py replacement. It is the only check that can tell
+you whether the replacement is actually better rather than differently wrong,
+and right now the honest answer is that nothing measures this at all.
+
+### §12.1 (Appendix B) should probably not be extracted as units
+
+The proofs appendix is not a list of identities; it is continuous multi-line
+algebra. Reading all 35 of its units found the segmenter tearing fractions,
+parentheses and summation limits across crop boundaries roughly every other
+unit -- 11 of 35 needed bracket-splitting or were pure debris (a stray `r=0`
+summation limit; a duplicate top-sliver of the next crop; torn denominator
+strokes).
+
+The transcriptions are faithful, but they are *proof fragments*. The useful
+content is the chain, not any single line, and the deck's card type is
+`identity`. Two honest options:
+
+- treat the whole appendix as prose and skip it, or
+- segment it by **proof block** rather than by rendered line.
+
+Either way, do not author cards from 12.1 as currently extracted. This is a
+scoping decision for the human, not something extraction should decide.
 
 ## 3. The cross-check, and reconciling two extractions
 

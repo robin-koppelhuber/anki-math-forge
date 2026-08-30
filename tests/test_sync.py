@@ -181,3 +181,26 @@ def test_tags_are_reconciled_on_update(config: Config, card_path: Path, anki: Fa
     tags = anki.notes[note_id]["tags"]
     assert "determinant" in tags
     assert "derivatives" not in tags
+
+
+def test_the_two_judgements_reach_anki_as_tags(config: Config) -> None:
+    """Filterable in Anki, which is where the decision they inform is made."""
+    card = model.Card(
+        frontmatter={
+            "uid": "aa11bb",
+            "type": "identity",
+            "status": "approved",
+            "frequency": "core",
+            "derivation": "definitional",
+        },
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    tags = sync.tags_for(card, config)
+    assert "freq::core" in tags
+    assert "derive::definitional" in tags
+
+    bare = model.Card(
+        frontmatter={"uid": "cc22dd", "type": "identity", "status": "approved"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    assert not [t for t in sync.tags_for(bare, config) if t.startswith(("freq", "derive"))]

@@ -1,0 +1,131 @@
+{# The guide: what am I looking at. It changes nothing -- its counterpart is
+   the filter rail on the left, which changes what the deck shows.
+
+   Three sizes, cycled with `?` and remembered:
+
+   counts -- the machine at a glance, how many are in each state
+   full   -- the whole state machine, and what every key does
+   off    -- nothing, for when the deck should have the window #}
+<aside class="guide" id="guide" aria-label="what am I looking at">
+  <div class="rail-grip right" data-rail="right"
+       title="drag to resize — double-click to reset"></div>
+  <div class="guide-scroll">
+    <div class="guide-head">
+      <span class="guide-title">guide</span>
+      <button type="button" class="guide-cycle" id="guide-cycle"
+              title="guide — cycle: counts / everything / hidden (?)">?</button>
+    </div>
+
+    <div class="at-a-glance">
+      {% include "_fsm_mini.html" %}
+    </div>
+
+    <div class="in-full">
+{% if view == 'units' %}
+    <h3>the whole machine</h3>
+    {% include "_fsm.html" %}
+
+    <h3>the unit</h3>
+    <dl>
+      <dt>§2.4, eq. 61, p. 10</dt>
+      <dd>where it is in the book. The equation number is the book's own, and
+          it is what makes this unit's id stable across re-extraction.</dd>
+      <dt>the picture</dt>
+      <dd>rendered from the PDF on demand, showing 40pt of surrounding page
+          with the unit's own box drawn on it. <b>The box is what this unit
+          claims to be.</b> If the box holds two numbered equations, or the
+          equation continues outside it, segmentation got it wrong — annotate
+          rather than card it.</dd>
+      <dt>the maths beside it</dt>
+      <dd>the transcription, rendered. A <b>hint, not content</b>: where it
+          disagrees with the picture, the picture wins. <span class="badge ocr">transcribed</span>
+          means something read the crop; <span class="badge bad">not transcribed</span>
+          means run <code>/transcribe</code>, or read the crop yourself.</dd>
+      <dt>the grey text underneath</dt>
+      <dd>the prose immediately above the equation in the book — the sentence
+          that introduces it. Context for deciding, never a transcription.</dd>
+    </dl>
+
+    <h3>what each key does</h3>
+    <dl>
+      <dt><b>q</b> queue</dt>
+      <dd><b>This becomes a card.</b> The greenlight: <code>/extract-cards</code>
+          reads everything queued and writes a stub for it. Nothing reaches
+          Anki without you approving the card afterwards, in the review view.</dd>
+      <dt><b>s</b> skip</dt>
+      <dd><b>Never offer this again.</b> Sticky — it survives re-extraction.
+          You are asked for a one-word reason, which is stored.</dd>
+      <dt><b>u</b> back to new</dt>
+      <dd>Undo a decision: the unit returns to the untriaged pool. This is the
+          only way back from a skip.</dd>
+      <dt><b>a</b> accept &middot; <b>d</b> dismiss</dt>
+      <dd>Act on a suggestion, or throw it away. Suggestions come from
+          <code>anki-forge classify</code> or from <code>/classify</code>;
+          both only ever <em>propose</em>. Pressing <b>q</b> or <b>s</b>
+          yourself also clears the suggestion &mdash; you overruled it.</dd>
+      <dt><b>n</b> annotate</dt>
+      <dd>Leave an instruction for Claude, read when the card is written —
+          "two cards, one per layout convention", "the transcription is wrong,
+          read the crop". Also shows up in <code>anki-forge todo</code>.</dd>
+      <dt><b>z</b> undo</dt>
+      <dd>Undo the last decision, however it was made &mdash; a state change,
+          an accepted suggestion, a dismissed one. It restores what was
+          actually there before, including the reason and any suggestion the
+          action cleared, so a mis-pressed key costs one keystroke. Repeat to
+          walk further back.</dd>
+      <dt><b>j</b> / <b>k</b></dt>
+      <dd>Next / previous. Queuing and skipping move you on to the next unit
+          still awaiting a decision &mdash; but the one you just acted on
+          <b>stays in the list</b>, so <b>k</b> always gets you back to it.</dd>
+    </dl>
+
+    <h3>filters</h3>
+    <dl>
+      <dt>new / queued / skipped / carded</dt>
+      <dd>The unit's state. <b>new</b> is untriaged, <b>carded</b> means a card
+          exists for it.</dd>
+      <dt>transcribed</dt>
+      <dd>Only units whose <code>tex_auto</code> passed the KaTeX gate, so the
+          maths is written out beside the crop instead of only pictured. The
+          crop stays authoritative &mdash; if the two disagree, believe the
+          crop and annotate the unit.</dd>
+      <dt>suggested</dt>
+      <dd>Only units something has proposed a decision for. A suggestion is
+          <b>never applied on its own</b> &mdash; it waits for you.
+          Most units have none, and that is a result rather than a gap: the
+          classifier is not permitted to propose a skip for an equation the
+          book gave a number, because numbering it is the document asserting
+          it is a result. Those are yours to decide, and <b>a</b>/<b>d</b>
+          do nothing on them.</dd>
+    </dl>
+{% else %}
+    <h3>the whole machine</h3>
+    {% include "_fsm.html" %}
+
+    <h3>what each key does</h3>
+    <dl>
+      <dt><b>a</b> approve</dt>
+      <dd>This card is right. Stamps <code>content_hash</code>, and
+          <code>sync</code> will push it to Anki. <b>Editing it afterwards
+          un-approves it</b> — the hash stops matching and it returns here.</dd>
+      <dt><b>r</b> reject</dt>
+      <dd>This card is wrong and is not worth fixing. It stays on disk; nothing
+          syncs it.</dd>
+      <dt><b>e</b> open in $EDITOR</dt>
+      <dd>Fix it yourself. The app re-reads from disk, and refuses to write
+          over a file that changed underneath it.</dd>
+      <dt><b>z</b> undo</dt>
+      <dd>Undo the last approve or reject. Approving stamps
+          <code>content_hash</code> and rejecting drops it, so this restores
+          the hash too &mdash; the card goes back to the state it was actually
+          in, not merely to the same status. The card you just acted on also
+          stays in the list, so <b>k</b> reaches it.</dd>
+      <dt><b>n</b> annotate</dt>
+      <dd>Leave an <code>@claude</code> note. <b>Sync refuses any card with an
+          open annotation, whatever its status</b>; <code>/triage</code>
+          resolves it, and the resulting edit sends the card back to draft.</dd>
+    </dl>
+{% endif %}
+    </div>
+  </div>
+</aside>

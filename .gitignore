@@ -9,3 +9,9 @@ build/
 *.egg-info/
 vendor/
 node_modules/
+
+# crop working files (--out dirs); the ledger keeps geometry, not pictures
+.crops-*/
+.tx-*/
+# the configured work_dir: crops, page renders, scratch LaTeX
+.forge/

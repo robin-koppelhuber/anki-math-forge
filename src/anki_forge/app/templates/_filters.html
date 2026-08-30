@@ -1,0 +1,84 @@
+{# The filter rail: everything that changes *what the deck shows*. States,
+   the two things waiting on you, and the sections -- one column, so there is
+   no longer a top strip and a rail disagreeing about the same counts.
+
+   Its counterpart is the guide on the right, which changes nothing and only
+   explains what you are looking at. Toggled with `f`. #}
+<aside class="filter-rail" id="filter-rail" aria-label="filters">
+  <div class="rail-grip left" data-rail="left"
+       title="drag to resize — double-click to reset"></div>
+  <div class="filter-rail-scroll">
+
+    {# The pipeline, as counts rather than as a diagram. Each row is a filter,
+       and rows link across views, so a card status is reachable from the unit
+       view and back. #}
+    <details class="filter-group" open>
+      <summary>units</summary>
+      <ul class="filter-list flow">
+        <li><a class="{{ 'on' if view == 'units' and state == 'new' }}"
+               href="/units?source={{ source or '' }}&state=new">new<b>{{ pipeline.new }}</b></a></li>
+        <li class="step you">q — you decide</li>
+        <li><a class="{{ 'on' if view == 'units' and state == 'queued' }}"
+               href="/units?source={{ source or '' }}&state=queued">queued<b>{{ pipeline.queued }}</b></a></li>
+        <li class="step">/extract-cards</li>
+        <li><a class="{{ 'on' if view == 'units' and state == 'carded' }}"
+               href="/units?source={{ source or '' }}&state=carded">carded<b>{{ pipeline.carded }}</b></a></li>
+        <li><a class="out {{ 'on' if view == 'units' and state == 'skipped' }}"
+               href="/units?source={{ source or '' }}&state=skipped">skipped<b>{{ pipeline.skipped }}</b></a></li>
+      </ul>
+    </details>
+
+    <details class="filter-group" open>
+      <summary>cards</summary>
+      <ul class="filter-list flow">
+        <li><a class="{{ 'on' if view == 'review' and status == 'draft' }}"
+               href="/review?status=draft">draft<b>{{ pipeline.draft }}</b></a></li>
+        <li class="step you">a — you decide</li>
+        <li><a class="{{ 'on' if view == 'review' and status == 'approved' }}"
+               href="/review?status=approved">approved<b>{{ pipeline.approved }}</b></a></li>
+        <li class="step">sync → Anki</li>
+        <li><a class="out {{ 'on' if view == 'review' and status == 'rejected' }}"
+               href="/review?status=rejected">rejected<b>{{ pipeline.rejected }}</b></a></li>
+      </ul>
+    </details>
+
+    <details class="filter-group" open>
+      <summary>needs you</summary>
+      <ul class="filter-list">
+        {% if view == 'units' %}
+        <li><a class="{{ 'on' if suggested }}"
+               href="/units?source={{ source }}&state={{ state }}{% if section %}&section={{ section }}{% endif %}&suggested=1">
+          suggested<b>{{ pipeline.suggested }}</b></a></li>
+        <li><a class="{{ 'on' if transcribed }}"
+               href="/units?source={{ source }}&state={{ state }}{% if section %}&section={{ section }}{% endif %}&transcribed=1">
+          transcribed<b>{{ transcribed_count }}</b></a></li>
+        {% endif %}
+        <li><span class="flat">annotated<b>{{ pipeline.annotated }}</b></span></li>
+      </ul>
+    </details>
+
+    {% if view == 'units' and section_tree %}
+    <details class="filter-group" open>
+      <summary>sections</summary>
+      {% if section %}
+      <p class="filter-clear"><a href="?source={{ source }}&state={{ state }}"
+           title="stop filtering by section; decisions are not affected">&larr; all sections</a></p>
+      {% endif %}
+      {% for group in section_tree %}
+      <details class="filter-chapter" {{ 'open' if section and section.split('.')[0] == group.chapter }}>
+        <summary>{{ group.chapter }}<span class="filter-tally">{{ group.undecided }}/{{ group.total }}</span></summary>
+        <ul class="filter-list">
+          {% for row in group.sections %}
+          <li><a class="{{ 'on' if section == row.name }}"
+                 title="{{ row.transcribed }} transcribed, {{ row.suggested }} suggested, {{ row.annotated }} annotated"
+                 href="?source={{ source }}&state={{ state }}&section={{ row.name }}">
+            §{{ row.name }}<b>{{ row.undecided }}/{{ row.total }}</b></a></li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endfor %}
+    </details>
+    {% endif %}
+
+  </div>
+</aside>

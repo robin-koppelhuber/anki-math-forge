@@ -22,7 +22,7 @@ transcriber.
 1. Render the crops you have been asked for:
 
    ```
-   uv run anki-forge crops --section <SECTION> --untranscribed --out <DIR> --json
+   uv run anki-forge crops --section <SECTION> --untranscribed --json
    ```
 
    That prints a manifest: one entry per unit with `unit`, `file`, `equation`,
@@ -62,9 +62,62 @@ transcriber.
   parse you are told and *nothing is stored*. That is the check working. Fix
   the LaTeX and retry; do not work around it.
 
+  One rejection recurs and is not your mistake: a multi-line display split
+  across crops leaves a bracket opened in one crop and closed in another,
+  and KaTeX refuses unbalanced `\left[` / `\right]` even when the
+  transcription is faithful. Use `\bigl[` / `\bigr]`, which carry no
+  pairing requirement. Reach for that only when the crop genuinely splits a
+  bracket -- everywhere else `\left` / `\right` is right.
+
+- **The tool layer halves runs of backslashes, and KaTeX will not save you.**
+  Any run of two or more backslashes is halved before the shell sees it, so a
+  row separator `\\` arrives as `\`. That is not a parse error: `\ ` is a
+  valid control space, so a two-row matrix silently becomes one row and the
+  gate passes it. A wrong matrix that looks right is the worst thing you can
+  put in this ledger.
+
+  **Type twice the backslashes you mean in any run** -- `\\\\` for a row
+  separator. Single backslashes (`\alpha`, `\begin`) are unaffected.
+
+  Two further traps, both found the hard way. **Single**-quoted arguments
+  carry `\\\\` through reliably. A **double**-quoted argument spanning
+  several lines does not: the shell's own line continuation eats the last
+  backslash of a run sitting before a newline. For any long or multi-row
+  transcription, sidestep quoting entirely -- write the LaTeX to a scratch
+  file with an unquoted-expansion heredoc and pass the file:
+
+  ```
+  cat > tex.tmp << 'EOF'
+  ...your LaTeX, exactly as you mean it...
+  EOF
+  uv run anki-forge units --id <UNIT-ID> --tex-auto "$(cat tex.tmp)"
+  ```
+
+  After recording anything containing `array`, `matrix`, `bmatrix`, `cases`
+  or `aligned`, read it back and check the separators survived:
+
+  ```
+  uv run anki-forge units --id <UNIT-ID> --json
+  ```
+
+- **A block of prose is transcribed, not skipped.** Parts of a source explain
+  rather than assert -- "If A is real and symmetric, the eigenvalues are
+  real", a bullet list of properties, a sentence defining a term. Record it:
+
+  ```
+  uv run anki-forge units --id <UNIT-ID> --tex-auto '\text{The inverse of an orthogonal matrix is orthogonal too.}'
+  ```
+
+  Wrap it in `\text{...}`. Bare prose passes the gate but renders as a
+  product of italic variables, which looks like mathematics and is not. Keep
+  any real symbols outside the braces: `\text{eigenvalues of } Q\text{ lie on
+  the unit circle}`.
+
+  Whether it becomes a card is triage's decision, not yours. An untranscribed
+  unit cannot be triaged at all -- it is a picture of some words.
+
 - **Do not guess.** If a crop is unreadable, cut off, or contains two
   equations, annotate it and move on:
-
   ```
   uv run anki-forge units --id <UNIT-ID> --annotate 'crop is cut off on the left'
   ```

@@ -19,13 +19,34 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
    which covers everything except `status`, `content_hash` and `## notes`.
 6. **Card content guidelines live in the skill, not in code.** The Python never
    generates or rewrites card text.
+7. **A crop is authoritative for what is printed, and silent about the rest.**
+   Conditions are usually printed around an identity, not inside it.
+   `anki-forge context <unit>` prints the page it came from — that is all it
+   does. Whether the identity needs a condition is mathematics, and belongs to
+   whoever writes the card: check it, prefer the source's wording where there
+   is one, and note in `## notes` any condition you add that the source does
+   not state.
 
 ## Card format
 
 One markdown file per card in [cards/](cards/), named `<uid>-<slug>.md`.
 Frontmatter: `uid` (6 hex), `type` (`identity` only for now), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
-`unit`, `tags`, `verify`. Sections: `## front` and `## back` required;
+`unit`, `tags`, `verify`, and optionally `frequency` and `derivation`.
+
+**A card is not one-to-one with a unit, in either direction.** One unit splits
+into several cards (`uids` on the unit); several units merge into one card
+(`unit` accepts a list, or a comma-separated string) — which is what a
+multi-line display cut into pieces needs. `anki-forge context <unit>` lists
+every unit on the page in reading order, so the pieces are visible and
+nameable; `new` takes `--unit` repeatedly and marks each one carded.
+
+`frequency` (`core | common | rare`) is how often the identity turns up.
+`derivation` (`definitional | short | long`) is what reconstructing it would
+take — `definitional` for facts that are true by definition and have nothing
+to derive. Both optional, both coarse on purpose, both reach Anki as
+`freq::` / `derive::` tags. An unrecognised value is a `check` error, because
+a typo would silently become its own tag and split the deck. Sections: `## front` and `## back` required;
 `conditions`, `proof`, `prose`, `verify`, `notes` optional.
 
 Math is written `$...$` / `$$...$$` and converted to MathJax delimiters on the
@@ -49,8 +70,10 @@ way into Anki. `## notes` and `## verify` never reach Anki.
 
 ```
 uv run anki-forge extract [source]   # source -> units; never reads the maths
+uv run anki-forge classify           # *propose* skips; applies nothing
 uv run anki-forge audit              # is the index trustworthy? 1..N, no gaps
 uv run anki-forge crops --section 2.4 --untranscribed --out DIR --json
+uv run anki-forge context <unit-id>  # the page an equation was printed on
 uv run anki-forge source-text <src>  # the book text, for card-writing context
 uv run anki-forge check              # lint (always; blocks sync)
 uv run anki-forge units --state queued --json

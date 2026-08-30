@@ -46,13 +46,16 @@ several `Agent` calls in one message.
    section in the prompt and `model` only if `$2` was given:
 
    > Transcribe section 2.4 of matrix-cookbook. Render the crops with
-   > `uv run anki-forge crops --section 2.4 --untranscribed --out <a temp dir> --json`,
+   > `uv run anki-forge crops --section 2.4 --untranscribed --json`,
    > read each one, and record it with
    > `uv run anki-forge units --id <id> --tex-auto '<latex>'`.
    > Follow your instructions exactly: transcribe what is printed, annotate
    > anything unreadable or suspicious, never guess.
 
-   Give each agent its **own** temp directory so they do not collide.
+   Crops land under the configured `work_dir` (`.forge/crops/<section>/`),
+   one directory per section, so parallel agents cannot collide and
+   nothing needs cleaning up by hand. Scratch files go under
+   `.forge/scratch/<section>/`.
 
 4. When they report back, verify mechanically rather than trusting the
    summaries:
@@ -76,5 +79,11 @@ that came back messy. The crop stays authoritative either way, which is what
 keeps a bad transcription cheap: the units view shows crop and transcription
 side by side, so the human sees the disagreement.
 
-Crops written under `--out` are **working files**. Delete them when the pass
-is done; the ledger keeps geometry, not pictures.
+Crops are **working files** under `.forge/`, which is gitignored. The ledger
+keeps geometry, not pictures, so the whole directory is safe to delete at any
+time.
+
+## Then
+
+Run `/classify`. It reads the transcriptions this pass produced, which is a
+better signal than the PDF text layer it falls back to.

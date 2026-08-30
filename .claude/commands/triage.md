@@ -48,3 +48,16 @@ That is the unit equivalent of deleting the `@claude` line from a card's
 
 Report each annotation and what you did about it. If one is ambiguous, leave
 it open and say so — guessing is worse than asking.
+
+## Addressed annotations
+
+`@claude ...` is a request for you: act on it, then delete the line (on a
+card) or clear it with `--resolve-notes --audience claude` (on a unit).
+
+`@me ...` is a decision only the human can make — a question parked where it
+will be found again. **Report those; do not act on them and do not clear
+them.** `anki-forge todo --json` carries an `audience` field for exactly this
+split, and `anki-forge todo` marks them `(me)`.
+
+Either kind blocks `sync`, because either kind means the thing is not
+finished.

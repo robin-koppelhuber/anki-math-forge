@@ -121,7 +121,41 @@ Set `lhs` and `rhs`; the runner samples several draws and compares. Available:
 matrix whose structure makes the claim falsifiable — testing a transpose on a
 symmetric matrix proves nothing.
 
+## Frequency and derivation
+
+Two optional frontmatter fields, both coarse, both reaching Anki as tags.
+
+`frequency: core | common | rare` — how often this identity actually turns up.
+`core` is what you would be embarrassed to look up; `rare` is worth having on
+file but not worth drilling. If everything looks `core`, you are grading the
+subject rather than the identity.
+
+`derivation: definitional | short | long` — what reconstructing it would take.
+
+- `definitional` — true by definition; there is nothing to derive. "An
+  orthogonal matrix satisfies `QᵀQ = I`" is not a result, it is what the word
+  means. These are **recognised, not reconstructed**, which is a different
+  kind of review, and it is why "how hard to derive" is the wrong question
+  for them rather than merely an easy one.
+- `short` — a couple of lines from something you already know.
+- `long` — you would want the proof in front of you.
+
+Leave both off when you are unsure. An absent judgement costs nothing; a
+confidently wrong one gets filtered on later and shapes what you drill.
+
+Three values each, deliberately. A 1–10 scale would be invented precision that
+no two sessions would apply the same way.
+
 ## Working from a unit
+
+**A card is not one-to-one with a unit.** A display equation the segmenter cut
+into three lines is three units and one identity: card it whole with repeated
+`--unit`, and all three are marked carded. Conversely one unit stating two
+independent facts is two cards citing the same unit. `anki-forge context
+<unit>` lists every unit on the page in reading order so the pieces are
+visible. Most units are still one card — merge when the pieces are meaningless
+apart, split when one card would have two answers.
+
 
 **Read the book's notation section before you write anything.**
 `anki-forge source-text <source>` prints the cached text layer; the Notation

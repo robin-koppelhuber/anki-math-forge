@@ -38,14 +38,62 @@ never a transcription. The crop is the authority for what an equation says.
    transcription is wrong, read the crop", "merge with eq 50". This is the
    greenlight gate: the human queued this unit *and told you how to card it*.
 
-   When you have acted on them, clear them:
+   Annotations are **addressed**. `@claude ...` is work for you. `@me ...` is a
+   decision the human parked for themselves — read it for context, **never act
+   on it, and never clear it**.
+
+   When you have acted on the ones addressed to you, clear only those:
 
    ```
-   uv run anki-forge units --id <unit-id> --resolve-notes
+   uv run anki-forge units --id <unit-id> --resolve-notes --audience claude
    ```
+
+   Plain `--resolve-notes` clears *everything* on the unit, `@me` notes
+   included, which throws away the human's decision without saying so.
 
    If a note is ambiguous, **leave it open, skip that unit, and say why** in
    your report. Guessing is worse than asking.
+
+3. **Read the page, then check the mathematics yourself.**
+
+   ```
+   uv run anki-forge context <unit-id>
+   ```
+
+   That prints the page the equation was printed on, prose and all. Conditions
+   are usually printed *around* an identity rather than inside it, so the crop
+   cannot carry them and the page usually can.
+
+   Then do the part no tool does: **work out whether the identity is actually
+   true as stated.** A derivative of an inverse needs the matrix to be
+   invertible whether or not the page says so. A trace identity may need the
+   product to be square. If the mathematics requires a condition, it goes in
+   `## conditions` — the page not mentioning it is not evidence that it does
+   not hold.
+
+   Two directions to be wrong in, and they are not symmetric. Omitting a real
+   condition makes a card that teaches something false. Adding one the source
+   does not have makes a card that disagrees with the book you are learning.
+   When the source states a condition, use its wording. When you believe one
+   is needed and the source is silent, state it and say so in `## notes`.
+
+   If you cannot settle it, **leave the card in draft and say why in
+   `## notes`**.
+
+3. **Decide the boundary before the content.** `context` lists every unit on
+   the page in reading order. A display equation the segmenter cut into three
+   is three units and one identity — card it whole:
+
+   ```
+   uv run anki-forge new --unit <a> --unit <b> --unit <c> --front '...' --back '...'
+   ```
+
+   All three are marked carded and point at the same card. The reverse also
+   happens: one unit stating two independent facts is two cards, each citing
+   that unit.
+
+   Neither is the common case. Most units are one card. Merge when the pieces
+   are meaningless apart, split when a single card would have two answers.
 
 3. Decide what card(s) the unit should produce. Use the **card-writing** skill
    for what makes a good front and back. Usually one card; occasionally zero

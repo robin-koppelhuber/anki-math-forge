@@ -1,0 +1,71 @@
+{# The machine at a glance: where everything currently is, and the single
+   keystroke that moves it on. No overlays, no cycles, no annotations -- those
+   are in the full legend one size up. Counts come from `pipeline`, the same
+   numbers the filters use, so the two cannot disagree. #}
+<figure class="fsm mini">
+<svg viewBox="0 0 220 430" role="img" aria-labelledby="mini-title">
+  <title id="mini-title">How many units and cards are in each state</title>
+  <defs>
+    <marker id="mar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6"
+            orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <text class="lane" x="6" y="14">UNITS</text>
+
+  <g class="state"><rect x="6" y="24" width="108" height="40" rx="6"/>
+    <text class="name" x="16" y="41">new</text>
+    <text class="count" x="104" y="55">{{ pipeline.new }}</text></g>
+
+  <path class="edge you" d="M60,64 V88" marker-end="url(#mar)"/>
+  <text class="key you" x="52" y="80">q</text>
+  <path class="edge you" d="M114,44 H154" marker-end="url(#mar)"/>
+  <text class="key you" x="134" y="38">s</text>
+
+  <g class="state out"><rect x="156" y="26" width="58" height="36" rx="6"/>
+    <text class="name" x="163" y="41">skip</text>
+    <text class="count small" x="206" y="55">{{ pipeline.skipped }}</text></g>
+
+  <g class="state"><rect x="6" y="90" width="108" height="40" rx="6"/>
+    <text class="name" x="16" y="107">queued</text>
+    <text class="count" x="104" y="121">{{ pipeline.queued }}</text></g>
+
+  <path class="edge" d="M60,130 V154" marker-end="url(#mar)"/>
+  <text class="step" x="66" y="146">/extract-cards</text>
+
+  <g class="state"><rect x="6" y="156" width="108" height="40" rx="6"/>
+    <text class="name" x="16" y="173">carded</text>
+    <text class="count" x="104" y="187">{{ pipeline.carded }}</text></g>
+
+  <line class="lane-rule" x1="0" y1="214" x2="220" y2="214"/>
+  <text class="lane" x="6" y="232">CARDS</text>
+
+  <path class="edge" d="M60,196 V240" marker-end="url(#mar)"/>
+
+  <g class="state"><rect x="6" y="242" width="108" height="40" rx="6"/>
+    <text class="name" x="16" y="259">draft</text>
+    <text class="count" x="104" y="273">{{ pipeline.draft }}</text></g>
+
+  <path class="edge you" d="M60,282 V306" marker-end="url(#mar)"/>
+  <text class="key you" x="52" y="298">a</text>
+  <path class="edge you" d="M114,262 H154" marker-end="url(#mar)"/>
+  <text class="key you" x="134" y="256">r</text>
+
+  <g class="state out"><rect x="156" y="244" width="58" height="36" rx="6"/>
+    <text class="name" x="163" y="259">rej</text>
+    <text class="count small" x="206" y="273">{{ pipeline.rejected }}</text></g>
+
+  <g class="state ok"><rect x="6" y="308" width="108" height="40" rx="6"/>
+    <text class="name" x="16" y="325">approved</text>
+    <text class="count" x="104" y="339">{{ pipeline.approved }}</text></g>
+
+  <path class="edge" d="M60,348 V372" marker-end="url(#mar)"/>
+  <text class="step" x="66" y="364">sync</text>
+  <text class="anki" x="6" y="390">→ Anki</text>
+
+  {% if pipeline.annotated %}
+  <text class="blocked" x="6" y="416">{{ pipeline.annotated }} annotated — sync is blocked</text>
+  {% endif %}
+</svg>
+</figure>

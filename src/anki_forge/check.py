@@ -60,6 +60,21 @@ def check_card(
     def add(level: str, code: str, message: str) -> None:
         findings.append(Finding(level, code, message, path=card.path, uid=card.uid))
 
+    # -- the two optional judgements ---------------------------------------
+    # Both are optional; a value outside the vocabulary is not, because a
+    # typo would silently become its own Anki tag and quietly split the deck.
+    for field_name, vocabulary in (
+        ("frequency", model.FREQUENCIES),
+        ("derivation", model.DERIVATIONS),
+    ):
+        value = str(card.frontmatter.get(field_name, "") or "")
+        if value and value not in vocabulary:
+            add(
+                ERROR,
+                f"{field_name}-unknown",
+                f"{field_name}: {value!r} is not one of {', '.join(vocabulary)}",
+            )
+
     # -- identity ---------------------------------------------------------
     if not card.uid:
         add(ERROR, "uid-missing", "no `uid` in frontmatter")

@@ -12,11 +12,18 @@ it. Augment first, review once.
 Load the book before you start, for the same reason `/extract-cards` does:
 
 ```
-uv run anki-forge source-text matrix-cookbook
+uv run anki-forge context <unit-id>     # per card: the frame it was printed in
+uv run anki-forge source-text matrix-cookbook   # the whole book, when you need it
 ```
 
-The notation section tells you what the symbols mean; the surrounding section
-tells you which conditions are actually load-bearing.
+`context` prints the page the equation was printed on. Read it — conditions
+are usually printed around an identity, not inside it.
+
+Then **check the mathematics yourself**. The page is evidence, not an oracle:
+an identity can require a condition the source never bothered to state. If
+the mathematics needs it, it belongs in `## conditions`; if you are adding
+something the source does not say, say so in `## notes` so the disagreement
+is visible.
 
 1. Find them — cards with only `## front` and `## back`:
 
@@ -31,7 +38,9 @@ tells you which conditions are actually load-bearing.
 2. For each, consult the **card-writing** skill and add what earns its place:
 
    - `## conditions` — when the identity is false without them. One line.
-     Say the layout convention whenever the shape depends on it.
+     Say the layout convention whenever the shape depends on it. Prefer the
+     source's own wording where it gives one; where it gives none and the
+     mathematics still needs a condition, state it and note the addition.
    - `## proof` — only when short and load-bearing (2–4 lines).
    - `## prose` — one sentence of intuition, or nothing.
    - `tags` — mechanical and reusable: topic, operation, structure.

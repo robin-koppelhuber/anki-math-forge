@@ -23,10 +23,12 @@ class TodoItem:
     note: str
     where: str  # file path or ledger path
     status: str = ""
+    audience: str = "claude"  # who it is addressed to: claude | me
 
     def format(self) -> str:
         status = f" [{self.status}]" if self.status else ""
-        return f"{self.kind} {self.ref}{status}: {self.note}\n    {self.where}"
+        who = "" if self.audience == "claude" else f" ({self.audience})"
+        return f"{self.kind} {self.ref}{status}{who}: {self.note}\n    {self.where}"
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -35,6 +37,7 @@ class TodoItem:
             "note": self.note,
             "where": self.where,
             "status": self.status,
+            "audience": self.audience,
         }
 
 
@@ -45,13 +48,23 @@ def collect(config: Config) -> list[TodoItem]:
     for card in model.load_all(config.cards_dir):
         where = str(_relative(card.path, config.root))
         for note in card.annotations():
-            items.append(TodoItem("card", card.uid, note, where, card.status))
+            items.append(
+                TodoItem(
+                    "card", card.uid, note, where, card.status,
+                    model.annotation_audience(note) or "claude",
+                )
+            )
 
     for ledger in open_ledgers(config.sources_dir).values():
         where = str(_relative(ledger.path, config.root))
         for unit in ledger:
             for note in unit.notes:
-                items.append(TodoItem("unit", unit.id, note, where, unit.state))
+                items.append(
+                    TodoItem(
+                        "unit", unit.id, note, where, unit.state,
+                        model.annotation_audience(note) or "claude",
+                    )
+                )
 
     return items
 

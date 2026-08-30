@@ -1,0 +1,130 @@
+{# The complete state machine, derived from the code rather than from memory.
+
+   Four things it is easy to get wrong here, all of them checked against the
+   source:
+
+   * `Ledger.set_state` permits any unit state to any other and the triage view
+     binds q/s/u unconditionally, so `u` is not "undo a skip" -- it returns
+     *any* unit to new, a carded one included.
+   * `Ledger.suggest` accepts any member of STATES and `accept()` applies
+     whatever was proposed. A suggestion is not a proposed *skip*; skipping is
+     merely what `classify` happens to propose today.
+   * Only an *approved* card is demoted by an edit (`Card.effective_status`).
+     A draft edited stays a draft, so a card can be revised any number of times
+     before anyone approves it.
+   * An annotation is not a state and does not attach to a particular box. It
+     can sit on any unit or any card, from either side, and it blocks sync
+     wherever it sits -- which is why the only arrow it gets is the one to the
+     sync gate. Arrows to individual boxes would claim something untrue.
+
+   Geometry is checked by tests/test_fsm.py: no overlapping boxes, no edge
+   through a box, no overlapping labels. Hand-authored SVG does not stay
+   correct on its own. #}
+<figure class="fsm">
+<svg viewBox="0 0 960 600" role="img" aria-labelledby="fsm-title">
+  <title id="fsm-title">The life of a unit and the card it becomes</title>
+  <defs>
+    <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+    </marker>
+  </defs>
+
+  <text class="lane" x="8" y="20">UNIT — an equation in the book</text>
+  <line class="lane-rule" x1="0" y1="330" x2="960" y2="330"/>
+  <text class="lane" x="210" y="368">CARD — a file in cards/</text>
+
+  <!-- unit lane -->
+  <g class="source"><text x="60" y="46">extract</text></g>
+  <path class="edge" d="M115,50 V66" marker-end="url(#ar)"/>
+
+  <g class="state"><rect x="90" y="70" width="96" height="38" rx="6"/>
+    <text x="138" y="94">new</text></g>
+  <path class="edge you" d="M186,89 H260" marker-end="url(#ar)"/>
+  <text class="lbl you" x="223" y="80">q</text>
+
+  <g class="state"><rect x="264" y="70" width="96" height="38" rx="6"/>
+    <text x="312" y="94">queued</text></g>
+  <path class="edge" d="M360,89 H468" marker-end="url(#ar)"/>
+  <text class="lbl" x="414" y="80">/extract-cards</text>
+
+  <g class="state"><rect x="472" y="70" width="96" height="38" rx="6"/>
+    <text x="520" y="94">carded</text></g>
+  <path class="edge you" d="M568,88 H696" marker-end="url(#ar)"/>
+  <text class="lbl you" x="632" y="79">s</text>
+
+  <g class="state out"><rect x="700" y="70" width="96" height="36" rx="6"/>
+    <text x="748" y="93">skipped</text></g>
+
+  <path class="edge you back" d="M748,70 V30 H160 V68" marker-end="url(#ar)"/>
+  <text class="lbl you" x="452" y="24">u — returns any unit to new, a carded one included</text>
+
+  <!-- what a unit gains, stacked under it -->
+  <g class="prop">
+    <rect x="90" y="150" width="300" height="52" rx="6"/>
+    <text x="102" y="170">transcription — /transcribe</text>
+    <text class="sub" x="102" y="190">none → ok · the crop, read into tex_auto</text>
+  </g>
+  <path class="edge dash" d="M138,108 V148" marker-end="url(#ar)"/>
+
+  <g class="overlay">
+    <rect x="90" y="222" width="300" height="56" rx="6"/>
+    <text x="102" y="242">suggestion — /classify</text>
+    <text class="sub" x="102" y="262">proposed, never applied · a accept · d dismiss</text>
+  </g>
+  <path class="edge dash" d="M240,202 V220" marker-end="url(#ar)"/>
+  <text class="lbl" x="320" y="216">classify reads it</text>
+
+  <path class="edge dash" d="M90,250 H40 V95 H86" marker-end="url(#ar)"/>
+  <text class="lbl" x="240" y="300">a applies whatever state it proposed — usually skipped, not only skipped</text>
+
+  <!-- the bridge -->
+  <path class="edge" d="M520,108 V340 H25 V399 H86" marker-end="url(#ar)"/>
+  <text class="lbl" x="330" y="334">writes a card file</text>
+
+  <!-- card lane -->
+  <g class="state"><rect x="90" y="380" width="96" height="38" rx="6"/>
+    <text x="138" y="404">draft</text></g>
+
+  <path class="edge cycle" d="M108,380 V358 H168 V378" marker-end="url(#ar)"/>
+  <text class="lbl cycle" x="138" y="352">any edit — still a draft</text>
+
+  <path class="edge you" d="M186,399 H260" marker-end="url(#ar)"/>
+  <text class="lbl you" x="223" y="390">a</text>
+
+  <g class="state ok"><rect x="264" y="380" width="96" height="38" rx="6"/>
+    <text x="312" y="404">approved</text></g>
+  <path class="edge" d="M360,399 H688" marker-end="url(#ar)"/>
+  <text class="lbl" x="420" y="390">sync</text>
+  <g class="source"><text x="692" y="404">Anki</text></g>
+  <path class="gate" d="M560,391 V407"/>
+
+  <path class="edge cycle" d="M312,418 V446 H172 V420" marker-end="url(#ar)"/>
+  <text class="lbl cycle" x="242" y="464">any edit un-approves it — back to draft</text>
+
+  <path class="edge you" d="M110,418 V498" marker-end="url(#ar)"/>
+  <text class="lbl you" x="96" y="452">r</text>
+  <g class="state out"><rect x="62" y="500" width="96" height="36" rx="6"/>
+    <text x="110" y="523">rejected</text></g>
+
+  <!-- annotations: everywhere, so pointed nowhere in particular -->
+  <g class="overlay warn">
+    <rect x="380" y="470" width="560" height="112" rx="6"/>
+    <text x="392" y="492">@claude / @me annotation — n</text>
+    <text class="sub" x="392" y="512">on any unit or any card, at any state, from either side</text>
+    <text class="sub" x="392" y="532">@claude is work for the model · @me is yours to decide</text>
+    <text class="sub" x="392" y="552">/triage resolves it — and resolving is an edit, so an</text>
+    <text class="sub" x="392" y="572">approved card drops back to draft</text>
+  </g>
+  <path class="edge dash warn" d="M560,468 V409" marker-end="url(#ar)"/>
+  <text class="lbl warn" x="572" y="440">blocks sync, wherever it sits</text>
+</svg>
+<figcaption>
+  Two objects, two gates. Everything in <b class="you-key">accent</b> is a
+  decision only you make; everything else is mechanical or a command.
+  <b>Transcription</b> is a property a unit gains, not a state. A
+  <b>suggestion</b> proposes a state and never applies it. An
+  <b>annotation</b> attaches anywhere — which is why it has no arrow to any
+  one box — and <b>stops sync</b> until it is resolved.
+</figcaption>
+</figure>

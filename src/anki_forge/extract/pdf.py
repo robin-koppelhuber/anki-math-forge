@@ -566,14 +566,20 @@ def heading_on_page(lines: list[Line]) -> str | None:
     return None
 
 
-def context_for(region: Region, blocks: list[Block], limit: int = 400) -> str:
+def context_for(region: Region, blocks: list[Block], body_left: float, limit: int = 400) -> str:
     """The prose above an equation region.
 
-    Only blocks flush against the text margin: the surrounding sentences, not
-    whatever equation happens to sit above this one.
+    Only blocks flush against the text margin -- the surrounding sentences,
+    not whatever equation happens to sit above this one. Display math is
+    always indented clear of the margin, which is the same test
+    `anchored_regions` uses to keep prose *out* of a crop; using it here keeps
+    the two consistent.
+
+    Without the filter this returns the mangled text layer of neighbouring
+    equations, which is worse than returning nothing: it looks like context.
     """
     top = region.bbox[1]
-    before = [b.text for b in blocks if b.bbox[3] <= top]
+    before = [b.text for b in blocks if b.bbox[3] <= top and b.bbox[0] <= body_left + MARGIN_SLACK]
     return " ".join(" ".join(before).split())[-limit:].strip()
 
 
@@ -639,7 +645,7 @@ def segment(
                             page=page_number,
                             bbox=[round(v, 1) for v in bbox],
                         ),
-                        context=context_for(region, blocks),
+                        context=context_for(region, blocks, body_left),
                         state="new",
                     )
                 )

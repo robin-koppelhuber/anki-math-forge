@@ -96,9 +96,8 @@ def run(
     report.text_chars = cache_source_text(config, source_name)
 
     ledger_path = config.units_path(source_name)
-    ledger = Ledger.load(ledger_path)
-    report.added, report.refreshed = ledger.upsert(units)
-    ledger.save()
+    with Ledger.edit(ledger_path) as ledger:
+        report.added, report.refreshed = ledger.upsert(units)
     return report
 
 

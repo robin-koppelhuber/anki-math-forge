@@ -21,16 +21,47 @@ function refresh(item, card) {
   }
 }
 
+/* Same contract as the units view: the server returns what it replaced, so
+   `z` restores exactly that. Approving stamps `content_hash` and rejecting
+   drops it, so a status-only undo would leave the card in a state it was
+   never in. */
+const undoStack = [];
+
+async function undo() {
+  const step = undoStack.pop();
+  if (!step) {
+    toast("nothing to undo");
+    return;
+  }
+  const item = deck.items.find((node) => node.dataset.uid === step.uid);
+  const result = await post(`/api/cards/${step.uid}/restore`, {
+    snapshot: step.before,
+    mtime: item ? item.dataset.mtime : "",
+  });
+  if (item) {
+    refresh(item, result.card);
+    delete item.dataset.settled;
+    const banner = item.querySelector(".settled");
+    if (banner) banner.remove();
+    deck.show(deck.items.indexOf(item));
+  }
+  toast(`undone: ${step.what} → back to ${result.card.status}`);
+}
+
 async function act(verb) {
   const item = deck.current;
   if (!item) return;
   const result = await post(`/api/cards/${item.dataset.uid}/${verb}`, {
     mtime: item.dataset.mtime,
   });
+  if (result.before) undoStack.push({ uid: item.dataset.uid, before: result.before, what: verb });
   refresh(item, result.card);
-  toast(`${result.card.uid} → ${result.card.status}`);
-  if (activeStatus !== "all" && result.card.status !== activeStatus) deck.drop();
-  else deck.next();
+  toast(`${result.card.uid} → ${result.card.status} · z undoes`);
+  if (activeStatus !== "all" && result.card.status !== activeStatus) {
+    deck.settle(result.card.status);
+  } else {
+    deck.next();
+  }
 }
 
 async function annotate() {
@@ -54,12 +85,15 @@ async function openEditor() {
 }
 
 bindKeys({
+  "?": cycleGuide,
+  f: toggleFilters,
+  z: undo,
   a: () => act("approve"),
   r: () => act("reject"),
   e: openEditor,
   n: annotate,
-  j: () => deck.next(),
+  j: () => deck.nextPending(),
   k: () => deck.prev(),
-  ArrowDown: () => deck.next(),
+  ArrowDown: () => deck.nextPending(),
   ArrowUp: () => deck.prev(),
 });

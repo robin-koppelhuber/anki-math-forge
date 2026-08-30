@@ -33,6 +33,7 @@ class Config:
     root: Path
     cards_dir: Path
     sources_dir: Path
+    work_dir: Path
     language: str
     layout: str
     front_char_cap: int
@@ -59,6 +60,17 @@ class Config:
 
     def units_path(self, source: str) -> Path:
         return self.sources_dir / source / "units.jsonl"
+
+    def scratch(self, *parts: str) -> Path:
+        """A directory for intermediate files, created on demand.
+
+        One predictable place for crops, page renders and scratch LaTeX, so a
+        pass leaves nothing behind in the repo root and a crashed agent leaves
+        something obviously disposable instead of `.tx-10-hi`.
+        """
+        path = self.work_dir.joinpath(*parts) if parts else self.work_dir
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
 
 def find_root(start: Path | None = None) -> Path:
@@ -98,6 +110,7 @@ def load(root: Path | None = None) -> Config:
         root=root,
         cards_dir=root / repo.get("cards_dir", "cards"),
         sources_dir=root / repo.get("sources_dir", "sources"),
+        work_dir=root / repo.get("work_dir", ".forge"),
         language=cards.get("language", "en"),
         layout=cards.get("layout", "denominator"),
         front_char_cap=int(cards.get("front_char_cap", 160)),
