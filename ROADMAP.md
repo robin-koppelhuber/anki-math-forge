@@ -263,6 +263,41 @@ transposes — are where it earns its keep, and none of them are carded yet.
 
 ---
 
+## 6. A "daily proof" challenge (idea, not scheduled)
+
+One theorem a day, presented as something to reconstruct rather than recall:
+the fundamental theorem of algebra, Abel-Ruffini (no general solution in
+radicals for degree 5 and above), irrationality of sqrt 2, Cantor's diagonal
+argument, and their kin.
+
+This is a **different object from an identity card**, which is why it does not
+just become another `type`. An identity card asks for one answer and is graded
+in a second. A proof is a structure: you either reconstruct the argument or you
+do not, the answer is a paragraph, and grading it against a stored back is not
+what makes it useful. Forcing it into the current card format would produce a
+front too broad to have one answer, which the card-writing skill exists to
+prevent.
+
+Two shapes worth considering, and they are not equivalent:
+
+- **As Anki**, a `proof` card type: front the statement, back the argument in
+  named steps, and the review is "did I get the shape". Cheap, reuses the
+  whole pipeline, and inherits the wrong grading model.
+- **As a standalone page**, one theorem a day with the steps revealed on
+  demand. Escapes the recall-grading model entirely, but is a second product
+  with its own state, and this repo's premise is that files are the truth and
+  the app is a view over them.
+
+Open questions before either is worth building. What is the source? The
+Cookbook has no proofs, so this needs its own corpus and the extraction
+pipeline may not apply at all. What is being reviewed -- the statement, the
+key idea, or the full argument? And is spaced repetition even the right
+schedule for something you work through rather than recall?
+
+Not scheduled. Recorded so the idea is not lost, and so that a future
+`type: proof` is a deliberate decision rather than a card format bent until it
+fits.
+
 ## Considered and rejected
 
 **Docling** (and marker, MinerU). Measured on this book: 19.7 s/page against

@@ -1,14 +1,39 @@
 ---
 description: Work the open @claude annotations
+argument-hint: [claude|me|cards|units|<status>|<state>]
 ---
 
 Resolve open annotations on cards and units.
 
-1. Read the list:
+Arguments: `$ARGUMENTS` — optional, and any combination of these filters:
+
+- **`claude`** or **`me`** — whose notes. `claude` is the work there is to do;
+  `me` is a review of what is parked for the human, and changes nothing.
+- **`cards`** or **`units`** — one side of the pipeline only.
+- a card status (`draft`, `approved`, `rejected`) or a unit state (`new`,
+  `queued`, `skipped`, `carded`) — only things at that stage.
+- nothing — everything open.
+
+**`/triage claude` is the common case**: every note you can actually act on,
+and nothing else. Without it the list is mostly `@me` items you are only
+allowed to report, and the work queues behind the reading.
+
+The stage filter matters for a different reason. An annotation on an
+`approved` card is blocking a sync *now*; one on a `new` unit is a note to
+whoever cards it, some day. Working them in one undifferentiated list means
+the urgent ones queue behind the speculative ones.
+
+1. Read the list. `todo` filters on `--audience`, `--kind` and `--status`,
+   which are the same three fields `--json` carries. Pass the filter to the
+   command; do not match on the prose:
 
    ```
-   uv run anki-forge todo --json
+   uv run anki-forge todo --audience claude --json
+   uv run anki-forge todo --audience claude --kind unit --status queued
    ```
+
+   Then say in your report how many you left untouched, so the rest are not
+   silently forgotten.
 
 2. For each item, do what it asks. The common ones:
 
@@ -24,6 +49,10 @@ Resolve open annotations on cards and units.
 
 3. **Resolving means deleting the `@claude` line** from `## notes` and making
    the edit. Both, in the same pass. A note left behind keeps blocking sync.
+
+   Before deleting one whose text is worth keeping — a segmentation map, a
+   correction, an argument — append it to `sources/<name>/notes-archive.md`
+   first. `cards/` and the ledger have no other undo.
 
    The edit changes `content_hash`, so an approved card drops back to `draft`
    and re-enters review automatically. That is the intended behaviour — do not
@@ -42,6 +71,10 @@ For a **unit** annotation, act on it and then clear it:
 uv run anki-forge units --id <unit-id> --resolve-notes
 uv run anki-forge units --id <unit-id> --set-state queued     # or skipped --reason ...
 ```
+
+`--resolve-notes` clears `@claude` only, which is its default. `--audience all`
+also deletes the `@me` decision parked on the same unit, so reach for it only
+when that is what you mean.
 
 That is the unit equivalent of deleting the `@claude` line from a card's
 `## notes`; without it the annotation sits in `todo` for ever.

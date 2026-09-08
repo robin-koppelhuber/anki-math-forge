@@ -78,3 +78,38 @@ def test_no_vocabulary_is_baked_in() -> None:
     body = source.split('"""', 2)[-1]
     for word in ("symmetric", "hermitian", "positive definite", "full rank"):
         assert word not in body.lower(), f"{word!r} is back in the code"
+
+
+def test_conventions_come_from_the_source(config: Config) -> None:
+    """Per source, not per project.
+
+    "Denominator layout" and "entries are real" are facts about one book. In
+    the project's own contract they would be wrong the moment a second source
+    arrived, and a card writer would be reading conventions that do not apply
+    to the page in front of them.
+    """
+    led = Ledger(config.units_path("demo"))
+    led.units.append(Unit(id="demo:1:1", locator=Locator(section="1", page=1)))
+    led.save()
+    _source(config, "## page 1\nsomething\n")
+
+    path = config.sources_dir / "demo" / "conventions.md"
+    path.write_text("# Conventions\n\n- entries are quaternions\n", encoding="utf-8")
+
+    found = context.assemble(config, "demo:1:1")
+    assert found is not None
+    assert "quaternions" in found.conventions
+    assert "quaternions" in found.format()
+
+
+def test_a_source_with_no_conventions_says_so(config: Config) -> None:
+    """Silence would read as "there are none", which is never why they are absent."""
+    led = Ledger(config.units_path("demo"))
+    led.units.append(Unit(id="demo:1:1", locator=Locator(section="1", page=1)))
+    led.save()
+    _source(config, "## page 1\nsomething\n")
+
+    found = context.assemble(config, "demo:1:1")
+    assert found is not None
+    assert found.conventions == ""
+    assert "none recorded" in found.format(), "an absent convention is a writer guessing"

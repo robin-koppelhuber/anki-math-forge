@@ -24,6 +24,13 @@
 
 * { box-sizing: border-box; }
 
+/* `hidden` must win. Any class rule that sets `display` outranks the browser's
+   own `[hidden] { display: none }` -- `.card.item { display: grid }` did, so
+   every card in the deck was on screen at once and only the first had been
+   through KaTeX. The review view had never had a card in it, so nothing
+   showed until it did. */
+[hidden] { display: none !important; }
+
 body {
   margin: 0;
   font: 16px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -56,7 +63,17 @@ footer.bar { border-bottom: 0; border-top: 1px solid var(--line); margin-top: au
 .views a.on { color: var(--ink); border-bottom: 2px solid var(--accent); }
 
 .filters { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
-.source-name { font-weight: 600; margin-right: 0.4rem; }
+.source-pick {
+  font: inherit;
+  font-weight: 600;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  max-width: 14rem;
+}
+.source-pick:hover { border-color: var(--accent); }
 
 .chip {
   color: var(--muted);
@@ -126,7 +143,7 @@ main {
    a row. The position is remembered. */
 .side-by-side {
   display: grid;
-  grid-template-columns: var(--split, 1fr) 18px var(--split-right, 1fr);
+  grid-template-columns: var(--split-units, 1fr) 18px var(--split-units-right, 1fr);
   gap: 0;
   align-items: start;
 }
@@ -190,8 +207,18 @@ main {
 
 /* -- review -------------------------------------------------------------- */
 
-.card.item { display: grid; grid-template-columns: 1fr 260px; gap: 1.8rem; }
-@media (max-width: 860px) { .card.item { grid-template-columns: 1fr; } }
+/* Body beside metadata, with the same draggable split as the units view.
+   How much room the crop and the findings deserve is not a layout decision
+   the stylesheet can make once for every card. */
+.card.item {
+  display: grid;
+  grid-template-columns: var(--split-card, 1fr) 18px var(--split-card-right, 260px);
+  gap: 0.9rem;
+}
+@media (max-width: 860px) {
+  .card.item { grid-template-columns: 1fr; }
+  .card.item .splitter { display: none; }
+}
 
 .card-body { min-width: 0; }
 .sec { margin-bottom: 1.3rem; overflow-x: auto; }
@@ -766,3 +793,114 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 /* The compact diagram is the opposite case: it is built to be narrow, so it
    should track the rail exactly. */
 .at-a-glance .fsm svg { min-width: 0; }
+
+/* Fenced code in a card -- `## verify` is Python. `<pre>` deliberately: KaTeX
+   skips it, which is what you want for code and wrong for prose. */
+.sec pre.code {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.8rem;
+  font-size: 12.5px;
+  line-height: 1.45;
+  overflow-x: auto;
+  text-align: left;
+  margin: 0.4rem 0;
+}
+
+/* Annotations on a card. Each is its own row because each is resolved on its
+   own, and resolving means deleting that line. */
+.annotations { list-style: none; margin: 0.6rem 0; padding: 0; display: grid; gap: 0.35rem; }
+.annotation {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.4rem;
+  align-items: start;
+  padding: 0.35rem 0.45rem;
+  border-left: 3px solid var(--line);
+  background: var(--panel, rgba(127, 127, 127, 0.07));
+  font-size: 0.9em;
+}
+.annotation.me { border-left-color: var(--accent); }
+.annotation .who { font-weight: 600; opacity: 0.75; white-space: nowrap; }
+.annotation .what { white-space: pre-wrap; }
+.annotation .resolve {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  padding: 0 0.4rem;
+  opacity: 0.6;
+}
+.annotation .resolve:hover { opacity: 1; border-color: var(--accent); }
+
+/* The x on an active filter. It is the affordance that says the row can be
+   turned off; without it the only clue was that clicking might do something. */
+.filter-list .clear-mark {
+  font-style: normal;
+  opacity: 0.7;
+  margin-right: 0.3rem;
+  font-weight: 600;
+}
+.filter-list a.on:hover .clear-mark { opacity: 1; }
+
+/* Which population the mini diagram counts. */
+.counts-scope { display: flex; gap: 0.25rem; margin: 0 0 0.4rem; font-size: 12px; }
+.counts-scope a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.counts-scope a.on { color: var(--panel); background: var(--accent); border-color: var(--accent); }
+.counts-scope a:hover { color: var(--ink); }
+.counts-scope a.on:hover { color: var(--panel); }
+
+/* A section row: name, the state split as a bar, and how many rows clicking
+   it would show. The bar is there because one ratio cannot say where a
+   section stands when there are four states it could be spread across. */
+.filter-list.sections a { align-items: center; gap: 0.4rem; }
+.sec-name { flex: 0 0 auto; }
+.sec-bar {
+  flex: 1 1 auto;
+  display: flex;
+  height: 5px;
+  min-width: 1.5rem;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--line);
+}
+.sec-bar .seg { display: block; height: 100%; }
+.seg.state-new,
+.seg.state-draft { background: var(--warn); }
+.seg.state-queued { background: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.seg.state-carded,
+.seg.state-approved { background: var(--accent); }
+.seg.state-skipped,
+.seg.state-rejected { background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.filter-list.sections a.on .sec-bar { background: color-mix(in srgb, var(--panel) 35%, transparent); }
+
+/* The key for the section bars: swatch and word, one line, in pipeline order. */
+.bar-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.1rem 0.55rem;
+  margin: 0.1rem 0 0.45rem 0.4rem;
+  font-size: 11px;
+  color: var(--muted);
+}
+.bar-key span { display: inline-flex; align-items: center; gap: 0.25rem; }
+.bar-key .seg {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 2px;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+/* The carded -> draft crossing is not a transition: one command produces the
+   draft and marks the unit, so the edge is drawn as a seam rather than a step. */
+.fsm.mini .edge.dash { stroke-dasharray: 2 3; }

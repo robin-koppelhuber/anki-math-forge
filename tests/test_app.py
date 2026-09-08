@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -333,23 +335,55 @@ def test_units_view_has_a_section_filter_rail(config: Config, units: Ledger) -> 
     assert "deck-column" in page
 
 
-def test_section_tree_groups_by_chapter(config: Config) -> None:
-    from anki_forge.app import section_tree
-    from anki_forge.ledger import Ledger, Locator, Unit
+def demo_units() -> list[Any]:
+    from anki_forge.ledger import Locator, Unit
 
-    led = Ledger(config.sources_dir / "s" / "units.jsonl")
-    led.units.extend(
-        [
-            Unit(id="s:eq:1", locator=Locator(section="2.1"), transcription="ok"),
-            Unit(id="s:eq:2", locator=Locator(section="2.4"), state="skipped"),
-            Unit(id="s:eq:3", locator=Locator(section="10.1")),
-        ]
+    return [
+        Unit(id="s:eq:1", locator=Locator(section="2.1"), transcription="ok"),
+        Unit(id="s:eq:2", locator=Locator(section="2.4"), state="skipped"),
+        Unit(id="s:eq:3", locator=Locator(section="10.1")),
+    ]
+
+
+def rows_for(shown: set[str]) -> dict[str, Any]:
+    from anki_forge.app import UNIT_STATES, section_rows
+
+    tree = section_rows(
+        demo_units(),
+        shown,
+        lambda u: u.locator.section,
+        lambda u: u.state,
+        lambda u: u.id,
+        UNIT_STATES,
     )
-    tree = {g["chapter"]: g for g in section_tree(led)}
+    return {g["chapter"]: g for g in tree}
+
+
+def test_section_rows_group_by_chapter(config: Config) -> None:
+    tree = rows_for({"s:eq:1", "s:eq:2", "s:eq:3"})
     assert set(tree) == {"2", "10"}
     assert tree["2"]["total"] == 2
-    assert tree["2"]["undecided"] == 1, "a skipped unit is decided"
     assert tree["10"]["sections"][0]["name"] == "10.1"
+
+
+def test_the_section_count_is_what_clicking_would_show(config: Config) -> None:
+    """It used to count one hard-coded state, so once nothing was `new` every
+    row read `0/x` for ever. It has to move with the other filters."""
+    assert rows_for({"s:eq:1", "s:eq:2", "s:eq:3"})["2"]["matching"] == 2
+    assert rows_for({"s:eq:2"})["2"]["matching"] == 1, "the filter narrowed it"
+    assert rows_for(set())["2"]["matching"] == 0
+    assert rows_for(set())["2"]["total"] == 2, "the total does not move"
+
+
+def test_section_rows_carry_the_whole_state_split(config: Config) -> None:
+    """One ratio cannot say where a section stands across four states."""
+    tree = rows_for(set())
+    by_name = {r["name"]: r for g in tree.values() for r in g["sections"]}
+    assert by_name["2.1"]["states"] == {"new": 1, "queued": 0, "carded": 0, "skipped": 0}
+    assert by_name["2.4"]["states"]["skipped"] == 1
+    # ...and as bar widths, so it can be read without hovering
+    assert by_name["2.4"]["bar"] == [{"state": "skipped", "n": 1, "pct": 100.0}]
+    assert sum(part["pct"] for part in by_name["2.1"]["bar"]) == 100.0
 
 
 def test_absent_suggestion_is_explained_not_silent(config: Config, units: Ledger) -> None:
@@ -527,9 +561,19 @@ def test_the_compact_diagram_uses_the_same_counts_as_the_filters(
 
     counts = pipeline_counts(config)
     assert counts["queued"] == 1
-    # the mini diagram renders it, and so does the filter rail's list
-    assert f'>{counts["queued"]}</text>' in page
-    assert f'queued<b>{counts["queued"]}</b>' in page
+    n = counts["queued"]
+    # The rail and the diagram carry the same number under different tags:
+    # the rail is always the whole source, the diagram follows `counts_scope`,
+    # so one repaint must not be able to overwrite the other.
+    assert re.search(rf'data-count="queued"[^>]*>{n}<', page), "the rail lost the count"
+    assert re.search(rf'data-fsm-count="queued"[^>]*>{n}<', page), "the diagram lost it"
+    assert page.count('data-count="queued"') == 1, "one owner per tag"
+
+    # ...and with a scope of `filtered` they are allowed to differ, because
+    # they are then answering different questions.
+    scoped = client.get("/units?state=queued&counts_scope=filtered&section=1.1").text
+    assert re.search(r'data-count="new"[^>]*>[1-9]', scoped), "the rail still counts everything"
+    assert re.search(r'data-fsm-count="new"[^>]*>0<', scoped), "the diagram counts the filter"
 
 
 def test_the_guide_has_a_handle_that_survives_being_hidden(
@@ -588,10 +632,10 @@ def test_the_splitter_track_is_wide_enough_to_grab(client: TestClient) -> None:
     css = (
         _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static" / "app.css"
     ).read_text(encoding="utf-8")
-    track = re.search(r"grid-template-columns: var\(--split, 1fr\) (\d+)px", css)
-    assert track, "the split grid changed shape"
-    width = int(track.group(1))
-    assert width >= 12, f"a {width}px handle is too thin to grab"
+    tracks = re.findall(r"grid-template-columns: var\(--split-[\w-]+[^)]*\) (\d+)px", css)
+    assert len(tracks) >= 2, "expected a draggable split in both the units and review views"
+    for width in (int(w) for w in tracks):
+        assert width >= 12, f"a {width}px handle is too thin to grab"
 
     rule = re.search(r"\.splitter \{([^}]*)\}", css)
     assert rule and "margin: 0;" in rule.group(1), (
@@ -637,3 +681,708 @@ def test_the_guide_remembers_its_two_widths_separately() -> None:
     assert '"anki-forge.rail-right"' in js
     assert '"anki-forge.rail-right-full"' in js
     assert "--rail-right-full" in js
+
+
+def test_katex_is_served_locally_when_installed(config: Config, units: Ledger) -> None:
+    """The CDN default fails silently: `renderMathInElement` is undefined,
+    nothing throws, and every card shows raw `$...$` as though its LaTeX were
+    wrong. `npm install katex` is already required for `check`, so use it."""
+    dist = config.root / "node_modules" / "katex" / "dist" / "contrib"
+    dist.mkdir(parents=True)
+    (dist.parent / "katex.min.js").write_text("//", encoding="utf-8")
+    (dist / "auto-render.min.js").write_text("//", encoding="utf-8")
+
+    auto = dataclasses.replace(config, katex_base="")  # "" means decide at startup
+    client = TestClient(create_app(auto))
+    page = client.get("/units").text
+    assert "/katex/katex.min.js" in page
+    assert client.get("/katex/katex.min.js").status_code == 200
+    assert client.get("/katex/contrib/auto-render.min.js").status_code == 200
+
+
+def test_the_cdn_is_the_fallback_when_katex_is_not_installed(
+    config: Config, units: Ledger
+) -> None:
+    auto = dataclasses.replace(config, katex_base="")
+    page = TestClient(create_app(auto)).get("/units").text
+    assert "cdn.jsdelivr.net" in page, "no local copy, so fall back rather than break"
+
+
+def test_a_configured_katex_base_still_wins(config: Config, units: Ledger) -> None:
+    page = TestClient(
+        create_app(dataclasses.replace(config, katex_base="https://example.test/katex"))
+    ).get("/units").text
+    assert "https://example.test/katex/katex.min.js" in page
+
+
+def test_the_template_never_renders_an_empty_katex_base(config: Config, units: Ledger) -> None:
+    """Templates reload per request; Python does not reload until a restart.
+
+    That mismatch shipped a broken page: the new template asked for a global
+    the old process had never set, so every asset URL came out as
+    `/katex.min.css` and KaTeX silently failed to load. The template carries
+    its own fallbacks so it renders something usable against either.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    base = (
+        _Path(__file__).resolve().parents[1]
+        / "src" / "anki_forge" / "app" / "templates" / "base.html"
+    ).read_text(encoding="utf-8")
+    assert 'default("", true)' in base, "the global must have a fallback"
+    assert "cdn.jsdelivr.net" in base, "and a last-resort URL"
+
+    page = TestClient(create_app(config)).get("/units").text
+    for ref in re.findall(r'(?:href|src)="([^"]*katex[^"]*)"', page):
+        assert not ref.startswith("/katex.min"), f"empty base rendered: {ref}"
+        assert ref.startswith(("http", "/katex/", "/static/")), ref
+
+
+def test_hidden_beats_every_display_rule() -> None:
+    """`item.hidden = true` is how the deck shows one thing at a time.
+
+    A class rule that sets `display` outranks the browser's own
+    `[hidden] { display: none }`. `.card.item { display: grid }` did exactly
+    that, so every card was on screen at once and only the first had been
+    through KaTeX -- which read as "only the first card renders".
+    """
+    import re
+    from pathlib import Path as _Path
+
+    css = (
+        _Path(__file__).resolve().parents[1]
+        / "src" / "anki_forge" / "app" / "static" / "app.css"
+    ).read_text(encoding="utf-8")
+    # Comments quote the rule they explain; searching them finds the wrong one.
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    rule = re.search(r"\[hidden\]\s*\{([^}]*)\}", css)
+    assert rule, "nothing makes [hidden] authoritative"
+    assert "display: none" in rule.group(1)
+    assert "!important" in rule.group(1), "without it any class rule still wins"
+
+
+def test_an_approved_card_can_be_sent_back_to_draft(config: Config) -> None:
+    """Changing your mind is not an edit.
+
+    Editing an approved card un-approves it as a side effect, but reaching for
+    the editor to make a token change would be a worse way to say so.
+    """
+    card = model.Card(
+        frontmatter={"uid": "abc123", "type": "identity", "status": "draft"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    path = config.cards_dir / "abc123-x.md"
+    card.save(path)
+    client = TestClient(create_app(config))
+
+    client.post("/api/cards/abc123/approve", json={"mtime": str(path.stat().st_mtime_ns)})
+    assert model.load(path).status == "approved"
+    assert model.load(path).frontmatter.get("content_hash")
+
+    result = client.post(
+        "/api/cards/abc123/unapprove", json={"mtime": str(path.stat().st_mtime_ns)}
+    ).json()
+    assert result["card"]["status"] == "draft"
+    back = model.load(path)
+    assert back.status == "draft"
+    assert "content_hash" not in back.frontmatter, "an unapproved card must not sync"
+
+
+def test_both_middle_splits_are_draggable(config: Config, units: Ledger) -> None:
+    """The units view splits crop from transcription, the review view splits
+    the card from its metadata. Both ratios are per-viewer, not per-stylesheet."""
+    model.Card(
+        frontmatter={"uid": "abc123", "type": "identity", "status": "draft"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    ).save(config.cards_dir / "abc123-x.md")
+
+    client = TestClient(create_app(config))
+    assert 'data-splitter="units"' in client.get("/units").text
+    assert 'data-splitter="card"' in client.get("/review").text
+
+
+def test_each_split_remembers_its_own_width() -> None:
+    """One stored number for both meant dragging one silently resized the other."""
+    from pathlib import Path as _Path
+
+    js = (
+        _Path(__file__).resolve().parents[1]
+        / "src" / "anki_forge" / "app" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+    assert '"anki-forge.split.units"' in js
+    assert '"anki-forge.split.card"' in js
+
+
+def test_every_bound_key_is_in_the_footer() -> None:
+    """The footer is the only place the keys are advertised.
+
+    `u` (send an approved card back to draft) was bound and unlisted, so it
+    existed only for whoever read the source. A keymap and a legend maintained
+    by hand drift; this notices.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    app = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app"
+    for view in ("units", "review"):
+        js = (app / "static" / f"{view}.js").read_text(encoding="utf-8")
+        block = js[js.index("bindKeys({") :]
+        bound = {k for k in re.findall(r'^\s{2}"?([A-Za-z?])"?:', block, re.M)}
+
+        html = (app / "templates" / f"{view}.html").read_text(encoding="utf-8")
+        start = html.index("{% block keys %}")
+        keys = html[start : html.index("{% endblock %}", start)]
+        listed = {k for entry in re.findall(r"<b>([^<]+)</b>", keys) for k in entry.split("/")}
+
+        assert bound <= listed, f"{view}: bound but not in the footer: {sorted(bound - listed)}"
+
+
+def test_every_mutation_returns_fresh_counts(config: Config, units: Ledger) -> None:
+    """The filter rail is what you navigate by; a stale count misdirects.
+
+    Both the rail and the guide's diagram render `pipeline`, so a decision
+    that changed a state used to leave every number on screen wrong until a
+    page load.
+    """
+    led = Ledger.load(config.units_path("demo"))
+    unit = led.units[0]
+    client = TestClient(create_app(config))
+    path = config.units_path("demo")
+
+    before = client.get("/api/counts").json()["pipeline"]
+    result = client.post(
+        f"/api/units/demo/{unit.id}/state",
+        json={"state": "queued", "mtime": str(path.stat().st_mtime_ns)},
+    ).json()
+
+    assert "pipeline" in result, "a mutation must hand back the counts it changed"
+    assert result["pipeline"]["queued"] == before["queued"] + 1
+    assert result["pipeline"]["new"] == before["new"] - 1
+
+
+def test_the_counts_have_somewhere_to_be_painted() -> None:
+    """`data-count` is the contract between the templates and app.js."""
+    import re
+    from pathlib import Path as _Path
+
+    app = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app"
+    js = (app / "static" / "app.js").read_text(encoding="utf-8")
+    assert "[data-count]" in js, "nothing repaints the rail"
+    assert "[data-fsm-count]" in js, "nothing repaints the diagram"
+
+    states = {"new", "queued", "carded", "skipped", "draft", "approved"}
+    rail = (app / "templates" / "_filters.html").read_text(encoding="utf-8")
+    diagram = (app / "templates" / "_fsm_mini.html").read_text(encoding="utf-8")
+    assert states <= set(re.findall(r'data-count="(\w+)"', rail))
+    assert states <= set(re.findall(r'data-fsm-count="(\w+)"', diagram))
+
+
+def test_undo_survives_a_page_load() -> None:
+    """Clicking a rail link is a navigation.
+
+    An in-page stack died on that click -- so a mis-pressed key became
+    permanent the moment you changed filter, which is when you would go
+    looking for undo.
+    """
+    from pathlib import Path as _Path
+
+    js = (
+        _Path(__file__).resolve().parents[1]
+        / "src" / "anki_forge" / "app" / "static" / "app.js"
+    ).read_text(encoding="utf-8")
+    assert "sessionStorage" in js
+    assert "anki-forge.undo" in js
+    for view in ("units", "review"):
+        src = (
+            _Path(__file__).resolve().parents[1]
+            / "src" / "anki_forge" / "app" / "static" / f"{view}.js"
+        ).read_text(encoding="utf-8")
+        assert "loadUndo()" in src, f"{view} does not restore the stack"
+        assert "saveUndo(undoStack)" in src, f"{view} does not persist it"
+
+
+def test_the_review_view_matches_the_anki_prompt(config: Config) -> None:
+    """What you approve should be what you review.
+
+    `conditions` belongs above the answer rule, as it does in the note type;
+    otherwise the web view and Anki disagree about what the question was.
+    """
+    import re
+
+    model.Card(
+        frontmatter={"uid": "abc123", "type": "identity", "status": "draft"},
+        sections=[
+            model.Section("front", "$a$"),
+            model.Section("back", "$b$"),
+            model.Section("conditions", "$X$ square."),
+        ],
+    ).save(config.cards_dir / "abc123-x.md")
+
+    page = TestClient(create_app(config)).get("/review").text
+    article = re.search(r'<article class="card item".*?</article>', page, re.S).group(0)
+    found = re.findall(r'sec sec-(\w+)|(<hr class="answer-rule">)', article)
+    order = [m or "RULE" for m, _ in found]
+    assert order.index("conditions") < order.index("RULE"), "conditions must precede the answer"
+    assert order.index("RULE") < order.index("back")
+
+
+def test_code_fences_render_as_code_not_as_backticks() -> None:
+    """A `## verify` block is Python between triple backticks.
+
+    Rendered as text it showed the fences literally and KaTeX tried to read
+    the maths-like parts of the code. `<pre>` is right here for exactly the
+    reason it was wrong for notes: KaTeX skips it.
+    """
+    from anki_forge.app import render_body
+
+    out = str(render_body("before\n```python\nlhs = a < b\n```\nafter"))
+    assert "```" not in out
+    assert "<pre class='code'>" in out
+    assert "a &lt; b" in out, "code must still be escaped"
+    assert out.startswith("before")
+
+
+def test_the_filter_returns_markup_not_a_string(config: Config) -> None:
+    """A plain str would be escaped again by Jinja and shown as tags."""
+    from markupsafe import Markup
+
+    from anki_forge.app import render_body
+
+    assert isinstance(render_body("```\nx = 1\n```"), Markup)
+
+    model.Card(
+        frontmatter={"uid": "abc123", "type": "identity", "status": "draft"},
+        sections=[
+            model.Section("front", "$a$"),
+            model.Section("back", "$b$"),
+            model.Section("verify", "```python\nlhs = 1\nrhs = 1\n```"),
+        ],
+    ).save(config.cards_dir / "abc123-x.md")
+    page = TestClient(create_app(config)).get("/review").text
+    assert "&lt;pre" not in page
+    assert "<pre class='code'>" in page
+
+
+def test_the_guide_lists_every_bound_key() -> None:
+    """The guide is where a key is explained, the footer only names it.
+
+    Six keys were bound and absent from the guide -- including `?`, which
+    opens the guide. Two hand-maintained lists against one keymap drift.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    app = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app"
+    guide = (app / "templates" / "_guide.html").read_text(encoding="utf-8")
+    units_part, review_part = guide.split("{% else %}", 1)
+
+    for view, part in (("units", units_part), ("review", review_part)):
+        js = (app / "static" / f"{view}.js").read_text(encoding="utf-8")
+        block = js[js.index("bindKeys({") :]
+        bound = set(re.findall(r'^\s{2}"?([A-Za-z?])"?:', block, re.M))
+        listed: set[str] = set()
+        for dt in re.findall(r"<dt>(.*?)</dt>", part, re.S):
+            listed |= set(re.findall(r"<b>([A-Za-z?])</b>", dt))
+        assert bound <= listed, f"{view}: bound but unexplained: {sorted(bound - listed)}"
+
+
+# -- the source picker -----------------------------------------------------
+
+
+def write_card(config: Config, uid: str, unit: str) -> Path:
+    """A minimal valid card belonging to whichever source `unit` names."""
+    path = config.cards_dir / f"{uid}-x.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\n"
+        f"uid: {uid}\n"
+        "type: identity\n"
+        "status: draft\n"
+        'source: "somewhere"\n'
+        f'unit: "{unit}"\n'
+        "tags: []\n"
+        "verify: false\n"
+        "---\n\n"
+        "## front\n$X$\n\n## back\n$Y$\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_source_picker_is_on_both_views(client: TestClient, card_path: Path) -> None:
+    """It renders for a single source too. Its absence was what made the units
+    view look like it was showing every book at once."""
+    for url in ("/units", "/review"):
+        body = client.get(url).text
+        assert 'id="source-pick"' in body, url
+        assert 'value="demo"' in body, url
+
+
+def test_picker_lists_every_configured_source(pdf_source: Config) -> None:
+    body = TestClient(create_app(pdf_source)).get("/units").text
+    assert 'value="demo"' in body
+    assert 'value="book"' in body
+
+
+def test_review_scopes_to_the_selected_source(pdf_source: Config) -> None:
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "book:1.1:1")
+    client = TestClient(create_app(pdf_source))
+
+    only_demo = client.get("/review?source=demo").text
+    assert "aaa111" in only_demo
+    assert "bbb222" not in only_demo
+
+    only_book = client.get("/review?source=book").text
+    assert "bbb222" in only_book
+    assert "aaa111" not in only_book
+
+
+def test_a_card_naming_no_unit_shows_under_every_source(pdf_source: Config) -> None:
+    """Misfiled, not homeless. A view that hides it is worse than one that
+    shows it twice, because nothing else would ever surface it."""
+    write_card(pdf_source, "ccc333", "")
+    client = TestClient(create_app(pdf_source))
+    assert "ccc333" in client.get("/review?source=demo").text
+    assert "ccc333" in client.get("/review?source=book").text
+
+
+def test_unknown_source_falls_back_rather_than_emptying(
+    client: TestClient, card_path: Path
+) -> None:
+    """A stale link should land somewhere real."""
+    response = client.get("/review?source=no-such-book")
+    assert response.status_code == 200
+    assert "7f3a2b" in response.text
+
+
+def test_pipeline_counts_scope_to_one_source(pdf_source: Config) -> None:
+    from anki_forge.app import pipeline_counts
+
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "book:1.1:1")
+    assert pipeline_counts(pdf_source)["draft"] == 2
+    assert pipeline_counts(pdf_source, "demo")["draft"] == 1
+    assert pipeline_counts(pdf_source, "book")["draft"] == 1
+
+
+def test_view_links_carry_the_source(pdf_source: Config) -> None:
+    """Switching view must not silently switch book."""
+    write_card(pdf_source, "bbb222", "book:1.1:1")
+    body = TestClient(create_app(pdf_source)).get("/review?source=book").text
+    assert 'href="/units?source=book"' in body
+    assert 'href="/review?source=book"' in body
+
+
+def test_rail_card_links_carry_the_source(pdf_source: Config) -> None:
+    write_card(pdf_source, "bbb222", "book:1.1:1")
+    body = TestClient(create_app(pdf_source)).get("/review?source=book").text
+    # `&` is escaped in an href now that the URL comes through a variable.
+    assert "/review?source=book&amp;status=draft" in body
+
+
+def test_source_name_comes_off_the_unit_id() -> None:
+    card = model.Card(
+        frontmatter={"uid": "a1b2c3", "unit": ["matrix-cookbook:3.1:148", "other:1:1"]},
+        sections=[],
+    )
+    assert card.source_name == "matrix-cookbook"
+    assert model.Card(frontmatter={"uid": "a1b2c3"}, sections=[]).source_name == ""
+
+
+def test_api_counts_take_a_source(pdf_source: Config) -> None:
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "book:1.1:1")
+    client = TestClient(create_app(pdf_source))
+    assert client.get("/api/counts?source=demo").json()["pipeline"]["draft"] == 1
+    assert client.get("/api/counts?source=book").json()["pipeline"]["draft"] == 1
+
+
+def test_the_default_source_is_the_first_in_the_toml(pdf_source: Config) -> None:
+    """Not alphabetical: which book you land on is a decision you make by
+    editing the config, not a consequence of its name."""
+    from anki_forge.app import resolve_source, source_names
+
+    assert source_names(pdf_source) == ["demo", "book"]
+    assert resolve_source(pdf_source, "") == "demo"
+
+
+# -- annotations: filtering, and the only way to finish with one ----------
+
+
+def annotate(config: Config, uid: str, unit: str, note: str) -> None:
+    path = write_card(config, uid, unit)
+    card = model.load(path)
+    card.add_annotation(note)
+    card.save()
+
+
+def test_review_filters_by_annotation_audience(pdf_source: Config) -> None:
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision for the human")
+    annotate(pdf_source, "bbb222", "demo:2.4:61", "work for the agent")
+    write_card(pdf_source, "ccc333", "demo:2.4:61")
+    client = TestClient(create_app(pdf_source))
+
+    mine = client.get("/review?status=draft&annotated=me").text
+    assert "aaa111" in mine and "bbb222" not in mine and "ccc333" not in mine
+
+    theirs = client.get("/review?status=draft&annotated=claude").text
+    assert "bbb222" in theirs and "aaa111" not in theirs
+
+    both = client.get("/review?status=draft&annotated=any").text
+    assert "aaa111" in both and "bbb222" in both and "ccc333" not in both
+
+
+def test_the_annotation_filter_keeps_the_stage_filter(pdf_source: Config) -> None:
+    """"@me on approved cards" is one click from "approved", not a view of
+    its own."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me on a draft")
+    annotate(pdf_source, "bbb222", "demo:2.4:61", "@me on an approved card")
+    card = model.load(next(pdf_source.cards_dir.rglob("bbb222-*.md")))
+    card.approve()
+    card.save()
+    client = TestClient(create_app(pdf_source))
+
+    approved = client.get("/review?status=approved&annotated=me").text
+    assert "bbb222" in approved and "aaa111" not in approved
+
+
+def test_counts_split_annotations_by_audience(pdf_source: Config) -> None:
+    from anki_forge.app import pipeline_counts
+
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    annotate(pdf_source, "bbb222", "demo:2.4:61", "work for the agent")
+    counts = pipeline_counts(pdf_source)
+    assert counts["annotated"] == 2
+    assert counts["annotated_me"] == 1
+    assert counts["annotated_claude"] == 1
+
+
+def test_resolve_route_removes_one_annotation(pdf_source: Config) -> None:
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    path = next(pdf_source.cards_dir.rglob("aaa111-*.md"))
+    client = TestClient(create_app(pdf_source))
+
+    response = client.post(
+        "/api/cards/aaa111/resolve", json={"mtime": mtime(path), "index": 0}
+    )
+
+    assert response.status_code == 200
+    assert model.load(path).annotations() == []
+    assert response.json()["pipeline"]["annotated_me"] == 0
+
+
+def test_resolve_refuses_a_stale_write(pdf_source: Config) -> None:
+    """The app is a view over files, so a note added in an editor meanwhile
+    must not be clobbered by a resolve aimed at the old list."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    client = TestClient(create_app(pdf_source))
+
+    response = client.post("/api/cards/aaa111/resolve", json={"mtime": "1", "index": 0})
+
+    assert response.status_code == 409
+
+
+def test_units_filter_by_annotation_audience(pdf_client: TestClient, pdf_units: Config) -> None:
+    from anki_forge.ledger import Ledger
+
+    path = pdf_units.units_path("book")
+    with Ledger.edit(path) as led:
+        first = led.units[0].id
+        led.annotate(first, "@me a decision on a unit")
+
+    mine = pdf_client.get("/units?source=book&state=all&annotated=me").text
+    assert first in mine
+    theirs = pdf_client.get("/units?source=book&state=all&annotated=claude").text
+    assert first not in theirs
+
+
+def test_a_filter_matching_nothing_is_not_an_empty_repo(pdf_source: Config) -> None:
+    """`empty.html` says "no cards here yet" and tells you to go extract some.
+    With cards on disk and a filter that matches none of them, that is a lie,
+    and the way out (drop the filter) is not the thing it suggests."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    client = TestClient(create_app(pdf_source))
+
+    for url in (
+        "/review?status=rejected",
+        "/review?status=draft&annotated=claude",
+        "/review?source=book",
+    ):
+        body = client.get(url).text
+        assert "no cards here yet" not in body, url
+        assert "nothing here with this filter" in body, url
+
+
+def test_empty_html_still_shows_when_the_repo_has_no_cards(client: TestClient) -> None:
+    body = client.get("/review").text
+    assert "no cards here yet" in body
+    assert "/extract-cards" in body
+
+
+# -- the filter rail: every toggle has a way back out ---------------------
+
+
+def needs_you(body: str) -> dict[str, tuple[bool, str]]:
+    """The `needs you` rows, as {label: (active, href)}."""
+    block = re.search(r"<summary>needs you</summary>(.*?)</details>", body, re.S).group(1)
+    rows = {}
+    for li in re.findall(r"<li>(.*?)</li>", block, re.S):
+        href = re.search(r'href="([^"]+)"', li).group(1).replace("&amp;", "&")
+        label = re.sub(r"<[^>]+>", "", li).replace("&times;", "").split()[0]
+        rows[label] = ('class="on"' in li, href)
+    return rows
+
+
+def test_an_active_filter_links_to_clearing_itself(client: TestClient, units: Ledger) -> None:
+    """It was one-way: once on, the only way off was editing the URL."""
+    rows = needs_you(client.get("/units?state=all&suggested=1").text)
+    active, href = rows["suggested"]
+    assert active
+    assert "suggested=1" not in href, "an active filter must link to its own removal"
+
+    assert not needs_you(client.get("/units?state=all").text)["suggested"][0]
+
+
+def test_clearing_one_filter_keeps_the_others(client: TestClient, units: Ledger) -> None:
+    """Turning `@me` off should not quietly take `suggested` with it."""
+    rows = needs_you(client.get("/units?state=all&suggested=1&annotated=me").text)
+
+    assert rows["@me"][0] and rows["suggested"][0]
+    assert "annotated=me" not in rows["@me"][1]
+    assert "suggested=1" in rows["@me"][1], "the other filter survives"
+    assert "annotated=me" in rows["suggested"][1], "and the same in reverse"
+
+
+def test_me_and_claude_replace_each_other(client: TestClient, units: Ledger) -> None:
+    """`annotated` holds one value, so they are alternatives, not a pair."""
+    rows = needs_you(client.get("/units?state=all&annotated=me").text)
+    assert rows["@claude"][1].endswith("annotated=claude")
+    assert "annotated=me" not in rows["@claude"][1]
+
+
+def test_the_annotation_count_matches_the_view_it_links_to(pdf_source: Config) -> None:
+    """The repo-wide total read "@me 42" on the review page and then showed no
+    cards, because all 42 were on units."""
+    from anki_forge.ledger import Ledger as L
+
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    card = model.load(next(pdf_source.cards_dir.rglob("aaa111-*.md")))
+    card.add_annotation("@me a decision on a card")
+    card.save()
+    extract.run(pdf_source, "book")
+    with L.edit(pdf_source.units_path("book")) as led:
+        annotated_units = [u.id for u in led.units[:2]]
+        for unit_id in annotated_units:
+            led.annotate(unit_id, "@me a decision on a unit")
+
+    client = TestClient(create_app(pdf_source))
+    assert needs_you(client.get("/review?status=draft").text)["@me"][1]
+    card_count = re.search(
+        r'data-count="annotated_me_card">(\d+)<',
+        client.get("/review?status=draft").text,
+    )
+    unit_count = re.search(
+        r'data-count="annotated_me_unit">(\d+)<',
+        client.get("/units?source=book&state=all").text,
+    )
+    assert card_count.group(1) == "1"
+    assert unit_count.group(1) == str(len(annotated_units))
+
+
+# -- sections on both views, and filters that compose ---------------------
+
+
+def test_card_section_comes_off_the_unit_id() -> None:
+    card = model.Card(frontmatter={"uid": "a1b2c3", "unit": "matrix-cookbook:2.3:66"}, sections=[])
+    assert card.section_name == "2.3"
+    assert model.Card(frontmatter={"uid": "a1b2c3"}, sections=[]).section_name == ""
+
+
+def test_review_filters_by_section(pdf_source: Config) -> None:
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "demo:1.1:2")
+    client = TestClient(create_app(pdf_source))
+
+    only = client.get("/review?status=draft&section=2.4").text
+    assert "aaa111" in only and "bbb222" not in only
+
+
+def test_filter_url_changes_one_key_and_keeps_the_rest() -> None:
+    """Every rail link used to assemble its own query string, and each forgot
+    a different parameter."""
+    from anki_forge.app import filter_url
+
+    current = {"source": "mc", "status": "draft", "section": "2.4", "annotated": "me"}
+    assert filter_url("/review", current, status="approved") == (
+        "/review?source=mc&status=approved&section=2.4&annotated=me"
+    )
+    assert filter_url("/review", current, annotated=None) == (
+        "/review?source=mc&status=draft&section=2.4"
+    )
+    assert filter_url("/review", {}) == "/review"
+
+
+def test_picking_a_section_keeps_the_annotation_filter(pdf_source: Config) -> None:
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    card = model.load(next(pdf_source.cards_dir.rglob("aaa111-*.md")))
+    card.add_annotation("@me a decision")
+    card.save()
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft&annotated=me").text
+
+    section_links = re.findall(r'href="(/review\?[^"]*section=2\.4[^"]*)"', body)
+    assert section_links, "the review rail should offer sections"
+    assert all("annotated=me" in href for href in section_links)
+
+
+def test_the_section_row_clears_itself(pdf_source: Config) -> None:
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft&section=2.4").text
+    block = re.search(r"<summary>sections</summary>(.*?)</details>\s*</details>", body, re.S)
+    active = re.search(r'<a class="on"[^>]*href="([^"]+)"', block.group(1))
+    assert active and "section=2.4" not in active.group(1).replace("&amp;", "&")
+
+
+# -- what the compact diagram counts --------------------------------------
+
+
+def test_counts_scope_narrows_the_diagram_only(pdf_source: Config) -> None:
+    """The rail's rows are links, so a row that says 3 and then shows 40 is
+    worse than one that says 40. The diagram answers a different question."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "demo:1.1:2")
+    client = TestClient(create_app(pdf_source))
+
+    whole = client.get("/review?status=draft&section=2.4").text
+    scoped = client.get("/review?status=draft&section=2.4&counts_scope=filtered").text
+
+    assert re.search(r'data-count="draft"[^>]*>2<', whole), "rail counts every card"
+    assert re.search(r'data-fsm-count="draft"[^>]*>2<', whole), "diagram defaults to all"
+    assert re.search(r'data-count="draft"[^>]*>2<', scoped), "the rail does not narrow"
+    assert re.search(r'data-fsm-count="draft"[^>]*>1<', scoped), "the diagram does"
+
+
+def test_api_counts_answers_for_the_active_filters(pdf_source: Config) -> None:
+    """A mutation response cannot know the query, so filtered mode asks."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "demo:1.1:2")
+    client = TestClient(create_app(pdf_source))
+
+    plain = client.get("/api/counts").json()
+    assert plain["pipeline"]["draft"] == 2
+    assert plain["fsm"] == plain["pipeline"], "no scope means no narrowing"
+
+    scoped = client.get("/api/counts?counts_scope=filtered&section=2.4").json()
+    assert scoped["pipeline"]["draft"] == 2
+    assert scoped["fsm"]["draft"] == 1
+
+
+def test_the_scope_toggle_offers_both_ways(pdf_source: Config) -> None:
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    client = TestClient(create_app(pdf_source))
+    for url, active in (("/review?status=draft", "all"),
+                        ("/review?status=draft&counts_scope=filtered", "filtered")):
+        block = re.search(r'<p class="counts-scope">(.*?)</p>', client.get(url).text, re.S).group(1)
+        on = re.search(r'<a class="on"[^>]*>(\w+)</a>', block)
+        assert on and on.group(1) == active, url

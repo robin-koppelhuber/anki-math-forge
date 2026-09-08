@@ -1,0 +1,27 @@
+---
+uid: "341688"
+type: identity
+status: approved
+content_hash: b0f4243753ced13e
+source: "Matrix Cookbook §2.5, eq. 102, p. 12"
+unit: "matrix-cookbook:2.5:102"
+frequency: core
+derivation: short
+tags: [derivatives, trace]
+verify: false
+---
+
+## front
+$\frac{\partial}{\partial \mathbf{X}}\text{Tr}(\mathbf{A}\mathbf{X}^T\mathbf{B})$
+
+## back
+$\mathbf{B}\mathbf{A}$
+
+## conditions
+Denominator layout.
+
+## proof
+$\text{Tr}(\mathbf{A}\mathbf{X}^T\mathbf{B}) = \text{Tr}(\mathbf{B}\mathbf{A}\mathbf{X}^T) = \sum_{ij} (\mathbf{B}\mathbf{A})_{ij} X_{ij}$.
+
+## prose
+Against $\partial\,\text{Tr}(\mathbf{A}\mathbf{X}\mathbf{B})/\partial\mathbf{X} = \mathbf{A}^T\mathbf{B}^T$: transposing $\mathbf{X}$ removes the transpose from the answer and reverses the order instead.

@@ -6,6 +6,9 @@
    counts -- the machine at a glance, how many are in each state
    full   -- the whole state machine, and what every key does
    off    -- nothing, for when the deck should have the window #}
+{% set here = '/review' if view == 'review' else '/units' %}
+{% set f = filters | default({}, true) %}
+{% set counts_scope = counts_scope | default('', true) %}
 <aside class="guide" id="guide" aria-label="what am I looking at">
   <div class="rail-grip right" data-rail="right"
        title="drag to resize — double-click to reset"></div>
@@ -17,6 +20,19 @@
     </div>
 
     <div class="at-a-glance">
+      {# Which population the diagram is counting. "all" is the whole source,
+         which is what you want when deciding where to work next; "filtered"
+         is what is on screen, which is what you want while working. The two
+         answer different questions, so neither is the right default for
+         both. #}
+      <p class="counts-scope">
+        <a class="{{ '' if counts_scope == 'filtered' else 'on' }}"
+           href="{{ filter_url(here, f, counts_scope=none) }}"
+           title="count everything in this source">all</a>
+        <a class="{{ 'on' if counts_scope == 'filtered' else '' }}"
+           href="{{ filter_url(here, f, counts_scope='filtered') }}"
+           title="count only what the active filters leave">filtered</a>
+      </p>
       {% include "_fsm_mini.html" %}
     </div>
 
@@ -55,6 +71,10 @@
       <dt><b>s</b> skip</dt>
       <dd><b>Never offer this again.</b> Sticky — it survives re-extraction.
           You are asked for a one-word reason, which is stored.</dd>
+      <dt><b>S</b> skip, with a reason</dt>
+      <dd>The same, but asks for one word first. Plain <b>s</b> does not,
+          because a skip is the commonest key in triage and stopping to type
+          turned one keystroke into a dialogue.</dd>
       <dt><b>u</b> back to new</dt>
       <dd>Undo a decision: the unit returns to the untriaged pool. This is the
           only way back from a skip.</dd>
@@ -77,6 +97,9 @@
       <dd>Next / previous. Queuing and skipping move you on to the next unit
           still awaiting a decision &mdash; but the one you just acted on
           <b>stays in the list</b>, so <b>k</b> always gets you back to it.</dd>
+      <dt><b>f</b> filters &middot; <b>?</b> this guide</dt>
+      <dd>Both panels toggle. The guide cycles three sizes: counts, then
+          everything, then hidden. Drag either edge to resize it.</dd>
     </dl>
 
     <h3>filters</h3>
@@ -108,6 +131,12 @@
       <dd>This card is right. Stamps <code>content_hash</code>, and
           <code>sync</code> will push it to Anki. <b>Editing it afterwards
           un-approves it</b> — the hash stops matching and it returns here.</dd>
+      <dt><b>u</b> back to draft</dt>
+      <dd>Un-approve a card you have changed your mind about. Editing one
+          does this as a side effect &mdash; <code>content_hash</code> stops
+          matching &mdash; but changing your mind is not an edit, and a token
+          change in the editor would be a worse way to say so. Clears the
+          hash, so nothing syncs it.</dd>
       <dt><b>r</b> reject</dt>
       <dd>This card is wrong and is not worth fixing. It stays on disk; nothing
           syncs it.</dd>
@@ -121,9 +150,48 @@
           in, not merely to the same status. The card you just acted on also
           stays in the list, so <b>k</b> reaches it.</dd>
       <dt><b>n</b> annotate</dt>
-      <dd>Leave an <code>@claude</code> note. <b>Sync refuses any card with an
-          open annotation, whatever its status</b>; <code>/triage</code>
-          resolves it, and the resulting edit sends the card back to draft.</dd>
+      <dd>Leave an <code>@claude</code> note &mdash; a request for Claude.
+          Prefix the text <code>@me</code> instead to park a decision for
+          yourself. <b>Sync refuses any card with an open annotation of either
+          kind, whatever its status.</b></dd>
+      <dt><b>x</b> resolve</dt>
+      <dd>Resolve the card's first annotation, or click <b>resolve</b> on any
+          one of them. <b>Resolving is deleting the line</b>: there is no
+          reply and no done-flag, because a note still in the file still
+          blocks sync. Answering it with a second annotation therefore makes
+          things worse, not better &mdash; now two notes block the card.
+          Resolve a <code>@claude</code> note once the work is done;
+          resolve a <code>@me</code> note once you have taken the decision it
+          was holding open. The edit is to <code>## notes</code>, which is
+          outside <code>content_hash</code>, so resolving does <em>not</em>
+          send an approved card back to draft.</dd>
+      <dt><b>j</b> / <b>k</b></dt>
+      <dd>Next / previous. Approving or rejecting moves you on to the next
+          card still awaiting a decision; the one you just acted on stays in
+          the list, so <b>k</b> reaches it.</dd>
+      <dt><b>f</b> filters &middot; <b>?</b> this guide</dt>
+      <dd>Both panels toggle; drag either edge to resize it.</dd>
+    </dl>
+
+    <h3>what a card is made of</h3>
+    <dl>
+      <dt>front, then <b>given</b></dt>
+      <dd>The question, and the setting it is asked in. Conditions sit
+          <b>above the answer</b>, here and in Anki: a constraint you only
+          see after answering is a verdict, not a condition.</dd>
+      <dt>back</dt>
+      <dd>The shortest complete answer.</dd>
+      <dt>used for</dt>
+      <dd>One line, usually absent: where this result actually turns up.
+          Distinct from prose &mdash; prose says what it <em>means</em>,
+          this says where it <em>appears</em>.</dd>
+      <dt>proof &middot; prose</dt>
+      <dd>A short derivation when it is load-bearing; one sentence of
+          intuition when it earns its place.</dd>
+      <dt>verify</dt>
+      <dd>Python that checks the identity numerically. <b>Never reaches
+          Anki</b> &mdash; it is a check on whoever wrote the card, and it is
+          how three errors in the source were caught.</dd>
     </dl>
 {% endif %}
     </div>

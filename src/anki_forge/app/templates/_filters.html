@@ -2,8 +2,16 @@
    the two things waiting on you, and the sections -- one column, so there is
    no longer a top strip and a rail disagreeing about the same counts.
 
+   Every link is built by `filter_url`, which carries the filters already in
+   force and changes only the one named. Hand-assembled query strings each
+   forgot a different parameter: picking a section dropped `@me`, toggling
+   `@me` dropped `suggested`.
+
    Its counterpart is the guide on the right, which changes nothing and only
    explains what you are looking at. Toggled with `f`. #}
+{% set src = source | default('', true) %}
+{% set here = '/review' if view == 'review' else '/units' %}
+{% set f = filters | default({}, true) %}
 <aside class="filter-rail" id="filter-rail" aria-label="filters">
   <div class="rail-grip left" data-rail="left"
        title="drag to resize — double-click to reset"></div>
@@ -11,20 +19,26 @@
 
     {# The pipeline, as counts rather than as a diagram. Each row is a filter,
        and rows link across views, so a card status is reachable from the unit
-       view and back. #}
+       view and back. Only the shared filters travel across that jump: a
+       section means the same thing on both sides, a `state` does not. #}
+    {% set shared = {'source': src, 'section': f.get('section', ''),
+                     'annotated': f.get('annotated', ''),
+                     'counts_scope': f.get('counts_scope', '')} %}
     <details class="filter-group" open>
       <summary>units</summary>
       <ul class="filter-list flow">
+        {# Written out rather than looped: `data-count="new"` is the contract
+           with app.js, and a computed attribute cannot be grepped for. #}
         <li><a class="{{ 'on' if view == 'units' and state == 'new' }}"
-               href="/units?source={{ source or '' }}&state=new">new<b>{{ pipeline.new }}</b></a></li>
+               href="{{ filter_url('/units', shared, state='new') }}">new<b data-count="new">{{ pipeline.new }}</b></a></li>
         <li class="step you">q — you decide</li>
         <li><a class="{{ 'on' if view == 'units' and state == 'queued' }}"
-               href="/units?source={{ source or '' }}&state=queued">queued<b>{{ pipeline.queued }}</b></a></li>
+               href="{{ filter_url('/units', shared, state='queued') }}">queued<b data-count="queued">{{ pipeline.queued }}</b></a></li>
         <li class="step">/extract-cards</li>
         <li><a class="{{ 'on' if view == 'units' and state == 'carded' }}"
-               href="/units?source={{ source or '' }}&state=carded">carded<b>{{ pipeline.carded }}</b></a></li>
+               href="{{ filter_url('/units', shared, state='carded') }}">carded<b data-count="carded">{{ pipeline.carded }}</b></a></li>
         <li><a class="out {{ 'on' if view == 'units' and state == 'skipped' }}"
-               href="/units?source={{ source or '' }}&state=skipped">skipped<b>{{ pipeline.skipped }}</b></a></li>
+               href="{{ filter_url('/units', shared, state='skipped') }}">skipped<b data-count="skipped">{{ pipeline.skipped }}</b></a></li>
       </ul>
     </details>
 
@@ -32,47 +46,93 @@
       <summary>cards</summary>
       <ul class="filter-list flow">
         <li><a class="{{ 'on' if view == 'review' and status == 'draft' }}"
-               href="/review?status=draft">draft<b>{{ pipeline.draft }}</b></a></li>
+               href="{{ filter_url('/review', shared, status='draft') }}">draft<b data-count="draft">{{ pipeline.draft }}</b></a></li>
         <li class="step you">a — you decide</li>
         <li><a class="{{ 'on' if view == 'review' and status == 'approved' }}"
-               href="/review?status=approved">approved<b>{{ pipeline.approved }}</b></a></li>
+               href="{{ filter_url('/review', shared, status='approved') }}">approved<b data-count="approved">{{ pipeline.approved }}</b></a></li>
         <li class="step">sync → Anki</li>
         <li><a class="out {{ 'on' if view == 'review' and status == 'rejected' }}"
-               href="/review?status=rejected">rejected<b>{{ pipeline.rejected }}</b></a></li>
+               href="{{ filter_url('/review', shared, status='rejected') }}">rejected<b data-count="rejected">{{ pipeline.rejected }}</b></a></li>
       </ul>
     </details>
 
+    {# Everything here is a toggle: clicking an active filter clears it. An
+       active row shows a x, so the way out is visible rather than merely
+       possible. The count is the one this link leads to, per view: the
+       repo-wide total said "@me 42" on the review page and then showed no
+       cards, because all 42 were on units. #}
+    {% set kind = 'card' if view == 'review' else 'unit' %}
     <details class="filter-group" open>
       <summary>needs you</summary>
       <ul class="filter-list">
         {% if view == 'units' %}
         <li><a class="{{ 'on' if suggested }}"
-               href="/units?source={{ source }}&state={{ state }}{% if section %}&section={{ section }}{% endif %}&suggested=1">
-          suggested<b>{{ pipeline.suggested }}</b></a></li>
+               href="{{ filter_url(here, f, suggested=(none if suggested else 1)) }}"
+               title="{{ 'showing only these — click to clear' if suggested
+                         else 'units a pass proposed a decision for' }}">
+          <span>{% if suggested %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}suggested</span>
+          <b data-count="suggested">{{ pipeline.suggested }}</b></a></li>
         <li><a class="{{ 'on' if transcribed }}"
-               href="/units?source={{ source }}&state={{ state }}{% if section %}&section={{ section }}{% endif %}&transcribed=1">
-          transcribed<b>{{ transcribed_count }}</b></a></li>
+               href="{{ filter_url(here, f, transcribed=(none if transcribed else 1)) }}"
+               title="{{ 'showing only these — click to clear' if transcribed
+                         else 'units whose maths you can read rather than squint at' }}">
+          <span>{% if transcribed %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}transcribed</span>
+          <b>{{ transcribed_count }}</b></a></li>
         {% endif %}
-        <li><span class="flat">annotated<b>{{ pipeline.annotated }}</b></span></li>
+        <li><a class="{{ 'on' if annotated == 'me' }}"
+               href="{{ filter_url(here, f, annotated=(none if annotated == 'me' else 'me')) }}"
+               title="{{ 'showing only these — click to clear' if annotated == 'me'
+                         else 'decisions parked for you' }}">
+          <span>{% if annotated == 'me' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@me</span>
+          <b data-count="annotated_me_{{ kind }}">{{ pipeline['annotated_me_' ~ kind] }}</b></a></li>
+        <li><a class="{{ 'on' if annotated == 'claude' }}"
+               href="{{ filter_url(here, f, annotated=(none if annotated == 'claude' else 'claude')) }}"
+               title="{{ 'showing only these — click to clear' if annotated == 'claude'
+                         else 'requests for Claude, open until resolved' }}">
+          <span>{% if annotated == 'claude' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@claude</span>
+          <b data-count="annotated_claude_{{ kind }}">{{ pipeline['annotated_claude_' ~ kind] }}</b></a></li>
       </ul>
     </details>
 
-    {% if view == 'units' and section_tree %}
+    {# Sections, on both views now. A card's section comes off its unit id, so
+       "§2.4" means the same thing on either side and survives the jump. #}
+    {% if section_tree %}
     <details class="filter-group" open>
       <summary>sections</summary>
       {% if section %}
-      <p class="filter-clear"><a href="?source={{ source }}&state={{ state }}"
+      <p class="filter-clear"><a href="{{ filter_url(here, f, section=none) }}"
            title="stop filtering by section; decisions are not affected">&larr; all sections</a></p>
       {% endif %}
+      {# One line, the states in pipeline order, so the bars below read
+         without a lookup. Only the lane this view edits: a units page has no
+         use for what `approved` looks like. #}
+      <p class="bar-key">
+        {% for state in (['new', 'queued', 'carded', 'skipped'] if view == 'units'
+                         else ['draft', 'approved', 'rejected']) %}
+        <span><i class="seg state-{{ state }}"></i>{{ state }}</span>
+        {% endfor %}
+      </p>
+
+      {# The number is how many rows clicking would show, so it moves with
+         the other filters. It used to be one hard-coded state -- `new` units,
+         `draft` cards -- which read `0/16` on every section once nothing was
+         in that state any more. The bar carries the rest of the split, which
+         one ratio cannot. #}
       {% for group in section_tree %}
       <details class="filter-chapter" {{ 'open' if section and section.split('.')[0] == group.chapter }}>
-        <summary>{{ group.chapter }}<span class="filter-tally">{{ group.undecided }}/{{ group.total }}</span></summary>
-        <ul class="filter-list">
+        <summary>{{ group.chapter }}<span class="filter-tally">{{ group.matching }}/{{ group.total }}</span></summary>
+        <ul class="filter-list sections">
           {% for row in group.sections %}
           <li><a class="{{ 'on' if section == row.name }}"
-                 title="{{ row.transcribed }} transcribed, {{ row.suggested }} suggested, {{ row.annotated }} annotated"
-                 href="?source={{ source }}&state={{ state }}&section={{ row.name }}">
-            §{{ row.name }}<b>{{ row.undecided }}/{{ row.total }}</b></a></li>
+                 title="§{{ row.name }} — {{ row.matching }} of {{ row.total }} match the current filters&#10;{% for state, n in row.states.items() %}{{ n }} {{ state }}&#10;{% endfor %}"
+                 href="{{ filter_url(here, f, section=(none if section == row.name else row.name)) }}">
+            <span class="sec-name">{% if section == row.name %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}§{{ row.name }}</span>
+            <span class="sec-bar" aria-hidden="true">
+              {%- for part in row.bar -%}
+              <i class="seg state-{{ part.state }}" style="width:{{ part.pct }}%"></i>
+              {%- endfor -%}
+            </span>
+            <b>{{ row.matching }}/{{ row.total }}</b></a></li>
           {% endfor %}
         </ul>
       </details>

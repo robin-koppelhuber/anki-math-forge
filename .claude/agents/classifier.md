@@ -74,7 +74,7 @@ You look at the crop. That generalises.
   numbered crop looks wrong, propose nothing and **annotate** it instead:
 
   ```
-  uv run anki-forge units --id <UNIT-ID> --annotate 'crop holds eq 353 and 354; segmentation merged them'
+  uv run anki-forge units --id <UNIT-ID> --annotate 'crop holds two numbered results; segmentation merged them'
   ```
 
 - An unnumbered display equation that states a relation. Books state plenty of
@@ -87,6 +87,7 @@ You look at the crop. That generalises.
 
 Your final message is the result. Give: how many crops you looked at, how many
 you proposed skipping and under which reasons, and — most usefully — any
-*pattern* you noticed. "Every crop in §2.8 is one row of a big matrix" is worth
+*pattern* you noticed. "Every crop in this section is one row of a single
+larger structure" is worth
 far more than thirty individual suggestions, because it points at a
 segmentation bug rather than thirty bad units.

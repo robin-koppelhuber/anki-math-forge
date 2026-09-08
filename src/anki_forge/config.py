@@ -10,6 +10,11 @@ from typing import Any
 
 CONFIG_NAME = "anki-forge.toml"
 
+# Which layout a derivative is written in. A typo here would read as
+# "not denominator" and silently change what every card means, so it is
+# refused at load rather than discovered by a wrong `verify`.
+LAYOUTS = ("denominator", "numerator")
+
 
 class ConfigError(Exception):
     pass
@@ -22,6 +27,11 @@ class SourceConfig:
     citation: str
     tex: Path | None
     pdf: Path | None
+    # Empty means "inherit the repo default". Both of these are facts about
+    # one book, not about this tool: which layout its derivatives use, and
+    # which deck its cards belong in. A repo with one source never sets them.
+    deck: str = ""
+    layout: str = ""
 
     @property
     def dir_name(self) -> str:
@@ -45,6 +55,9 @@ class Config:
     host: str
     port: int
     katex_base: str
+    # Flag number -> what you meant by it. Empty by default: a flag with no
+    # meaning here is reported rather than guessed at.
+    flags: dict[int, str] = field(default_factory=dict)
     sources: dict[str, SourceConfig] = field(default_factory=dict)
 
     @property
@@ -60,6 +73,27 @@ class Config:
 
     def units_path(self, source: str) -> Path:
         return self.sources_dir / source / "units.jsonl"
+
+    def deck_for(self, source: str) -> str:
+        """Which Anki deck this source's cards belong in.
+
+        Per source, because two books are two subjects far more often than
+        they are one. A card that names no source falls back to the repo
+        default rather than going nowhere.
+        """
+        spec = self.sources.get(source)
+        return spec.deck if spec and spec.deck else self.deck
+
+    def layout_for(self, source: str) -> str:
+        """Which derivative layout this source's cards are written in.
+
+        `[cards] layout` is the default and a source overrides it. Mixing the
+        two silently is the failure that poisons a deck: on a square matrix
+        the conventions are indistinguishable, so the error survives review
+        and first bites on a rectangular one.
+        """
+        spec = self.sources.get(source)
+        return spec.layout if spec and spec.layout else self.layout
 
     def scratch(self, *parts: str) -> Path:
         """A directory for intermediate files, created on demand.
@@ -104,6 +138,8 @@ def load(root: Path | None = None) -> Config:
             citation=spec.get("citation", spec.get("title", name)),
             tex=_opt_path(root, spec.get("tex")),
             pdf=_opt_path(root, spec.get("pdf")),
+            deck=str(spec.get("deck", "") or ""),
+            layout=_layout(spec.get("layout", ""), f"[sources.{name}]"),
         )
 
     return Config(
@@ -112,18 +148,46 @@ def load(root: Path | None = None) -> Config:
         sources_dir=root / repo.get("sources_dir", "sources"),
         work_dir=root / repo.get("work_dir", ".forge"),
         language=cards.get("language", "en"),
-        layout=cards.get("layout", "denominator"),
+        layout=_layout(cards.get("layout", "denominator"), "[cards]") or "denominator",
         front_char_cap=int(cards.get("front_char_cap", 160)),
         anki_url=os.environ.get("ANKI_CONNECT_URL", anki.get("url", "http://127.0.0.1:8765")),
         deck=anki.get("deck", "Default"),
         note_type_version=int(anki.get("note_type_version", 1)),
         tag_prefix=anki.get("tag_prefix", "forge"),
         extra_macros=tuple(check.get("extra_macros", ())),
+        flags=_flags(anki.get("flags", {})),
         host=app.get("host", "127.0.0.1"),
         port=int(app.get("port", 8000)),
         katex_base=app.get("katex_base", ""),
         sources=sources,
     )
+
+
+def _flags(raw: Any) -> dict[int, str]:
+    """`[anki.flags]` keys are TOML strings; Anki numbers its flags 1-7."""
+    flags: dict[int, str] = {}
+    for key, value in dict(raw or {}).items():
+        try:
+            number = int(str(key))
+        except ValueError:
+            raise ConfigError(f"[anki.flags] key {key!r} is not a flag number") from None
+        if not 1 <= number <= 7:
+            raise ConfigError(f"[anki.flags] {number} is not a flag; Anki has 1 to 7")
+        text = str(value or "").strip()
+        if text:
+            flags[number] = text
+    return flags
+
+
+def _layout(value: Any, where: str) -> str:
+    text = str(value or "").strip()
+    if text and text not in LAYOUTS:
+        raise ConfigError(
+            f"{where} layout = {text!r}; expected one of {', '.join(LAYOUTS)}. "
+            "A layout that is not recognised would silently be treated as "
+            "'not denominator' and change what every card from it means."
+        )
+    return text
 
 
 def _opt_path(root: Path, value: str | None) -> Path | None:

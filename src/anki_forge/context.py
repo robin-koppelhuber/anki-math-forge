@@ -25,6 +25,7 @@ class UnitContext:
     unit: str
     locator: str
     transcription: str
+    conventions: str
     page_text: str
     page_units: list[dict[str, Any]]
 
@@ -33,6 +34,7 @@ class UnitContext:
             "unit": self.unit,
             "locator": self.locator,
             "transcription": self.transcription,
+            "conventions": self.conventions,
             "page_text": self.page_text,
             "page_units": self.page_units,
         }
@@ -41,6 +43,14 @@ class UnitContext:
         out = [f"{self.unit}  {self.locator}"]
         if self.transcription:
             out.append(f"\n  {self.transcription}")
+        out.append(
+            "\n## the setting this source is read in\n"
+            + (
+                self.conventions
+                or "(none recorded -- write sources/<name>/conventions.md, or"
+                " whoever writes a card here is guessing at what is ambient)"
+            )
+        )
         out.append(f"\n## the page it was printed on\n{self.page_text or '(no text layer)'}")
         if self.page_units:
             out.append(
@@ -74,6 +84,7 @@ def assemble(config: Config, unit_id: str) -> UnitContext | None:
         unit=unit.id,
         locator=unit.locator.label(),
         transcription=unit.tex_source or unit.tex_auto or "",
+        conventions=_conventions(config, source),
         page_text=_page(text, unit.locator.page),
         page_units=_page_units(ledger, unit.locator.page),
     )
@@ -106,3 +117,17 @@ def _page_units(ledger: Any, page: int | None) -> list[dict[str, Any]]:
         }
         for u in rows
     ]
+
+def _conventions(config: Config, source: str) -> str:
+    """The ambient setting cards from this source are read in.
+
+    Per source, not per project: "denominator layout" and "entries are real"
+    are facts about one book, and a second source brings its own. Keeping them
+    in the project's own contract would make that contract wrong the moment
+    the deck grows.
+    """
+    path = config.sources_dir / source / "conventions.md"
+    if not path.exists():
+        return ""
+    text = re.sub(r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M)
+    return text.strip()

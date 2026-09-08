@@ -10,20 +10,23 @@ A card is only as good as the context you had when you wrote it. Before
 writing anything:
 
 ```
-uv run anki-forge source-text matrix-cookbook
+uv run anki-forge source-text <source>
 ```
 
-That is the whole book's text layer — about 26k tokens, so read all of it, not
-a snippet. Two parts matter most:
+That is the source's whole text layer. Read it rather than a snippet if it
+fits; where it does not, read these two parts, which are the ones that matter:
 
-- **Notation and Nomenclature** (near the front). It defines what `A⁺`,
-  `A^{1/2}`, `(A)ᵢⱼ`, `Tr(A)` and the rest actually mean in this book. Without
-  it you will guess at exactly the symbols that make a card wrong.
-- **The section around each unit.** Equations 49–58 are all determinant
-  derivatives; knowing that is what stops you writing ten near-duplicates.
+- **The front matter**, before the numbered body starts. This is where a
+  source defines its symbols, and it is the one place that says what its
+  notation means. Skipping it means guessing at exactly the symbols that make
+  a card wrong. (`anki-forge context <unit>` gives you the page a unit came
+  from; the front matter you have to go and read.)
+- **The neighbourhood of each unit.** A run of results on one theme is the
+  usual shape of a reference work, and knowing you are inside one is what
+  stops you writing ten near-duplicate cards.
 
 The mathematics in that text layer is mangled — it is context for *deciding*,
-never a transcription. The crop is the authority for what an equation says.
+never a transcription. The crop is the authority for what a unit says.
 
 ## Then work the queue
 
@@ -35,7 +38,7 @@ never a transcription. The crop is the authority for what an equation says.
 
 2. **Read each unit's `notes` and do what they say.** They are the instruction
    you were left at triage time — "two cards, one per layout convention", "the
-   transcription is wrong, read the crop", "merge with eq 50". This is the
+   transcription is wrong, read the crop", "merge with the unit above". This is
    greenlight gate: the human queued this unit *and told you how to card it*.
 
    Annotations are **addressed**. `@claude ...` is work for you. `@me ...` is a

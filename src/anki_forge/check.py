@@ -18,6 +18,10 @@ from .model import Card
 ERROR = "error"
 WARN = "warn"
 
+# One clause, glanceable. Not a knob: if this needs tuning the section is
+# being used for something else.
+USES_CHAR_CAP = 150
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -130,6 +134,19 @@ def check_card(
             "front-too-long",
             f"rendered front is ~{length} chars, cap is {config.front_char_cap} "
             "-- a prompt this long is usually two cards",
+        )
+
+    # A `uses` line is meant to be glanceable: one clause naming where the
+    # result turns up. Past a certain length it stops being a pointer and
+    # becomes a paragraph nobody reads on the back of a flashcard, which is
+    # what `## prose` is for.
+    uses = latex.rendered_length(card.section("uses") or "")
+    if uses > USES_CHAR_CAP:
+        add(
+            WARN,
+            "uses-too-long",
+            f"`## uses` is ~{uses} chars, cap is {USES_CHAR_CAP}: name the "
+            "setting in plain words, do not explain it",
         )
 
     # -- approval (DESIGN.md §3.5) ----------------------------------------

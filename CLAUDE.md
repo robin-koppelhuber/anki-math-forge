@@ -6,7 +6,10 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
 ## Invariants
 
 1. **Nothing reaches Anki without human approval.** `sync` only touches
-   `status: approved`.
+   `status: approved`. Traffic is one-way with one exception: `feedback`
+   reads review comments and flags back out, writes them into `## notes` as
+   `@claude` lines, and erases them from Anki in the same pass — so Anki is
+   an inbox for that text, never a source of truth.
 2. **Files are the source of truth.** The web app is a view over them, never a
    store. Anything it does is also doable by editing a file.
 3. **Extraction produces units, never cards.** If `extract` is tempted to write
@@ -29,7 +32,10 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
 
 ## Card format
 
-One markdown file per card in [cards/](cards/), named `<uid>-<slug>.md`.
+One markdown file per card in [cards/](cards/), named
+`<source>/<uid>-<slug>.md`. The folder is **filing only**: `unit:` is the one
+place a card's source is recorded, and every loader `rglob`s, so a card in the
+wrong folder still loads and still syncs.
 Frontmatter: `uid` (6 hex), `type` (`identity` only for now), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
 `unit`, `tags`, `verify`, and optionally `frequency` and `derivation`.
@@ -52,19 +58,41 @@ a typo would silently become its own tag and split the deck. Sections: `## front
 Math is written `$...$` / `$$...$$` and converted to MathJax delimiters on the
 way into Anki. `## notes` and `## verify` never reach Anki.
 
-## Conventions (DESIGN.md §15, decided)
+## Conventions
 
-- **Language:** English, including prose sections.
-- **Layout:** **denominator layout** throughout. `∂(scalar)/∂X` has the shape
-  of `Xᵀ`; `∂y/∂x` for vectors has shape `(dim x, dim y)`. Every card that
-  could be read either way says so in `## conditions`. Mixing conventions is
-  the failure that quietly poisons a deck — do not do it silently.
-- **Deck:** `Mathematics::Matrix Calculus`, note type `anki-forge identity v1`.
+**Conventions belong to a source, not to this file.** Which layout a
+derivative uses, what the entries are, what a bare symbol means: each is a
+fact about one book and one deck, not about this tool. Naming any of them here
+would make this contract wrong the moment a second source arrives, and a card
+writer told to read it as authoritative would be applying conventions that do
+not hold for the page in front of them.
+
+So they live in two places, by kind:
+
+- **`anki-forge.toml`** for what a key can express, and **under
+  `[sources.<name>]` when it is a fact about one book**: `layout` and `deck`
+  both live there, with `[cards] layout` and `[anki] deck` as the repo-wide
+  fallback. `[cards] language` and the note type are genuinely repo-wide and
+  stay put. A `layout` outside `denominator | numerator` is refused at load,
+  because an unrecognised one would read as "not denominator" and silently
+  change what every card from that source means.
+- **`sources/<name>/conventions.md`** for what it cannot: the ambient
+  mathematical setting, what is assumed constant, how a contested convention
+  was settled. `anki-forge context <unit>` prints it, so whoever writes or
+  reviews a card sees the right one without knowing it exists. If a source has
+  no such file, `context` says so — an absent convention is a card writer
+  guessing.
+
+What is true of the *tool* stays here:
+
 - **`verify` backend:** numpy plus central-difference numerical gradients. No
   torch, no jax.
-- **Cookbook source form:** PDF. No LaTeX source is published, so the
-  crop is the artefact. See [sources/matrix-cookbook/README.md](sources/matrix-cookbook/README.md)
-  for what extraction gets, and for the one known error in the book (eq 28).
+- **Mixing conventions silently is the failure that quietly poisons a deck.**
+  Whatever a source declares, a card that could be read either way says so in
+  `## conditions`. `verify` refuses a source whose layout its gradient does
+  not compute rather than checking against the wrong one: the two agree on
+  every square matrix, so the mismatch would pass review and first bite on a
+  rectangular one.
 
 ## Commands
 
@@ -81,6 +109,7 @@ uv run anki-forge new --unit <id> --front '$...$' --back '$...$'
 uv run anki-forge todo               # open @claude annotations
 uv run anki-forge serve              # units triage + card review
 uv run anki-forge sync --dry-run     # then without --dry-run
+uv run anki-forge feedback           # Anki review comments/flags -> @claude notes
 uv run anki-forge verify             # opt-in numeric check
 ```
 

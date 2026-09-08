@@ -21,6 +21,10 @@ import yaml
 
 # Frontmatter keys in the order they are written back out. Unknown keys keep
 # their relative order and land after these.
+# ASCII record separator: it cannot occur in card text, so joining on it
+# cannot make two different cards hash the same.
+HASH_SEPARATOR = chr(30)
+
 FRONTMATTER_ORDER = (
     "uid",
     "type",
@@ -50,7 +54,16 @@ FREQUENCIES = ("core", "common", "rare")
 DERIVATIONS = ("definitional", "short", "long")
 
 # Canonical section order. Unknown sections keep file order and land after.
-SECTION_ORDER = ("front", "back", "conditions", "proof", "prose", "verify", "notes")
+SECTION_ORDER = (
+    "front",
+    "back",
+    "conditions",
+    "uses",
+    "proof",
+    "prose",
+    "verify",
+    "notes",
+)
 
 # Sections allowed per `type` (DESIGN.md §7: "section whitelist for the
 # declared type"). MVP ships `identity` only (§5).
@@ -63,7 +76,11 @@ REQUIRED_SECTIONS = ("front", "back")
 # `## notes` never syncs and never enters the content hash (DESIGN.md §8):
 # annotating a card is not an edit of the card, but the fix that resolves the
 # annotation is.
-UNHASHED_SECTIONS = frozenset({"notes"})
+# `verify` is a check on the author, not card content: it never reaches Anki
+# (see notetype.FIELDS) and no reviewer sees it. Hashing it meant that fixing
+# a test un-approved a card whose mathematics had not changed. If the claim
+# itself changes, `front` or `back` changes with it and the hash moves anyway.
+UNHASHED_SECTIONS = frozenset({"notes", "verify"})
 UNHASHED_FRONTMATTER = frozenset({"status", "content_hash"})
 
 STATUSES = ("draft", "approved", "rejected")
@@ -83,6 +100,8 @@ def annotation_audience(line: str) -> str:
         if head.startswith(prefix):
             return prefix[1:]
     return ""
+
+
 UID_RE = re.compile(r"^[0-9a-f]{6}$")
 _SECTION_RE = re.compile(r"^##[ \t]+([A-Za-z][A-Za-z0-9_-]*)[ \t]*$")
 _FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n(.*?)(?:\n)---[ \t]*(?:\n|\Z)", re.DOTALL)
@@ -162,6 +181,35 @@ class Card:
         return str(self.frontmatter.get("source", "") or "")
 
     @property
+    def source_name(self) -> str:
+        """The source *key*, read off the unit ids.
+
+        `source` is the human citation ("Matrix Cookbook ss3.1, eq. 148");
+        this is `matrix-cookbook`, the name that indexes `sources/` and
+        `[sources.*]`. Derived rather than stored, so it cannot drift from
+        the unit the card actually came from. Empty when the card names no
+        unit, which the app treats as "belongs to every source" rather than
+        to none: a card with no home should be visible, not lost.
+        """
+        for unit in self.units:
+            head = unit.split(":", 1)[0].strip()
+            if head:
+                return head
+        return ""
+
+    @property
+    def section_name(self) -> str:
+        """The source section, read off the unit id: `2.3` in
+        `matrix-cookbook:2.3:66`. Derived for the same reason as
+        `source_name`: a card filed under a section it does not come from is
+        a second truth waiting to disagree with the first."""
+        for unit in self.units:
+            parts = unit.split(":")
+            if len(parts) >= 2 and parts[1].strip():
+                return parts[1].strip()
+        return ""
+
+    @property
     def tags(self) -> list[str]:
         raw = self.frontmatter.get("tags") or []
         if isinstance(raw, str):
@@ -208,10 +256,30 @@ class Card:
         text = " ".join(text.split()).strip()
         if not text:
             return
-        if not text.lower().startswith(ANNOTATION_PREFIX):
+        # Any known prefix, not just `@claude`. Guarding on one of the two
+        # turned an `@me` note into `@claude @me ...`, which reads back as
+        # audience `claude` -- a decision parked for the human, queued as work
+        # for the agent, which is the one mix-up the split exists to prevent.
+        if not annotation_audience(text):
             text = f"{ANNOTATION_PREFIX} {text}"
         body = self.section("notes")
         self.set_section("notes", f"{body}\n{text}" if body else text)
+
+    def resolve_annotation(self, index: int) -> str:
+        """Drop the `index`-th annotation from `## notes` and return it.
+
+        Resolving a note *is* deleting it: there is no reply and no done-flag,
+        because a note that is still there still blocks sync. Non-annotation
+        lines in `## notes` are left where they are, so a resolve never
+        touches the prose around it.
+        """
+        lines = (self.section("notes") or "").splitlines()
+        marked = [i for i, line in enumerate(lines) if annotation_audience(line)]
+        if not 0 <= index < len(marked):
+            raise CardError(f"no annotation {index} on card {self.uid}")
+        removed = lines.pop(marked[index])
+        self.set_section("notes", "\n".join(lines).strip())
+        return removed
 
     # -- hashing (DESIGN.md §3.5, §8) -------------------------------------
     def content_hash(self) -> str:
@@ -221,13 +289,23 @@ class Card:
         card or scribbling an annotation on it is not an edit -- but changing
         anything a reviewer looked at is.
         """
-        payload = Card(
-            frontmatter={
-                k: v for k, v in self.frontmatter.items() if k not in UNHASHED_FRONTMATTER
-            },
-            sections=[s.canonical() for s in self.sections if s.name not in UNHASHED_SECTIONS],
-        )
-        digest = hashlib.sha256(payload.render().encode("utf-8")).hexdigest()
+        # Hash the content, not the file. Rendering it would make the digest
+        # depend on FRONTMATTER_ORDER, so adding an optional field to that
+        # tuple silently invalidated every approval in the deck -- the card
+        # was untouched and `check` reported it as edited. Sorted keys and an
+        # explicit separator make the digest independent of how the file
+        # happens to be laid out.
+        parts = [
+            f"{key}={self.frontmatter[key]!r}"
+            for key in sorted(self.frontmatter)
+            if key not in UNHASHED_FRONTMATTER
+        ]
+        parts += [
+            f"##{s.name}\n{s.canonical().body}"
+            for s in sorted(self.sections, key=lambda s: s.name)
+            if s.name not in UNHASHED_SECTIONS
+        ]
+        digest = hashlib.sha256(HASH_SEPARATOR.join(parts).encode('utf-8')).hexdigest()
         return digest[:16]
 
     def hash_matches(self) -> bool:
@@ -363,7 +441,12 @@ def find(cards_dir: Path, uid: str) -> Card | None:
     return None
 
 
-REPLACE_ATTEMPTS = 20
+# Windows refuses the rename while any other process holds the destination
+# open, so this waits rather than failing. The budget is generous on purpose:
+# waiting costs nothing, and the alternative is throwing away a write that has
+# already been computed. One second was not enough under a loaded machine --
+# twelve concurrent writers plus other work made the suite flake here.
+REPLACE_ATTEMPTS = 100
 REPLACE_POLL = 0.05
 
 

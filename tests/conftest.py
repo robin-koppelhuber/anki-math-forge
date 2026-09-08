@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 
 from anki_forge import config as config_mod
-from anki_forge.anki import AnkiConnect
+from anki_forge.anki import AnkiConnect, AnkiError
 from anki_forge.config import Config
 
 CONFIG_TOML = """
@@ -160,11 +160,21 @@ class FakeAnki(AnkiConnect):
         self.decks: list[str] = ["Default"]
         self.models: dict[str, list[str]] = {}
         self.notes: dict[int, dict[str, Any]] = {}
+        # One card per note, which is what this note type produces. A new
+        # card's `due` is its position in the new queue, counting up from
+        # wherever the collection already was.
+        self.cards: dict[int, dict[str, Any]] = {}
         self.calls: list[str] = []
         self._next_id = 1000
+        self._next_position = 1
+        # Set to an action name to make it raise, for the paths where a write
+        # to Anki fails after the file has already been changed.
+        self.fail_on: str | None = None
 
     def invoke(self, action: str, **params: Any) -> Any:
         self.calls.append(action)
+        if action == self.fail_on:
+            raise AnkiError(f"{action} refused (test)")
         handler = getattr(self, f"_do_{action}", None)
         if handler is None:
             raise AssertionError(f"unexpected AnkiConnect action {action!r}")
@@ -225,7 +235,67 @@ class FakeAnki(AnkiConnect):
             "fields": dict(note["fields"]),
             "tags": list(note["tags"]),
         }
+        self.cards[self._next_id] = {
+            "cardId": self._next_id,
+            "note": self._next_id,
+            "deck": note["deckName"],
+            "uid": note["fields"].get("uid", ""),
+            "type": 0,
+            "queue": 0,
+            "flags": 0,
+            "due": self._next_position,
+        }
+        self._next_position += 1
         return self._next_id
+
+    def note_by_uid(self, uid: str) -> tuple[int, dict[str, Any]]:
+        return next(
+            (nid, n) for nid, n in self.notes.items() if n["fields"].get("uid") == uid
+        )
+
+    def set_feedback(self, uid: str, html: str) -> None:
+        self.notes[self.note_by_uid(uid)[0]]["fields"]["Feedback"] = html
+
+    def get_feedback(self, uid: str) -> str:
+        return self.note_by_uid(uid)[1]["fields"].get("Feedback", "")
+
+    def set_flag(self, uid: str, flag: int) -> None:
+        self.cards_by_uid(uid)["flags"] = flag
+
+    def _do_modelFieldAdd(self, modelName: str, fieldName: str, index: int) -> None:
+        fields = self.models[modelName]
+        fields.insert(index, fieldName)
+
+    def cards_by_uid(self, uid: str) -> dict[str, Any]:
+        return next(c for c in self.cards.values() if c["uid"] == uid)
+
+    def _do_findCards(self, query: str) -> list[int]:
+        deck = query.split('deck:"', 1)[-1].rstrip('"') if 'deck:"' in query else ""
+        return [c["cardId"] for c in self.cards.values() if not deck or c["deck"] == deck]
+
+    def _do_cardsInfo(self, cards: list[int]) -> list[dict[str, Any]]:
+        return [
+            {
+                "cardId": c["cardId"],
+                "type": c["type"],
+                "queue": c["queue"],
+                "due": c["due"],
+                "flags": c.get("flags", 0),
+                "note": c["note"],
+                "deckName": c["deck"],
+                "fields": {"uid": {"value": c["uid"], "order": 0}},
+            }
+            for cid in cards
+            if (c := self.cards.get(cid)) is not None
+        ]
+
+    def _do_setSpecificValueOfCard(
+        self, card: int, keys: list[str], newValues: list[Any], warning_check: bool = False
+    ) -> list[bool]:
+        assert warning_check, "AnkiConnect refuses this without the flag"
+        for key, value in zip(keys, newValues, strict=True):
+            self.cards[card][key] = value
+        return [True]
 
     def _do_updateNoteFields(self, note: dict[str, Any]) -> None:
         self.notes[note["id"]]["fields"].update(note["fields"])

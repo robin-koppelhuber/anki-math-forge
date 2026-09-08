@@ -10,16 +10,18 @@ decide whether a unit is worth carding if all you can see is a picture
 
 Arguments: `$ARGUMENTS`
 
-- **`$1`** — a section (`2.4`), or `--all` for the whole book. Default: ask.
+- **`$1`** — a section, as `locator.section` spells it, or `--all` for the
+  whole source. Default: ask.
 - **`$2`** — model override: `haiku`, `sonnet`, or `opus`. Default: the
   transcriber agent's own setting (`sonnet`).
 
 ## Why a subagent
 
-Seven hundred crops would fill this session's context and crowd out everything
-else. Each subagent takes one section, keeps its images to itself, and reports
-back a summary. Sections are independent, so dispatch them **in parallel** —
-several `Agent` calls in one message.
+A crop is an image, and images are the most expensive thing this session can
+read. A source of any size will crowd out everything else if the main agent
+reads them all. Each subagent takes one section, keeps its images to itself,
+and reports back a summary. Sections are independent, so dispatch them **in
+parallel** — several `Agent` calls in one message.
 
 ## Steps
 
@@ -39,14 +41,17 @@ several `Agent` calls in one message.
    uv run anki-forge units --state all --json
    ```
 
-   Group by `locator.section`. A section of 30–40 units is one subagent. Split
-   anything much larger.
+   Group by `locator.section`. Aim at a few dozen units per subagent: enough
+   that dispatch overhead is worth it, few enough that one agent's context
+   holds the section. Split anything much larger; combine neighbouring small
+   ones. A source that numbers no sections leaves `locator.section` empty —
+   group by page instead.
 
 3. Dispatch one `transcriber` subagent per section, in parallel, passing the
    section in the prompt and `model` only if `$2` was given:
 
-   > Transcribe section 2.4 of matrix-cookbook. Render the crops with
-   > `uv run anki-forge crops --section 2.4 --untranscribed --json`,
+   > Transcribe section `<SECTION>` of `<SOURCE>`. Render the crops with
+   > `uv run anki-forge crops --section <SECTION> --untranscribed --json`,
    > read each one, and record it with
    > `uv run anki-forge units --id <id> --tex-auto '<latex>'`.
    > Follow your instructions exactly: transcribe what is printed, annotate

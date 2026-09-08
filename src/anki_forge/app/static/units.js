@@ -11,11 +11,12 @@ const activeState = new URLSearchParams(location.search).get("state") || "new";
    before it acted, so `z` restores exactly that -- state, reason and any
    suggestion -- rather than guessing. A mis-pressed key costs one keystroke,
    which is the point of a keyboard-driven triage view. */
-const undoStack = [];
+const undoStack = loadUndo();
 
 function recordUndo(item, result, what) {
   if (!result || !result.before) return;
   undoStack.push({ id: item.dataset.id, before: result.before, what });
+  saveUndo(undoStack);
 }
 
 function paintState(item, unit) {
@@ -29,6 +30,7 @@ function paintState(item, unit) {
 
 async function undo() {
   const step = undoStack.pop();
+  saveUndo(undoStack);
   if (!step) {
     toast("nothing to undo");
     return;
@@ -39,6 +41,7 @@ async function undo() {
     { snapshot: step.before, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
+  repaintCounts(result.pipeline);
   if (item) {
     paintState(item, result.unit);
     delete item.dataset.settled;
@@ -50,7 +53,7 @@ async function undo() {
 }
 
 async function setState(state, reason) {
-  const item = deck.current;
+  const item = currentOf(deck);
   if (!item) return;
   const body = { state, reason: reason || "", mtime: board.dataset.mtime };
   const result = await post(
@@ -58,6 +61,7 @@ async function setState(state, reason) {
     body,
   );
   board.dataset.mtime = result.mtime;
+  repaintCounts(result.pipeline);
   recordUndo(item, result, state);
   paintState(item, result.unit);
   toast(`${result.unit.id} → ${result.unit.state} · z undoes`);
@@ -69,13 +73,14 @@ async function setState(state, reason) {
 }
 
 async function decideOnSuggestion(verb) {
-  const item = deck.current;
+  const item = currentOf(deck);
   if (!item) return;
   const result = await post(
     `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/${verb}`,
     { mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
+  repaintCounts(result.pipeline);
   recordUndo(item, result, verb === "accept" ? "accept" : "dismiss");
   const note = item.querySelector(".suggestion");
   if (note) note.remove();
@@ -93,7 +98,7 @@ async function decideOnSuggestion(verb) {
 }
 
 async function annotate() {
-  const item = deck.current;
+  const item = currentOf(deck);
   if (!item) return;
   const text = await ask("annotation for " + item.dataset.id, "@claude ");
   if (!text) return;

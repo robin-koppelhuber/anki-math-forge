@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set view = "review" %}
 {% set state = "" %}
-{% block title %}review · anki-forge{% endblock %}
+{% block title %}review · {{ source | default('', true) }} · anki-forge{% endblock %}
 
 {% block filters %}{% endblock %}
 
@@ -10,15 +10,29 @@
   {% for card in cards %}
   <article class="card item" data-uid="{{ card.uid }}" data-mtime="{{ card.mtime }}" hidden>
     <div class="card-body">
-      {% for section in card.sections %}
+      {# `conditions` sits with the prompt, above the answer rule, because it
+         fixes the setting the question is asked in. The same order as the
+         Anki template, so what you approve is what you review. #}
+      {% set prompt = ['front', 'conditions'] %}
+      {% for name in prompt %}
+        {% for section in card.sections if section.name == name %}
       <section class="sec sec-{{ section.name }}">
-        {% if section.name not in ('front', 'back') %}<h2>{{ section.name }}</h2>{% endif %}
-        <div class="math">{{ section.body }}</div>
-        {% if section.name == 'front' %}<hr class="answer-rule">{% endif %}
+        {% if section.name != 'front' %}<h2>given</h2>{% endif %}
+        <div class="math">{{ section.body | body }}</div>
+      </section>
+        {% endfor %}
+      {% endfor %}
+      <hr class="answer-rule">
+      {% for section in card.sections if section.name not in prompt %}
+      <section class="sec sec-{{ section.name }}">
+        {% if section.name != 'back' %}<h2>{{ section.name }}</h2>{% endif %}
+        <div class="math">{{ section.body | body }}</div>
       </section>
       {% endfor %}
     </div>
 
+    <div class="splitter" data-splitter="card"
+         title="drag to resize — double-click to reset"></div>
     <aside class="meta">
       <div class="row"><span class="badge state-{{ card.status }}">{{ card.status }}</span>
         <code>{{ card.uid }}</code>
@@ -38,7 +52,23 @@
       <p class="checks-ok">check: clean</p>
       {% endif %}
 
-      {% if card.notes %}<pre class="notes">{{ card.notes }}</pre>{% endif %}
+      {# A div, not a <pre>: KaTeX's auto-render ignores `pre` by default, so
+         maths in a note was the one place on the card that never rendered.
+         `white-space: pre-wrap` keeps the line breaks. #}
+      {% if card.annotations %}
+      <ul class="annotations">
+        {% for note in card.annotations %}
+        <li class="annotation {{ note.audience }}">
+          <span class="who">@{{ note.audience }}</span>
+          <span class="what">{{ note.text }}</span>
+          <button type="button" class="resolve" data-resolve="{{ loop.index0 }}"
+                  title="resolve: deletes the line, which is the only thing that unblocks sync">
+            resolve</button>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {% if card.plain_notes %}<div class="notes">{{ card.plain_notes }}</div>{% endif %}
 
       {% if card.unit_image %}
       <figure class="crop small">
@@ -58,9 +88,11 @@
 {% block keys %}
 <span class="key-group"><b>a</b> approve</span>
 <span class="key-group"><b>r</b> reject</span>
+<span class="key-group"><b>u</b> back to draft</span>
 <span class="key-group sep"><b>z</b> undo</span>
 <span class="key-group"><b>e</b> $EDITOR</span>
 <span class="key-group"><b>n</b> annotate</span>
+<span class="key-group"><b>x</b> resolve first note</span>
 <span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
 <span class="key-group"><b>f</b> filters</span>
 <span class="key-group"><b>?</b> guide</span>

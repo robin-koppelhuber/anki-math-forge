@@ -8,6 +8,13 @@ description: How to turn a mathematical unit into a card worth reviewing - what 
 The Python enforces structure. This file is the craft: nothing here is
 checkable by a linter, which is exactly why it is written down.
 
+**A note on the examples.** The rules here are meant to survive a change of
+source: each is stated without reference to any particular subject. The worked
+examples are matrix calculus because that is what this deck currently holds,
+and they are illustrations, not part of the rule. If an example stops making
+sense because the deck moved on, replace the example — the rule above it
+should still stand.
+
 ## What makes a cardable unit
 
 A unit is worth a card when **you would be annoyed to have to look it up**.
@@ -38,9 +45,9 @@ two cards or a badly phrased one.
 
 Good:
 
-```
+``
 $\frac{\partial}{\partial X} \log \det X$
-```
+``
 
 Bad, and why:
 
@@ -58,6 +65,37 @@ If the answer depends on a convention (layout, transpose placement), either
 put the convention in `## conditions` **and** make the front unambiguous, or
 do not write the card.
 
+### The card must stand alone
+
+**Every object on the front is defined before the front uses it**, either
+ambiently or on the card itself. **Ambient means whatever the source declares**
+— `anki-forge context <unit>` prints it, and it is per source, because
+"entries are real" and "denominator layout" are facts about one book rather
+than about this tool. Read it rather than assuming. Everything it does not
+cover is the card's job.
+
+If `context` says no conventions are recorded for a source, that is not
+permission to invent them: write them down first, or every card after this one
+is guessing at the same things independently.
+
+A front reading `$\frac{\partial}{\partial \mathbf{X}}\text{Tr}(\mathbf{A}\mathbf{X}\mathbf{B})$`
+is unanswerable as it stands: nothing says what `A` and `B` are, and the answer
+depends on their shapes. Either the shapes are forced by the expression being
+defined and you say so in `## conditions`, or they are not and the front is
+incomplete.
+
+The test: **could someone who has never seen this book answer it?** They have
+the ambient conventions and nothing else. No neighbouring card, no section
+heading, no page. If answering needs something that is not on the card, the
+card is not finished.
+
+Two failure shapes to watch for, both of which look fine while writing:
+
+- a symbol introduced by the source's surrounding prose (`where `W` is the
+  inverse of `A`) and silently inherited onto the card;
+- a shape constraint that the reviewer must reconstruct to know what the answer
+  even looks like.
+
 ## Backs
 
 The shortest complete answer. `$X^{-\top}$`, not a sentence explaining it.
@@ -72,8 +110,213 @@ Include when the identity is false without them: invertibility, symmetry,
 positive definiteness, conformability, layout convention. One line. If a card
 has no real conditions, leave the section out rather than writing "none".
 
-Every card whose shape depends on layout says so — this deck is **denominator
-layout** throughout (see CLAUDE.md).
+Every card whose shape depends on layout says so. Which layout is the
+source's to declare, not this file's: `anki-forge context <unit>` prints it.
+
+### Form: mathematics, in a fixed order
+
+Write the mathematics, not a sentence about the mathematics. One line, clauses
+separated by `;`, always in this order:
+
+1. **shapes** — `$\mathbf{A} \in \mathbb{R}^{m \times n}$`, `$\mathbf{B} \in \mathbb{R}^{n \times m}$`
+2. **structural properties** — `$\mathbf{A}$ invertible`, `$\mathbf{A} = \mathbf{A}^T$`,
+   `$\text{rank}(\mathbf{X}) = m$`
+3. **domain restrictions** — `$\det(\mathbf{X}) > 0$`, `$\mathbf{X} \neq 0$`
+4. **layout**, last and only when the shape depends on it, as exactly
+   `Denominator layout.` — nothing appended to it.
+
+**The typographic convention gives you the type, not the shape.** The source's
+declared setting says `\mathbf{X}` is a matrix with real entries. It does not say
+`\mathbf{X}` is *square*, and a matrix generally is not.
+
+So for `$\frac{\partial}{\partial \mathbf{X}}\prod_i \lambda_i$` the squareness is load-bearing: eigenvalues exist
+only for a square matrix, and without that clause the card asks something
+undefined. Write `$\mathbf{X} \in \mathbb{R}^{n \times n}$`, not "`\mathbf{X}` square" and not nothing.
+
+Use the set-membership form as the single spelling, everywhere:
+
+- it is mathematics rather than an English word, which is the rule above;
+- it names `n`, which the answer and the later clauses usually refer to;
+- it is the same shape of clause as the rectangular cases (`$\mathbf{X} \in \mathbb{R}^{m \times n}$`), where
+  giving the dimensions is not optional -- one form covers both, so the reader
+  never has to notice which kind of card this is.
+
+Stating `\mathbb{R}` is mildly redundant against the ambient "entries are real", and
+worth it: the deck also has complex cards, where the clause reads `$\mathbf{X} \in \mathbb{C}^{n \times n}$`, and
+the contrast only works if both are always written.
+
+| write | not |
+|---|---|
+| `$\mathbf{A} \in \mathbb{R}^{m \times n}$; $\mathbf{B} \in \mathbb{R}^{n \times m}$.` | "A is m×n and B is n×m so that both products are defined and square." |
+| `$\mathbf{X}$ invertible; $\det(\mathbf{X}) > 0$. Denominator layout.` | "Denominator layout: the result has the shape of X, which need not be square." |
+
+The fixed order and the fixed layout sentence are the point. A reviewer reads
+hundreds of these: when every card puts shapes first and ends the same way,
+the eye goes straight to what differs. Two spellings of the same requirement
+read as two different requirements.
+
+**Conditions state requirements. They do not explain them.** Why a condition
+is needed, what breaks without it, what a reader might wrongly assume — those
+go in `## prose`, or in `## notes` when they are addressed to someone. A
+condition that argues is doing another section's job and crowds out the one
+thing this section is for.
+
+### A condition must be worth stating
+
+A `## conditions` line earns its place when **violating it changes something**:
+the identity becomes false, or a reader applies it where it does not hold.
+
+What does not earn its place is restating that the expression is well-formed.
+"`A` and `B` are conformable" on a card whose front is `Tr(AXB)` says only
+that the front means something, which the reader already assumed by reading
+it. If the shapes are forced, put them in the statement where they inform the
+answer, not in a condition where they inform nothing.
+
+**When the real condition is existence, ask about existence.** For a
+derivative identity there is usually a genuine question hiding in the
+conditions: *where does this hold?* If the answer is the generic one --
+wherever the expression is defined -- it is not a card and barely a condition.
+If the answer is specific, it is often the more valuable card of the two:
+
+| identity | the interesting question |
+|---|---|
+| `∂ln det(X)/∂X` | not "is `X` invertible" but `det(X) > 0`, over ℝ |
+| `∂ln det(XᵀX)/∂X` | `X` of full **column** rank, not merely nonzero |
+| `∂Tr[(A + XᵀCX)⁻¹XᵀBX]/∂X` | the printed form needs `A` **symmetric**, which the book never says |
+
+So: **do not** add "when does this exist?" as a second card by reflex. Across
+a table of derivative identities the answer is the same generic sentence, and
+a hundred cards with one answer teach nothing. **Do** make it a card when the
+answer is specific enough to be got wrong -- and then it is a real card, not a
+restatement, because its front asks something the identity card does not.
+
+The check either way: read the condition and ask what a reader would do
+differently on being told it. If the answer is "nothing", cut it.
+
+### Conditions are shown with the prompt
+
+They render **above the answer**, in Anki and in the review view alike, under
+the heading *given*. Two consequences.
+
+They are part of the question, so they must read as setting rather than as
+commentary. `$\mathbf{X} \in \mathbb{R}^{n \times n}$ invertible` tells you
+which question you are being asked; "invertibility is needed here because the
+right-hand side would otherwise be undefined" is an answer to a different one.
+
+And a condition must not give the answer away. If stating it would make the
+front trivial, it is not a condition -- it is part of the answer, and belongs
+in `## back` or `## prose`.
+
+### Where a notation gloss goes
+
+A symbol the deck declares no ambient meaning for has to be explained
+somewhere. Which section depends on **where the symbol appears**, not on where
+it is convenient:
+
+- **In the front** -- the gloss belongs in `## conditions`. You cannot answer a
+  question posed in notation you do not have.
+- **Only in the back** -- the gloss belongs in `## prose`. Conditions are the
+  setting of the question, and a symbol that is not in the question is not
+  part of its setting. Putting it there also leaks: naming the Hadamard
+  product before the answer tells the reader the answer contains one.
+
+The second case is easy to get wrong, because the gloss feels like a
+precondition for understanding the card. It is a precondition for
+understanding the *answer*, and the answer is where it should sit.
+
+### Define, don't rename
+
+A gloss that swaps a symbol for a proper name has not glossed anything.
+*"Here $\circ$ Hadamard product"* tells a reader who does not know `∘` the
+name of a thing they also do not know; *"here $\circ$ multiplies entry by
+entry (the Hadamard product)"* is shorter and usable. The same trap catches
+"the transposed cofactor matrix", "the elementary symmetric polynomials",
+"the generalised Rayleigh quotient": each is a name defined by more names.
+
+So, everywhere a name appears on a card, in `## conditions`, `## prose` or
+`## uses`:
+
+**Say the thing in the shortest plain words that make it usable, then put the
+formal name in parentheses.** The plain half carries the meaning; the name
+rides along so the reader can look it up and so the card matches how the
+result is spoken about.
+
+| Renames | Defines |
+| --- | --- |
+| `Here $\circ$ Hadamard product.` | `Here $\circ$ multiplies entry by entry (the Hadamard product).` |
+| `$(\cdot)^{+}$ is the Moore-Penrose pseudo-inverse.` | `$(\cdot)^{+}$ inverts what is invertible and zeroes the rest (the Moore-Penrose pseudo-inverse).` |
+| `L-optimal experimental design.` | `Choosing where to measure so the estimate comes out most precise (L-optimal design).` |
+
+This catches ordinary words too, not just proper names. **"free"** was on
+nine cards ("$\mathbf{X} = \mathbf{X}^T$ with $X_{ij}, i \le j$ free") and
+never said what it meant: which entries you actually vary, the rest following
+from the constraint. Written out, *"varied over $X_{ij}$ with $i \le j$ only,
+the rest following by symmetry"*, it needs no gloss at all, which is the
+better outcome. The same goes for a symbol like $\delta$: say *"$1$ when
+$i = j$ and $0$ otherwise"* and the Kronecker delta needs no introduction.
+
+And when a card names a function, **say what it is a function of.**
+"$f$ scalar-valued" does not tell a reader that $f$ eats the matrix being
+differentiated; `$f : \mathbb{R}^{n \times n} \to \mathbb{R}$` does, in
+fewer words.
+
+**A structure named on the front is defined in `## conditions`, as
+mathematics.** Conditions render with the prompt, so this puts the definition
+inside the question without cluttering it: the front says *"for Toeplitz
+`T`"*, the conditions say `$T_{ij} = t_{i-j}$`, and a reader who does not know
+the word can still answer. Do not explain the structure on the front itself,
+which turns a prompt into a lecture, and do not leave it to prose, which is
+only read after the answer.
+
+| Front | Conditions |
+| --- | --- |
+| `for Toeplitz $\mathbf{T}$` | `$T_{ij} = t_{i-j}$` |
+| `for symmetric $\mathbf{X}$` | `$\mathbf{X} = \mathbf{X}^T$` |
+| `for diagonal $\mathbf{X}$` | `$X_{ij} = 0$ for $i \neq j$` |
+| `for positive definite $\mathbf{A}$` | `$\mathbf{x}^T\mathbf{A}\mathbf{x} > 0$ for every $\mathbf{x} \neq \mathbf{0}$` |
+
+The last one is the trap. `$\mathbf{A} \succ 0$` looks like mathematics but
+is only the same name in symbols, so it defines nothing a reader did not
+already have to know.
+
+A name with no short plain version does not go on the card at all. If five
+words will not carry it, it is not a pointer, it is a second card's worth of
+material: cut it. *"Bearing-only sensor Jacobians"* fails this; *"how a
+bearing to a target swings as the sensor moves"* passes and needs no name.
+
+The exception is a name the deck's own front or back already spells out. When
+the defining equation is sitting next to the word, the word is glossed:
+`$\text{Tr}(\mathbf{X}^T\mathbf{X}) = \|\mathbf{X}\|_F^2$` defines the
+Frobenius norm on the spot, and repeating it in words is padding.
+
+### How far down to go
+
+The test: **would omitting it make the card false, or make a plausible reader
+apply it wrongly?** If violating it is impossible inside the deck's declared
+setting, it is ambient, not a condition.
+
+Three tiers, and only the middle one belongs on a card.
+
+1. **Ambient, declared once.** Finite-dimensional; entries real unless the card
+   says otherwise; `ᵀ` transpose and `ᴴ` conjugate transpose. Those are
+   examples; the source declares its own. In its `conventions.md`, not on 500
+   cards. A sentence repeated on every card stops being read, and then
+   the one card where it is load-bearing reads like all the others.
+2. **On the card, because the identity turns on it.** Conformability
+   (`Tr(AB) = Tr(BA)` needs A to be m×n and B n×m, and *neither* square).
+   Dimension (`det(I+A) = 1 + det(A) + Tr(A)` holds at n = 2 and nowhere
+   else). Field, when it changes the claim or the reading: eigenvalues are
+   counted over ℂ with algebraic multiplicity, or a real matrix with no real
+   eigenvalues breaks the identity; `aᵀa` is `Σaᵢ²` in both fields but is the
+   squared norm only over ℝ.
+3. **Out of scope, not stated.** Infinite dimensions, trace-class operators,
+   Fredholm determinants. The source is about matrices. Saying "finite
+   dimensional" on every card buys nothing, because nothing in the deck is
+   not.
+
+The interesting cases are the ones where tier 3 is where a reader's intuition
+already lives: state the tier-2 condition that keeps them out of it, rather
+than the tier-3 fact that would not have occurred to them.
 
 ## Proof
 
@@ -85,13 +328,127 @@ collect terms" is not.
 Leave it out for definitional facts and for anything whose proof is a page.
 A wrong or hand-wavy proof is worse than no proof.
 
+## Uses
+
+Optional, and **one clause** — `check` caps it at 150 rendered characters.
+Written the way **Define, don't rename** requires: the setting in plain
+words, its formal name in parentheses behind them.
+Where this result actually gets used: the setting you would meet it in, not a
+restatement of what it says.
+
+Past a clause it stops being a pointer and becomes a paragraph on the back of
+a flashcard, which is what `## prose` is for. If naming the setting needs a
+sentence of explanation, the explanation is prose and the name is the uses
+line.
+
+```
+## uses
+Choosing where to measure so the estimate comes out most precise
+(D-optimal design).
+```
+
+Good ones name a place: an algorithm, a derivation you would recognise, a
+standard result it feeds. Bad ones fail in one of two directions. Generic
+("useful in optimisation") is true of everything here and so says nothing.
+Bare jargon ("L-optimal experimental design") says something, but only to a
+reader who already knew it, and that reader did not need the line.
+
+Reserve it for results where the answer alone leaves you asking *why would I
+ever need this*. On an identity whose use is obvious from its shape, leave it
+out. Most cards should not have one; the section exists for the handful where
+knowing the setting is what makes the card stick.
+
+It is not `## prose`. Prose says what the result *means*; uses says where it
+*turns up*.
+
 ## Prose
 
 One sentence of intuition, ideally connecting to something scalar you already
 know: *"the matrix analogue of (log x)' = 1/x"*. Optional. Cut it if it is
-just the formula in words.
+just the formula in words, and apply the punchline test in **Language**: if
+the halves of its one sentence already live in other sections, it is a
+restatement.
 
-Written in **English** (CLAUDE.md).
+Written in the language `[cards] language` declares.
+
+## When the source is wrong
+
+Transcription and carding answer to different rules, and conflating them is
+how a known-false formula ends up being drilled for years.
+
+A **transcription** records what the book prints. The crop is authoritative,
+errors included (DESIGN.md §4).
+
+A **card** is what you review. A back you have shown to be false does not
+belong in it, whatever the book prints. Correct it, and record both the
+book's form and the evidence in `## notes` — the deck is a record of the
+mathematics, and `sources/<name>/README.md` is the record of the book.
+
+The bar is evidence, not suspicion. `verify` exists for this: eq. 95's printed
+denominator is wrong by 8.6 against a numerical gradient while the transposed
+form matches to 1.8e-08, and that is what licenses changing the back. Where
+you only suspect, card it as printed and say so.
+
+## What earns a `@me` note
+
+A note is read by a human, blocks `sync` until resolved, and is the only part
+of a card nobody can skim past. Three things earn one:
+
+- the **source is wrong**, or its stated conditions are insufficient;
+- this card stands in a **relation to another card** -- it duplicates one,
+  overlaps one, or was kept despite being a special case of one;
+- something is **undecided** and you are handing the decision over.
+
+Nothing else. In particular, **"the source did not state this condition, so I
+added it" is not a note**: the condition is sitting on the card, and if adding
+conditions is the normal case for a source, that belongs in its
+`conventions.md`, once.
+
+The first pass over this deck wrote 151 notes across 87 of 98 cards, 3,769
+words, most of them that one sentence. Every card was blocked from syncing by
+a note nobody would read. Eleven survived the cut.
+
+## Language
+
+Adopted from the writing guidelines in `SML-Summer-2026/shared/UBIQUITOUS_LANGUAGE.md`,
+kept only where a flashcard makes the case stronger than a paper does.
+
+1. **Name, do not point.** No "this condition", "the same identity", "the map
+   above". **A card is reviewed with no context at all** — no preceding
+   sentence, no page, no neighbouring card. A bare pointer that a paper could
+   just about carry has nothing to resolve against here. Write the symbol or
+   the formula.
+2. **State, do not announce.** No opener whose content arrives after a colon:
+   "two cases, and the second is the useful one: ...". Write the fact as the
+   sentence. On a front, an announcement is not a question.
+3. **No unwitnessed quantifiers.** "often", "in general", "most of the time"
+   name a case the reader can check, or come out. On a card there is no
+   surrounding text in which the witness might be found later.
+4. **Contrast must earn its negation.** "X, not Y" is worth the words only
+   when Y is a misreading someone would actually form. *"Neither factor need
+   be square"* earns it, because assuming both are square is the natural
+   error. A vague Y is emphasis; cut it and let X stand.
+5. **No scaffolding.** A sentence about the card rather than the mathematics
+   ("note that this generalises the scalar case") either binds a choice to a
+   consequence in the same sentence or goes.
+6. **The punchline test**, for `## prose`. It should have a punchline statable
+   in one sentence. If the halves of that sentence already live in `## front`,
+   `## back` or `## conditions`, the prose is a restatement.
+7. **Say which quantity you mean.** The guideline that bans "hardness" as a
+   word covering four different quantities is why this deck's field is called
+   `derivation` and takes `definitional | short | long` rather than a
+   difficulty score.
+8. **One section, one job.** `front` asks, `back` answers, `conditions` bounds,
+   `proof` derives, `prose` interprets. A claim that needs its own
+   justification does not belong in `prose`: it is a `proof`, or it is another
+   card.
+
+**Not adopted, deliberately.** That document bans "display" for mathematics.
+Here the display/inline distinction is load-bearing — the segmenter keys on
+display maths being indented clear of the text margin — so "display equation"
+stays, meaning the typographic thing. Its ban on em-dashes is a house style
+for that paper; card text is short enough that it does not bite, and
+retrofitting this repo's prose would be churn for nothing.
 
 ## Length
 
@@ -100,6 +457,7 @@ Written in **English** (CLAUDE.md).
 | `front` | one formula; `check` caps the rendered length at 160 chars |
 | `back` | one line |
 | `conditions` | one line |
+| `uses` | one clause, ~120 chars, and usually absent |
 | `proof` | 2–4 lines |
 | `prose` | one sentence |
 
@@ -110,11 +468,11 @@ stray transpose or sign would survive proofreading — Woodbury, block inverses,
 matrix-differential results with several transposes. Not for the easy ones;
 the point is coverage where the eye fails.
 
-```python
+``python
 X = invertible(4)
 lhs = grad(lambda M: np.log(abs(np.linalg.det(M))), X)
 rhs = np.linalg.inv(X).T
-```
+``
 
 Set `lhs` and `rhs`; the runner samples several draws and compares. Available:
 `np`, `rng`, `grad`, `randn`, `spd`, `sym`, `invertible`, `orth`. Sample a
@@ -171,14 +529,15 @@ crop. Where the two disagree,
 the crop wins, and if the crop is unreadable, annotate the unit rather than
 guessing.
 
-Keep the source citation exact — `Matrix Cookbook §2.4, eq. 61` — because the
-review view links back to it and that is how a suspect card gets settled.
+Keep the source citation exact — whatever `anki-forge new` generated from the
+unit's locator, down to the section and the number — because the review view
+links back to it, and that is how a suspect card gets settled.
 
 ## Worked examples
 
 **Good.**
 
-```markdown
+``markdown
 ## front
 $\frac{\partial}{\partial X} \log \det X$
 
@@ -194,18 +553,18 @@ differential as $\operatorname{tr}(G^\top dX)$ gives $G = X^{-\top}$.
 
 ## prose
 The matrix analogue of $(\log x)' = 1/x$.
-```
+``
 
 **Bad**, same unit:
 
-```markdown
+``markdown
 ## front
 What is the derivative of the log-determinant of a matrix?
 
 ## back
 It is the inverse transpose, $X^{-\top}$, which you can derive from Jacobi's
 formula, though note that in numerator layout you would write $X^{-1}$ instead.
-```
+``
 
 The front is a topic prompt, the back mixes answer, derivation and a second
 convention, and nothing states the layout the card actually uses.

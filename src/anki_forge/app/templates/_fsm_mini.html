@@ -1,7 +1,11 @@
 {# The machine at a glance: where everything currently is, and the single
-   keystroke that moves it on. No overlays, no cycles, no annotations -- those
+   keystroke that moves it on. Counts come from `fsm_counts`, which the header
+   toggle switches between the whole source and what the filters leave. No overlays, no cycles, no annotations -- those
    are in the full legend one size up. Counts come from `pipeline`, the same
    numbers the filters use, so the two cannot disagree. #}
+{# Falls back to the rail's numbers: the empty views render this without
+   a scope of their own, and a missing count must not blank the page. #}
+{% set fsm_counts = fsm_counts | default(pipeline, true) %}
 <figure class="fsm mini">
 <svg viewBox="0 0 220 430" role="img" aria-labelledby="mini-title">
   <title id="mini-title">How many units and cards are in each state</title>
@@ -16,7 +20,7 @@
 
   <g class="state"><rect x="6" y="24" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="41">new</text>
-    <text class="count" x="104" y="55">{{ pipeline.new }}</text></g>
+    <text class="count" x="104" y="55" data-fsm-count="new">{{ fsm_counts.new }}</text></g>
 
   <path class="edge you" d="M60,64 V88" marker-end="url(#mar)"/>
   <text class="key you" x="52" y="80">q</text>
@@ -25,27 +29,32 @@
 
   <g class="state out"><rect x="156" y="26" width="58" height="36" rx="6"/>
     <text class="name" x="163" y="41">skip</text>
-    <text class="count small" x="206" y="55">{{ pipeline.skipped }}</text></g>
+    <text class="count small" x="206" y="55" data-fsm-count="skipped">{{ fsm_counts.skipped }}</text></g>
 
   <g class="state"><rect x="6" y="90" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="107">queued</text>
-    <text class="count" x="104" y="121">{{ pipeline.queued }}</text></g>
+    <text class="count" x="104" y="121" data-fsm-count="queued">{{ fsm_counts.queued }}</text></g>
 
   <path class="edge" d="M60,130 V154" marker-end="url(#mar)"/>
   <text class="step" x="66" y="146">/extract-cards</text>
 
   <g class="state"><rect x="6" y="156" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="173">carded</text>
-    <text class="count" x="104" y="187">{{ pipeline.carded }}</text></g>
+    <text class="count" x="104" y="187" data-fsm-count="carded">{{ fsm_counts.carded }}</text></g>
 
   <line class="lane-rule" x1="0" y1="214" x2="220" y2="214"/>
   <text class="lane" x="6" y="232">CARDS</text>
 
-  <path class="edge" d="M60,196 V240" marker-end="url(#mar)"/>
+  {# Not a step. `/extract-cards` writes the draft and marks the unit carded
+     in the same call, so this crossing is one event seen from the other side.
+     It was the only unlabelled arrow in a diagram where every other one names
+     a command or a key, which made it read as a step nobody had named. #}
+  <path class="edge dash" d="M60,196 V240" marker-end="url(#mar)"/>
+  <text class="step" x="66" y="228">same step</text>
 
   <g class="state"><rect x="6" y="242" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="259">draft</text>
-    <text class="count" x="104" y="273">{{ pipeline.draft }}</text></g>
+    <text class="count" x="104" y="273" data-fsm-count="draft">{{ fsm_counts.draft }}</text></g>
 
   <path class="edge you" d="M60,282 V306" marker-end="url(#mar)"/>
   <text class="key you" x="52" y="298">a</text>
@@ -54,18 +63,18 @@
 
   <g class="state out"><rect x="156" y="244" width="58" height="36" rx="6"/>
     <text class="name" x="163" y="259">rej</text>
-    <text class="count small" x="206" y="273">{{ pipeline.rejected }}</text></g>
+    <text class="count small" x="206" y="273" data-fsm-count="rejected">{{ fsm_counts.rejected }}</text></g>
 
   <g class="state ok"><rect x="6" y="308" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="325">approved</text>
-    <text class="count" x="104" y="339">{{ pipeline.approved }}</text></g>
+    <text class="count" x="104" y="339" data-fsm-count="approved">{{ fsm_counts.approved }}</text></g>
 
   <path class="edge" d="M60,348 V372" marker-end="url(#mar)"/>
   <text class="step" x="66" y="364">sync</text>
   <text class="anki" x="6" y="390">→ Anki</text>
 
-  {% if pipeline.annotated %}
-  <text class="blocked" x="6" y="416">{{ pipeline.annotated }} annotated — sync is blocked</text>
+  {% if fsm_counts.annotated %}
+  <text class="blocked" x="6" y="416">{{ fsm_counts.annotated }} annotated — sync is blocked</text>
   {% endif %}
 </svg>
 </figure>

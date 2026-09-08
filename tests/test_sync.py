@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from anki_forge import check, model, notetype, sync
+from anki_forge import config as config_mod
 from anki_forge.config import Config
 from conftest import FakeAnki
 
@@ -42,7 +43,10 @@ def test_notes_and_verify_never_reach_a_field(config: Config, card_path: Path) -
     card.add_annotation("do not ship this")
     card.set_section("verify", "lhs = 1\nrhs = 1")
     fields = sync.fields_for(card, config)
-    assert set(fields) == set(notetype.FIELDS)
+    assert set(fields) == set(notetype.FIELDS) - {"Feedback"}, (
+        "`Feedback` is inbound only; sync writing it would wipe a comment "
+        "typed between a review and the next `feedback` pull"
+    )
     assert "do not ship" not in "".join(fields.values())
     assert "lhs" not in "".join(fields.values())
 
@@ -204,3 +208,158 @@ def test_the_two_judgements_reach_anki_as_tags(config: Config) -> None:
         sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
     )
     assert not [t for t in sync.tags_for(bare, config) if t.startswith(("freq", "derive"))]
+
+
+def test_conditions_are_shown_with_the_prompt() -> None:
+    """A setting revealed after you answer is a verdict, not a condition.
+
+    The front template used to be `{{Front}}` alone, so `X in R^{n x n}` --
+    which says *which question is being asked* -- only appeared once the
+    answer was already given. That made "could someone answer this front from
+    the ambient conventions alone" a rule no card could satisfy.
+    """
+    from anki_forge import notetype
+
+    assert "{{#Conditions}}" in notetype.FRONT_TEMPLATE, "the setting must be on the prompt"
+    assert "{{Conditions}}" in notetype.FRONT_TEMPLATE
+    # and not repeated on the back, which already renders {{FrontSide}}
+    assert "{{FrontSide}}" in notetype.BACK_TEMPLATE
+    assert "{{Conditions}}" not in notetype.BACK_TEMPLATE
+
+
+# -- per-source decks ------------------------------------------------------
+
+
+def min_card(config: Config, uid: str, unit: str) -> Path:
+    path = config.cards_dir / f"{uid}-x.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nuid: {uid}\ntype: identity\nstatus: draft\n"
+        f'source: "somewhere"\nunit: "{unit}"\ntags: []\nverify: false\n---\n\n'
+        "## front\n$X$\n\n## back\n$Y$\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def with_book_deck(repo: Path, deck: str) -> Config:
+    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml += f'\n[sources.book]\ntitle = "A Book"\ndeck = "{deck}"\n'
+    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    return config_mod.load(repo)
+
+
+def test_each_source_syncs_to_its_own_deck(repo: Path) -> None:
+    config = with_book_deck(repo, "Physics::Tensors")
+    approve(min_card(config, "aaa111", "demo:1.1:2"))
+    approve(min_card(config, "bbb222", "book:1.1:1"))
+
+    fake = FakeAnki()
+    sync.run(config, client=fake)
+
+    filed = {n["fields"]["uid"]: n["deck"] for n in fake.notes.values()}
+    assert filed == {"aaa111": config.deck, "bbb222": "Physics::Tensors"}
+
+
+def test_sync_creates_every_deck_it_writes_to(repo: Path) -> None:
+    config = with_book_deck(repo, "Physics::Tensors")
+    approve(min_card(config, "bbb222", "book:1.1:1"))
+
+    fake = FakeAnki()
+    report = sync.run(config, client=fake)
+
+    assert "Physics::Tensors" in fake.decks
+    setup = [o.detail for o in report.outcomes if o.action == "setup"]
+    assert any("Physics::Tensors" in (d or "") for d in setup)
+
+
+# -- the order new cards are introduced in ---------------------------------
+
+
+def graded(config: Config, uid: str, frequency: str, derivation: str) -> Path:
+    path = min_card(config, uid, "demo:1.1:2")
+    card = model.load(path)
+    card.frontmatter["frequency"] = frequency
+    card.frontmatter["derivation"] = derivation
+    card.save()
+    return path
+
+
+def test_study_order_is_most_useful_first_then_easiest(config: Config) -> None:
+    """Anki numbers a new card by when it arrives and introduces them in that
+    order, so the order they are added in is the order they are studied."""
+    graded(config, "aaa111", "rare", "definitional")
+    graded(config, "bbb222", "core", "long")
+    graded(config, "ccc333", "core", "definitional")
+    graded(config, "ddd444", "common", "short")
+
+    order = [c.uid for c in sync.in_study_order(model.load_all(config.cards_dir))]
+    assert order == ["ccc333", "bbb222", "ddd444", "aaa111"]
+
+
+def test_an_ungraded_card_sorts_last_in_its_group(config: Config) -> None:
+    """Unannotated is unjudged, not easy."""
+    graded(config, "aaa111", "core", "long")
+    min_card(config, "bbb222", "demo:1.1:2")  # no frequency, no derivation
+
+    order = [c.uid for c in sync.in_study_order(model.load_all(config.cards_dir))]
+    assert order == ["aaa111", "bbb222"]
+
+
+def test_cards_are_added_in_study_order(repo: Path, config: Config) -> None:
+    approve(graded(config, "aaa111", "rare", "long"))
+    approve(graded(config, "bbb222", "core", "definitional"))
+
+    fake = FakeAnki()
+    sync.run(config, client=fake)
+
+    added = [n["fields"]["uid"] for n in fake.notes.values()]
+    assert added == ["bbb222", "aaa111"], "insertion order is the study order"
+
+
+def test_reposition_leaves_a_card_you_have_started_alone(config: Config) -> None:
+    """Past the new queue `due` is a date, not a position. Rewriting it would
+    move a real review by decades."""
+    approve(graded(config, "aaa111", "rare", "long"))
+    approve(graded(config, "bbb222", "core", "definitional"))
+    fake = FakeAnki()
+    sync.run(config, client=fake)
+
+    for card in fake.cards.values():
+        if card["uid"] == "bbb222":
+            card["type"] = 2  # a review card
+            card["due"] = 19_000
+
+    report = sync.run(config, client=fake, reposition_new=True)
+
+    assert fake.cards_by_uid("bbb222")["due"] == 19_000, "a studied card is untouched"
+    assert any("already studied" in (o.detail or "") for o in report.outcomes)
+
+
+def test_reposition_keeps_the_deck_where_it_sits(config: Config) -> None:
+    """Positions start from where the deck already is, so it does not jump
+    ahead of every other deck's new cards."""
+    approve(graded(config, "aaa111", "rare", "long"))
+    approve(graded(config, "bbb222", "core", "definitional"))
+    fake = FakeAnki()
+    sync.run(config, client=fake)
+    for offset, card in enumerate(fake.cards.values()):
+        card["due"] = 5000 + offset
+
+    sync.run(config, client=fake, reposition_new=True)
+
+    assert fake.cards_by_uid("bbb222")["due"] == 5000
+    assert fake.cards_by_uid("aaa111")["due"] == 5001
+
+
+def test_a_dry_run_repositions_nothing(config: Config) -> None:
+    approve(graded(config, "aaa111", "rare", "long"))
+    approve(graded(config, "bbb222", "core", "definitional"))
+    fake = FakeAnki()
+    sync.run(config, client=fake)
+    before = {uid: fake.cards_by_uid(uid)["due"] for uid in ("aaa111", "bbb222")}
+
+    report = sync.run(config, client=fake, reposition_new=True, dry_run=True)
+
+    assert {uid: fake.cards_by_uid(uid)["due"] for uid in before} == before
+    assert any("repositioned" in (o.detail or "") for o in report.outcomes)

@@ -99,6 +99,53 @@ class AnkiConnect:
     def update_note_fields(self, note_id: int, fields: dict[str, str]) -> None:
         self.invoke("updateNoteFields", note={"id": note_id, "fields": fields})
 
+    def model_field_add(self, model: str, field: str, index: int) -> None:
+        """Add a field to a note type that already has notes.
+
+        The alternative is a new note type, and `sync` finds notes by note
+        type name -- so renaming it would orphan every existing note along
+        with its whole review history and re-add all of them as new.
+        """
+        self.invoke("modelFieldAdd", modelName=model, fieldName=field, index=index)
+
+    def set_card_flag(self, card_id: int, flag: int) -> None:
+        """Set or clear a card's flag.
+
+        AnkiConnect has no flag action, so this goes through the generic
+        column writer. `flags` is an integer column on the card; 0 is none.
+        """
+        self.invoke(
+            "setSpecificValueOfCard",
+            card=card_id,
+            keys=["flags"],
+            newValues=[flag],
+            warning_check=True,
+        )
+
+    def find_cards(self, query: str) -> list[int]:
+        return list(self.invoke("findCards", query=query))
+
+    def cards_info(self, card_ids: list[int]) -> list[dict[str, Any]]:
+        if not card_ids:
+            return []
+        return list(self.invoke("cardsInfo", cards=card_ids))
+
+    def set_new_position(self, card_id: int, position: int) -> None:
+        """Move a card in the new-card queue.
+
+        For a card that has never been studied, `due` *is* its position, so
+        this is the reposition the GUI offers. It means a date for anything
+        further along, which is why the caller checks `type == 0` first;
+        AnkiConnect will happily write nonsense here.
+        """
+        self.invoke(
+            "setSpecificValueOfCard",
+            card=card_id,
+            keys=["due"],
+            newValues=[position],
+            warning_check=True,
+        )
+
     def add_tags(self, note_ids: list[int], tags: str) -> None:
         self.invoke("addTags", notes=note_ids, tags=tags)
 

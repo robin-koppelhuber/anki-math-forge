@@ -3,18 +3,6 @@
 {% set status = "" %}
 {% block title %}units · {{ source }} · anki-forge{% endblock %}
 
-{% block filters %}
-<span class="filters">
-  {% if sources|length > 1 %}
-  <select onchange="location.search = '?source=' + this.value + '&state={{ state }}'">
-    {% for name in sources %}
-    <option value="{{ name }}" {{ 'selected' if name == source }}>{{ name }}</option>
-    {% endfor %}
-  </select>
-  {% else %}<span class="source-name">{{ source }}</span>{% endif %}
-</span>
-{% endblock %}
-
 {% block main %}
 <div id="deck" data-source="{{ source }}" data-mtime="{{ mtime }}">
   {% for unit in units %}
@@ -40,7 +28,7 @@
       {% else %}
       <p class="crop-missing">no crop geometry for this unit</p>
       {% endif %}
-      <div class="splitter" data-splitter title="drag to resize — double-click to reset"></div>
+      <div class="splitter" data-splitter="units" title="drag to resize — double-click to reset"></div>
       <div class="transcription">
         {% if unit.tex and unit.transcription == 'ok' %}
         <div class="math">$${{ unit.tex }}$$</div>

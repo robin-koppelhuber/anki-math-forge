@@ -9,8 +9,20 @@ const KATEX_DELIMS = [
   { left: "\\(", right: "\\)", display: false },
 ];
 
+/* If KaTeX never loaded, every card shows raw `$...$` and looks like the
+   LaTeX is wrong. Returning quietly made a loading failure indistinguishable
+   from a transcription failure, which is the worst thing this view could get
+   wrong -- so say so, once. */
+let katexWarned = false;
+
 function renderMath(root) {
-  if (typeof renderMathInElement !== "function") return;
+  if (typeof renderMathInElement !== "function") {
+    if (!katexWarned) {
+      katexWarned = true;
+      toast("KaTeX did not load — maths is showing as raw LaTeX, not wrong", "bad");
+    }
+    return;
+  }
   renderMathInElement(root, { delimiters: KATEX_DELIMS, throwOnError: false });
 }
 
@@ -81,7 +93,12 @@ class Deck {
   }
 
   show(index) {
-    if (!this.items.length) return;
+    if (!this.items.length) {
+      // Say "0 / 0" rather than leaving the last count on screen. An empty
+      // list is a real state, not a failure to paint.
+      if (this.position) this.position.textContent = "0 / 0";
+      return;
+    }
     this.index = Math.max(0, Math.min(index, this.items.length - 1));
     this.items.forEach((item, i) => (item.hidden = i !== this.index));
     const item = this.current;
@@ -152,6 +169,14 @@ class Deck {
   get remaining() {
     return this.items.filter((item) => !item.dataset.settled).length;
   }
+}
+
+/* Every action needs something to act on. Returning silently made an empty
+   filter look like a broken keyboard, so say which it is. */
+function currentOf(deck) {
+  const item = deck.current;
+  if (!item) toast("nothing here to act on — the filter is empty");
+  return item;
 }
 
 function bindKeys(handlers) {
@@ -262,7 +287,24 @@ function cycleGuide() {
    rail you want depends on your screen -- so both are remembered.
    One pointer-drag helper serves both, because two hand-rolled drag loops is
    how they end up behaving differently. */
-const SPLIT_KEY = "anki-forge.split";
+/* Two things split down the middle, and neither ratio is a decision the
+   stylesheet can make once: a dense matrix wants the crop wide, a long
+   identity wants the text wide, and how much room the metadata deserves
+   changes with how much of it there is. Named, so each remembers its own. */
+const SPLITS = {
+  units: {
+    key: "anki-forge.split.units",
+    left: "--split-units",
+    right: "--split-units-right",
+    fallback: 0.5,
+  },
+  card: {
+    key: "anki-forge.split.card",
+    left: "--split-card",
+    right: "--split-card-right",
+    fallback: 0.72,
+  },
+};
 
 /* The right rail has two widths, because it has two jobs. At `counts` it is a
    narrow column of numbers; at `full` it holds a 960-unit-wide state machine.
@@ -312,10 +354,12 @@ function recall(key, fallback) {
   }
 }
 
-function applySplit(fraction) {
+function applySplit(name, fraction) {
+  const split = SPLITS[name];
+  if (!split) return 0;
   const clamped = Math.min(0.85, Math.max(0.15, fraction));
-  document.documentElement.style.setProperty("--split", `${clamped}fr`);
-  document.documentElement.style.setProperty("--split-right", `${1 - clamped}fr`);
+  document.documentElement.style.setProperty(split.left, `${clamped}fr`);
+  document.documentElement.style.setProperty(split.right, `${1 - clamped}fr`);
   return clamped;
 }
 
@@ -327,7 +371,9 @@ function applyRail(name, px) {
 }
 
 (function enableDragging() {
-  applySplit(recall(SPLIT_KEY, 0.5));
+  Object.keys(SPLITS).forEach((name) =>
+    applySplit(name, recall(SPLITS[name].key, SPLITS[name].fallback)),
+  );
   Object.keys(RAILS).forEach((name) =>
     applyRail(name, recall(RAILS[name].key, RAILS[name].fallback)),
   );
@@ -341,7 +387,7 @@ function applyRail(name, px) {
     const handle = grip || splitter;
     drag = grip
       ? { kind: "rail", side: grip.dataset.rail, handle }
-      : { kind: "split", box: splitter.parentElement, handle };
+      : { kind: "split", name: splitter.dataset.splitter, box: splitter.parentElement, handle };
     handle.classList.add("dragging");
     handle.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -357,7 +403,7 @@ function applyRail(name, px) {
       return;
     }
     const box = drag.box.getBoundingClientRect();
-    if (box.width) applySplit((event.clientX - box.left) / box.width);
+    if (box.width) applySplit(drag.name, (event.clientX - box.left) / box.width);
   });
 
   document.addEventListener("pointerup", () => {
@@ -369,7 +415,8 @@ function applyRail(name, px) {
       const rail = RAILS[railName(drag.side)];
       remember(rail.key, read(rail.var));
     } else {
-      remember(SPLIT_KEY, read("--split"));
+      const split = SPLITS[drag.name];
+      if (split) remember(split.key, read(split.left));
     }
     drag = null;
   });
@@ -382,9 +429,94 @@ function applyRail(name, px) {
       remember(rail.key, rail.fallback);
       return;
     }
-    if (event.target.closest("[data-splitter]")) {
-      applySplit(0.5);
-      remember(SPLIT_KEY, 0.5);
+    const splitter = event.target.closest("[data-splitter]");
+    if (splitter) {
+      const split = SPLITS[splitter.dataset.splitter];
+      if (split) {
+        applySplit(splitter.dataset.splitter, split.fallback);
+        remember(split.key, split.fallback);
+      }
     }
   });
 })();
+
+/* Keep the filter rail and the guide's diagram in step with what you just
+   decided. Both render the same `pipeline` counts, so a decision that changed
+   a state used to leave every number on screen stale until a page load -- and
+   the rail is what you navigate by. Every mutating route returns the fresh
+   counts; this paints them. */
+function paintCounts(pipeline) {
+  if (!pipeline) return;
+  document.querySelectorAll("[data-count]").forEach((el) => {
+    const value = pipeline[el.dataset.count];
+    if (value !== undefined) el.textContent = value;
+  });
+}
+
+/* The undo stack outlives a page load. Clicking a rail link is a navigation,
+   which used to throw the stack away -- so a mis-pressed key became permanent
+   the moment you changed filter, which is exactly when you would go looking
+   for it. Session storage, so it dies with the tab and never with a click. */
+const UNDO_KEY = "anki-forge.undo";
+
+function loadUndo() {
+  try {
+    const raw = sessionStorage.getItem(UNDO_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUndo(stack) {
+  try {
+    sessionStorage.setItem(UNDO_KEY, JSON.stringify(stack.slice(-50)));
+  } catch {
+    /* private window: undo still works within this page */
+  }
+}
+
+/* The source picker. It rewrites one query parameter and leaves the rest
+   alone, so switching book keeps the state, section and status filter you
+   were on -- the old inline handler rebuilt the whole query string and threw
+   those away. */
+(function sourcePicker() {
+  const pick = document.getElementById("source-pick");
+  if (!pick) return;
+  pick.addEventListener("change", () => {
+    const url = new URL(location.href);
+    url.searchParams.set("source", pick.value);
+    location.href = url.toString();
+  });
+})();
+
+/* The mini diagram counts either the whole source or what the filters leave.
+   It has its own attribute because the rail shows the unfiltered numbers on
+   the same page, and one repaint would otherwise overwrite the other. */
+function paintFsm(counts) {
+  if (!counts) return;
+  document.querySelectorAll("[data-fsm-count]").forEach((el) => {
+    const value = counts[el.dataset.fsmCount];
+    if (value !== undefined) el.textContent = value;
+  });
+}
+
+/* In `filtered` mode the new counts depend on the query, which a mutation
+   response cannot know, so ask for them. In `all` mode the response already
+   carries them. */
+async function repaintCounts(pipeline) {
+  paintCounts(pipeline);
+  const params = new URLSearchParams(location.search);
+  if (params.get("counts_scope") !== "filtered") {
+    paintFsm(pipeline);
+    return;
+  }
+  try {
+    const response = await fetch(`/api/counts?${params.toString()}`);
+    const payload = await response.json();
+    paintCounts(payload.pipeline);
+    paintFsm(payload.fsm);
+  } catch {
+    /* the numbers go stale until the next load; nothing else breaks */
+  }
+}

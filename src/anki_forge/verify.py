@@ -179,5 +179,19 @@ def run(
     for card in cards:
         if only and card.uid != only:
             continue
+        # `grad` computes the denominator-layout gradient and nothing else. On
+        # a square matrix the two conventions are indistinguishable, so a
+        # numerator-layout source would pass most cards and fail the
+        # rectangular ones for a reason nobody would guess. Say so instead.
+        layout = config.layout_for(card.source_name)
+        if layout and layout != "denominator":
+            results.append(
+                VerifyResult(
+                    card.uid,
+                    SKIP,
+                    f"source uses {layout} layout; `grad` computes denominator layout only",
+                )
+            )
+            continue
         results.append(verify_card(card, trials=trials))
     return results

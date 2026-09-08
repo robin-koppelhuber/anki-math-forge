@@ -112,6 +112,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="clear the @claude annotations on --id, once you have acted on them",
     )
+    p.add_argument(
+        "--audience",
+        choices=("claude", "me", "all"),
+        default="claude",
+        help=(
+            "whose notes --resolve-notes clears, and who --annotate addresses. "
+            "Defaults to `claude`: resolving your own requests must not delete a "
+            "`@me` decision parked on the same unit"
+        ),
+    )
     p.add_argument("--flagged", action="store_true", help="only units the audit is unsure about")
     p.add_argument("--suggested", action="store_true", help="only units with an open suggestion")
     p.add_argument(
@@ -203,13 +213,42 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_check)
 
     p = subs.add_parser("todo", help="open @claude annotations")
+    p.add_argument(
+        "--audience",
+        choices=("claude", "me"),
+        default=None,
+        help=(
+            "whose notes. `claude` is the work you can actually do; `me` is "
+            "parked for a human and is only ever reported"
+        ),
+    )
+    p.add_argument("--kind", choices=("card", "unit"), default=None)
+    p.add_argument(
+        "--status", default=None, help="a card status or a unit state, e.g. approved, queued"
+    )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_todo)
 
     p = subs.add_parser("sync", help="push approved cards to Anki, upserting by uid")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--reposition",
+        action="store_true",
+        help=(
+            "also put cards already in Anki into study order: frequency "
+            "core-to-rare, then derivation definitional-to-long. Only cards "
+            "you have not started are moved"
+        ),
+    )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_sync)
+
+    p = subs.add_parser(
+        "feedback", help="pull review comments and flags back out of Anki"
+    )
+    p.add_argument("--dry-run", action="store_true", help="say what would come back")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_feedback)
 
     p = subs.add_parser("verify", help="opt-in numeric check of identities")
     p.add_argument("--uid", default=None)
@@ -357,14 +396,18 @@ def _mutate_unit(
                 if state == "failed":
                     print("  (did not parse under KaTeX; nothing stored)", file=sys.stderr)
             if args.resolve_notes:
-                cleared = led.resolve_notes(args.id, getattr(args, "audience", ""))
+                # "all" is the only way to reach the clear-everything path, and
+                # it has to be asked for: 7 units carry a `@me` decision beside
+                # a `@claude` request, and the old default wiped both.
+                audience = "" if args.audience == "all" else args.audience
+                cleared = led.resolve_notes(args.id, audience)
                 print(f"{args.id}: {cleared} annotation(s) resolved")
             if args.set_state:
                 unit = led.set_state(args.id, args.set_state, reason=args.reason)
                 print(f"{unit.id} -> {unit.state}" + (f" ({unit.reason})" if unit.reason else ""))
             if args.annotate:
                 text = args.annotate
-                audience = getattr(args, "audience", "")
+                audience = "" if args.audience == "all" else args.audience
                 if audience and not text.lstrip().startswith("@"):
                     text = f"@{audience} {text}"
                 led.annotate(args.id, text)
@@ -572,7 +615,12 @@ def cmd_new(args: argparse.Namespace, config: Config) -> int:
         card_type=args.type,
         tags=list(args.tag),
     )
-    path = config.cards_dir / f"{uid}-{model.slugify(args.front)}.md"
+    # Filed under the source it came from. This is filing only: `unit:` stays
+    # the one place a card's source is recorded, because a directory and a
+    # frontmatter field that both claim to say it will eventually disagree.
+    # Every loader rglobs, so a card in the wrong folder still loads.
+    folder = unit_ids[0].split(":", 1)[0] if unit_ids else ""
+    path = config.cards_dir / folder / f"{uid}-{model.slugify(args.front)}.md"
     card.save(path)
 
     for unit_id in unit_ids:
@@ -621,11 +669,20 @@ def cmd_check(args: argparse.Namespace, config: Config) -> int:
 
 def cmd_todo(args: argparse.Namespace, config: Config) -> int:
     items = todo.collect(config)
+    # Filtering here rather than by eye downstream. The audience split is what
+    # decides whether a note is work or a report, so reading it off the prose
+    # is the one mistake this list must not invite.
+    if args.audience:
+        items = [i for i in items if i.audience == args.audience]
+    if args.kind:
+        items = [i for i in items if i.kind == args.kind]
+    if args.status:
+        items = [i for i in items if i.status == args.status]
     if args.json:
         print(json.dumps([i.as_dict() for i in items], indent=2, ensure_ascii=False))
         return OK
     if not items:
-        print("no open annotations")
+        print("no open annotations" + (" matching that filter" if _todo_filtered(args) else ""))
         return OK
     for item in items:
         print(item.format())
@@ -633,10 +690,33 @@ def cmd_todo(args: argparse.Namespace, config: Config) -> int:
     return OK
 
 
+def _todo_filtered(args: argparse.Namespace) -> bool:
+    return bool(args.audience or args.kind or args.status)
+
+
+def cmd_feedback(args: argparse.Namespace, config: Config) -> int:
+    from . import feedback as feedback_mod
+
+    report = feedback_mod.run(config, dry_run=args.dry_run)
+    if args.json:
+        print(json.dumps(report.as_dict(), indent=2, ensure_ascii=False))
+        return OK if report.ok else FAILED
+
+    for comment in report.imported:
+        print(f"{comment.uid}  ({comment.kind})  {comment.text}")
+    for ref, reason in report.skipped:
+        print(f"{ref}: {reason}", file=sys.stderr)
+    verb = "would import" if args.dry_run else "imported"
+    print(f"\n{verb}: {len(report.imported)}, skipped {len(report.skipped)}")
+    if report.imported and not args.dry_run:
+        print("they are `@claude` notes now -- `/triage claude` works them")
+    return OK if report.ok else FAILED
+
+
 def cmd_sync(args: argparse.Namespace, config: Config) -> int:
     from . import sync as sync_mod
 
-    report = sync_mod.run(config, dry_run=args.dry_run)
+    report = sync_mod.run(config, dry_run=args.dry_run, reposition_new=args.reposition)
     if args.json:
         print(
             json.dumps(

@@ -121,6 +121,29 @@ def test_new_writes_a_stub_and_cards_the_unit(
     assert unit.uids == [card.uid]
 
 
+def test_new_files_the_card_under_its_source(repo: Path, config: Config) -> None:
+    """One folder per source, so a second book does not land in the same
+    thousand-file directory. Filing only: `unit:` is still what says where a
+    card came from, and every loader rglobs, so a misfiled card still loads."""
+    run(repo, "extract")
+    run(repo, "units", "--id", "demo:1.1:2", "--set-state", "queued")
+    run(repo, "new", "--unit", "demo:1.1:2", "--front", "$a$", "--back", "$b$")
+
+    written = list(config.cards_dir.rglob("*.md"))
+    assert len(written) == 1
+    assert written[0].parent.name == "demo"
+    assert model.load_all(config.cards_dir)[0].source_name == "demo"
+
+
+def test_new_without_a_unit_stays_at_the_top(repo: Path, config: Config) -> None:
+    """No unit means no source to file it under. It must not vanish."""
+    run(repo, "new", "--front", "$a$", "--back", "$b$")
+    written = list(config.cards_dir.rglob("*.md"))
+    assert len(written) == 1
+    assert written[0].parent == config.cards_dir
+    assert len(model.load_all(config.cards_dir)) == 1
+
+
 def test_new_refuses_an_unknown_unit(repo: Path) -> None:
     run(repo, "extract")
     assert run(repo, "new", "--unit", "demo:9:9", "--front", "$a$", "--back", "$b$") == 1
@@ -438,3 +461,40 @@ def test_one_card_can_be_built_from_several_units(tmp_path: Path, config: Config
         assert unit is not None
         assert unit.state == "carded", f"{unit_id} was left untouched"
         assert unit.uids == [card.uid]
+
+
+def test_todo_filters_on_audience(
+    repo: Path, card_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The audience split decides whether a note is work or a report, so it is
+    a flag rather than something the caller matches on the prose."""
+    card = model.load(card_path)
+    card.add_annotation("check the transpose")
+    card.add_annotation("@me a decision for the human")
+    card.save()
+    drain(capsys)
+
+    run(repo, "todo", "--audience", "claude")
+    claude = out(capsys)
+    assert "check the transpose" in claude
+    assert "a decision for the human" not in claude
+
+    run(repo, "todo", "--audience", "me")
+    mine = out(capsys)
+    assert "a decision for the human" in mine
+    assert "check the transpose" not in mine
+
+
+def test_todo_says_when_a_filter_emptied_the_list(
+    repo: Path, card_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """"no open annotations" would otherwise read as "you are done"."""
+    card = model.load(card_path)
+    card.add_annotation("@me a decision for the human")
+    card.save()
+    drain(capsys)
+
+    run(repo, "todo", "--audience", "claude")
+    assert "matching that filter" in out(capsys)
+    run(repo, "todo")
+    assert "matching that filter" not in out(capsys)

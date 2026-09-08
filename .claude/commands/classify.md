@@ -8,8 +8,9 @@ not fifty-seven presses of `s` before the first real decision.
 
 **Run `/transcribe` first.** `classify` now reads a unit's transcription in
 preference to the PDF text layer, because a transcription is what somebody saw
-on the crop while the text layer is whatever pdfTeX happened to emit -- mangled
-or absent for anything unusual. Classifying an untranscribed book still works;
+on the crop, while the text layer is whatever the document's producer happened
+to emit -- mangled or absent for anything unusual, and missing entirely from a
+scanned source. Classifying an untranscribed book still works;
 it is just working from the worse of the two sources.
 
 Arguments: `$ARGUMENTS` — `$1` a section (`2.8`) or `--all`; `$2` an optional
@@ -55,9 +56,10 @@ and a guess that silently moved units would be indistinguishable from a bug.
    If any unit's *state* changed, something is wrong: this pass proposes only.
 
 5. Report per section: how many proposed, under which reasons, and every
-   pattern an agent noticed. A pattern — "all of §2.8 is rows of one big
-   matrix" — is a segmentation finding worth more than the suggestions
-   themselves, and belongs in ROADMAP.md rather than in thirty skips.
+   pattern an agent noticed. A pattern — "every unit in this section is one
+   row of a single larger structure" — is a segmentation finding worth more
+   than the suggestions themselves, and belongs in ROADMAP.md rather than in
+   thirty skips.
 
 ## Then
 

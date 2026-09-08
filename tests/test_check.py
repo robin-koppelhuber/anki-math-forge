@@ -259,3 +259,23 @@ def test_definitional_is_a_derivation_value(config: Config) -> None:
         sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
     )
     assert "derivation-unknown" not in {f.code for f in check.check_card(card, config)}
+
+
+def test_a_long_uses_line_is_flagged(config: Config) -> None:
+    """`uses` is a pointer, not a paragraph.
+
+    The first pass produced one at 246 characters, which is prose wearing the
+    wrong section's name -- and on the back of a flashcard nobody reads it.
+    """
+    card = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity", "status": "draft"},
+        sections=[
+            model.Section("front", "$a$"),
+            model.Section("back", "$b$"),
+            model.Section("uses", "x" * (check.USES_CHAR_CAP + 1)),
+        ],
+    )
+    assert "uses-too-long" in {f.code for f in check.check_card(card, config)}
+
+    card.sections[-1].body = "Backpropagation through a linear layer."
+    assert "uses-too-long" not in {f.code for f in check.check_card(card, config)}

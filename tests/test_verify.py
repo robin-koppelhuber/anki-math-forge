@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from anki_forge import model, verify
@@ -121,3 +122,42 @@ def test_run_over_a_repo_skips_cards_that_did_not_opt_in(
 def test_trial_count_is_honoured(trials: int) -> None:
     result = verify.verify_card(card(LOGDET), trials=trials)
     assert f"{trials} trials" in result.detail
+
+
+def test_the_gradient_is_x_shaped_not_x_transpose_shaped() -> None:
+    """Denominator layout, pinned to a rectangular case.
+
+    CLAUDE.md claimed `d(scalar)/dX` has the shape of `X^T` while `grad()` has
+    always produced the shape of `X`. On a square `X` the two are
+    indistinguishable, which is why the contradiction sat in the contract
+    until a card-writing pass hit eq. 55 with a rectangular `X`.
+    """
+    rng = np.random.default_rng(0)
+    x = rng.normal(size=(5, 3))
+    out = verify.grad(lambda m: float(np.log(np.linalg.det(m.T @ m))), x)
+    assert out.shape == x.shape, "denominator layout: the gradient is shaped like X"
+    assert out.shape != x.T.shape
+    # and it is the Cookbook's eq. 55 value
+    assert np.abs(out - 2 * np.linalg.pinv(x).T).max() < 1e-7
+
+
+def test_verify_refuses_a_layout_its_gradient_cannot_compute(repo: Path) -> None:
+    """`grad` computes denominator layout only. The two agree on every square
+    matrix, so checking a numerator source against it would pass most cards and
+    fail the rectangular ones for a reason nobody would guess."""
+    from anki_forge import config as config_mod
+
+    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml += '\n[sources.book]\ntitle = "A Book"\nlayout = "numerator"\n'
+    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    config = config_mod.load(repo)
+
+    card = model.parse(
+        "---\nuid: bbb222\ntype: identity\nstatus: draft\n"
+        'unit: "book:1.1:1"\nverify: true\n---\n\n'
+        "## front\n$a$\n\n## back\n$b$\n\n"
+        "## verify\n```python\nlhs = np.zeros(1)\nrhs = np.ones(1)\n```\n"
+    )
+    results = verify.run([card], config)
+    assert [r.status for r in results] == [verify.SKIP]
+    assert "numerator" in results[0].detail

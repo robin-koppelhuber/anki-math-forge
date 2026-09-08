@@ -159,7 +159,7 @@ def test_normalise_strips_delimiters_and_tags() -> None:
 def test_a_transcription_is_only_stored_once_it_parses() -> None:
     """The gate is the whole mechanical contribution here (§4)."""
     assert transcribe.gate(r"X^{-	op}", latex.checker(()))[0] == "ok"
-    assert transcribe.gate(r"rac{a}{b", latex.checker(()))[0] == "failed"
+    assert transcribe.gate(r"\frac{a}{b", latex.checker(()))[0] == "failed"
 
 
 def test_rerunning_extract_never_destroys_a_transcription(config: Config) -> None:

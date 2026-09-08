@@ -13,7 +13,7 @@ Load the book before you start, for the same reason `/extract-cards` does:
 
 ```
 uv run anki-forge context <unit-id>     # per card: the frame it was printed in
-uv run anki-forge source-text matrix-cookbook   # the whole book, when you need it
+uv run anki-forge source-text <source>   # the whole book, when you need it
 ```
 
 `context` prints the page the equation was printed on. Read it — conditions
@@ -43,6 +43,15 @@ is visible.
      mathematics still needs a condition, state it and note the addition.
    - `## proof` — only when short and load-bearing (2–4 lines).
    - `## prose` — one sentence of intuition, or nothing.
+   - `## uses` — only where the answer alone leaves you asking *why would I
+     ever need this*. One clause, the setting in plain words with its formal
+     name in parentheses. Most cards should not have one.
+   - `frequency` and `derivation` — **both, on every card.** `frequency` is
+     `core | common | rare`, `derivation` is `definitional | short | long`.
+     They are not decoration: `sync` introduces new cards in that order, most
+     useful first and then easiest first, and a card missing either sorts to
+     the back of the queue as unjudged. A stub left ungraded is a card you
+     will meet last.
    - `tags` — mechanical and reusable: topic, operation, structure.
    - `verify: true` plus a `## verify` snippet where a stray transpose or sign
      would survive proofreading.

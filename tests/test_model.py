@@ -134,3 +134,158 @@ def test_stub_is_minimal_but_complete() -> None:
     assert card.section_names() == ["front", "back"]
     assert card.status == "draft"
     assert model.parse(card.render()).render() == card.render()
+
+
+def test_reordering_frontmatter_does_not_break_an_approval() -> None:
+    """The digest is over content, not over the file's layout.
+
+    It used to hash the rendered card, so it depended on FRONTMATTER_ORDER.
+    Adding one optional field to that tuple invalidated every approval in the
+    deck: the cards were untouched and `check` called them edited.
+    """
+    a = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity", "tags": ["x"], "frequency": "core"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    b = model.Card(
+        frontmatter={"frequency": "core", "tags": ["x"], "type": "identity", "uid": "aa11bb"},
+        sections=[model.Section("back", "$b$"), model.Section("front", "$a$")],
+    )
+    assert a.content_hash() == b.content_hash()
+
+
+def test_changing_content_still_changes_the_hash() -> None:
+    """Order-independence must not become blindness."""
+    base = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    before = base.content_hash()
+
+    edited = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$c$")],
+    )
+    assert edited.content_hash() != before
+
+    tagged = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity", "frequency": "core"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    assert tagged.content_hash() != before, "adding a field is a real content change"
+
+
+def test_status_and_notes_stay_out_of_the_hash() -> None:
+    plain = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
+    )
+    approved = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity", "status": "approved",
+                     "content_hash": "deadbeef"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$b$"),
+                  model.Section("notes", "@me a thought")],
+    )
+    assert plain.content_hash() == approved.content_hash()
+
+
+def test_editing_a_verify_block_does_not_unapprove() -> None:
+    """`verify` is a check on the author, not content a reviewer saw.
+
+    It never reaches Anki. Hashing it meant tightening a numerical test threw
+    away an approval on a card whose mathematics had not moved.
+    """
+    def card(verify: str) -> model.Card:
+        return model.Card(
+            frontmatter={"uid": "aa11bb", "type": "identity"},
+            sections=[
+                model.Section("front", "$a$"),
+                model.Section("back", "$b$"),
+                model.Section("verify", verify),
+            ],
+        )
+
+    assert card("lhs = 1\nrhs = 1").content_hash() == card("lhs = 2\nrhs = 2").content_hash()
+
+    # but the claim itself still does
+    changed = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity"},
+        sections=[model.Section("front", "$a$"), model.Section("back", "$c$")],
+    )
+    assert changed.content_hash() != card("lhs = 1\nrhs = 1").content_hash()
+
+
+def test_uses_is_a_recognised_section() -> None:
+    """"Where does this actually turn up" is a different question from what the
+    result means, so it gets its own short section rather than crowding prose."""
+    assert "uses" in model.SECTION_ORDER
+    assert model.SECTION_ORDER.index("uses") < model.SECTION_ORDER.index("proof")
+
+    card = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity"},
+        sections=[
+            model.Section("back", "$b$"),
+            model.Section("uses", "The normal equations."),
+            model.Section("front", "$a$"),
+        ],
+    )
+    # rendering puts sections in canonical order, so `uses` must have a place
+    rendered = card.render()
+    assert rendered.index("## front") < rendered.index("## back") < rendered.index("## uses")
+
+
+def test_uses_reaches_anki_as_its_own_field() -> None:
+    from anki_forge import notetype
+
+    assert "Uses" in notetype.FIELDS
+    assert "{{#Uses}}" in notetype.BACK_TEMPLATE
+    assert "{{Uses}}" not in notetype.FRONT_TEMPLATE, "it is answer-side, not a prompt"
+
+
+def test_add_annotation_keeps_an_existing_audience(card_path: Path) -> None:
+    """`@me` is a decision parked for the human. Prefixing it with `@claude`
+    would file it as the agent's work, which is the one mix-up the audience
+    split exists to prevent."""
+    card = model.load(card_path)
+    card.add_annotation("@me a decision for the human")
+    card.add_annotation("plain text gets the default")
+
+    notes = card.annotations()
+    assert notes[0] == "@me a decision for the human"
+    assert notes[1] == "@claude plain text gets the default"
+    assert [model.annotation_audience(n) for n in notes] == ["me", "claude"]
+
+
+def test_resolve_annotation_deletes_the_line_and_leaves_the_prose(card_path: Path) -> None:
+    """Resolving *is* deleting: a note still in the file still blocks sync, so
+    anything short of a delete leaves the card exactly as stuck."""
+    card = model.load(card_path)
+    card.set_section("notes", "a plain note that is not addressed to anyone")
+    card.add_annotation("@me a decision")
+    card.add_annotation("work for the agent")
+
+    removed = card.resolve_annotation(0)
+
+    assert removed == "@me a decision"
+    assert card.annotations() == ["@claude work for the agent"]
+    assert "a plain note that is not addressed to anyone" in card.section("notes")
+
+
+def test_resolving_does_not_un_approve(card_path: Path) -> None:
+    """`## notes` is outside `content_hash`, so finishing with a note is not
+    an edit to the card a reviewer looked at."""
+    card = model.load(card_path)
+    card.add_annotation("@me a decision")
+    card.approve()
+    before = card.content_hash()
+
+    card.resolve_annotation(0)
+
+    assert card.content_hash() == before
+    assert card.effective_status == "approved"
+
+
+def test_resolving_an_index_that_is_not_there_is_refused(card_path: Path) -> None:
+    card = model.load(card_path)
+    with pytest.raises(CardError):
+        card.resolve_annotation(0)

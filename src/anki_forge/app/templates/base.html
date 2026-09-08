@@ -4,19 +4,38 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}anki-forge{% endblock %}</title>
-<link rel="stylesheet" href="{{ config.katex_base }}/katex.min.css">
+{# Resolved by create_app; the fallbacks matter because a template change
+   takes effect on the next request while a Python change needs a restart --
+   so this file must render something usable against the old code too. #}
+{% set kb = katex_base | default("", true) or config.katex_base
+            or "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist" %}
+<link rel="stylesheet" href="{{ kb }}/katex.min.css">
 <link rel="stylesheet" href="/static/app.css">
-<script defer src="{{ config.katex_base }}/katex.min.js"></script>
-<script defer src="{{ config.katex_base }}/contrib/auto-render.min.js"></script>
+<script defer src="{{ kb }}/katex.min.js"></script>
+<script defer src="{{ kb }}/contrib/auto-render.min.js"></script>
 <script defer src="/static/app.js"></script>
 {% block head %}{% endblock %}
 </head>
 <body>
+{# The source in force, carried on every in-header link so switching
+   view does not silently switch book. #}
+{% set src = source | default('', true) %}
 <header class="bar">
   <nav class="views">
-    <a href="/units" class="{{ 'on' if view == 'units' }}">units</a>
-    <a href="/review" class="{{ 'on' if view == 'review' }}">review</a>
+    <a href="/units?source={{ src }}" class="{{ 'on' if view == 'units' }}">units</a>
+    <a href="/review?source={{ src }}" class="{{ 'on' if view == 'review' }}">review</a>
   </nav>
+  {% if sources is defined and sources %}
+  {# Rendered even for a single source: which book you are working on is
+     worth stating, and it is the one control whose absence made the units
+     view look like it was showing everything. #}
+  <select class="source-pick" id="source-pick" aria-label="source"
+          title="the source you are working on">
+    {% for name in sources %}
+    <option value="{{ name }}" {{ 'selected' if name == src }}>{{ name }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
   {% block filters %}{% endblock %}
   <span class="position" id="position"></span>
 </header>
