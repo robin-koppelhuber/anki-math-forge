@@ -904,3 +904,53 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 /* The carded -> draft crossing is not a transition: one command produces the
    draft and marks the unit, so the edge is drawn as a seam rather than a step. */
 .fsm.mini .edge.dash { stroke-dasharray: 2 3; }
+
+/* Where a card sits in the new-card queue, and what put it there. */
+.place { margin: 0.5rem 0; font-size: 0.86em; }
+.place .row { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: center; margin: 0 0 0.25rem; }
+.place .pos {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.place .grade {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--ink);
+}
+.place .grade.missing { background: none; border: 1px dashed var(--line); color: var(--muted); }
+.place .dep { margin: 0.1rem 0; color: var(--muted); }
+.place .dep code { color: var(--ink); }
+.place .dep.needs { border-left: 2px solid var(--accent); padding-left: 0.4rem; }
+.place .dep.needed { border-left: 2px solid var(--line); padding-left: 0.4rem; }
+
+/* The sort key, under the compact diagram. */
+.order-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  align-items: center;
+  margin: 0.5rem 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+.order-key b { color: var(--ink); font-size: 11px; }
+.order-key span {
+  padding: 0.05rem 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+.order-key span + span::before { content: none; }
+.order-key em { font-style: normal; color: var(--accent); font-weight: 600; }
+
+/* A dependency you can follow. */
+.place .goto { text-decoration: none; border-bottom: 1px dotted var(--line); }
+.place .goto:hover { border-bottom-color: var(--accent); }
+.place .goto:hover code { color: var(--accent); }
+
+/* A `requires` naming no card. `check` errors on it; the UI must not offer a
+   link to nowhere. */
+.place code.dead { color: var(--bad); text-decoration: line-through; }

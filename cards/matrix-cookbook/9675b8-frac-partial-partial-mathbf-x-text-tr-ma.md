@@ -20,8 +20,8 @@ $\mathbf{A}^T\mathbf{B}^T$
 ## conditions
 Denominator layout.
 
-## proof
-$\text{Tr}(\mathbf{A}\mathbf{X}\mathbf{B}) = \text{Tr}(\mathbf{X}\mathbf{B}\mathbf{A})$, and $\partial\,\text{Tr}(\mathbf{X}\mathbf{M})/\partial\mathbf{X} = \mathbf{M}^T$ with $\mathbf{M} = \mathbf{B}\mathbf{A}$.
-
 ## prose
 $\mathbf{A}^T\mathbf{B}^T = (\mathbf{B}\mathbf{A})^T$: rotate $\mathbf{X}$ to the front of the trace, then transpose what is left, so the order does not reverse.
+
+## proof
+$\text{Tr}(\mathbf{A}\mathbf{X}\mathbf{B}) = \text{Tr}(\mathbf{X}\mathbf{B}\mathbf{A})$, and $\partial\,\text{Tr}(\mathbf{X}\mathbf{M})/\partial\mathbf{X} = \mathbf{M}^T$ with $\mathbf{M} = \mathbf{B}\mathbf{A}$.

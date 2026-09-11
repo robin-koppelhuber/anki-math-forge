@@ -3,6 +3,7 @@
 
 const deck = new Deck();
 const activeStatus = new URLSearchParams(location.search).get("status") || "draft";
+const activeAnnotated = new URLSearchParams(location.search).get("annotated") || "";
 
 function refresh(item, card) {
   item.dataset.mtime = card.mtime;
@@ -84,7 +85,16 @@ async function annotate() {
     mtime: item.dataset.mtime,
   });
   refresh(item, result.card);
-  toast("annotated — sync will refuse this card until it is resolved");
+  repaintCounts(result.pipeline);
+  // Annotating *is* a decision: you have said your piece and you are done
+  // with the card. Leaving the cursor put meant reaching for `j` every time,
+  // which is the one thing every other action here does for you.
+  if (activeAnnotated === "none") {
+    deck.settle("annotated");
+  } else {
+    deck.nextPending();
+  }
+  toast("annotated — sync refuses it until resolved · k goes back");
 }
 
 async function openEditor() {
@@ -136,4 +146,40 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("[data-resolve]");
   if (!button) return;
   resolveAnnotation(Number(button.dataset.resolve)).catch(() => {});
+});
+
+
+/* Following a dependency. The card is usually already in the deck on screen,
+   just hidden behind the one you are looking at, so jumping to it should not
+   cost a page load. The hash is what carries it either way: setting it makes
+   a history entry, so the back button returns you to the card you came from,
+   and a full navigation lands on `#uid` and is picked up by the same handler. */
+function showByUid(uid) {
+  const index = deck.items.findIndex((item) => item.dataset.uid === uid);
+  if (index < 0) return false;
+  deck.show(index);
+  return true;
+}
+
+function followHash() {
+  const uid = location.hash.replace(/^#/, "");
+  if (!uid) return;
+  // Say so rather than doing nothing. A link that lands on a filter which
+  // still excludes its target used to be indistinguishable from a dead one.
+  if (!showByUid(uid)) toast(`${uid} is not in this view — try the status filter`);
+}
+
+window.addEventListener("hashchange", followHash);
+followHash();
+
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-goto]");
+  if (!link || event.metaKey || event.ctrlKey || event.shiftKey) return;
+  const uid = link.dataset.goto;
+  if (deck.items.some((item) => item.dataset.uid === uid)) {
+    // Already here: move the cursor and leave the page alone.
+    event.preventDefault();
+    location.hash = uid;
+  }
+  // Otherwise the href does the work: it clears the filters that hide it.
 });

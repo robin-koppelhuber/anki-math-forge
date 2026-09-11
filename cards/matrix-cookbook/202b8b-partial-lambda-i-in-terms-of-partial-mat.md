@@ -22,13 +22,13 @@ $\mathbf{A} \in \mathbb{R}^{n \times n}$, $\mathbf{A} = \mathbf{A}^\top$;
 $\lambda_i$ a simple eigenvalue of $\mathbf{A}$ with eigenvector
 $\mathbf{v}_i$, $\mathbf{v}_i^\top\mathbf{v}_i = 1$.
 
+## prose
+The gradient of a simple eigenvalue is the rank-one projector $\mathbf{v}_i\mathbf{v}_i^\top$, so only the part of the perturbation aligned with $\mathbf{v}_i$ moves $\lambda_i$ at first order.
+
 ## proof
 Differentiate $\mathbf{A}\mathbf{v}_i = \lambda_i\mathbf{v}_i$ and left-multiply by $\mathbf{v}_i^\top$:
 $\mathbf{v}_i^\top(\partial\mathbf{A})\mathbf{v}_i + \mathbf{v}_i^\top\mathbf{A}\,\partial\mathbf{v}_i = \partial\lambda_i + \lambda_i\mathbf{v}_i^\top\partial\mathbf{v}_i$.
 Since $\mathbf{v}_i^\top\mathbf{A} = \lambda_i\mathbf{v}_i^\top$, the two $\partial\mathbf{v}_i$ terms cancel.
-
-## prose
-The gradient of a simple eigenvalue is the rank-one projector $\mathbf{v}_i\mathbf{v}_i^\top$, so only the part of the perturbation aligned with $\mathbf{v}_i$ moves $\lambda_i$ at first order.
 
 ## verify
 ```python

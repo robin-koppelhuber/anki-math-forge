@@ -20,11 +20,11 @@ $\dfrac{\mathbf{I}}{\|\mathbf{x}-\mathbf{a}\|_2}-\dfrac{(\mathbf{x}-\mathbf{a})(
 ## conditions
 $\mathbf{x} \neq \mathbf{a}$.
 
-## uses
-Backpropagation through $L_2$ normalisation; how a bearing to a target swings as the sensor moves.
-
 ## prose
 Writing $r = \|\mathbf{x}-\mathbf{a}\|_2$ and $\hat{\mathbf{u}} = (\mathbf{x}-\mathbf{a})/r$, this is $(\mathbf{I}-\hat{\mathbf{u}}\hat{\mathbf{u}}^\top)/r$, the projection onto the directions orthogonal to $\hat{\mathbf{u}}$ scaled by $1/r$, because sliding along $\hat{\mathbf{u}}$ does not turn it.
+
+## uses
+Backpropagation through $L_2$ normalisation; how a bearing to a target swings as the sensor moves.
 
 ## verify
 ```python

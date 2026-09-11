@@ -20,11 +20,11 @@ $k(\mathbf{X}^{k-1})^T$
 ## conditions
 $\mathbf{X} \in \mathbb{R}^{n \times n}$; $k \in \mathbb{Z}_{>0}$. Denominator layout.
 
-## proof
-$d\,\text{Tr}(\mathbf{X}^k) = \sum_{r=0}^{k-1}\text{Tr}(\mathbf{X}^r d\mathbf{X}\,\mathbf{X}^{k-1-r}) = k\,\text{Tr}(\mathbf{X}^{k-1} d\mathbf{X})$, the $k$ terms being cyclic rotations of one another.
-
 ## prose
 The matrix analogue of $(x^k)' = k x^{k-1}$.
+
+## proof
+$d\,\text{Tr}(\mathbf{X}^k) = \sum_{r=0}^{k-1}\text{Tr}(\mathbf{X}^r d\mathbf{X}\,\mathbf{X}^{k-1-r}) = k\,\text{Tr}(\mathbf{X}^{k-1} d\mathbf{X})$, the $k$ terms being cyclic rotations of one another.
 
 ## verify
 ```python

@@ -21,12 +21,12 @@ $-\mathbf{X}^{-\top}\mathbf{a}\mathbf{b}^\top\mathbf{X}^{-\top}$
 $\mathbf{X} \in \mathbb{R}^{n \times n}$ invertible;
 $\mathbf{a}, \mathbf{b} \in \mathbb{R}^{n}$. Denominator layout.
 
+## prose
+The order reverses under the transpose: $\mathbf{b}$ sits to the right of $\mathbf{a}$ on the right-hand side even though it sits to the right of $\mathbf{X}^{-1}$ on the left.
+
 ## proof
 $d(\mathbf{a}^\top\mathbf{X}^{-1}\mathbf{b}) = -\mathbf{a}^\top\mathbf{X}^{-1}(d\mathbf{X})\mathbf{X}^{-1}\mathbf{b} = -\operatorname{Tr}(\mathbf{X}^{-1}\mathbf{b}\mathbf{a}^\top\mathbf{X}^{-1}\, d\mathbf{X})$;
 reading that as $\operatorname{Tr}(\mathbf{G}^\top d\mathbf{X})$ gives $\mathbf{G} = -(\mathbf{X}^{-1}\mathbf{b}\mathbf{a}^\top\mathbf{X}^{-1})^\top$.
-
-## prose
-The order reverses under the transpose: $\mathbf{b}$ sits to the right of $\mathbf{a}$ on the right-hand side even though it sits to the right of $\mathbf{X}^{-1}$ on the left.
 
 ## verify
 ```python

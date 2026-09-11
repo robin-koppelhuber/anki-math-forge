@@ -35,6 +35,17 @@ function toast(message, kind = "") {
   el._timer = setTimeout(() => (el.hidden = true), 2600);
 }
 
+/* Cancel is not a submit button (see base.html), so it needs closing by
+   hand. Bound once, not per call. */
+document.addEventListener("DOMContentLoaded", () => {
+  const cancel = document.getElementById("prompt-cancel");
+  if (cancel) {
+    cancel.addEventListener("click", () =>
+      document.getElementById("prompt").close("cancel"),
+    );
+  }
+});
+
 function ask(label, value = "") {
   const dialog = document.getElementById("prompt");
   const input = document.getElementById("prompt-input");

@@ -20,11 +20,11 @@ $\sum_{r=0}^{k-1}(\mathbf{X}^r\mathbf{A}\mathbf{X}^{k-r-1})^T$
 ## conditions
 $\mathbf{X} \in \mathbb{R}^{n \times n}$; $k$ a positive integer. Denominator layout.
 
-## proof
-$d\,\text{Tr}(\mathbf{A}\mathbf{X}^k) = \sum_{r=0}^{k-1}\text{Tr}(\mathbf{X}^{k-1-r}\mathbf{A}\mathbf{X}^{r} d\mathbf{X})$, one term per occurrence of $\mathbf{X}$.
-
 ## prose
 The sum does not collapse the way it does for $\text{Tr}(\mathbf{X}^k)$, because $\mathbf{A}$ blocks the cyclic rotation that would make the terms equal.
+
+## proof
+$d\,\text{Tr}(\mathbf{A}\mathbf{X}^k) = \sum_{r=0}^{k-1}\text{Tr}(\mathbf{X}^{k-1-r}\mathbf{A}\mathbf{X}^{r} d\mathbf{X})$, one term per occurrence of $\mathbf{X}$.
 
 ## verify
 ```python

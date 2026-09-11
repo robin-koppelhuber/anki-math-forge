@@ -7,6 +7,7 @@ source: "Matrix Cookbook §2.3, eq. 66, p. 10"
 unit: "matrix-cookbook:2.3:66"
 frequency: common
 derivation: short
+requires: [af5ca1, ae6e48]
 tags: [derivatives, eigenvalues, determinant]
 verify: false
 ---

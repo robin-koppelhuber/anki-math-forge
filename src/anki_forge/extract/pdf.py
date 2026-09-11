@@ -1,4 +1,4 @@
-"""Segment a PDF into units by heuristic. **Deprecated -- see ROADMAP.md §4.**
+"""Segment a PDF into units by heuristic. **Frozen -- see ROADMAP.md §13.**
 
 This works, and it is verified: 571/571 numbered equations on The Matrix
 Cookbook, 98.8% of them in a crop holding exactly one equation. It is also a
@@ -20,11 +20,15 @@ bbox)`, then check that with the same contiguity oracle in `audit.py`. The
 ledger does not care who fills it, as long as the ids stay stable -- and they
 come from the document's own numbering, not from anything in here.
 
-**What must survive its deletion**, and does not live here:
+**What must survive without it**, and does not live here:
 
 * `render.py` -- crops, which work from `locator.bbox` alone;
 * `audit.py` -- the 1..N oracle, which scores *any* extractor;
 * `ledger.py` -- stable ids and triage state, the actual valuable thing.
+
+It is **kept**, not deleted: one selectable backend per source, behind the
+same one-function seam. Frozen means frozen. When a shared type changes
+under it, give it a shim rather than editing it.
 
 The only contract this module owes the rest of the system is `segment()`
 returning units whose `locator` carries a section, an equation number and a

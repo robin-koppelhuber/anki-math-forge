@@ -22,6 +22,13 @@ $\mathbf{A} \in \mathbb{R}^{n \times n}$, $\mathbf{A} = \mathbf{A}^\top$;
 $\lambda_i$ a simple eigenvalue of $\mathbf{A}$ with eigenvector
 $\mathbf{v}_i$, $\mathbf{v}_i^\top\mathbf{v}_i = 1$.
 
+## prose
+$(\cdot)^{+}$ inverts what is invertible and zeroes the rest (the Moore-Penrose pseudo-inverse);
+$\lambda_i\mathbf{I}-\mathbf{A}$ is singular exactly along $\mathbf{v}_i$, and
+that is the direction $\mathbf{v}_i^\top\mathbf{v}_i = 1$ has already pinned
+down, so the pseudo-inverse returns the one perturbation orthogonal to
+$\mathbf{v}_i$.
+
 ## uses
 Backpropagation through a symmetric eigendecomposition; the sensitivity of PCA directions to a perturbed covariance.
 
@@ -29,13 +36,6 @@ Backpropagation through a symmetric eigendecomposition; the sensitivity of PCA d
 Differentiating $\mathbf{A}\mathbf{v}_i = \lambda_i\mathbf{v}_i$ gives
 $(\lambda_i\mathbf{I}-\mathbf{A})\,\partial\mathbf{v}_i = (\partial\mathbf{A})\mathbf{v}_i - (\partial\lambda_i)\mathbf{v}_i$.
 Applying $(\lambda_i\mathbf{I}-\mathbf{A})^{+}$ drops the $(\partial\lambda_i)\mathbf{v}_i$ term, since $(\lambda_i\mathbf{I}-\mathbf{A})^{+}\mathbf{v}_i = \mathbf{0}$.
-
-## prose
-$(\cdot)^{+}$ inverts what is invertible and zeroes the rest (the Moore-Penrose pseudo-inverse);
-$\lambda_i\mathbf{I}-\mathbf{A}$ is singular exactly along $\mathbf{v}_i$, and
-that is the direction $\mathbf{v}_i^\top\mathbf{v}_i = 1$ has already pinned
-down, so the pseudo-inverse returns the one perturbation orthogonal to
-$\mathbf{v}_i$.
 
 ## verify
 ```python

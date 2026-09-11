@@ -85,6 +85,12 @@
                          else 'decisions parked for you' }}">
           <span>{% if annotated == 'me' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@me</span>
           <b data-count="annotated_me_{{ kind }}">{{ pipeline['annotated_me_' ~ kind] }}</b></a></li>
+        <li><a class="{{ 'on' if annotated == 'none' }}"
+               href="{{ filter_url(here, f, annotated=(none if annotated == 'none' else 'none')) }}"
+               title="{{ 'showing only these — click to clear' if annotated == 'none'
+                         else 'nothing pending on them: the ones waiting on your judgement' }}">
+          <span>{% if annotated == 'none' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}no notes</span>
+          <b data-count="unannotated_{{ kind }}">{{ pipeline['unannotated_' ~ kind] }}</b></a></li>
         <li><a class="{{ 'on' if annotated == 'claude' }}"
                href="{{ filter_url(here, f, annotated=(none if annotated == 'claude' else 'claude')) }}"
                title="{{ 'showing only these — click to clear' if annotated == 'claude'

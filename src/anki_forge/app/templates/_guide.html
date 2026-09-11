@@ -34,6 +34,15 @@
            title="count only what the active filters leave">filtered</a>
       </p>
       {% include "_fsm_mini.html" %}
+
+      {# The order Anki introduces new cards in. A picture would be a poor
+         one: nine dependency edges across a hundred cards is a near-empty
+         graph, and the rule is four keys long. #}
+      <p class="order-key" title="what decides which new card you meet next">
+        <b>study order</b>
+        <span>frequency</span><span>derivation</span><span>source order</span>
+        <em>requires wins</em>
+      </p>
     </div>
 
     <div class="in-full">
@@ -150,10 +159,20 @@
           in, not merely to the same status. The card you just acted on also
           stays in the list, so <b>k</b> reaches it.</dd>
       <dt><b>n</b> annotate</dt>
-      <dd>Leave an <code>@claude</code> note &mdash; a request for Claude.
-          Prefix the text <code>@me</code> instead to park a decision for
-          yourself. <b>Sync refuses any card with an open annotation of either
-          kind, whatever its status.</b></dd>
+      <dd>Leave an <code>@claude</code> note, a request for Claude. Prefix
+          the text <code>@me</code> instead to park a decision for yourself.
+          <b>Sync refuses any card with an open annotation of either kind,
+          whatever its status</b>, so the note alone holds the card back and
+          you do not touch its status. Annotating moves you on to the next
+          card, like every other decision here; <b>k</b> goes back.</dd>
+      <dt><b>r</b> reject &mdash; and what it is not</dt>
+      <dd><code>rejected</code> means <b>this card should not exist</b>. It is
+          not a way to park something: an annotated card is already refused by
+          sync <em>whatever</em> its status, so a note alone is enough to hold
+          it back. Rejecting to clear it from the draft list leaves a card
+          Anki is still showing you while the repo says never sync it &mdash;
+          <code>sync</code> never deletes. Use <b>no notes</b> in the filter
+          rail to review only what is actually waiting on you.</dd>
       <dt><b>x</b> resolve</dt>
       <dd>Resolve the card's first annotation, or click <b>resolve</b> on any
           one of them. <b>Resolving is deleting the line</b>: there is no

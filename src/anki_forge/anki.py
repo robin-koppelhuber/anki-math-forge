@@ -99,6 +99,12 @@ class AnkiConnect:
     def update_note_fields(self, note_id: int, fields: dict[str, str]) -> None:
         self.invoke("updateNoteFields", note={"id": note_id, "fields": fields})
 
+    def model_templates(self, model: str) -> dict[str, dict[str, str]]:
+        return dict(self.invoke("modelTemplates", modelName=model))
+
+    def model_styling(self, model: str) -> str:
+        return str(self.invoke("modelStyling", modelName=model).get("css", ""))
+
     def model_field_add(self, model: str, field: str, index: int) -> None:
         """Add a field to a note type that already has notes.
 

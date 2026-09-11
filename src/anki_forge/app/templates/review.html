@@ -42,6 +42,29 @@
       {% if card.tags %}<p class="tags">{% for tag in card.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</p>{% endif %}
       <p class="path"><code>{{ card.path }}</code></p>
 
+      {# Templates are re-read per request but Python is not, so this has to
+         render a bare uid when the running server still returns the old
+         payload of plain strings. Blank entries are what it did before. #}
+      {# What decides when Anki introduces this card. All of it lives in the
+         frontmatter and none of it was visible here, which made `requires` a
+         graph you could only edit blind. `required_by` is the half no file
+         can tell you: a card says what it needs, never what needs it. #}
+      <div class="place">
+        <p class="row">
+          {% if card.position %}<span class="pos" title="its place in the study order for this source, which does not move when you filter">order {{ card.position }}/{{ card.total }}</span>{% endif %}
+          <span class="grade {{ 'missing' if not card.frequency }}">{{ card.frequency or 'no frequency' }}</span>
+          <span class="grade {{ 'missing' if not card.derivation }}">{{ card.derivation or 'no derivation' }}</span>
+        </p>
+        {% if card.requires %}
+        <p class="dep needs" title="introduced before this card, whatever their grading">
+          needs {% for dep in card.requires %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="go to {{ uid }}"><code>{{ uid }}</code></a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `anki-forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
+        {% endif %}
+        {% if card.required_by %}
+        <p class="dep needed" title="this card is pulled forward to sit ahead of them">
+          needed by {% for dep in card.required_by %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="go to {{ uid }}"><code>{{ uid }}</code></a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `anki-forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
+        {% endif %}
+      </div>
+
       {% if card.findings %}
       <ul class="findings">
         {% for finding in card.findings %}
@@ -91,7 +114,7 @@
 <span class="key-group"><b>u</b> back to draft</span>
 <span class="key-group sep"><b>z</b> undo</span>
 <span class="key-group"><b>e</b> $EDITOR</span>
-<span class="key-group"><b>n</b> annotate</span>
+<span class="key-group"><b>n</b> annotate &amp; next</span>
 <span class="key-group"><b>x</b> resolve first note</span>
 <span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
 <span class="key-group"><b>f</b> filters</span>

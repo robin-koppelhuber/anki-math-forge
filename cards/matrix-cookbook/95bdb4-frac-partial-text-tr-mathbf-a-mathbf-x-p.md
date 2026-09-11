@@ -20,8 +20,8 @@ $\mathbf{A} + \mathbf{A}^T - (\mathbf{A} \circ \mathbf{I})$
 ## conditions
 $\mathbf{X} = \mathbf{X}^T$, varied over $X_{ij}$ with $i \le j$ only, the rest following by symmetry. Denominator layout.
 
-## proof
-Varying all $n^2$ entries of $\mathbf{X}$ independently gives $\mathbf{A}^T$; the symmetric rule $\mathbf{G} + \mathbf{G}^T - \text{diag}(\mathbf{G})$ with $\mathbf{G} = \mathbf{A}^T$ gives $\mathbf{A}^T + \mathbf{A} - (\mathbf{A} \circ \mathbf{I})$.
-
 ## prose
 Here $\circ$ multiplies entry by entry (the Hadamard product). Free entries give $\mathbf{A}^T$; constraining $\mathbf{X}$ to be symmetric adds the mirror image and subtracts $\mathbf{A} \circ \mathbf{I}$, the diagonal that would otherwise be counted twice.
+
+## proof
+Varying all $n^2$ entries of $\mathbf{X}$ independently gives $\mathbf{A}^T$; the symmetric rule $\mathbf{G} + \mathbf{G}^T - \text{diag}(\mathbf{G})$ with $\mathbf{G} = \mathbf{A}^T$ gives $\mathbf{A}^T + \mathbf{A} - (\mathbf{A} \circ \mathbf{I})$.

@@ -52,6 +52,10 @@ is visible.
      useful first and then easiest first, and a card missing either sorts to
      the back of the queue as unjudged. A stub left ungraded is a card you
      will meet last.
+   - `requires` — uids this card's proof or notation rests on, if any.
+     It decides the order the deck is introduced in and it outranks the
+     gradings: without it a card can arrive before the result it is built
+     from. Only real dependencies; two cards on a theme are not one.
    - `tags` — mechanical and reusable: topic, operation, structure.
    - `verify: true` plus a `## verify` snippet where a stray transpose or sign
      would survive proofreading.

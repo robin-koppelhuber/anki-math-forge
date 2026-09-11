@@ -20,14 +20,14 @@ $-\mathbf{C}\mathbf{X}(\mathbf{X}^T\mathbf{C}\mathbf{X})^{-1}(\mathbf{A}+\mathbf
 ## conditions
 $\mathbf{C}$ symmetric; $\mathbf{X}^T\mathbf{C}\mathbf{X}$ invertible. Denominator layout.
 
+## prose
+$\mathbf{A} + \mathbf{A}^T$ appears because $\mathbf{X}$ enters $\mathbf{X}^T\mathbf{C}\mathbf{X}$ on both sides.
+
 ## uses
 Choosing where to measure so the estimate comes out most precise, over the design matrix $\mathbf{X}$ (L-optimal design).
 
 ## proof
 With $\mathbf{M} = \mathbf{X}^T\mathbf{C}\mathbf{X}$ and $d\mathbf{M} = d\mathbf{X}^T\mathbf{C}\mathbf{X} + \mathbf{X}^T\mathbf{C}\,d\mathbf{X}$, $d\,\text{Tr}(\mathbf{M}^{-1}\mathbf{A}) = -\text{Tr}(\mathbf{M}^{-1} d\mathbf{M}\,\mathbf{M}^{-1}\mathbf{A})$; the two halves of $d\mathbf{M}$ contribute $\mathbf{A}$ and $\mathbf{A}^T$.
-
-## prose
-$\mathbf{A} + \mathbf{A}^T$ appears because $\mathbf{X}$ enters $\mathbf{X}^T\mathbf{C}\mathbf{X}$ on both sides.
 
 ## verify
 ```python

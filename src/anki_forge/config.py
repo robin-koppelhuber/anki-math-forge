@@ -15,6 +15,12 @@ CONFIG_NAME = "anki-forge.toml"
 # refused at load rather than discovered by a wrong `verify`.
 LAYOUTS = ("denominator", "numerator")
 
+# Whether the order a source prints things in is worth following. A book
+# that builds up should say `printed`; an alphabetical table or a paper
+# whose results precede their lemmas should say `none`, and its cards fall
+# back to an arbitrary but stable order instead of a misleading one.
+ORDERS = ("printed", "none")
+
 
 class ConfigError(Exception):
     pass
@@ -32,6 +38,7 @@ class SourceConfig:
     # which deck its cards belong in. A repo with one source never sets them.
     deck: str = ""
     layout: str = ""
+    order: str = "printed"
 
     @property
     def dir_name(self) -> str:
@@ -49,6 +56,7 @@ class Config:
     front_char_cap: int
     anki_url: str
     deck: str
+    note_type_name: str
     note_type_version: int
     tag_prefix: str
     extra_macros: tuple[str, ...]
@@ -62,7 +70,14 @@ class Config:
 
     @property
     def note_type(self) -> str:
-        return f"anki-forge identity v{self.note_type_version}"
+        """The note type's name in Anki: a stem you choose, plus the version.
+
+        Nothing here is derived from the package name. The name is written into
+        every note in the collection, so it has to survive this project being
+        renamed; the version stays separate because it is the lever the
+        field-migration error tells you to pull.
+        """
+        return f"{self.note_type_name} v{self.note_type_version}"
 
     def source(self, name: str) -> SourceConfig:
         try:
@@ -140,6 +155,7 @@ def load(root: Path | None = None) -> Config:
             pdf=_opt_path(root, spec.get("pdf")),
             deck=str(spec.get("deck", "") or ""),
             layout=_layout(spec.get("layout", ""), f"[sources.{name}]"),
+            order=_order(spec.get("order", "printed"), f"[sources.{name}]"),
         )
 
     return Config(
@@ -152,6 +168,7 @@ def load(root: Path | None = None) -> Config:
         front_char_cap=int(cards.get("front_char_cap", 160)),
         anki_url=os.environ.get("ANKI_CONNECT_URL", anki.get("url", "http://127.0.0.1:8765")),
         deck=anki.get("deck", "Default"),
+        note_type_name=str(anki.get("note_type_name", "Math Card")),
         note_type_version=int(anki.get("note_type_version", 1)),
         tag_prefix=anki.get("tag_prefix", "forge"),
         extra_macros=tuple(check.get("extra_macros", ())),
@@ -177,6 +194,15 @@ def _flags(raw: Any) -> dict[int, str]:
         if text:
             flags[number] = text
     return flags
+
+
+def _order(value: Any, where: str) -> str:
+    text = str(value or "printed").strip()
+    if text not in ORDERS:
+        raise ConfigError(
+            f"{where} order = {text!r}; expected one of {', '.join(ORDERS)}"
+        )
+    return text
 
 
 def _layout(value: Any, where: str) -> str:

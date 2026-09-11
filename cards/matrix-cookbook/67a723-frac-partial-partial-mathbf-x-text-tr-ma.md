@@ -20,8 +20,8 @@ $\mathbf{A}^T$
 ## conditions
 Denominator layout.
 
-## proof
-$\text{Tr}(\mathbf{X}\mathbf{A}) = \sum_{ij} X_{ij} A_{ji}$, so $\partial / \partial X_{ij} = A_{ji}$.
-
 ## prose
 $\text{Tr}(\mathbf{X}\mathbf{A})$ is the entrywise inner product of $\mathbf{X}$ with $\mathbf{A}^T$, and the gradient of a linear form is its coefficient matrix.
+
+## proof
+$\text{Tr}(\mathbf{X}\mathbf{A}) = \sum_{ij} X_{ij} A_{ji}$, so $\partial / \partial X_{ij} = A_{ji}$.

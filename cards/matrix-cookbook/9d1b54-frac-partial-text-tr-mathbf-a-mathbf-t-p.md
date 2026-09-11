@@ -20,8 +20,8 @@ $\boldsymbol{\alpha}(\mathbf{A}) + \boldsymbol{\alpha}(\mathbf{A})^T - \boldsymb
 ## conditions
 $T_{ij} = t_{i-j}$ with $t_{-d} = t_d$, varied over the $t_d$ with $d \ge 0$; $[\boldsymbol{\alpha}(\mathbf{A})]_{ij} = \sum_k A_{k,\,k+i-j}$. Denominator layout.
 
-## uses
-Fitting a Gaussian process whose covariance depends only on the gap between points (stationary).
-
 ## prose
 Here $\circ$ Hadamard product. Symmetry ties $t_d$ to $t_{-d}$, which is the same pairing that turns $\mathbf{G}$ into $\mathbf{G} + \mathbf{G}^T - \text{diag}(\mathbf{G})$ for a symmetric matrix.
+
+## uses
+Fitting a Gaussian process whose covariance depends only on the gap between points (stationary).

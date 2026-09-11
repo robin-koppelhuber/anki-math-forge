@@ -1386,3 +1386,204 @@ def test_the_scope_toggle_offers_both_ways(pdf_source: Config) -> None:
         block = re.search(r'<p class="counts-scope">(.*?)</p>', client.get(url).text, re.S).group(1)
         on = re.search(r'<a class="on"[^>]*>(\w+)</a>', block)
         assert on and on.group(1) == active, url
+
+
+def test_filtering_to_cards_with_no_annotation(pdf_source: Config) -> None:
+    """Without this an annotated draft sat in the review queue for ever, and
+    the only way to stop meeting it was to reject it -- which claims the card
+    should never exist and is not what anyone meant."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    write_card(pdf_source, "bbb222", "demo:2.4:61")
+    client = TestClient(create_app(pdf_source))
+
+    clear = client.get("/review?status=draft&annotated=none").text
+    assert "bbb222" in clear and "aaa111" not in clear
+
+    rows = needs_you(client.get("/review?status=draft").text)
+    assert rows["no"][1].endswith("annotated=none"), "offered when it is off"
+    assert not needs_you(clear)["no"][1].endswith("annotated=none"), "clears when on"
+
+
+def test_the_no_notes_count_is_the_complement(pdf_source: Config) -> None:
+    from anki_forge.app import pipeline_counts
+
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    write_card(pdf_source, "bbb222", "demo:2.4:61")
+    counts = pipeline_counts(pdf_source)
+
+    assert counts["unannotated_card"] == 1
+    assert counts["annotated_me_card"] == 1
+
+
+def test_enter_in_the_prompt_means_ok_not_cancel(client: TestClient, card_path: Path) -> None:
+    """In a `method="dialog"` form, Enter activates the *first submit button*
+    in tree order. With `cancel` first, every annotation typed and submitted
+    with Enter was discarded in silence: the dialog returned "cancel", `ask()`
+    resolved null, and the caller returned without a word. Four cards lost
+    their notes that way."""
+    body = client.get("/review").text
+    actions = re.search(r'<div class="prompt-actions">(.*?)</div>', body, re.S).group(1)
+    buttons = re.findall(r"<button([^>]*)>", actions)
+
+    submits = [b for b in buttons if 'type="button"' not in b]
+    assert submits, "the dialog needs a submit button or Enter does nothing"
+    assert 'value="ok"' in submits[0], "the first submit button is what Enter presses"
+
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+          / "app.js").read_text(encoding="utf-8")
+    assert "prompt-cancel" in js, "a non-submit cancel has to be closed by hand"
+
+
+def test_annotate_advances_like_every_other_decision() -> None:
+    """Annotating is a decision: you have said your piece and are done with
+    the card. Leaving the cursor put meant reaching for `j` every time."""
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+          / "review.js").read_text(encoding="utf-8")
+    body = js[js.index("async function annotate"):js.index("async function openEditor")]
+    assert "deck.nextPending()" in body or "deck.settle" in body, "annotate must move on"
+    assert "activeAnnotated" in body, "and settle out when the filter excludes it"
+
+
+def place_of(body: str, uid: str) -> str:
+    block = re.search(rf'data-uid="{uid}".*?<div class="place">(.*?)</div>', body, re.S)
+    return " ".join(re.sub(r"<[^>]+>", " ", block.group(1)).split()) if block else ""
+
+
+def test_a_card_shows_where_it_sits_and_what_put_it_there(pdf_source: Config) -> None:
+    """`frequency`, `derivation` and `requires` all decide when Anki
+    introduces a card, and none of them was visible while reviewing."""
+    path = write_card(pdf_source, "aaa111", "demo:2.4:61")
+    card = model.load(path)
+    card.frontmatter["frequency"] = "core"
+    card.frontmatter["derivation"] = "short"
+    card.save()
+
+    place = place_of(TestClient(create_app(pdf_source)).get("/review?status=draft").text, "aaa111")
+    assert "order 1/1" in place
+    assert "core" in place and "short" in place
+
+
+def test_the_card_names_what_needs_it_not_only_what_it_needs(pdf_source: Config) -> None:
+    """The reverse edge is the half no file can give you: a card records what
+    it requires, never what requires it."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    dependent = model.load(write_card(pdf_source, "bbb222", "demo:2.4:61"))
+    dependent.frontmatter["requires"] = ["aaa111"]
+    dependent.save()
+
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft").text
+    assert "needs aaa111" in place_of(body, "bbb222")
+    assert "needed by bbb222" in place_of(body, "aaa111")
+
+
+def test_an_ungraded_card_says_so(pdf_source: Config) -> None:
+    """It sorts last as unjudged, which is worth seeing rather than guessing."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    place = place_of(TestClient(create_app(pdf_source)).get("/review?status=draft").text, "aaa111")
+    assert "no frequency" in place and "no derivation" in place
+
+
+def test_the_guide_states_the_sort_key(client: TestClient, card_path: Path) -> None:
+    body = client.get("/review").text
+    key = re.search(r'<p class="order-key".*?</p>', body, re.S)
+    assert key, "the rule that decides what you meet next should be stated somewhere"
+    text = " ".join(re.sub(r"<[^>]+>", " ", key.group(0)).split())
+    for part in ("frequency", "derivation", "source order", "requires"):
+        assert part in text
+
+
+def test_a_dependency_is_a_link_you_can_follow(pdf_source: Config) -> None:
+    """Both directions. The href drops the filters that could hide the target,
+    so following one always lands somewhere rather than on an empty deck."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    dependent = model.load(write_card(pdf_source, "bbb222", "demo:2.4:61"))
+    dependent.frontmatter["requires"] = ["aaa111"]
+    dependent.save()
+
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft&annotated=none").text
+    links = dict(re.findall(r'<a class="goto" data-goto="(\w+)" href="([^"]+)"', body))
+
+    assert set(links) == {"aaa111", "bbb222"}, "needs and needed-by are both links"
+    for href in links.values():
+        target = href.replace("&amp;", "&")
+        assert "status=all" in target, "a status filter must not hide the target"
+        assert "annotated=" not in target, "nor an annotation filter"
+        assert target.endswith("#" + target.split("#")[-1])
+
+
+def test_following_a_dependency_stays_on_the_page_when_it_can() -> None:
+    """The target is usually already in the deck, hidden behind the card you
+    are looking at, so jumping to it should not cost a page load. The hash
+    carries it either way, which is what makes the back button work."""
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+          / "review.js").read_text(encoding="utf-8")
+    assert "data-goto" in js
+    assert "preventDefault" in js, "no reload when the card is already here"
+    assert "hashchange" in js, "and a full navigation lands via the hash"
+
+
+def test_a_dependency_links_to_its_own_source_not_the_current_one(pdf_source: Config) -> None:
+    """`check` validates `requires` against the whole repo, not one book, so a
+    cross-source dependency is legal. Linking it with the current source would
+    land on a card that is not there, and the hash lookup would find nothing
+    and say nothing."""
+    write_card(pdf_source, "aaa111", "book:1.1:1")
+    dependent = model.load(write_card(pdf_source, "bbb222", "demo:2.4:61"))
+    dependent.frontmatter["requires"] = ["aaa111"]
+    dependent.save()
+
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft&source=demo").text
+    href = dict(re.findall(r'data-goto="(\w+)" href="([^"]+)"', body))["aaa111"]
+
+    assert "source=book" in href.replace("&amp;", "&"), "the target's source, not the page's"
+
+
+def test_a_requires_naming_no_card_is_not_offered_as_a_link(pdf_source: Config) -> None:
+    """`check` errors on it. The UI should not also invite a click."""
+    card = model.load(write_card(pdf_source, "aaa111", "demo:2.4:61"))
+    card.frontmatter["requires"] = ["nosuch"]
+    card.save()
+
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft").text
+    assert 'data-goto="nosuch"' not in body
+    assert '<code class="dead"' in body
+
+
+def test_the_order_badge_is_labelled(pdf_source: Config) -> None:
+    """The header already shows a bare `N / M` for the filtered list. Two
+    unlabelled counters on one screen compete, and they count different
+    things: this one does not move when you filter."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft").text
+    assert re.search(r'<span class="pos"[^>]*>order \d+/\d+</span>', body)
+
+
+def test_a_hash_that_names_a_hidden_card_says_so() -> None:
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+          / "review.js").read_text(encoding="utf-8")
+    body = js[js.index("function followHash"):js.index("window.addEventListener")]
+    assert "toast" in body, "a miss must not be silent"
+
+
+def test_the_dependency_list_survives_a_stale_server(config: Config, card_path: Path) -> None:
+    """Templates are re-read per request; Python is only loaded at startup. A
+    template that assumed the new payload rendered every dependency as a blank
+    while the running server still returned plain strings. `base.html` states
+    this rule; this pins it for the block that broke it."""
+    from fastapi.templating import Jinja2Templates
+
+    from anki_forge.app import TEMPLATES
+
+    env = Jinja2Templates(directory=str(TEMPLATES)).env
+    source = (TEMPLATES / "review.html").read_text(encoding="utf-8")
+    block = re.search(r"needs \{% for dep in card\.requires %\}(.*?)\{% endfor %\}", source, re.S)
+    assert block, "the dependency loop moved"
+
+    # The fragment uses `loop.last`, so give it a loop.
+    template = env.from_string("{% for dep in deps %}" + block.group(1) + "{% endfor %}")
+
+    stale = template.render(deps=["5658ad"])
+    assert "5658ad" in stale, "an old payload of plain strings still shows the uid"
+
+    fresh = template.render(deps=[{"uid": "5658ad", "known": True, "href": "/review#5658ad"}])
+    assert 'data-goto="5658ad"' in fresh and "/review#5658ad" in fresh

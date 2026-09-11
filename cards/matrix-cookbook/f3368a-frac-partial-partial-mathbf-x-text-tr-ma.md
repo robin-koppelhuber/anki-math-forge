@@ -20,11 +20,11 @@ $\mathbf{B}\mathbf{X}\mathbf{C}+\mathbf{B}^T\mathbf{X}\mathbf{C}^T$
 ## conditions
 Denominator layout.
 
-## proof
-$d\,\text{Tr}(\mathbf{X}^T\mathbf{B}\mathbf{X}\mathbf{C}) = \text{Tr}(d\mathbf{X}^T\mathbf{B}\mathbf{X}\mathbf{C}) + \text{Tr}(\mathbf{C}\mathbf{X}^T\mathbf{B}\,d\mathbf{X})$, giving $\mathbf{B}\mathbf{X}\mathbf{C} + (\mathbf{C}\mathbf{X}^T\mathbf{B})^T$.
-
 ## prose
 $\mathbf{C} = \mathbf{I}$ recovers $\partial\,\text{Tr}(\mathbf{X}^T\mathbf{B}\mathbf{X})/\partial\mathbf{X} = \mathbf{B}\mathbf{X} + \mathbf{B}^T\mathbf{X}$.
+
+## proof
+$d\,\text{Tr}(\mathbf{X}^T\mathbf{B}\mathbf{X}\mathbf{C}) = \text{Tr}(d\mathbf{X}^T\mathbf{B}\mathbf{X}\mathbf{C}) + \text{Tr}(\mathbf{C}\mathbf{X}^T\mathbf{B}\,d\mathbf{X})$, giving $\mathbf{B}\mathbf{X}\mathbf{C} + (\mathbf{C}\mathbf{X}^T\mathbf{B})^T$.
 
 ## verify
 ```python

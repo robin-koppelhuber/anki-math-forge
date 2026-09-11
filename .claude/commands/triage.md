@@ -23,7 +23,15 @@ The stage filter matters for a different reason. An annotation on an
 whoever cards it, some day. Working them in one undifferentiated list means
 the urgent ones queue behind the speculative ones.
 
-1. Read the list. `todo` filters on `--audience`, `--kind` and `--status`,
+1. Pull anything waiting in Anki first, or the list is already stale --
+   a comment typed during review is a `@claude` note only once it is
+   imported:
+
+   ```
+   uv run anki-forge feedback
+   ```
+
+2. Read the list. `todo` filters on `--audience`, `--kind` and `--status`,
    which are the same three fields `--json` carries. Pass the filter to the
    command; do not match on the prose:
 
@@ -35,7 +43,7 @@ the urgent ones queue behind the speculative ones.
    Then say in your report how many you left untouched, so the rest are not
    silently forgotten.
 
-2. For each item, do what it asks. The common ones:
+3. For each item, do what it asks. The common ones:
 
    - *"this looks wrong"* — check the card against its source crop (the
      review view links to it; `units --id <unit> --json` gives the path) and
@@ -47,7 +55,7 @@ the urgent ones queue behind the speculative ones.
    - *"this duplicates 4b2e1c"* — compare, keep the better one, delete the
      other file. Say which you kept and why.
 
-3. **Resolving means deleting the `@claude` line** from `## notes` and making
+4. **Resolving means deleting the `@claude` line** from `## notes` and making
    the edit. Both, in the same pass. A note left behind keeps blocking sync.
 
    Before deleting one whose text is worth keeping — a segmentation map, a
@@ -58,7 +66,7 @@ the urgent ones queue behind the speculative ones.
    and re-enters review automatically. That is the intended behaviour — do not
    re-approve anything yourself.
 
-4. Confirm nothing is left dangling:
+5. Confirm nothing is left dangling:
 
    ```
    uv run anki-forge check

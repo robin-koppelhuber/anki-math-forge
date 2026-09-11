@@ -20,8 +20,8 @@ $2\mathbf{X}^{-1} - (\mathbf{X}^{-1} \circ \mathbf{I})$
 ## conditions
 $\mathbf{X} = \mathbf{X}^T$, varied over $X_{ij}$ with $i \le j$ only, the rest following by symmetry; $\det(\mathbf{X}) > 0$. Denominator layout.
 
-## proof
-Varying all $n^2$ entries independently gives $\mathbf{X}^{-T}$; the symmetric rule $\mathbf{G} + \mathbf{G}^T - \text{diag}(\mathbf{G})$ with $\mathbf{X}^{-1}$ symmetric gives $2\mathbf{X}^{-1} - (\mathbf{X}^{-1} \circ \mathbf{I})$.
-
 ## prose
 Here $\circ$ multiplies entry by entry (the Hadamard product). The factor $2$ is the off-diagonal pairing of a symmetric $\mathbf{X}$, and the Hadamard term takes that doubling back off the diagonal.
+
+## proof
+Varying all $n^2$ entries independently gives $\mathbf{X}^{-T}$; the symmetric rule $\mathbf{G} + \mathbf{G}^T - \text{diag}(\mathbf{G})$ with $\mathbf{X}^{-1}$ symmetric gives $2\mathbf{X}^{-1} - (\mathbf{X}^{-1} \circ \mathbf{I})$.

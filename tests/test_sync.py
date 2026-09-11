@@ -171,6 +171,41 @@ def test_note_type_field_drift_is_refused(config: Config, card_path: Path, anki:
     assert any("Bump `note_type_version`" in o.detail for o in report.outcomes)
 
 
+def test_note_type_name_carries_no_project_name(config: Config) -> None:
+    """The name is written into every note, so it must not track the tool's own
+    name. Renaming the project is then a docs diff, not a migration."""
+    assert config.note_type == "Math Card v1"
+    assert not any(bit in config.note_type.lower() for bit in ("forge", "anki"))
+
+
+def test_renamed_note_type_is_reported_not_recreated(
+    config: Config, card_path: Path, anki: FakeAnki
+) -> None:
+    """The name changed here and not in Anki. Creating the new note type would
+    leave 108 notes on the old one: still in the collection, invisible to
+    `sync`, and re-added as new. Refuse and say how to fix it."""
+    approve(card_path)
+    anki.models["anki-forge identity v1"] = list(notetype.FIELDS)
+
+    report = sync.run(config, client=anki)
+
+    assert not report.ok
+    assert config.note_type not in anki.models, "must not create a second note type"
+    assert len(anki.notes) == 0
+    detail = " ".join(o.detail or "" for o in report.outcomes)
+    assert "anki-forge identity v1" in detail
+    assert "Rename it in Anki" in detail
+
+
+def test_note_type_is_created_when_nothing_stale_is_there(
+    config: Config, card_path: Path, anki: FakeAnki
+) -> None:
+    approve(card_path)
+    report = sync.run(config, client=anki)
+    assert report.ok
+    assert anki.models[config.note_type] == list(notetype.FIELDS)
+
+
 def test_tags_are_reconciled_on_update(config: Config, card_path: Path, anki: FakeAnki) -> None:
     approve(card_path)
     sync.run(config, client=anki)
@@ -363,3 +398,64 @@ def test_a_dry_run_repositions_nothing(config: Config) -> None:
 
     assert {uid: fake.cards_by_uid(uid)["due"] for uid in before} == before
     assert any("repositioned" in (o.detail or "") for o in report.outcomes)
+
+
+# -- the card layout -------------------------------------------------------
+
+
+def test_prose_comes_before_uses_and_proof_on_the_card(config: Config) -> None:
+    """`prose` is one sentence and it is the only unlabelled block. Between two
+    labelled ones there was no way to see where `proof` ended and it began."""
+    back = notetype.spec(config.note_type)["cardTemplates"][0]["Back"]
+    assert back.index("{{Prose}}") < back.index("{{Uses}}") < back.index("{{Proof}}")
+
+    order = list(model.SECTION_ORDER)
+    assert order.index("prose") < order.index("uses") < order.index("proof")
+
+
+def test_reordering_sections_costs_no_approval(config: Config, card_path: Path) -> None:
+    """`content_hash` sorts sections by name, so the reading order is free to
+    change without re-reviewing the deck."""
+    card = model.load(card_path)
+    before = card.content_hash()
+    card.sections = list(reversed(card.sections))
+    assert card.content_hash() == before
+
+
+def test_a_layout_change_is_reported_rather_than_pushed(config: Config, card_path: Path) -> None:
+    """The template is yours to edit in Anki too, so a content sync must not
+    quietly overwrite it. Saying nothing was the wrong other half: a layout
+    change here simply never arrived."""
+    approve(card_path)
+    anki = FakeAnki()
+    sync.run(config, client=anki)
+    anki.templates[config.note_type][config.note_type + " card"]["Back"] = "edited in Anki"
+
+    report = sync.run(config, client=anki)
+
+    assert anki.templates[config.note_type][config.note_type + " card"]["Back"] == "edited in Anki"
+    assert any("--templates" in (o.detail or "") for o in report.outcomes)
+
+
+def test_templates_pushes_the_layout(config: Config, card_path: Path) -> None:
+    approve(card_path)
+    anki = FakeAnki()
+    sync.run(config, client=anki)
+    anki.templates[config.note_type][config.note_type + " card"]["Back"] = "stale"
+
+    sync.run(config, client=anki, templates=True)
+
+    live = anki.templates[config.note_type][config.note_type + " card"]["Back"]
+    assert live.index("{{Prose}}") < live.index("{{Proof}}")
+    assert anki.css[config.note_type] == notetype.CSS
+
+
+def test_a_dry_run_pushes_no_template(config: Config, card_path: Path) -> None:
+    approve(card_path)
+    anki = FakeAnki()
+    sync.run(config, client=anki)
+    anki.templates[config.note_type][config.note_type + " card"]["Back"] = "stale"
+
+    sync.run(config, client=anki, templates=True, dry_run=True)
+
+    assert anki.templates[config.note_type][config.note_type + " card"]["Back"] == "stale"

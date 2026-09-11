@@ -43,3 +43,18 @@ def test_an_unrecognised_layout_is_refused_at_load(repo: Path) -> None:
     every card from that source means."""
     with pytest.raises(config_mod.ConfigError, match="denominator"):
         two_source_repo(repo, layout="denomenator")
+
+
+def test_source_order_defaults_to_printed(repo: Path) -> None:
+    assert two_source_repo(repo).source("book").order == "printed"
+
+
+def test_a_source_can_say_its_printed_order_means_nothing(repo: Path) -> None:
+    """An alphabetical table or a paper whose results precede their lemmas
+    should not have its print order followed as if it were a syllabus."""
+    assert two_source_repo(repo, order="none").source("book").order == "none"
+
+
+def test_an_unrecognised_order_is_refused_at_load(repo: Path) -> None:
+    with pytest.raises(config_mod.ConfigError, match="printed"):
+        two_source_repo(repo, order="alphabetical")

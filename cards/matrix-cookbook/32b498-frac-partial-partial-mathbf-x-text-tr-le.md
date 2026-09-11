@@ -20,14 +20,14 @@ $-2\mathbf{C}\mathbf{X}\mathbf{M}^{-1}\mathbf{X}^T\mathbf{B}\mathbf{X}\mathbf{M}
 ## conditions
 $\mathbf{A}$, $\mathbf{B}$, $\mathbf{C}$ symmetric; $\mathbf{A} + \mathbf{X}^T\mathbf{C}\mathbf{X}$ invertible. Denominator layout.
 
+## prose
+$\mathbf{A} = \mathbf{0}$ gives the same identity for $\text{Tr}[(\mathbf{X}^T\mathbf{C}\mathbf{X})^{-1}(\mathbf{X}^T\mathbf{B}\mathbf{X})]$.
+
 ## uses
 Finding the projection that spreads several classes furthest apart (the multiclass Fisher discriminant).
 
 ## proof
 $d\,\text{Tr}(\mathbf{M}^{-1}\mathbf{N}) = -\text{Tr}(\mathbf{M}^{-1} d\mathbf{M}\,\mathbf{M}^{-1}\mathbf{N}) + \text{Tr}(\mathbf{M}^{-1} d\mathbf{N})$ with $\mathbf{N} = \mathbf{X}^T\mathbf{B}\mathbf{X}$; each of $d\mathbf{M}$ and $d\mathbf{N}$ splits into two halves that are equal because $\mathbf{M}$ and $\mathbf{N}$ are symmetric, which is where both factors of 2 come from.
-
-## prose
-$\mathbf{A} = \mathbf{0}$ gives the same identity for $\text{Tr}[(\mathbf{X}^T\mathbf{C}\mathbf{X})^{-1}(\mathbf{X}^T\mathbf{B}\mathbf{X})]$.
 
 ## verify
 ```python

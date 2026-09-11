@@ -34,6 +34,7 @@ from .. import check, latex, model
 from ..config import Config
 from ..ledger import Ledger, Unit, open_ledgers
 from ..model import Card, StaleFileError
+from ..sync import in_study_order, source_positions
 
 HERE = Path(__file__).parent
 TEMPLATES = HERE / "templates"
@@ -216,6 +217,7 @@ def create_app(config: Config) -> FastAPI:
     ) -> Any:
         name = resolve_source(config, source)
         cards, findings = check.check_repo(config)
+        everywhere = cards  # kept: the filters below rebind `cards`
         # The emptiness test is against the repo, before any filter. A filter
         # that matches nothing is a filter that matches nothing; the deck is
         # not empty and telling you to go extract more cards is a lie.
@@ -246,6 +248,39 @@ def create_app(config: Config) -> FastAPI:
             unsectioned = [c for c in unsectioned if has_annotation(c.annotations(), annotated)]
         if status not in ("all", ""):
             unsectioned = [c for c in unsectioned if c.effective_status == status]
+        # A dependency may name a card in another source: `check` validates
+        # `requires` against the whole repo, not one book. Linking it with the
+        # *current* source would land on a card that is not there, and the
+        # hash lookup would find nothing and say nothing.
+        homes = {c.uid: c.source_name for c in everywhere}
+
+        def link(uid: str) -> dict[str, Any]:
+            known = uid in homes
+            where = homes.get(uid) or name
+            return {
+                "uid": uid,
+                "known": known,
+                # `status=all` and no annotation filter, so following a link
+                # never lands on a deck that excludes what you asked for.
+                "href": filter_url("/review", {}, source=where, status="all") + f"#{uid}",
+            }
+
+        # One ordering for the whole source, so a card can say where it sits
+        # and what put it there. The reverse edges are only computable here:
+        # a card's file says what it needs, never what needs it.
+        by_uid_card = {c.uid: c for c in in_source}
+        ordered = in_study_order(in_source, source_positions(config))
+        places: dict[str, dict[str, Any]] = {
+            c.uid: {"position": i + 1, "total": len(ordered), "required_by": []}
+            for i, c in enumerate(ordered)
+        }
+        for c in in_source:
+            for need in c.requires:
+                if need in places:
+                    places[need]["required_by"].append(link(c.uid))
+        for uid, place in places.items():
+            place["requires"] = [link(n) for n in by_uid_card[uid].requires]
+
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         filters = {
             "source": name,
@@ -260,7 +295,9 @@ def create_app(config: Config) -> FastAPI:
             "review.html",
             {
                 "config": config,
-                "cards": [_card_payload(c, findings, config) for c in selected],
+                "cards": [
+                    _card_payload(c, findings, config, places.get(c.uid)) for c in selected
+                ],
                 "counts": counts,
                 "pipeline": pipeline_counts(config, name),
                 "total": len(cards),
@@ -587,6 +624,8 @@ def pipeline_counts(
     # ...and again per kind, because the rail row is a link to one view. The
     # repo-wide total said "@me 42" on the review page and then showed no
     # cards, since all 42 of them were on units.
+    counts["unannotated_unit"] = 0
+    counts["unannotated_card"] = 0
     counts["annotated_me_unit"] = 0
     counts["annotated_claude_unit"] = 0
     counts["annotated_me_card"] = 0
@@ -607,6 +646,7 @@ def pipeline_counts(
             counts["annotated"] += bool(unit.notes)
             counts["annotated_me"] += has_annotation(unit.notes, "me")
             counts["annotated_claude"] += has_annotation(unit.notes, "claude")
+            counts["unannotated_unit"] += has_annotation(unit.notes, "none")
             counts["annotated_me_unit"] += has_annotation(unit.notes, "me")
             counts["annotated_claude_unit"] += has_annotation(unit.notes, "claude")
     for card in model.load_all(config.cards_dir):
@@ -619,6 +659,7 @@ def pipeline_counts(
         counts["annotated"] += bool(notes)
         counts["annotated_me"] += has_annotation(notes, "me")
         counts["annotated_claude"] += has_annotation(notes, "claude")
+        counts["unannotated_card"] += has_annotation(notes, "none")
         counts["annotated_me_card"] += has_annotation(notes, "me")
         counts["annotated_claude_card"] += has_annotation(notes, "claude")
     return counts
@@ -663,7 +704,16 @@ def scoped_counts(config: Config, source: str, filters: dict[str, Any]) -> dict[
 
 
 def has_annotation(notes: list[str], audience: str) -> bool:
-    """Does any of these notes address `audience`? `any` means any of them."""
+    """Does any of these notes address `audience`?
+
+    `any` matches an annotation to anyone; `none` matches a card carrying no
+    annotation at all -- the ones actually waiting on your judgement. Without
+    that, an annotated draft sat in the review queue for ever and the only way
+    to stop meeting it was to reject it, which claims something quite
+    different and is not what you meant.
+    """
+    if audience == "none":
+        return not any(model.annotation_audience(n) for n in notes)
     if audience == "any":
         return any(model.annotation_audience(n) for n in notes)
     return any(model.annotation_audience(n) == audience for n in notes)
@@ -762,7 +812,12 @@ def _unit_payload(unit: Unit, config: Config) -> dict[str, Any]:
     }
 
 
-def _card_payload(card: Card, findings: list[check.Finding], config: Config) -> dict[str, Any]:
+def _card_payload(
+    card: Card,
+    findings: list[check.Finding],
+    config: Config,
+    place: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     mine = [f.as_dict() for f in check.findings_for(findings, card)]
     return {
         "uid": card.uid,
@@ -770,12 +825,29 @@ def _card_payload(card: Card, findings: list[check.Finding], config: Config) -> 
         "source": card.source,
         "unit": card.unit,
         "tags": card.tags,
+        # What decides where this card lands in the new-card queue. All of it
+        # was invisible here: you author `frequency`, `derivation` and
+        # `requires` by hand in the file and could not see any of them while
+        # reviewing, which is a poor way to keep a dependency graph honest.
+        "frequency": card.frequency,
+        "derivation": card.derivation,
+        # Resolved links, not bare uids: each one knows which source its
+        # target lives in, and whether it exists at all.
+        "requires": (place or {}).get(
+            "requires", [{"uid": u, "known": False, "href": ""} for u in card.requires]
+        ),
+        "required_by": (place or {}).get("required_by", []),
+        "position": (place or {}).get("position"),
+        "total": (place or {}).get("total"),
         "verify": card.verify_enabled,
         "path": str(card.path.relative_to(config.root)) if card.path else "",
         "mtime": str(card.mtime_ns or 0),
+        # Canonical order, not file order: the app is a view, and a card whose
+        # file has not been rewritten since `SECTION_ORDER` changed should
+        # still read the way the Anki card does.
         "sections": [
             {"name": s.name, "body": s.body}
-            for s in card.sections
+            for s in card.canonical().sections
             if s.name != "notes" and s.body.strip()
         ],
         "plain_notes": "\n".join(

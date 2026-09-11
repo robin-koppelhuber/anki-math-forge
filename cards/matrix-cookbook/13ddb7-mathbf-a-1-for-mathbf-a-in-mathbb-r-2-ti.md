@@ -7,6 +7,7 @@ source: "Matrix Cookbook §1.3, eq. 31, p. 7"
 unit: "matrix-cookbook:1.3:31"
 frequency: core
 derivation: short
+requires: [5f0141]
 tags: [inverse, two-by-two]
 verify: true
 ---

@@ -19,11 +19,11 @@ $\mathbf{X}^T\mathbf{B}\mathbf{J}^{ij} + \mathbf{J}^{ji}\mathbf{B}\mathbf{X}$
 
 ## conditions
 
+## prose
+Here $\mathbf{J}^{ij}$ has a single $1$ at $(i,j)$ and zeros everywhere else (the single-entry matrix).
+
 ## proof
 Product rule with $\partial\mathbf{X}/\partial X_{ij} = \mathbf{J}^{ij}$: the
 right factor gives $\mathbf{X}^T\mathbf{B}\mathbf{J}^{ij}$ and the left factor
 gives $(\mathbf{J}^{ij})^T\mathbf{B}\mathbf{X}$, which is why the index pair
 comes out reversed.
-
-## prose
-Here $\mathbf{J}^{ij}$ has a single $1$ at $(i,j)$ and zeros everywhere else (the single-entry matrix).

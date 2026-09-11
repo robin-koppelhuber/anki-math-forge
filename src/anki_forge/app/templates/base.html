@@ -60,8 +60,14 @@
   <form method="dialog">
     <label id="prompt-label">annotation</label>
     <input type="text" id="prompt-input" autocomplete="off" spellcheck="false">
+    {# `cancel` must not be a submit button. In a `method="dialog"` form,
+       Enter activates the *first* submit button in tree order, so with cancel
+       first every annotation typed and submitted with Enter was silently
+       discarded: the dialog returned "cancel", `ask()` resolved null, and the
+       caller returned without a word. `type="button"` takes it out of the
+       running and app.js closes the dialog for it. #}
     <div class="prompt-actions">
-      <button value="cancel">cancel</button>
+      <button value="cancel" type="button" id="prompt-cancel">cancel</button>
       <button value="ok" id="prompt-ok">ok</button>
     </div>
   </form>

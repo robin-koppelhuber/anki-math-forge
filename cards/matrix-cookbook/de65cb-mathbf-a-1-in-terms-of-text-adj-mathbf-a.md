@@ -7,6 +7,7 @@ source: "Matrix Cookbook §3.1, eq. 151, p. 17"
 unit: "matrix-cookbook:3.1:151"
 frequency: common
 derivation: short
+requires: [c49127]
 tags: [inverse, cofactor, determinant]
 verify: true
 ---

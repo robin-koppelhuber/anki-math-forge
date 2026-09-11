@@ -20,11 +20,11 @@ $2\mathbf{A}^T(\mathbf{A}\mathbf{X}\mathbf{B}+\mathbf{C})\mathbf{B}^T$
 ## conditions
 Denominator layout.
 
-## proof
-With $\mathbf{E} = \mathbf{A}\mathbf{X}\mathbf{B} + \mathbf{C}$ the trace is $\|\mathbf{E}\|_F^2$, so $d = 2\,\text{Tr}(\mathbf{B}\mathbf{E}^T\mathbf{A}\,d\mathbf{X})$, giving $2\mathbf{A}^T\mathbf{E}\mathbf{B}^T$.
-
 ## prose
 The least-squares gradient: the residual $\mathbf{A}\mathbf{X}\mathbf{B} + \mathbf{C}$ sandwiched between the transposes of whatever multiplies $\mathbf{X}$.
+
+## proof
+With $\mathbf{E} = \mathbf{A}\mathbf{X}\mathbf{B} + \mathbf{C}$ the trace is $\|\mathbf{E}\|_F^2$, so $d = 2\,\text{Tr}(\mathbf{B}\mathbf{E}^T\mathbf{A}\,d\mathbf{X})$, giving $2\mathbf{A}^T\mathbf{E}\mathbf{B}^T$.
 
 ## verify
 ```python

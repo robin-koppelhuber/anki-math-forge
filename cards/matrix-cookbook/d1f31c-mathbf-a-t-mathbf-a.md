@@ -20,8 +20,8 @@ $\text{Tr}(\mathbf{a}\mathbf{a}^T)$
 ## conditions
 $\mathbf{a} \in \mathbb{R}^{n}$.
 
-## uses
-The trace trick: $\mathbb{E}[\mathbf{a}^T\mathbf{a}] = \text{Tr}(\mathbb{E}[\mathbf{a}\mathbf{a}^T])$, which turns an expected squared error into a covariance.
-
 ## prose
 Over $\mathbb{R}$ this writes $\|\mathbf{a}\|^2$ as a trace; over $\mathbb{C}$ the identity still holds but $\mathbf{a}^T\mathbf{a} = \sum_i a_i^2$ is not the squared norm, which is $\bar{\mathbf{a}}^T\mathbf{a}$ (written $\mathbf{a}^H$).
+
+## uses
+The trace trick: $\mathbb{E}[\mathbf{a}^T\mathbf{a}] = \text{Tr}(\mathbb{E}[\mathbf{a}\mathbf{a}^T])$, which turns an expected squared error into a covariance.

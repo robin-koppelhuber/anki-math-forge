@@ -7,6 +7,7 @@ source: "Matrix Cookbook §1.3, p. 7"
 unit: "matrix-cookbook:1.3:p7y427"
 frequency: common
 derivation: short
+requires: ["1039e9"]
 tags: [eigenvalues, two-by-two]
 verify: true
 ---
@@ -20,11 +21,11 @@ $\lambda_{1,2} = \dfrac{\text{Tr}(\mathbf{A}) \pm \sqrt{\text{Tr}(\mathbf{A})^2 
 ## conditions
 $\mathbf{A} \in \mathbb{R}^{2 \times 2}$; $\lambda_{1,2}$ taken over $\mathbb{C}$.
 
-## proof
-$\det(\mathbf{A} - \lambda\mathbf{I}) = \lambda^2 - \lambda\,\text{Tr}(\mathbf{A}) + \det(\mathbf{A})$; the quadratic formula on that polynomial gives the two roots.
-
 ## prose
 The roots are real exactly when $\text{Tr}(\mathbf{A})^2 \ge 4\det(\mathbf{A})$, which a symmetric $\mathbf{A}$ always satisfies, its discriminant being $(A_{11}-A_{22})^2 + 4A_{12}^2$.
+
+## proof
+$\det(\mathbf{A} - \lambda\mathbf{I}) = \lambda^2 - \lambda\,\text{Tr}(\mathbf{A}) + \det(\mathbf{A})$; the quadratic formula on that polynomial gives the two roots.
 
 ## verify
 ```python

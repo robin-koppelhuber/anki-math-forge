@@ -21,13 +21,13 @@ $-\mathbf{A}^{-\top}\frac{\partial J}{\partial \mathbf{W}}\mathbf{A}^{-\top}$
 $\mathbf{A} \in \mathbb{R}^{n \times n}$ invertible;
 $J : \mathbb{R}^{n \times n} \to \mathbb{R}$. Denominator layout.
 
+## prose
+A gradient crossing an inversion is conjugated by $\mathbf{A}^{-\top}$ on both sides and flipped in sign, which is how a gradient in a covariance converts to one in its inverse (the precision matrix).
+
 ## proof
 $d\mathbf{W} = -\mathbf{A}^{-1}(d\mathbf{A})\mathbf{A}^{-1}$, so
 $dJ = \operatorname{Tr}\big((\partial J/\partial\mathbf{W})^\top d\mathbf{W}\big) = -\operatorname{Tr}\big(\mathbf{A}^{-1}(\partial J/\partial\mathbf{W})^\top\mathbf{A}^{-1}\, d\mathbf{A}\big)$;
 transposing the bracket gives the result.
-
-## prose
-A gradient crossing an inversion is conjugated by $\mathbf{A}^{-\top}$ on both sides and flipped in sign, which is how a gradient in a covariance converts to one in its inverse (the precision matrix).
 
 ## verify
 ```python

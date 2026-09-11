@@ -40,6 +40,25 @@ this card's relation to another, or something still undecided. If the note
 would only say "the condition next to it was added", the condition next to it
 already says that.
 
+## What a bare `\partial` means
+
+A card whose front is `\partial(\det(\mathbf{X}))` is asking for the
+**differential**, not a derivative with respect to anything in particular. It
+is the first-order change in `\det(\mathbf{X})` produced by an arbitrary
+perturbation `\partial\mathbf{X}` of the whole matrix, and the answer is
+linear in `\partial\mathbf{X}`.
+
+So it is not quite "differentiate with respect to every variable", though that
+is the right instinct: no single variable is named because none is singled
+out. The practical difference is that the answer keeps `\partial\mathbf{X}`
+in it rather than dividing it away, which is what makes these the cards the
+gradient rules are *derived from*. The book's chapter 2 opens with them for
+exactly that reason.
+
+Where a scalar parameter is named, the card writes it: `\partial\mathbf{Y}
+/\partial x` is the same identity with the perturbation restricted to a
+one-parameter family.
+
 ## How the layout convention was settled
 
 It was recorded backwards, as the shape of `Xᵀ`, until two card-writing passes

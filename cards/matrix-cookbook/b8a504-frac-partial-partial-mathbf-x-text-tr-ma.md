@@ -20,11 +20,11 @@ $\mathbf{X}\mathbf{B}^T+\mathbf{X}\mathbf{B}$
 ## conditions
 Denominator layout.
 
-## proof
-$d\,\text{Tr}(\mathbf{X}\mathbf{B}\mathbf{X}^T) = \text{Tr}(\mathbf{B}\mathbf{X}^T d\mathbf{X}) + \text{Tr}(d\mathbf{X}^T \mathbf{X}\mathbf{B})$, giving $(\mathbf{B}\mathbf{X}^T)^T + \mathbf{X}\mathbf{B}$.
-
 ## prose
 $\mathbf{B}$ ends up on the right of $\mathbf{X}$ here, and on the left in $\partial\,\text{Tr}(\mathbf{X}^T\mathbf{B}\mathbf{X})/\partial\mathbf{X} = \mathbf{B}\mathbf{X} + \mathbf{B}^T\mathbf{X}$.
+
+## proof
+$d\,\text{Tr}(\mathbf{X}\mathbf{B}\mathbf{X}^T) = \text{Tr}(\mathbf{B}\mathbf{X}^T d\mathbf{X}) + \text{Tr}(d\mathbf{X}^T \mathbf{X}\mathbf{B})$, giving $(\mathbf{B}\mathbf{X}^T)^T + \mathbf{X}\mathbf{B}$.
 
 ## verify
 ```python

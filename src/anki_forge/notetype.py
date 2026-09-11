@@ -21,6 +21,16 @@ from typing import Any
 # a live note type only when the collection matches one of these exactly --
 # that is an upgrade. Anything else is drift somebody made by hand, and
 # re-adding a field they deleted would not bring its contents back.
+# Names this note type has shipped under, oldest first. The current name comes
+# from `[anki] note_type_name`, deliberately: a note type is a thing in
+# somebody's collection, and it should not change because the project changed
+# its own name. `sync` refuses to create a fresh note type while one of these
+# is still in the collection, because creating one would silently orphan every
+# note on it along with its review history.
+PREVIOUS_NAMES = [
+    "anki-forge identity v1",
+]
+
 PREVIOUS_FIELDS = [
     ["uid", "Front", "Back", "Conditions", "Uses", "Proof", "Prose", "Source"],
 ]
@@ -63,9 +73,12 @@ BACK_TEMPLATE = "\n".join(
         '<div class="back">{{Back}}</div>',
         "",
         # `{{FrontSide}}` already carries them.
+        # `Prose` first, and it is the only block with no label: one sentence
+        # of interpretation sitting directly under the answer. Everything
+        # after it is labelled, so the boundaries are visible.
+        '{{#Prose}}<div class="prose">{{Prose}}</div>{{/Prose}}',
         '{{#Uses}}<div class="uses"><span class="label">used for</span>{{Uses}}</div>{{/Uses}}',
         '{{#Proof}}<div class="proof"><span class="label">proof</span>{{Proof}}</div>{{/Proof}}',
-        '{{#Prose}}<div class="prose">{{Prose}}</div>{{/Prose}}',
         '{{#Source}}<div class="source">{{Source}}</div>{{/Source}}',
         "",
     ]

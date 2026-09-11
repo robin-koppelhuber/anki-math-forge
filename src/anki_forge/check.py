@@ -140,6 +140,22 @@ def check_card(
     # result turns up. Past a certain length it stops being a pointer and
     # becomes a paragraph nobody reads on the back of a flashcard, which is
     # what `## prose` is for.
+    # A newline in a body is not whitespace: `to_anki_html` turns it into a
+    # `<br>`, so a section wrapped at some column renders with hard breaks
+    # mid-sentence on the card. `verify` is code and never reaches Anki.
+    for section in card.sections:
+        if section.name in ("notes", "verify"):
+            continue
+        body = section.body.strip()
+        if len(body.splitlines()) > 1 and all(line.strip() for line in body.splitlines()):
+            add(
+                WARN,
+                "section-wrapped",
+                f"`## {section.name}` is wrapped across lines; each newline "
+                "becomes a <br> on the card. Write it as one line unless the "
+                "break is deliberate",
+            )
+
     uses = latex.rendered_length(card.section("uses") or "")
     if uses > USES_CHAR_CAP:
         add(
@@ -177,6 +193,91 @@ def check_card(
     return findings
 
 
+def check_requires(cards: list[Card]) -> list[Finding]:
+    """The dependency graph, which decides the order cards are introduced in.
+
+    An unknown name is a typo that silently does nothing -- the ordering
+    ignores what it cannot resolve, so nothing would ever look wrong. A cycle
+    has no valid order at all. Both are errors; a prerequisite that is merely
+    not approved yet is a warning, because `sync` will introduce the card
+    without its foundation and that is worth knowing rather than blocking.
+    """
+    findings: list[Finding] = []
+    by_uid = {card.uid: card for card in cards if card.uid}
+
+    for card in sorted(cards, key=lambda c: c.uid):
+        for need in card.requires:
+            if need == card.uid:
+                findings.append(
+                    Finding(
+                        ERROR,
+                        "requires-self",
+                        f"`requires` names its own uid {need}",
+                        card.path,
+                        card.uid,
+                    )
+                )
+            elif need not in by_uid:
+                findings.append(
+                    Finding(
+                        ERROR,
+                        "requires-unknown",
+                        f"`requires` names {need}, which is not a card here -- "
+                        "the ordering ignores what it cannot resolve, so this "
+                        "would quietly do nothing",
+                        card.path,
+                        card.uid,
+                    )
+                )
+            elif (
+                card.effective_status == "approved"
+                and by_uid[need].effective_status != "approved"
+            ):
+                findings.append(
+                    Finding(
+                        WARN,
+                        "requires-unapproved",
+                        f"needs {need}, which is {by_uid[need].effective_status}; "
+                        "sync would introduce this card without it",
+                        card.path,
+                        card.uid,
+                    )
+                )
+
+    # Cycles: no order satisfies them, so say which cards are in one.
+    colour: dict[str, int] = {}
+    reported: set[str] = set()
+
+    def walk(uid: str, trail: list[str]) -> None:
+        colour[uid] = 1
+        for need in by_uid[uid].requires:
+            if need not in by_uid or need == uid:
+                continue
+            if colour.get(need) == 1:
+                loop = trail[trail.index(need) :] if need in trail else [need]
+                for member in loop:
+                    if member not in reported:
+                        reported.add(member)
+                        findings.append(
+                            Finding(
+                                ERROR,
+                                "requires-cycle",
+                                "`requires` forms a cycle: "
+                                + " -> ".join([*loop, loop[0]]),
+                                by_uid[member].path,
+                                member,
+                            )
+                        )
+            elif colour.get(need) is None:
+                walk(need, [*trail, need])
+        colour[uid] = 2
+
+    for uid in sorted(by_uid):
+        if colour.get(uid) is None:
+            walk(uid, [uid])
+    return findings
+
+
 def check_deck(
     cards: list[Card],
     config: Config,
@@ -199,6 +300,8 @@ def check_deck(
     findings: list[Finding] = []
     for card in cards:
         findings.extend(check_card(card, config, checker=tex, for_sync=for_sync))
+
+    findings.extend(check_requires(cards))
 
     by_uid: dict[str, list[Card]] = defaultdict(list)
     for card in cards:

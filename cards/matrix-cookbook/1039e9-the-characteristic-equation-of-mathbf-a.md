@@ -17,11 +17,11 @@ the characteristic equation of $\mathbf{A} \in \mathbb{R}^{2 \times 2}$
 ## back
 $\lambda^2 - \lambda\,\text{Tr}(\mathbf{A}) + \det(\mathbf{A}) = 0$
 
-## proof
-$\det(\mathbf{A} - \lambda\mathbf{I}) = (A_{11}-\lambda)(A_{22}-\lambda) - A_{12}A_{21} = \lambda^2 - \lambda(A_{11}+A_{22}) + (A_{11}A_{22}-A_{12}A_{21})$, whose two coefficients are $\text{Tr}(\mathbf{A})$ and $\det(\mathbf{A})$.
-
 ## prose
 Reading the coefficients as the sum and the product of the roots gives $\lambda_1 + \lambda_2 = \text{Tr}(\mathbf{A})$ and $\lambda_1\lambda_2 = \det(\mathbf{A})$ (Vieta's formulas).
+
+## proof
+$\det(\mathbf{A} - \lambda\mathbf{I}) = (A_{11}-\lambda)(A_{22}-\lambda) - A_{12}A_{21} = \lambda^2 - \lambda(A_{11}+A_{22}) + (A_{11}A_{22}-A_{12}A_{21})$, whose two coefficients are $\text{Tr}(\mathbf{A})$ and $\det(\mathbf{A})$.
 
 ## verify
 ```python

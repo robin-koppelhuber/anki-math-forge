@@ -20,13 +20,13 @@ $\text{Tr}(\mathbf{X}^{-1}\partial\mathbf{X})$
 ## conditions
 $\mathbf{X} \in \mathbb{R}^{n \times n}$; $\det(\mathbf{X}) > 0$.
 
-## proof
-Divide $\partial\det(\mathbf{X}) = \det(\mathbf{X})\text{Tr}(\mathbf{X}^{-1}\partial\mathbf{X})$
-by $\det(\mathbf{X})$.
-
 ## prose
 The matrix analogue of $d(\ln x) = dx/x$, and the reason $\det(\mathbf{X})$
 disappears from the right-hand side.
+
+## proof
+Divide $\partial\det(\mathbf{X}) = \det(\mathbf{X})\text{Tr}(\mathbf{X}^{-1}\partial\mathbf{X})$
+by $\det(\mathbf{X})$.
 
 ## notes
 writes $\ln(\det(\mathbf{X}))$ without an absolute value here. Writing

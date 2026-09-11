@@ -22,12 +22,12 @@ $\mathbf{X} \in \mathbb{R}^{n \times n}$ invertible;
 $\mathbf{A} \in \mathbb{R}^{p \times n}$; $\mathbf{B} \in \mathbb{R}^{n \times p}$.
 Denominator layout.
 
+## prose
+Cyclicity puts $\mathbf{B}$ in front of $\mathbf{A}$, so the answer carries $\mathbf{B}\mathbf{A}$ where the trace carries $\mathbf{A}\dots\mathbf{B}$.
+
 ## proof
 $d\operatorname{Tr}(\mathbf{A}\mathbf{X}^{-1}\mathbf{B}) = -\operatorname{Tr}(\mathbf{A}\mathbf{X}^{-1}(d\mathbf{X})\mathbf{X}^{-1}\mathbf{B}) = -\operatorname{Tr}(\mathbf{X}^{-1}\mathbf{B}\mathbf{A}\mathbf{X}^{-1}\, d\mathbf{X})$
 by cyclicity; matching $\operatorname{Tr}(\mathbf{G}^\top d\mathbf{X})$ transposes the bracket.
-
-## prose
-Cyclicity puts $\mathbf{B}$ in front of $\mathbf{A}$, so the answer carries $\mathbf{B}\mathbf{A}$ where the trace carries $\mathbf{A}\dots\mathbf{B}$.
 
 ## verify
 ```python

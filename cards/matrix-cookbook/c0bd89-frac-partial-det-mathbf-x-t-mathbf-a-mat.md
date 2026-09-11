@@ -22,12 +22,12 @@ $\mathbf{X} \in \mathbb{R}^{m \times n}$; $\mathbf{A} \in \mathbb{R}^{m \times m
 $\mathbf{X}^T\mathbf{A}\mathbf{X}$ and $\mathbf{X}^T\mathbf{A}^T\mathbf{X}$
 invertible. Denominator layout.
 
-## uses
-Choosing where to measure so the estimate comes out most precise: maximise $\det(\mathbf{X}^T\mathbf{A}\mathbf{X})$ over the design $\mathbf{X}$ (D-optimal design).
-
 ## prose
 The two terms coincide when $\mathbf{A} = \mathbf{A}^T$, collapsing to
 $2\det(\mathbf{X}^T\mathbf{A}\mathbf{X})\mathbf{A}\mathbf{X}(\mathbf{X}^T\mathbf{A}\mathbf{X})^{-1}$.
+
+## uses
+Choosing where to measure so the estimate comes out most precise: maximise $\det(\mathbf{X}^T\mathbf{A}\mathbf{X})$ over the design $\mathbf{X}$ (D-optimal design).
 
 ## verify
 ```python

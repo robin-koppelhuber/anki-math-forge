@@ -51,8 +51,9 @@ never a transcription. The crop is the authority for what a unit says.
    uv run anki-forge units --id <unit-id> --resolve-notes --audience claude
    ```
 
-   Plain `--resolve-notes` clears *everything* on the unit, `@me` notes
-   included, which throws away the human's decision without saying so.
+   `--audience claude` is the default; `--audience all` also deletes the
+   `@me` decision parked on the same unit, so reach for it only when that is
+   what you mean.
 
    If a note is ambiguous, **leave it open, skip that unit, and say why** in
    your report. Guessing is worse than asking.

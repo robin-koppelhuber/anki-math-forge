@@ -21,12 +21,12 @@ $2(\mathbf{X}^+)^T$
 $\mathbf{X} \in \mathbb{R}^{m \times n}$; $\text{rank}(\mathbf{X}) = n$.
 Denominator layout.
 
-## uses
-Choosing where to measure so the estimate comes out most precise: maximise $\ln\det(\mathbf{X}^T\mathbf{X})$ over the design $\mathbf{X}$ (D-optimal design).
-
 ## prose
 $(\mathbf{X}^+)^T = \mathbf{X}(\mathbf{X}^T\mathbf{X})^{-1}$, which has the shape
 of $\mathbf{X}$; $\mathbf{X}^{-T}$ does not exist for rectangular $\mathbf{X}$.
+
+## uses
+Choosing where to measure so the estimate comes out most precise: maximise $\ln\det(\mathbf{X}^T\mathbf{X})$ over the design $\mathbf{X}$ (D-optimal design).
 
 ## verify
 ```python

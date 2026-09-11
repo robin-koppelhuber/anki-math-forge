@@ -21,12 +21,12 @@ $-\big((\mathbf{X}+\mathbf{A})^{-2}\big)^{\top}$
 $\mathbf{X}, \mathbf{A} \in \mathbb{R}^{n \times n}$; $\mathbf{X} + \mathbf{A}$
 invertible. Denominator layout.
 
+## prose
+The shift $\mathbf{A}$ never leaves the inverse, because differentiating $\mathbf{X}+\mathbf{A}$ in $\mathbf{X}$ returns $d\mathbf{X}$ unchanged.
+
 ## proof
 $d(\mathbf{X}+\mathbf{A})^{-1} = -(\mathbf{X}+\mathbf{A})^{-1}(d\mathbf{X})(\mathbf{X}+\mathbf{A})^{-1}$ since $d(\mathbf{X}+\mathbf{A}) = d\mathbf{X}$,
 and cyclicity of the trace collects the two factors into $(\mathbf{X}+\mathbf{A})^{-2}$.
-
-## prose
-The shift $\mathbf{A}$ never leaves the inverse, because differentiating $\mathbf{X}+\mathbf{A}$ in $\mathbf{X}$ returns $d\mathbf{X}$ unchanged.
 
 ## verify
 ```python

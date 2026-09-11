@@ -20,8 +20,8 @@ $\text{Tr}\left[\left(\frac{\partial g(\mathbf{U})}{\partial \mathbf{U}}\right)^
 ## conditions
 $\mathbf{X} \in \mathbb{R}^{m \times n}$; $f : \mathbb{R}^{m \times n} \to \mathbb{R}^{p \times q}$; $g : \mathbb{R}^{p \times q} \to \mathbb{R}$. Denominator layout.
 
-## proof
-Summing the scalar chain rule over the entries of $\mathbf{U}$ gives $\sum_{k}\sum_{l}\frac{\partial g(\mathbf{U})}{\partial u_{kl}}\frac{\partial u_{kl}}{\partial x_{ij}}$, and that double sum is the trace of $\left(\frac{\partial g}{\partial \mathbf{U}}\right)^T\frac{\partial \mathbf{U}}{\partial X_{ij}}$.
-
 ## prose
 Differentiating a structured $\mathbf{A}$ is the case $\mathbf{U} = \mathbf{X} = \mathbf{A}$: the structure lives entirely in $\frac{\partial \mathbf{A}}{\partial A_{ij}}$, which is the single-entry matrix $\mathbf{J}^{ij}$ only when the entries of $\mathbf{A}$ vary independently of one another.
+
+## proof
+Summing the scalar chain rule over the entries of $\mathbf{U}$ gives $\sum_{k}\sum_{l}\frac{\partial g(\mathbf{U})}{\partial u_{kl}}\frac{\partial u_{kl}}{\partial x_{ij}}$, and that double sum is the trace of $\left(\frac{\partial g}{\partial \mathbf{U}}\right)^T\frac{\partial \mathbf{U}}{\partial X_{ij}}$.

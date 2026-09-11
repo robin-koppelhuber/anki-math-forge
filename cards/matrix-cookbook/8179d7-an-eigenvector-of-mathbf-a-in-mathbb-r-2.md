@@ -7,6 +7,7 @@ source: "Matrix Cookbook §1.3, p. 7"
 unit: "matrix-cookbook:1.3:p7y487"
 frequency: common
 derivation: short
+requires: [2d3bf4]
 tags: [eigenvectors, two-by-two]
 verify: true
 ---
@@ -20,11 +21,11 @@ $\mathbf{v}_i \propto \begin{bmatrix} A_{12} \\ \lambda_i - A_{11} \end{bmatrix}
 ## conditions
 $\mathbf{A} \in \mathbb{R}^{2 \times 2}$; $\lambda_i$ an eigenvalue of $\mathbf{A}$; not both $A_{12} = 0$ and $\lambda_i = A_{11}$.
 
-## proof
-$(\mathbf{A} - \lambda_i\mathbf{I})\mathbf{v}_i$ has first entry $(A_{11}-\lambda_i)A_{12} + A_{12}(\lambda_i - A_{11}) = 0$ and second entry $A_{21}A_{12} + (A_{22}-\lambda_i)(\lambda_i - A_{11}) = -(\lambda_i^2 - \lambda_i\text{Tr}(\mathbf{A}) + \det(\mathbf{A}))$, which vanishes by the characteristic equation.
-
 ## prose
 Turning the first row of $\mathbf{A} - \lambda_i\mathbf{I}$ through a right angle lands in its kernel, and for a singular $2 \times 2$ that kernel is the eigenspace.
+
+## proof
+$(\mathbf{A} - \lambda_i\mathbf{I})\mathbf{v}_i$ has first entry $(A_{11}-\lambda_i)A_{12} + A_{12}(\lambda_i - A_{11}) = 0$ and second entry $A_{21}A_{12} + (A_{22}-\lambda_i)(\lambda_i - A_{11}) = -(\lambda_i^2 - \lambda_i\text{Tr}(\mathbf{A}) + \det(\mathbf{A}))$, which vanishes by the characteristic equation.
 
 ## verify
 ```python

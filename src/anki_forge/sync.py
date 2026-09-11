@@ -173,30 +173,188 @@ def decks_for(cards: list[Card], config: Config) -> list[str]:
     return sorted({config.deck_for(card.source_name) for card in cards})
 
 
-def study_key(card: Card) -> tuple[int, int, str]:
-    """Where a card belongs in the new-card queue.
+def source_positions(config: Config) -> dict[str, int]:
+    """Every unit id, numbered in the order its source prints it.
 
-    Most useful first, then easiest first: `frequency` core before common
-    before rare, and within a frequency `derivation` definitional before
-    short before long. Both vocabularies are already declared in that order,
-    so the rank is their index and adding a value in the right place is all
-    it takes to keep this honest.
+    A ledger is written in reading order, so the index is the order that
+    source introduces things in. Whether that is worth following is a fact
+    about the source, not about this tool: a text that builds up says
+    `order = "printed"` and a table with no meaningful order says `none`,
+    whose units get no position and so fall back to an arbitrary but stable
+    tiebreak rather than a misleading one.
 
-    A card missing either annotation sorts last within its group rather than
-    first, because an unannotated card is unjudged, not easy. `uid` breaks
-    ties so the order is stable across runs.
+    Sources are numbered in the order `anki-forge.toml` lists them, for the
+    same reason the deck list is: which source comes first is a choice you
+    make by editing the config, not an accident of spelling.
     """
-    frequency = model.FREQUENCIES.index(card.frequency) if card.frequency else len(
-        model.FREQUENCIES
-    )
-    derivation = model.DERIVATIONS.index(card.derivation) if card.derivation else len(
-        model.DERIVATIONS
-    )
-    return (frequency, derivation, card.uid)
+    from .ledger import open_ledgers
+
+    ledgers = open_ledgers(config.sources_dir)
+    names = [n for n in config.sources if n in ledgers]
+    names += sorted(set(ledgers) - set(names))
+
+    positions: dict[str, int] = {}
+    at = 0
+    for name in names:
+        spec = config.sources.get(name)
+        if spec is not None and spec.order == "none":
+            continue
+        for unit in ledgers[name]:
+            positions[unit.id] = at
+            at += 1
+    return positions
 
 
-def in_study_order(cards: list[Card]) -> list[Card]:
-    return sorted(cards, key=study_key)
+def study_key(card: Card, positions: dict[str, int] | None = None) -> tuple[int, int, int, str]:
+    """Where a card belongs in the new-card queue, dependencies aside.
+
+    Most useful first, then easiest first, then in the order the source
+    introduces it: `frequency` core before common before rare, `derivation`
+    definitional before short before long, and within that the printed order.
+
+    That third key used to be `uid`, a hash, so inside a large bucket the
+    order was noise and a result could arrive well before what it is built
+    from. A source's own order costs nothing to follow and is usually better
+    than a hash; where it is not, `requires` overrides it and the source can
+    turn it off entirely.
+
+    A card missing either grading sorts last within its group: unannotated is
+    unjudged, not easy.
+    """
+    positions = positions or {}
+    frequency = (
+        model.FREQUENCIES.index(card.frequency)
+        if card.frequency
+        else len(model.FREQUENCIES)
+    )
+    derivation = (
+        model.DERIVATIONS.index(card.derivation)
+        if card.derivation
+        else len(model.DERIVATIONS)
+    )
+    where = min((positions[u] for u in card.units if u in positions), default=len(positions))
+    return (frequency, derivation, where, card.uid)
+
+
+def effective_keys(
+    cards: list[Card], positions: dict[str, int] | None = None
+) -> dict[str, tuple[int, int, int, str]]:
+    """Each card's sort key, after prerequisites inherit from their dependents.
+
+    A prerequisite is at least as important as the most important thing that
+    needs it. Without that, requiring a `rare` card drags the `core` card that
+    needs it to the back of the queue -- the dependency was respected and the
+    deck got worse. Pulling the prerequisite forward respects it and keeps the
+    useful card early.
+    """
+    by_uid = {card.uid: card for card in cards}
+    own = {uid: study_key(card, positions) for uid, card in by_uid.items()}
+    dependents: dict[str, list[str]] = {uid: [] for uid in by_uid}
+    for card in cards:
+        for need in card.requires:
+            if need in by_uid and need != card.uid:
+                dependents[need].append(card.uid)
+
+    effective: dict[str, tuple[int, int, int, str]] = {}
+    walking: set[str] = set()
+
+    def resolve(uid: str) -> tuple[int, int, int, str]:
+        if uid in effective:
+            return effective[uid]
+        if uid in walking:  # a cycle; `check` refuses one, so just stop here
+            return own[uid]
+        walking.add(uid)
+        best = min([own[uid], *(resolve(d) for d in dependents[uid])])
+        walking.discard(uid)
+        effective[uid] = best
+        return best
+
+    for uid in by_uid:
+        resolve(uid)
+    return effective
+
+
+def in_study_order(cards: list[Card], positions: dict[str, int] | None = None) -> list[Card]:
+    """Study order, with `requires` respected absolutely.
+
+    A topological sort whose priority is `effective_keys`: of everything whose
+    prerequisites are already placed, take the most useful. The gradings still
+    decide nearly everything; the graph only moves a card that would otherwise
+    arrive before its own foundation, and it moves the foundation forward
+    rather than the result back.
+
+    A `requires` naming a card that is not here is ignored rather than fatal --
+    `sync` orders only what is approved, and a prerequisite still in draft
+    should not strand everything built on it. `check` reports that instead.
+    """
+    import heapq
+
+    by_uid = {card.uid: card for card in cards}
+    keys = effective_keys(cards, positions)
+    blocking = {
+        card.uid: {u for u in card.requires if u in by_uid and u != card.uid} for card in cards
+    }
+    unblocks: dict[str, list[str]] = {uid: [] for uid in by_uid}
+    for uid, needs in blocking.items():
+        for need in needs:
+            unblocks[need].append(uid)
+
+    ready = [(keys[uid], uid) for uid, needs in blocking.items() if not needs]
+    heapq.heapify(ready)
+
+    out: list[Card] = []
+    while ready:
+        _, uid = heapq.heappop(ready)
+        out.append(by_uid[uid])
+        for dependent in unblocks[uid]:
+            blocking[dependent].discard(uid)
+            if not blocking[dependent]:
+                heapq.heappush(ready, (keys[dependent], dependent))
+
+    if len(out) < len(cards):
+        # A cycle. `check` refuses one, so this is belt and braces: place the
+        # rest by key rather than dropping them on the floor.
+        placed = {card.uid for card in out}
+        out.extend(sorted((c for c in cards if c.uid not in placed), key=lambda c: keys[c.uid]))
+    return out
+
+
+def template_drift(client: AnkiConnect, config: Config) -> list[str]:
+    """Where the live note type differs from `notetype.py`.
+
+    `sync` has never pushed a template, which is deliberate: the template is
+    also yours to edit in Anki, and overwriting it on every content sync would
+    quietly undo any change you made there. But silence was the wrong other
+    half -- a change to the card layout here simply never arrived, with
+    nothing saying so.
+    """
+    spec = notetype.spec(config.note_type)
+    drift: list[str] = []
+    live_templates = client.model_templates(config.note_type)
+    for template in spec["cardTemplates"]:
+        name = template["Name"]
+        live = live_templates.get(name, {})
+        for side in ("Front", "Back"):
+            if live.get(side, "") != template[side]:
+                drift.append(f"{name}/{side}")
+    if client.model_styling(config.note_type).strip() != spec["css"].strip():
+        drift.append("css")
+    return drift
+
+
+def push_templates(
+    client: AnkiConnect, config: Config, *, dry_run: bool
+) -> list[CardOutcome]:
+    """Make the live note type's layout match `notetype.py`. Fields are not
+    touched here; `ensure_collection` owns those."""
+    spec = notetype.spec(config.note_type)
+    if not dry_run:
+        client.update_model_templates(
+            config.note_type,
+            {t["Name"]: {"Front": t["Front"], "Back": t["Back"]} for t in spec["cardTemplates"]},
+        )
+        client.update_model_styling(config.note_type, spec["css"])
+    return [CardOutcome("-", "setup", "pushed the card template and styling")]
 
 
 def ensure_collection(
@@ -212,7 +370,23 @@ def ensure_collection(
         if not dry_run:
             client.create_deck(deck)
         created.append(f"deck {deck!r}")
-    if config.note_type not in client.model_names():
+    live_models = set(client.model_names())
+    if config.note_type not in live_models:
+        # A name this note type used to have, still in the collection, means the
+        # name was changed here and not there. Creating the new one would leave
+        # every existing note on the old type: still in Anki, invisible to
+        # `sync`, and re-added as new the moment anything syncs. Anki can rename
+        # a note type in place without touching a single review, so say that
+        # rather than doing something irreversible.
+        stale = [name for name in notetype.PREVIOUS_NAMES if name in live_models]
+        if stale:
+            raise AnkiError(
+                f"note type {config.note_type!r} is missing, but {stale[0]!r} is in "
+                "the collection. Rename it in Anki (Tools > Manage Note Types > "
+                f"Rename) to {config.note_type!r}, which keeps every note and its "
+                "review history, and sync again. Setting `note_type_name` back to "
+                f"{stale[0].rsplit(' v', 1)[0]!r} also works."
+            )
         if not dry_run:
             client.create_model(notetype.spec(config.note_type))
         created.append(f"note type {config.note_type!r}")
@@ -260,7 +434,7 @@ def reposition(
     """
     outcomes: list[CardOutcome] = []
     by_uid = {card.uid: card for card in cards}
-    wanted = [c.uid for c in in_study_order(cards)]
+    wanted = [c.uid for c in in_study_order(cards, source_positions(config))]
 
     positions: dict[str, tuple[int, int]] = {}
     studied: list[str] = []
@@ -314,6 +488,7 @@ def run(
     client: AnkiConnect | None = None,
     dry_run: bool = False,
     reposition_new: bool = False,
+    templates: bool = False,
 ) -> SyncReport:
     """Lint, then upsert every approved card."""
     client = client or AnkiConnect(config.anki_url)
@@ -344,11 +519,28 @@ def run(
         # Added in study order: Anki numbers a new card by when it arrives,
         # and its default new-card order is that position. Getting the order
         # right at insertion costs nothing and needs no repositioning later.
-        for card in in_study_order(ready):
+        for card in in_study_order(ready, source_positions(config)):
             try:
                 report.outcomes.append(_upsert(client, config, card, dry_run=dry_run))
             except AnkiError as exc:
                 report.outcomes.append(CardOutcome(card.uid, "error", str(exc)))
+
+    if ready:
+        try:
+            drift = template_drift(client, config)
+            if drift and templates:
+                report.outcomes.extend(push_templates(client, config, dry_run=dry_run))
+            elif drift:
+                report.outcomes.append(
+                    CardOutcome(
+                        "-",
+                        "skip",
+                        f"card layout in Anki differs from notetype.py ({', '.join(drift)}); "
+                        "`--templates` pushes it",
+                    )
+                )
+        except AnkiError as exc:
+            report.outcomes.append(CardOutcome("-", "error", str(exc)))
 
     if reposition_new and ready:
         try:

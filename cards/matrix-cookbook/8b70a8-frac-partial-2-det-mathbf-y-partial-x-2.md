@@ -20,15 +20,15 @@ $\det(\mathbf{Y})\left(\text{Tr}\left[\mathbf{Y}^{-1}\frac{\partial^2\mathbf{Y}}
 ## conditions
 $\mathbf{Y}(x) \in \mathbb{R}^{n \times n}$ invertible; $x \in \mathbb{R}$.
 
+## prose
+The squared trace and the trace of the square differ, which is why two terms
+that look alike do not cancel.
+
 ## proof
 Differentiate $\det(\mathbf{Y})\text{Tr}[\mathbf{Y}^{-1}\mathbf{Y}']$ again. The
 $\det(\mathbf{Y})$ factor contributes the squared trace,
 $\partial(\mathbf{Y}^{-1})/\partial x = -\mathbf{Y}^{-1}\mathbf{Y}'\mathbf{Y}^{-1}$
 contributes the last term, and $\mathbf{Y}'$ contributes the first.
-
-## prose
-The squared trace and the trace of the square differ, which is why two terms
-that look alike do not cancel.
 
 ## notes
 units (p8y617, p8y651, 48). The $+$ joining the first two terms sits at a line

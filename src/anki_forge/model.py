@@ -34,6 +34,7 @@ FRONTMATTER_ORDER = (
     "unit",
     "frequency",
     "derivation",
+    "requires",
     "tags",
     "verify",
 )
@@ -54,13 +55,18 @@ FREQUENCIES = ("core", "common", "rare")
 DERIVATIONS = ("definitional", "short", "long")
 
 # Canonical section order. Unknown sections keep file order and land after.
+# Reading order on the card, and the order sections are written in a file.
+# `prose` comes straight after the answer because it is one sentence and it
+# interprets: the short thing first, then the longer ones. It is also the only
+# unlabelled block, so putting it between two labelled ones left no way to see
+# where `proof` ended and it began.
 SECTION_ORDER = (
     "front",
     "back",
     "conditions",
+    "prose",
     "uses",
     "proof",
-    "prose",
     "verify",
     "notes",
 )
@@ -81,7 +87,7 @@ REQUIRED_SECTIONS = ("front", "back")
 # a test un-approved a card whose mathematics had not changed. If the claim
 # itself changes, `front` or `back` changes with it and the hash moves anyway.
 UNHASHED_SECTIONS = frozenset({"notes", "verify"})
-UNHASHED_FRONTMATTER = frozenset({"status", "content_hash"})
+UNHASHED_FRONTMATTER = frozenset({"status", "content_hash", "requires"})
 
 STATUSES = ("draft", "approved", "rejected")
 
@@ -184,9 +190,9 @@ class Card:
     def source_name(self) -> str:
         """The source *key*, read off the unit ids.
 
-        `source` is the human citation ("Matrix Cookbook ss3.1, eq. 148");
-        this is `matrix-cookbook`, the name that indexes `sources/` and
-        `[sources.*]`. Derived rather than stored, so it cannot drift from
+        `source` is the human citation ("Some Book, ss3.1, eq. 148"); this is
+        the key that indexes `sources/` and `[sources.*]`, read off the unit
+        id's first segment. Derived rather than stored, so it cannot drift from
         the unit the card actually came from. Empty when the card names no
         unit, which the app treats as "belongs to every source" rather than
         to none: a card with no home should be visible, not lost.
@@ -200,7 +206,7 @@ class Card:
     @property
     def section_name(self) -> str:
         """The source section, read off the unit id: `2.3` in
-        `matrix-cookbook:2.3:66`. Derived for the same reason as
+        `<source>:<section>:<equation>`. Derived for the same reason as
         `source_name`: a card filed under a section it does not come from is
         a second truth waiting to disagree with the first."""
         for unit in self.units:
@@ -208,6 +214,23 @@ class Card:
             if len(parts) >= 2 and parts[1].strip():
                 return parts[1].strip()
         return ""
+
+    @property
+    def requires(self) -> list[str]:
+        """Cards that must be introduced before this one.
+
+        The ordering respects this absolutely: a prerequisite outranks
+        frequency, because meeting a result whose proof you cannot follow is
+        worse than meeting a rare one early. Everything else is a tiebreak.
+
+        Use it only for a real dependency -- this card's proof or notation
+        rests on that one. Two cards on a theme are not a dependency, and a
+        graph that says they are makes the order rigid for no gain.
+        """
+        raw = self.frontmatter.get("requires") or []
+        if isinstance(raw, str):
+            return [u.strip() for u in raw.split(",") if u.strip()]
+        return [str(u).strip() for u in raw if str(u).strip()]
 
     @property
     def tags(self) -> list[str]:

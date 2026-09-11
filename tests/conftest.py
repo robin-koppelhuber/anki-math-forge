@@ -159,6 +159,8 @@ class FakeAnki(AnkiConnect):
         super().__init__("http://fake")
         self.decks: list[str] = ["Default"]
         self.models: dict[str, list[str]] = {}
+        self.templates: dict[str, dict[str, dict[str, str]]] = {}
+        self.css: dict[str, str] = {}
         self.notes: dict[int, dict[str, Any]] = {}
         # One card per note, which is what this note type produces. A new
         # card's `due` is its position in the new queue, counting up from
@@ -200,7 +202,25 @@ class FakeAnki(AnkiConnect):
 
     def _do_createModel(self, **spec: Any) -> dict[str, Any]:
         self.models[spec["modelName"]] = list(spec["inOrderFields"])
+        self.templates[spec["modelName"]] = {
+            t["Name"]: {"Front": t["Front"], "Back": t["Back"]} for t in spec["cardTemplates"]
+        }
+        self.css[spec["modelName"]] = spec.get("css", "")
         return {"id": 1}
+
+    def _do_modelTemplates(self, modelName: str) -> dict[str, Any]:
+        return self.templates.get(modelName, {})
+
+    def _do_modelStyling(self, modelName: str) -> dict[str, Any]:
+        return {"css": self.css.get(modelName, "")}
+
+    def _do_updateModelTemplates(self, model: dict[str, Any]) -> None:
+        self.templates[model["name"]] = {
+            k: dict(v) for k, v in model["templates"].items()
+        }
+
+    def _do_updateModelStyling(self, model: dict[str, Any]) -> None:
+        self.css[model["name"]] = model["css"]
 
     def _do_findNotes(self, query: str) -> list[int]:
         model = _quoted(query, "note")

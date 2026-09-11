@@ -20,10 +20,10 @@ $\sum_{r=0}^{n-1}\left(\mathbf{X}^r\mathbf{J}^{ij}\mathbf{X}^{n-1-r}\right)_{kl}
 ## conditions
 $\mathbf{X} \in \mathbb{R}^{m \times m}$; $n \in \mathbb{Z}_{>0}$.
 
+## prose
+Here $\mathbf{J}^{ij}$ has a single $1$ at $(i,j)$ and zeros everywhere else (the single-entry matrix).
+
 ## proof
 The product rule over the $n$ copies of $\mathbf{X}$: summand $r$
 differentiates the factor at position $r+1$, replacing it by $\mathbf{J}^{ij}$
 and leaving $\mathbf{X}^r$ to its left and $\mathbf{X}^{n-1-r}$ to its right.
-
-## prose
-Here $\mathbf{J}^{ij}$ has a single $1$ at $(i,j)$ and zeros everywhere else (the single-entry matrix).

@@ -87,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
         "context",
         help="the page an equation was printed on, for writing its card",
     )
-    p.add_argument("unit", help="unit id, e.g. matrix-cookbook:2.4:61")
+    p.add_argument("unit", help="unit id, shaped <source>:<section>:<equation>")
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_context)
 
@@ -231,6 +231,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = subs.add_parser("sync", help="push approved cards to Anki, upserting by uid")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--templates",
+        action="store_true",
+        help=(
+            "also push the card layout and styling from notetype.py. Without "
+            "it a layout change is reported and left alone, since the template "
+            "is yours to edit in Anki too"
+        ),
+    )
     p.add_argument(
         "--reposition",
         action="store_true",
@@ -716,7 +725,12 @@ def cmd_feedback(args: argparse.Namespace, config: Config) -> int:
 def cmd_sync(args: argparse.Namespace, config: Config) -> int:
     from . import sync as sync_mod
 
-    report = sync_mod.run(config, dry_run=args.dry_run, reposition_new=args.reposition)
+    report = sync_mod.run(
+        config,
+        dry_run=args.dry_run,
+        reposition_new=args.reposition,
+        templates=args.templates,
+    )
     if args.json:
         print(
             json.dumps(

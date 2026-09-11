@@ -20,15 +20,15 @@ $(\mathbf{X}^{-1})^T$
 ## conditions
 $\mathbf{X} \in \mathbb{R}^{n \times n}$ invertible. Denominator layout.
 
+## prose
+The matrix analogue of $(\ln|x|)' = 1/x$, and the absolute value is what lets
+$\det(\mathbf{X}) < 0$ through.
+
 ## proof
 Jacobi's formula gives
 $\partial\ln|\det\mathbf{X}| = \text{Tr}(\mathbf{X}^{-1}\partial\mathbf{X})$;
 reading the differential as $\text{Tr}(\mathbf{G}^T\partial\mathbf{X})$ gives
 $\mathbf{G} = \mathbf{X}^{-T}$.
-
-## prose
-The matrix analogue of $(\ln|x|)' = 1/x$, and the absolute value is what lets
-$\det(\mathbf{X}) < 0$ through.
 
 ## verify
 ```python

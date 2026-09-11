@@ -442,13 +442,32 @@ kept only where a flashcard makes the case stronger than a paper does.
    `proof` derives, `prose` interprets. A claim that needs its own
    justification does not belong in `prose`: it is a `proof`, or it is another
    card.
+9. **Simple grammar.** Short declarative sentences, one idea each. Prefer a
+   full stop to a subordinate clause. A card is read in a few seconds under
+   time pressure, which is the shortest attention any prose in this repo gets.
+10. **No line breaks inside a section.** Write each section body as one long
+    line and let the editor wrap it. **A newline is not whitespace here**: it
+    becomes a `<br>` on the Anki card, so a body wrapped at column 78 renders
+    with hard breaks mid-sentence at whatever column you happened to stop.
+    Break a line only where you want a break to appear. `check` warns.
+11. **No em-dashes.** Use a colon to introduce, commas or parentheses for an
+    aside, or two sentences. An em-dash aside inside a sentence that already
+    carries a formula gives the reader two suspensions to hold at once.
 
 **Not adopted, deliberately.** That document bans "display" for mathematics.
-Here the display/inline distinction is load-bearing — the segmenter keys on
-display maths being indented clear of the text margin — so "display equation"
-stays, meaning the typographic thing. Its ban on em-dashes is a house style
-for that paper; card text is short enough that it does not bite, and
-retrofitting this repo's prose would be churn for nothing.
+Here the display/inline distinction is load-bearing: the segmenter keys on
+display maths being indented clear of the text margin, so "display equation"
+stays, meaning the typographic thing.
+
+Its environment discipline (definition / lemma / remark) does not transfer
+either. Cards have no numbered environments, and rule 8 above already splits
+the same work across sections.
+
+The em-dash ban **was** declined here, on the grounds that card text is short
+enough not to need it. That was wrong twice over: five uses across three cards
+made "retrofitting is churn" false, and a card is exactly where a suspended
+aside costs most, since there is no surrounding paragraph to recover the
+thread from.
 
 ## Length
 
