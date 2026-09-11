@@ -831,11 +831,29 @@ behind a shim, or a second book where it is chosen and then found to mislead.
 
 ## 14. `verify` coverage
 
-`verify` works and the corruption suite passes, but exactly one card opts in.
-The gnarly identities (Woodbury, block inverses, anything with three transposes)
-are where it earns its keep, and none of them are carded yet. §9 makes this a
-publishing blocker rather than a nicety, since "the identity is numerically
-checked" is one of the two claims worth making and one card does not support it.
+**Measured, not guessed: 42 of 108 cards verify.** The "exactly one card opts
+in" this section used to say was years stale. 66 do not: 8 `definitional`
+(nothing to derive), 57 `short`, 1 `long`.
+
+**Adding more is blocked by a contradiction in the hash, not by the maths.**
+`## verify` the *section* is exempt from `content_hash`, for a reason the code
+states plainly: it is a check on the author rather than card content, and
+hashing it meant that fixing a test un-approved a card whose mathematics had
+not changed. But `verify:` the *frontmatter flag* is **not** exempt. So turning
+a test on does precisely what the exemption exists to prevent.
+
+Demonstrated: four identities were opted in (norm gradient, derivative of an
+inverse and of a determinant with respect to a scalar, and `d det(X^-1)/dX`).
+All four passed numerically on the first run, and all four cards went
+`hash-stale`. Reverted.
+
+**The fix is one line and a decision.** Adding `verify` to
+`UNHASHED_FRONTMATTER` makes the rule consistent with its own stated rationale.
+The cost is that it changes how *every* hash is computed, so all 108 stored
+hashes go stale at once and have to be re-stamped. That is provably safe --
+check each card against the old scheme first, and re-stamp only if it matches,
+so nothing whose content actually drifted gets waved through -- but it is a
+change to the approval mechanism, and that is not a call to make quietly.
 
 **Measure it against `identity` cards only.** An `intuition` card (§3) has
 nothing to check numerically, so counting it in the denominator would make
