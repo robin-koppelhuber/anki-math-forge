@@ -24,6 +24,8 @@
   <nav class="views">
     <a href="/units?source={{ src }}" class="{{ 'on' if view == 'units' }}">units</a>
     <a href="/review?source={{ src }}" class="{{ 'on' if view == 'review' }}">review</a>
+    <a href="/config?source={{ src }}" class="{{ 'on' if view == 'config' }}"
+       title="what every setting resolved to, and where it came from">config</a>
   </nav>
   {% if sources is defined and sources %}
   {# Rendered even for a single source: which book you are working on is
@@ -31,8 +33,17 @@
      view look like it was showing everything. #}
   <select class="source-pick" id="source-pick" aria-label="source"
           title="the source you are working on">
-    {% for name in sources %}
-    <option value="{{ name }}" {{ 'selected' if name == src }}>{{ name }}</option>
+    {# Grouped by tag, because a shelf of papers is fifty entries and a flat
+       list of citekeys is unusable at that size. The label is the source
+       *name*: a select's typeahead matches what is shown, and a citekey
+       starts with the author you are looking for. #}
+    {% for group in sources %}
+    {% if group.tag %}<optgroup label="{{ group.tag }}">{% endif %}
+    {% for row in group.sources %}
+    <option value="{{ row.name }}" title="{{ row.title }}"
+            {{ 'selected' if row.name == src }}>{{ row.name }}</option>
+    {% endfor %}
+    {% if group.tag %}</optgroup>{% endif %}
     {% endfor %}
   </select>
   {% endif %}

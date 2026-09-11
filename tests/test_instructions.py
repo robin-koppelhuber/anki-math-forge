@@ -77,9 +77,9 @@ def test_the_project_contract_declares_no_source_conventions() -> None:
     for claim in ("denominator layout", "entries are real", "conjugate transpose"):
         assert claim not in section.lower().replace("**", ""), (
             f"CLAUDE.md still declares {claim!r}; that belongs in "
-            "sources/<name>/conventions.md"
+            "sources/<name>/source.md"
         )
-    assert "sources/<name>/conventions.md" in section, "it must say where they do live"
+    assert "sources/<name>/source.md" in section, "it must say where they do live"
 
 
 def test_the_loaded_source_declares_its_own() -> None:
@@ -87,10 +87,11 @@ def test_the_loaded_source_declares_its_own() -> None:
     for source in (ROOT / "sources").iterdir():
         if not source.is_dir() or not (source / "units.jsonl").exists():
             continue
-        conventions = source / "conventions.md"
-        assert conventions.exists(), (
-            f"{source.name} has units but no conventions.md; every card written "
-            "from it is guessing at what is ambient"
+        # Either name: `source.md` is where they live now, and `conventions.md`
+        # is still read for a repo that has not moved.
+        assert (source / "source.md").exists() or (source / "conventions.md").exists(), (
+            f"{source.name} has units but declares no conventions; every card "
+            "written from it is guessing at what is ambient"
         )
 
 

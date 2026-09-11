@@ -15,3 +15,6 @@ node_modules/
 .tx-*/
 # the configured work_dir: crops, page renders, scratch LaTeX
 .forge/
+
+# local secrets for MCP servers; .env.example is the template
+.env

@@ -1,0 +1,33 @@
+name: checks
+
+# There is a real suite here, plus ruff and mypy strict, and none of it was
+# discoverable from outside. This is what makes a badge honest.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # `--extra pdf` pulls PyMuPDF, which the crop and page-height tests need.
+      # It is AGPL and optional, which is what keeps the core MIT: installing it
+      # is a choice made here, not a licence inherited by anyone using the tool.
+      - run: uv sync --extra pdf --dev
+
+      # KaTeX first: without it `check` falls back to a structural parser that
+      # is strictly weaker, and the suite would be testing the fallback rather
+      # than the gate that actually runs.
+      - run: npm ci
+
+      - run: uv run ruff check .
+      - run: uv run mypy
+      - run: uv run pytest -q

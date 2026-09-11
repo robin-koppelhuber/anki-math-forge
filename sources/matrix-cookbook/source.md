@@ -1,12 +1,20 @@
-# Conventions for this source
++++
+title = "The Matrix Cookbook"
+citation = "Matrix Cookbook"
+pdf = "sources/matrix-cookbook/matrixcookbook.pdf"
+tex = ""
+deck = "Mathe::Matrix-Calculus"
+order = "printed"
+tags = ["maths", "reference"]
 
-The ambient setting every card from this source is read in, declared once here
-so that no card repeats it. `anki-forge context <unit>` prints this file, so
-whoever writes or reviews a card sees it without having to know it exists.
+# The book differentiates in denominator layout. A machine key rather than only
+# prose below, because `verify` has to act on it: its numerical gradient
+# computes one layout, the two agree on every square matrix, and a mismatch
+# would pass review and first bite on a rectangular one.
+layout = "denominator"
++++
 
-Machine-readable knobs live in `anki-forge.toml` — `[cards] layout`,
-`[cards] language`, `[anki] deck`. This file is for what a configuration key
-cannot say.
+# The Matrix Cookbook
 
 ## The setting
 

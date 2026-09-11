@@ -146,5 +146,43 @@
     </details>
     {% endif %}
 
+    {# What a reader marked, and what you said it meant. A prose source is
+       triaged by meaning rather than by state -- "the claims first, the terms
+       never" -- and nothing renders for a source with no marks, so the
+       Cookbook's rail is unchanged. #}
+    {% if mark_rows is defined and mark_rows %}
+    <details class="filter-group marks" open>
+      <summary>what you marked</summary>
+      <ul class="filter-list">
+        {% for row in mark_rows %}
+        <li><a class="{{ 'on' if mark == row.key }}"
+               title="{{ row.key }}{{ ' — ' ~ row.meaning if row.meaning }}"
+               href="{{ filter_url(here, f, mark=(none if mark == row.key else row.key)) }}">
+          {% if mark == row.key %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}
+          <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
+          {{ row.meaning or row.key }}<b>{{ row.count }}</b></a></li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+
+    {# What to run next on exactly what is on screen. Copied, not launched:
+       you paste it where you can watch it, so nothing writes cards with
+       nobody looking. #}
+    {% if commands is defined and commands %}
+    <details class="filter-group commands" open>
+      <summary>next on this</summary>
+      <ul class="filter-list runs">
+        {% for cmd in commands %}
+        <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
+                    title="copy — {{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
+          <span class="run-label">{{ cmd.label }}</span>
+          <code>{{ cmd.run }}</code>
+        </button></li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+
   </div>
 </aside>

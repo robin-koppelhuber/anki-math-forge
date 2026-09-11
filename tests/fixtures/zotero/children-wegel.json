@@ -1,0 +1,72 @@
+[
+ {
+  "key": "YXEYND5B",
+  "version": 8256,
+  "itemType": "note",
+  "parentItem": "VFD2E2BR",
+  "note": "<div data-schema-version=\"9\"><p>“PDF” is the correct file</p>\n</div>",
+  "tags": [],
+  "relations": {},
+  "dateAdded": "2026-09-11T16:23:00Z",
+  "dateModified": "2026-09-11T16:23:15Z"
+ },
+ {
+  "key": "VX8CZN3W",
+  "version": 8252,
+  "itemType": "attachment",
+  "title": "MOL_appendix.pdf",
+  "parentItem": "VFD2E2BR",
+  "linkMode": "imported_file",
+  "contentType": "application/pdf",
+  "charset": "",
+  "filename": "MOL_appendix.pdf",
+  "lastRead": 1789143755,
+  "mtime": 1751650029223,
+  "md5": "74c47a0cdf494e2444a078d04ecf4361",
+  "tags": [
+   {
+    "tag": "Javier Proposed"
+   }
+  ],
+  "relations": {},
+  "dateAdded": "2025-07-04T17:27:42Z",
+  "dateModified": "2025-11-12T16:50:45Z"
+ },
+ {
+  "key": "ZIETASLD",
+  "version": 8090,
+  "itemType": "attachment",
+  "title": "PDF",
+  "parentItem": "VFD2E2BR",
+  "linkMode": "imported_file",
+  "contentType": "application/pdf",
+  "charset": "",
+  "filename": "Wegel et al. - 2025 - On the sample complexity of semi-supervised multi-objective learning.pdf",
+  "lastRead": 1786708103,
+  "mtime": 1762966234996,
+  "md5": "74cd73be2a4b3245d7b9b520c6e46e59",
+  "tags": [],
+  "relations": {},
+  "dateAdded": "2025-11-12T16:50:40Z",
+  "dateModified": "2025-11-12T16:50:40Z"
+ },
+ {
+  "key": "6B5KY3LE",
+  "version": 3719,
+  "itemType": "attachment",
+  "title": "Snapshot",
+  "url": "https://arxiv.org/abs/2508.17152",
+  "accessDate": "2025-11-12T16:50:05Z",
+  "parentItem": "VFD2E2BR",
+  "linkMode": "imported_url",
+  "contentType": "text/html",
+  "charset": "utf-8",
+  "filename": "2508.html",
+  "mtime": 1762966205110,
+  "md5": "a596844679de12a930ee81b6c0aa4ddf",
+  "tags": [],
+  "relations": {},
+  "dateAdded": "2025-11-12T16:50:05Z",
+  "dateModified": "2025-11-12T16:50:05Z"
+ }
+]

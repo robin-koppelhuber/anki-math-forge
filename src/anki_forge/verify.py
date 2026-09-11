@@ -127,6 +127,11 @@ def namespace(rng: np.random.Generator) -> dict[str, Any]:
 
 def verify_card(card: Card, *, trials: int = TRIALS, seed: int = 0) -> VerifyResult:
     """Run a card's `## verify` snippet. Cards without one are skipped."""
+    if card.type != "identity":
+        # There is nothing numeric to check about an explanation. Saying so
+        # matters for coverage: counting `intuition` cards in the denominator
+        # would make it look worse every time the deck got better.
+        return VerifyResult(card.uid, SKIP, f"nothing to verify on a `{card.type}` card")
     if not card.verify_enabled:
         return VerifyResult(card.uid, SKIP, "verify: false")
     code = code_of(card)

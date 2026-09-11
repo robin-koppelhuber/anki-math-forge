@@ -531,3 +531,79 @@ async function repaintCounts(pipeline) {
     /* the numbers go stale until the next load; nothing else breaks */
   }
 }
+
+/* Copy a suggested command. Nothing is launched from here on purpose: you
+   paste it where you can watch it, which is the whole difference between a
+   command you ran and one that ran itself. */
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-copy]");
+  if (!button) return;
+  const text = button.dataset.copy;
+  try {
+    await navigator.clipboard.writeText(text);
+    button.classList.add("copied");
+    setTimeout(() => button.classList.remove("copied"), 1200);
+  } catch {
+    /* Clipboard needs a secure context, and 127.0.0.1 counts -- but a
+       hostname alias does not. Select it instead so ctrl+c still works. */
+    const code = button.querySelector("code");
+    if (!code) return;
+    const range = document.createRange();
+    range.selectNodeContents(code);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+});
+
+/* Counts that follow work happening elsewhere.
+
+   Everything worth showing is already on disk: a `/transcribe` pass writes the
+   ledger and a `/extract-cards` pass writes card files, so the numbers can be
+   derived rather than reported. No job runner, no progress protocol, and it
+   works whether the pass was started from a terminal, a subagent or by hand.
+
+   The deck on screen deliberately does not reshuffle underneath you -- being
+   moved to a different card mid-decision is worse than a stale list -- so when
+   the numbers move, the header offers a reload and leaves the choice alone. */
+const COUNT_POLL_MS = 4000;
+
+(function followTheFiles() {
+  const rail = document.getElementById("filter-rail");
+  if (!rail) return;
+  let baseline = null;
+
+  async function tick() {
+    if (document.visibilityState !== "visible") return;
+    const params = new URLSearchParams(location.search);
+    let payload;
+    try {
+      const response = await fetch(`/api/counts?${params.toString()}`);
+      payload = await response.json();
+    } catch {
+      return; /* the numbers go stale until the next load; nothing else breaks */
+    }
+    paintCounts(payload.pipeline);
+    paintFsm(params.get("counts_scope") === "filtered" ? payload.fsm : payload.pipeline);
+
+    const signature = JSON.stringify(payload.pipeline);
+    if (baseline === null) baseline = signature;
+    else if (signature !== baseline) showReload();
+  }
+
+  function showReload() {
+    if (document.getElementById("reload-hint")) return;
+    const hint = document.createElement("button");
+    hint.id = "reload-hint";
+    hint.type = "button";
+    hint.className = "reload-hint";
+    hint.textContent = "files changed — reload";
+    hint.title = "something wrote to the ledger or the cards while this page was open";
+    hint.addEventListener("click", () => location.reload());
+    document.querySelector("header")?.appendChild(hint);
+  }
+
+  setInterval(tick, COUNT_POLL_MS);
+  document.addEventListener("visibilitychange", tick);
+  tick();
+})();

@@ -214,6 +214,12 @@ class FakeAnki(AnkiConnect):
     def _do_modelStyling(self, modelName: str) -> dict[str, Any]:
         return {"css": self.css.get(modelName, "")}
 
+    def _do_modelTemplateRename(
+        self, modelName: str, oldTemplateName: str, newTemplateName: str
+    ) -> None:
+        templates = self.templates[modelName]
+        templates[newTemplateName] = templates.pop(oldTemplateName)
+
     def _do_updateModelTemplates(self, model: dict[str, Any]) -> None:
         self.templates[model["name"]] = {
             k: dict(v) for k, v in model["templates"].items()

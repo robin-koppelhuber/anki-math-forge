@@ -206,6 +206,43 @@ def test_note_type_is_created_when_nothing_stale_is_there(
     assert anki.models[config.note_type] == list(notetype.FIELDS)
 
 
+def test_card_template_is_renamed_after_a_note_type_rename(
+    config: Config, card_path: Path, anki: FakeAnki
+) -> None:
+    """Anki renames a note type without renaming its template. Pushing under a
+    name the note type does not have would add a *second* template, and a
+    second card for every note."""
+    approve(card_path)
+    sync.run(config, client=anki)
+    stale = "anki-forge identity v1 card"
+    anki.templates[config.note_type] = {
+        stale: anki.templates[config.note_type].pop(notetype.CARD_TEMPLATE)
+    }
+
+    report = sync.run(config, client=anki)
+
+    assert report.ok
+    assert list(anki.templates[config.note_type]) == [notetype.CARD_TEMPLATE], (
+        "renamed in place, not added alongside"
+    )
+    assert any("renamed" in (o.detail or "") for o in report.outcomes)
+
+
+def test_a_second_card_template_is_refused(
+    config: Config, card_path: Path, anki: FakeAnki
+) -> None:
+    approve(card_path)
+    sync.run(config, client=anki)
+    live = anki.templates[config.note_type]
+    live["anki-forge identity v1 card"] = live.pop(notetype.CARD_TEMPLATE)
+    live["mine"] = {"Front": "hand-made", "Back": "hand-made"}
+
+    report = sync.run(config, client=anki)
+
+    assert not report.ok
+    assert any("not guess which" in (o.detail or "") for o in report.outcomes)
+
+
 def test_tags_are_reconciled_on_update(config: Config, card_path: Path, anki: FakeAnki) -> None:
     approve(card_path)
     sync.run(config, client=anki)
@@ -429,11 +466,11 @@ def test_a_layout_change_is_reported_rather_than_pushed(config: Config, card_pat
     approve(card_path)
     anki = FakeAnki()
     sync.run(config, client=anki)
-    anki.templates[config.note_type][config.note_type + " card"]["Back"] = "edited in Anki"
+    anki.templates[config.note_type][notetype.CARD_TEMPLATE]["Back"] = "edited in Anki"
 
     report = sync.run(config, client=anki)
 
-    assert anki.templates[config.note_type][config.note_type + " card"]["Back"] == "edited in Anki"
+    assert anki.templates[config.note_type][notetype.CARD_TEMPLATE]["Back"] == "edited in Anki"
     assert any("--templates" in (o.detail or "") for o in report.outcomes)
 
 
@@ -441,11 +478,11 @@ def test_templates_pushes_the_layout(config: Config, card_path: Path) -> None:
     approve(card_path)
     anki = FakeAnki()
     sync.run(config, client=anki)
-    anki.templates[config.note_type][config.note_type + " card"]["Back"] = "stale"
+    anki.templates[config.note_type][notetype.CARD_TEMPLATE]["Back"] = "stale"
 
     sync.run(config, client=anki, templates=True)
 
-    live = anki.templates[config.note_type][config.note_type + " card"]["Back"]
+    live = anki.templates[config.note_type][notetype.CARD_TEMPLATE]["Back"]
     assert live.index("{{Prose}}") < live.index("{{Proof}}")
     assert anki.css[config.note_type] == notetype.CSS
 
@@ -454,8 +491,8 @@ def test_a_dry_run_pushes_no_template(config: Config, card_path: Path) -> None:
     approve(card_path)
     anki = FakeAnki()
     sync.run(config, client=anki)
-    anki.templates[config.note_type][config.note_type + " card"]["Back"] = "stale"
+    anki.templates[config.note_type][notetype.CARD_TEMPLATE]["Back"] = "stale"
 
     sync.run(config, client=anki, templates=True, dry_run=True)
 
-    assert anki.templates[config.note_type][config.note_type + " card"]["Back"] == "stale"
+    assert anki.templates[config.note_type][notetype.CARD_TEMPLATE]["Back"] == "stale"

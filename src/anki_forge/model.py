@@ -72,9 +72,20 @@ SECTION_ORDER = (
 )
 
 # Sections allowed per `type` (DESIGN.md §7: "section whitelist for the
-# declared type"). MVP ships `identity` only (§5).
+# declared type").
+#
+# `identity` states a mathematical fact: it has a definite answer, and `verify`
+# can check it numerically.
+#
+# `intuition` explains one. It is what a marked passage in a prose source turns
+# into -- why a bound is tight, what a term is really measuring, which of two
+# conditions is doing the work. Two sections come off it. `verify` has nothing
+# to run against an explanation, and `conditions` belongs to a statement rather
+# than to a reading of one; anything that genuinely needs a hypothesis stated
+# is an identity wearing the wrong type.
 SECTIONS_BY_TYPE: dict[str, frozenset[str]] = {
     "identity": frozenset(SECTION_ORDER),
+    "intuition": frozenset(SECTION_ORDER) - {"verify", "conditions"},
 }
 
 REQUIRED_SECTIONS = ("front", "back")

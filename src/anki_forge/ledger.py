@@ -48,19 +48,90 @@ class Locator:
     """
 
     section: str = ""
+    # The Cookbook's own key, and the only thing `extract/pdf.py` emits. Kept
+    # rather than migrated: that module is frozen (§13), and rewriting 751
+    # ledger lines to say `kind: equation` would be churn for no new fact.
+    # `ref` below reads it and the general form the same way.
     equation: int | None = None
+    # The general form, for sources that number something other than equations.
+    # `kind` is the family a contiguity check runs over ("equation",
+    # "theorem", "lemma"); `label` is the number within it ("2.4", "61").
+    kind: str = ""
+    label: str = ""
+    # Which file inside the source, when a source has more than one. Empty
+    # means the only one. A Zotero item is routinely many documents: a paper
+    # plus its appendix, or a book as fifteen chapter PDFs, and page 17 of one
+    # is not page 17 of another.
+    document: str = ""
     page: int | None = None
     bbox: list[float] | None = None
 
-    def label(self) -> str:
+    @property
+    def ref(self) -> tuple[str, str]:
+        """`(kind, label)`, however this unit happens to record it.
+
+        The shim between the frozen segmenter and everything after it: one
+        place reads `equation`, and nothing else has to know it exists.
+        """
+        if self.label or self.kind:
+            # A kind with no label is normal: a Zotero highlight is a
+            # "highlight" and nothing numbers it.
+            return self.kind or "equation", self.label
+        if self.equation is not None:
+            return "equation", str(self.equation)
+        return "", ""
+
+    def describe(self) -> str:
+        """A human reading of where this is, for a citation line."""
         bits = []
         if self.section:
             bits.append(f"§{self.section}")
-        if self.equation is not None:
-            bits.append(f"eq. {self.equation}")
+        kind, label = self.ref
+        if label:
+            # An unnumbered kind contributes nothing to a citation: "p. 8" is
+            # what you want, not "Highlight, p. 8".
+            bits.append(f"eq. {label}" if kind == "equation" else f"{kind.capitalize()} {label}")
         if self.page is not None:
             bits.append(f"p. {self.page}")
         return ", ".join(bits)
+
+
+@dataclass
+class Mark:
+    """One human mark inside a unit: a highlight, an underline, a sticky note.
+
+    A unit is a *region*, and a region can carry several marks that belong
+    together. Zotero is where these come from today, but nothing here is
+    Zotero-shaped: a mark is a kind, a colour, what it covers and what the
+    reader said about it, which is what a PDF annotation layer is anywhere.
+    It is called a mark and not an annotation because this project already
+    uses that word for the `@claude` lines in a card's `## notes`.
+
+    The first mark on a unit is the one the unit came from -- its key is the
+    unit's id -- and the rest are what you marked around it.
+
+    What a kind or a colour *means* is deliberately not here. It lives in the
+    config and is resolved when something displays a mark, so that editing your
+    scheme changes every unit at once instead of only the ones imported since.
+
+    `key` is the source's own permanent id for the mark, never a position.
+    Marks are what *changes* inside a unit as you keep reading, so deriving
+    anything durable from their order would renumber the world every time a
+    sentence got highlighted.
+    """
+
+    key: str = ""
+    kind: str = ""  # highlight | underline | note | image | ink
+    colour: str = ""  # the name, not the hex: "purple"
+    text: str = ""  # what it covers on the page
+    comment: str = ""  # what the reader wrote about it
+    bbox: list[float] | None = None  # top-left origin, like every other bbox
+    order: str = ""  # the source's own reading-order key
+
+    @property
+    def content(self) -> str:
+        """A note covers nothing; its comment is the whole of it."""
+        return self.comment if self.kind == "note" else self.text
 
 
 @dataclass
@@ -91,6 +162,13 @@ class Unit:
     reason: str = ""  # why it was skipped
     uids: list[str] = field(default_factory=list)  # cards produced from it
     notes: list[str] = field(default_factory=list)  # @claude annotations
+    marks: list[Mark] = field(default_factory=list)  # what a reader marked here
+    # Pages either side of this one that a card writer should be handed. `None`
+    # inherits the source's setting, which inherits the repo's. Set during
+    # triage, where you can see that a theorem's hypotheses are two pages back
+    # and the default window would cut them off. Human-owned: extraction never
+    # touches it, so it survives a re-segmentation like `state` does.
+    context_pages: int | None = None
     suggestion: Suggestion | None = None  # proposed, never applied
 
     @property
@@ -120,14 +198,23 @@ class Unit:
         return bool(self.tex_source)
 
     def citation(self, title: str) -> str:
-        label = self.locator.label()
+        label = self.locator.describe()
         return f"{title} {label}" if label else title
 
     def to_json(self) -> dict[str, Any]:
         data = asdict(self)
         data["locator"] = {k: v for k, v in data["locator"].items() if v not in ("", None)}
+        # Same treatment as the locator: a mark with no comment should not
+        # write `"comment": ""` on every line of the ledger.
+        marks = [{k: v for k, v in m.items() if v not in ("", None)} for m in data.get("marks", [])]
+        if marks:
+            data["marks"] = marks
+        else:
+            data.pop("marks", None)
         if data.get("suggestion") is None:
             data.pop("suggestion", None)
+        if data.get("context_pages") is None:
+            data.pop("context_pages", None)
         return data
 
     @classmethod
@@ -143,10 +230,18 @@ class Unit:
             if isinstance(raw_suggestion, dict)
             else None
         )
+        mark_fields = Mark.__dataclass_fields__
+        marks = [
+            Mark(**{k: v for k, v in row.items() if k in mark_fields})
+            for row in data.get("marks") or []
+            if isinstance(row, dict)
+        ]
+        rest = {k: v for k, v in data.items() if k in known and k not in ("suggestion", "marks")}
         return cls(
             locator=Locator(**{k: v for k, v in raw_locator.items() if k in fields}),
             suggestion=suggestion,
-            **{k: v for k, v in data.items() if k in known and k != "suggestion"},
+            marks=marks,
+            **rest,
         )
 
 

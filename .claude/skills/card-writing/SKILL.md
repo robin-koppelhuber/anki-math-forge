@@ -299,7 +299,7 @@ Three tiers, and only the middle one belongs on a card.
 
 1. **Ambient, declared once.** Finite-dimensional; entries real unless the card
    says otherwise; `ᵀ` transpose and `ᴴ` conjugate transpose. Those are
-   examples; the source declares its own. In its `conventions.md`, not on 500
+   examples; the source declares its own. In its `source.md`, not on 500
    cards. A sentence repeated on every card stops being read, and then
    the one card where it is load-bearing reads like all the others.
 2. **On the card, because the identity turns on it.** Conformability
@@ -402,7 +402,7 @@ of a card nobody can skim past. Three things earn one:
 Nothing else. In particular, **"the source did not state this condition, so I
 added it" is not a note**: the condition is sitting on the card, and if adding
 conditions is the normal case for a source, that belongs in its
-`conventions.md`, once.
+the source's own file, once.
 
 The first pass over this deck wrote 151 notes across 87 of 98 cards, 3,769
 words, most of them that one sentence. Every card was blocked from syncing by

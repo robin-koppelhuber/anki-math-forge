@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% set view = "config" %}
+{% block title %}config · anki-forge{% endblock %}
+
+{% block main %}
+<div class="config-page">
+  <h1>effective configuration</h1>
+  <p class="muted">
+    What every setting resolved to, and where the value came from. Read-only:
+    the config is read at startup, so editing here would take effect at some
+    unrelated later moment, and half these keys change the meaning of content
+    that already exists. <code>layout</code> decides what every derivative on
+    every card from that source means.
+  </p>
+
+  {% for group, rows in grouped.items() %}
+  <section class="config-group">
+    <h2>{{ group }}</h2>
+    <table class="config-table">
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <th>{{ row.key }}</th>
+          <td><code>{{ row.value }}</code></td>
+          <td class="origin {{ 'inherited' if row['from'] == 'inherited' }}">{{ row['from'] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block keys %}
+<span class="key-group">read-only — edit the files</span>
+{% endblock %}

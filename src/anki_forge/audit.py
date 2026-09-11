@@ -202,7 +202,15 @@ def _check_transcription(report: Report, units: list[Unit]) -> None:
     # gap: somebody read the crop and declined to guess at it. Counting those
     # as outstanding work sends the next pass back to re-guess exactly where
     # refusing was right.
-    untriaged = [u for u in units if u.transcription == "none" and u.state in ("new", "queued")]
+    # A unit carrying marks already has its text: the reader highlighted a
+    # passage and Zotero lifted it off the page. There is no equation to
+    # transcribe, so asking `/transcribe` to read the crop would send it to
+    # re-type prose that is already exact.
+    untriaged = [
+        u
+        for u in units
+        if u.transcription == "none" and u.state in ("new", "queued") and not u.marks
+    ]
     missing = [u for u in untriaged if not u.notes]
     declined = len(untriaged) - len(missing)
     if missing:

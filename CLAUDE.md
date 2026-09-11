@@ -36,7 +36,7 @@ One markdown file per card in [cards/](cards/), named
 `<source>/<uid>-<slug>.md`. The folder is **filing only**: `unit:` is the one
 place a card's source is recorded, and every loader `rglob`s, so a card in the
 wrong folder still loads and still syncs.
-Frontmatter: `uid` (6 hex), `type` (`identity` only for now), `status`
+Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
 `unit`, `tags`, `verify`, and optionally `frequency` and `derivation`.
 
@@ -47,13 +47,33 @@ multi-line display cut into pieces needs. `anki-forge context <unit>` lists
 every unit on the page in reading order, so the pieces are visible and
 nameable; `new` takes `--unit` repeatedly and marks each one carded.
 
+`requires` is a list of uids that must be introduced *before* this card, and
+it decides the order `sync` adds new cards in. Only for a real dependency:
+this card's proof or notation rests on that one. It is outside
+`content_hash`, because approving a card is not approving its position in
+the queue. Within the graph, order is `frequency`, then `derivation`, then
+the order the source prints it in.
+
+**`identity` states a fact; `intuition` explains one.** An identity has a
+definite answer and `verify` can check it numerically. An intuition is what a
+marked passage in a prose source becomes: why a bound is tight, what a term is
+really measuring, which of two hypotheses is doing the work. It has no
+`## verify` (there is nothing numeric to check) and no `## conditions` (a
+hypothesis belongs to a statement; anything that needs one is an identity
+wearing the wrong type). Both reach Anki as a `type::` tag, and a source may
+send each to its own subdeck under `[decks]`, because five restatements a day
+is comfortable and five pieces of intuition a day is not.
+
 `frequency` (`core | common | rare`) is how often the identity turns up.
 `derivation` (`definitional | short | long`) is what reconstructing it would
 take — `definitional` for facts that are true by definition and have nothing
 to derive. Both optional, both coarse on purpose, both reach Anki as
 `freq::` / `derive::` tags. An unrecognised value is a `check` error, because
-a typo would silently become its own tag and split the deck. Sections: `## front` and `## back` required;
-`conditions`, `proof`, `prose`, `verify`, `notes` optional.
+a typo would silently become its own tag and split the deck. Sections: `## front` and `## back` required; `conditions`, `prose`, `uses`,
+`proof`, `verify`, `notes` optional. They read in that order on the card:
+`prose` is one sentence and the only unlabelled block, so it sits directly
+under the answer and everything after it is labelled. `content_hash` sorts
+sections by name, so the reading order costs no approvals to change.
 
 Math is written `$...$` / `$$...$$` and converted to MathJax delimiters on the
 way into Anki. `## notes` and `## verify` never reach Anki.
@@ -67,21 +87,32 @@ would make this contract wrong the moment a second source arrives, and a card
 writer told to read it as authoritative would be applying conventions that do
 not hold for the page in front of them.
 
-So they live in two places, by kind:
+So they live with the source, in **`sources/<name>/source.md`**: TOML between
+`+++` fences, then prose. One file, two halves.
 
-- **`anki-forge.toml`** for what a key can express, and **under
-  `[sources.<name>]` when it is a fact about one book**: `layout` and `deck`
-  both live there, with `[cards] layout` and `[anki] deck` as the repo-wide
-  fallback. `[cards] language` and the note type are genuinely repo-wide and
-  stay put. A `layout` outside `denominator | numerator` is refused at load,
-  because an unrecognised one would read as "not denominator" and silently
-  change what every card from that source means.
-- **`sources/<name>/conventions.md`** for what it cannot: the ambient
-  mathematical setting, what is assumed constant, how a contested convention
-  was settled. `anki-forge context <unit>` prints it, so whoever writes or
-  reviews a card sees the right one without knowing it exists. If a source has
-  no such file, `context` says so — an absent convention is a card writer
-  guessing.
+- **Above the fence** is what a key can express, and it is what the tool acts
+  on: `title`, `citation`, `pdf`/`tex`, `deck`, `layout`, `order`, `tags`, and
+  a source's own reading of its Zotero marks. A `layout` outside
+  `denominator | numerator` is refused at load, because an unrecognised one
+  would read as "not denominator" and silently change what every card from
+  that source means.
+- **Below it** is what a key cannot: the ambient mathematical
+  setting, what is assumed constant, how a contested convention was settled.
+  `anki-forge context <unit>` prints it, so whoever writes or reviews a card
+  sees the right one without knowing it exists. If a source has no such file,
+  `context` says so — an absent convention is a card writer guessing.
+
+TOML rather than YAML, because every key up there overrides one in
+`anki-forge.toml` and a block copied between the two has to work unchanged.
+It is also the stricter language: in YAML a tag or colour written `no`, `on` or
+`y` is silently a boolean. One file rather than two, because a convention kept
+away from the keys it qualifies is the one nobody opens. A folder with no
+`source.md` is not a source: discovery does not guess.
+
+`anki-forge.toml` keeps what is genuinely repo-wide — `[cards] language`, the
+note type, `[anki] deck` and `[cards] layout` as fallbacks, `[zotero]` defaults
+— and a `[sources.<name>]` block there still works for a repo that has not
+moved yet.
 
 What is true of the *tool* stays here:
 
@@ -98,10 +129,11 @@ What is true of the *tool* stays here:
 
 ```
 uv run anki-forge extract [source]   # source -> units; never reads the maths
+uv run anki-forge zotero --tag anki  # what you marked up in Zotero -> units
 uv run anki-forge classify           # *propose* skips; applies nothing
 uv run anki-forge audit              # is the index trustworthy? 1..N, no gaps
 uv run anki-forge crops --section 2.4 --untranscribed --out DIR --json
-uv run anki-forge context <unit-id>  # the page an equation was printed on
+uv run anki-forge context <unit-id>  # the page it was printed on (--pages N for more)
 uv run anki-forge source-text <src>  # the book text, for card-writing context
 uv run anki-forge check              # lint (always; blocks sync)
 uv run anki-forge units --state queued --json
@@ -129,14 +161,16 @@ interface to read from, not the human output.
 - The app loads KaTeX from a CDN by default. For offline use, copy
   `node_modules/katex/dist` somewhere served and point `[app] katex_base` at it.
 
-## Deprecated
+## Frozen
 
-`src/anki_forge/extract/pdf.py` is **marked for deletion** — see
-[ROADMAP.md](ROADMAP.md) §4. It works and it is verified, but it is a
-heuristic specialised to this one book. Do not extend it; do not fix its
-heuristics. Its replacement is a model reading pages, checked by the same
-contiguity oracle. `extract/render.py` (crops) is deliberately separate and
-is *not* deprecated.
+`src/anki_forge/extract/pdf.py` is **frozen**, see [ROADMAP.md](ROADMAP.md)
+§13. It works and it is verified, but it is a heuristic specialised to this one
+book, so it is one selectable backend rather than the default. The default is a
+model reading pages, checked by the same contiguity oracle.
+
+Do not extend it; do not fix its heuristics. When a shared type changes under
+it, give it a shim rather than editing it. `extract/render.py` (crops) is
+deliberately separate and is not frozen.
 
 ## Working here
 

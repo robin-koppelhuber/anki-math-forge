@@ -105,6 +105,21 @@ class AnkiConnect:
     def model_styling(self, model: str) -> str:
         return str(self.invoke("modelStyling", modelName=model).get("css", ""))
 
+    def export_package(self, deck: str, path: str, include_sched: bool = False) -> bool:
+        """Write a deck to an `.apkg`. Anki does the writing, so the path is
+        Anki's to resolve and must be absolute."""
+        return bool(
+            self.invoke("exportPackage", deck=deck, path=path, includeSched=include_sched)
+        )
+
+    def model_template_rename(self, model: str, old: str, new: str) -> None:
+        self.invoke(
+            "modelTemplateRename",
+            modelName=model,
+            oldTemplateName=old,
+            newTemplateName=new,
+        )
+
     def model_field_add(self, model: str, field: str, index: int) -> None:
         """Add a field to a note type that already has notes.
 

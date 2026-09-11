@@ -56,11 +56,12 @@
       <dd>where it is in the book. The equation number is the book's own, and
           it is what makes this unit's id stable across re-extraction.</dd>
       <dt>the picture</dt>
-      <dd>rendered from the PDF on demand, showing 40pt of surrounding page
-          with the unit's own box drawn on it. <b>The box is what this unit
-          claims to be.</b> If the box holds two numbered equations, or the
-          equation continues outside it, segmentation got it wrong — annotate
-          rather than card it.</dd>
+      <dd>rendered from the PDF on demand, showing a margin of surrounding page
+          with the unit's own box drawn on it — how much is
+          <code>crop_context</code>, and a source may set its own. <b>The box is
+          what this unit claims to be.</b> If the box holds two numbered
+          equations, or the equation continues outside it, segmentation got it
+          wrong — annotate rather than card it. <b>p</b> shows the whole page.</dd>
       <dt>the maths beside it</dt>
       <dd>the transcription, rendered. A <b>hint, not content</b>: where it
           disagrees with the picture, the picture wins. <span class="badge ocr">transcribed</span>
@@ -96,6 +97,20 @@
       <dd>Leave an instruction for Claude, read when the card is written —
           "two cards, one per layout convention", "the transcription is wrong,
           read the crop". Also shows up in <code>anki-forge todo</code>.</dd>
+      <dt><b>c</b> context size</dt>
+      <dd>How much of the document whoever writes this card is handed: this
+          page only, one page either side, three, ten, or all of it. Cycles
+          through those rather than asking for a number, because the decision
+          is "a bit more" or "all of it" and not a measurement. This is the
+          moment you can tell — the theorem is here and its hypotheses are two
+          pages back, and no per-source default knows that. The badge appears
+          only once a unit asks for something other than the default.</dd>
+      <dt><b>p</b> whole page</dt>
+      <dd>Swap the crop for the entire page, with the unit's own box drawn on
+          it. The two ways segmentation fails are only visible against the
+          surroundings: a split equation shows its missing lines outside the
+          box, and two merged into one show two numbers inside it. Press again
+          to go back.</dd>
       <dt><b>z</b> undo</dt>
       <dd>Undo the last decision, however it was made &mdash; a state change,
           an accepted suggestion, a dismissed one. It restores what was

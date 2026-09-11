@@ -6,7 +6,8 @@
 {% block main %}
 <div id="deck" data-source="{{ source }}" data-mtime="{{ mtime }}">
   {% for unit in units %}
-  <article class="unit item" data-id="{{ unit.id }}" data-state="{{ unit.state }}" hidden>
+  <article class="unit item" data-id="{{ unit.id }}" data-state="{{ unit.state }}"
+           data-context-pages="{{ unit.context_pages }}" hidden>
     <div class="unit-head">
       <span class="locator">{{ unit.locator or unit.id }}</span>
       <span class="badge state-{{ unit.state }}">{{ unit.state }}</span>
@@ -15,6 +16,12 @@
       {% elif unit.transcription == 'failed' %}<span class="badge bad">transcription failed</span>
       {% else %}<span class="badge bad">not transcribed</span>{% endif %}
       {% if unit.uids %}<span class="badge carded">{{ unit.uids|join(', ') }}</span>{% endif %}
+      {# How much of the document a card writer gets. Shown only when this
+         unit asked for something other than the default, so the common case
+         stays quiet. `c` cycles it. #}
+      <span class="badge context{{ ' own' if unit.context_own }}" data-context-badge
+            title="pages either side handed to whoever writes the card (c)"
+            {{ 'hidden' if not unit.context_own }}>{{ unit.context_pages }}p</span>
     </div>
 
     <div class="side-by-side">
@@ -89,6 +96,8 @@
 <span class="key-group"><b>a</b>/<b>d</b> accept/dismiss</span>
 <span class="key-group sep"><b>z</b> undo</span>
 <span class="key-group"><b>n</b> annotate</span>
+<span class="key-group"><b>c</b> context size</span>
+<span class="key-group"><b>p</b> whole page</span>
 <span class="key-group"><b>S</b> skip + reason</span>
 <span class="key-group"><b>u</b> back to new</span>
 <span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>

@@ -93,6 +93,23 @@ def create_app(config: Config) -> FastAPI:
     def index() -> RedirectResponse:
         return RedirectResponse("/review")
 
+    @app.get("/config", response_class=HTMLResponse)
+    def config_view(request: Request, source: str = "") -> Any:
+        """Every resolved setting, and where it came from. Read-only."""
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for row in effective_config(config):
+            grouped.setdefault(str(row["where"]), []).append(row)
+        return templates.TemplateResponse(
+            request,
+            "config.html",
+            {
+                "config": config,
+                "source": resolve_source(config, source),
+                "sources": source_options(config),
+                "grouped": grouped,
+            },
+        )
+
     @app.get("/units", response_class=HTMLResponse)
     def units_view(
         request: Request,
@@ -103,6 +120,7 @@ def create_app(config: Config) -> FastAPI:
         readable: bool = False,  # the old name for the same filter; kept for links
         suggested: bool = False,
         annotated: str = "",
+        mark: str = "",
         counts_scope: str = "",
     ) -> Any:
         ledgers = _ledgers(config)
@@ -116,7 +134,7 @@ def create_app(config: Config) -> FastAPI:
                     "view": "units",
                     "config": config,
                     "source": resolve_source(config, source),
-                    "sources": source_names(config),
+                    "sources": source_options(config),
                     "pipeline": pipeline_counts(config),
                 },
             )
@@ -135,10 +153,14 @@ def create_app(config: Config) -> FastAPI:
             unsectioned = [u for u in unsectioned if has_annotation(u.notes, annotated)]
         if transcribed or readable:
             unsectioned = [u for u in unsectioned if u.transcription == "ok"]
+        if mark:
+            unsectioned = [u for u in unsectioned if unit_mark(u) == mark]
         if suggested:
             units = [u for u in units if u.suggestion is not None]
         if annotated:
             units = [u for u in units if has_annotation(u.notes, annotated)]
+        if mark:
+            units = [u for u in units if unit_mark(u) == mark]
         transcribed = transcribed or readable
         if transcribed:
             # Triage is much faster when you can read the maths rather than
@@ -151,6 +173,7 @@ def create_app(config: Config) -> FastAPI:
             "annotated": annotated,
             "suggested": suggested,
             "transcribed": transcribed,
+            "mark": mark,
             "counts_scope": counts_scope,
         }
         return templates.TemplateResponse(
@@ -159,7 +182,7 @@ def create_app(config: Config) -> FastAPI:
             {
                 "config": config,
                 "source": name,
-                "sources": source_names(config),
+                "sources": source_options(config),
                 "units": [_unit_payload(u, config) for u in units],
                 "counts": ledger.counts(),
                 "sections": ledger.sections(),
@@ -187,6 +210,11 @@ def create_app(config: Config) -> FastAPI:
                 "suggested": suggested,
                 "counts_scope": counts_scope,
                 "filters": filters,
+                "commands": commands_for("units", filters, ledger.counts()),
+                "mark": mark,
+                "mark_rows": mark_rows(
+                    ledger.select(state=state or "all", section=section or None), config, name
+                ),
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
                     if counts_scope == "filtered"
@@ -231,7 +259,7 @@ def create_app(config: Config) -> FastAPI:
                     "view": "review",
                     "config": config,
                     "source": name,
-                    "sources": source_names(config),
+                    "sources": source_options(config),
                     "pipeline": pipeline_counts(config),
                 },
             )
@@ -303,10 +331,11 @@ def create_app(config: Config) -> FastAPI:
                 "total": len(cards),
                 "status": status,
                 "source": name,
-                "sources": source_names(config),
+                "sources": source_options(config),
                 "annotated": annotated,
                 "section": section,
                 "filters": filters,
+                "commands": commands_for("review", filters, counts),
                 "section_tree": section_rows(
                     in_source,
                     {c.uid for c in unsectioned},
@@ -397,6 +426,26 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(400, "empty annotation")
         return _mutate_ledger(config, source, body, lambda led: led.annotate(unit_id, text))
 
+    @app.post("/api/units/{source}/{unit_id:path}/context")
+    def set_unit_context(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+        """How much of the document a card writer gets for this unit.
+
+        Set here rather than only in the config, because triage is the moment
+        you can see it: the theorem is on this page and its hypotheses are two
+        pages back, and no per-source default knows that.
+        """
+        raw = body.get("pages")
+        pages = None if raw is None or int(raw) < 0 else int(raw)
+
+        def apply(led: Ledger) -> Unit:
+            unit = led.get(unit_id)
+            if unit is None:
+                raise HTTPException(404, f"no unit {unit_id!r}")
+            unit.context_pages = pages
+            return unit
+
+        return _mutate_ledger(config, source, body, apply)
+
     # -- card actions -----------------------------------------------------
 
     @app.post("/api/cards/{uid}/approve")
@@ -470,7 +519,7 @@ def create_app(config: Config) -> FastAPI:
         if geometry is None:
             raise HTTPException(404, f"unit {unit_id!r} has no page geometry")
 
-        document = config.source(source).pdf
+        document = config.document_for(source, unit.locator.document)
         if document is None or not document.exists():
             raise HTTPException(
                 409,
@@ -719,6 +768,45 @@ def has_annotation(notes: list[str], audience: str) -> bool:
     return any(model.annotation_audience(n) == audience for n in notes)
 
 
+def unit_mark(unit: Unit) -> str:
+    """`kind/colour` of the mark this unit came from, or empty.
+
+    The unit's *own* mark, not the ones shown beside it: those belong to their
+    own units and matching on them would return every neighbour too.
+    """
+    if not unit.marks:
+        return ""
+    own = unit.marks[0]
+    return f"{own.kind}/{own.colour}" if own.colour else own.kind
+
+
+def mark_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
+    """Every kind of mark in this source, with what you said it means.
+
+    A prose source is triaged by what you meant, not by what state a unit is
+    in: "the claims first, the terms never". Nothing appears for a source with
+    no marks, so the Cookbook's rail is unchanged.
+    """
+    scheme = config.zotero_for(source)
+    tally: dict[str, int] = {}
+    for unit in units:
+        key = unit_mark(unit)
+        if key:
+            tally[key] = tally.get(key, 0) + 1
+    rows: list[dict[str, Any]] = []
+    for key, count in tally.items():
+        kind, _, colour = key.partition("/")
+        rows.append({
+            "key": key,
+            "kind": kind,
+            "colour": colour,
+            "meaning": scheme.means(kind, colour),
+            "count": count,
+        })
+    rows.sort(key=lambda row: (-int(row["count"]), str(row["key"])))
+    return rows
+
+
 def card_in_source(card: Card, source: str) -> bool:
     """Does this card belong to the source the header is scoped to?
 
@@ -743,6 +831,146 @@ def source_names(config: Config) -> list[str]:
     return names
 
 
+def effective_config(config: Config) -> list[dict[str, Any]]:
+    """Every resolved setting, and where the value came from.
+
+    Read-only on purpose. Editing would not break invariant 2 -- it would edit
+    the file -- but the config is read at startup, so a change here would take
+    effect at some unrelated later moment. And half these keys change the
+    meaning of *existing* content: `layout` decides what every derivative on
+    every card from that source means. A box that silently changes one, with a
+    restart between cause and effect, is a trap dressed as convenience.
+
+    What was actually missing was seeing. There is no way today to tell which
+    layout a card resolved to, or whether that came from the source or the
+    default, without reading Python.
+    """
+    rows: list[dict[str, Any]] = []
+
+    def add(where: str, key: str, value: Any, source: str) -> None:
+        rows.append({"where": where, "key": key, "value": value, "from": source})
+
+    add("repo", "layout", config.layout, "anki-forge.toml")
+    add("repo", "language", config.language, "anki-forge.toml")
+    add("repo", "front_char_cap", config.front_char_cap, "anki-forge.toml")
+    add("repo", "crop_context", config.crop_context_for(""), "anki-forge.toml")
+    add("repo", "context_pages", config.context_pages, "anki-forge.toml")
+    add("anki", "deck", config.deck, "anki-forge.toml")
+    add("anki", "note type", config.note_type, "anki-forge.toml")
+    add("anki", "tag prefix", config.tag_prefix, "anki-forge.toml")
+    add("anki", "url", config.anki_url, "ANKI_CONNECT_URL or anki-forge.toml")
+    add("zotero", "data dir", str(config.zotero.data_dir), "anki-forge.toml")
+    add("zotero", "units from", ", ".join(sorted(config.zotero.units_from)), "anki-forge.toml")
+
+    for name, spec in config.sources.items():
+        where = f"source: {name}"
+        origin = f"sources/{name}/source.md"
+        inherited = "inherited"
+        add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
+        add(where, "layout", config.layout_for(name), origin if spec.layout else inherited)
+        add(where, "order", spec.order, origin)
+        add(
+            where,
+            "crop_context",
+            config.crop_context_for(name),
+            origin if spec.crop_context else inherited,
+        )
+        add(
+            where,
+            "context_pages",
+            config.context_pages_for(name),
+            origin if spec.context_pages >= 0 else inherited,
+        )
+        if spec.tags:
+            add(where, "tags", ", ".join(spec.tags), origin)
+        for card_type, deck in sorted(spec.decks.items()):
+            add(where, f"deck [{card_type}]", deck, origin)
+        scheme = config.zotero_for(name)
+        if scheme.units_from:
+            add(
+                where,
+                "units from",
+                ", ".join(sorted(scheme.units_from)),
+                origin if spec.units_from else inherited,
+            )
+    return rows
+
+
+def commands_for(
+    view: str, filters: dict[str, Any], counts: dict[str, int]
+) -> list[dict[str, str]]:
+    """What to run next on exactly what is on screen.
+
+    The honest version of "trigger Claude from the website": you filter here,
+    copy, and paste it where you can watch it. Nothing is launched, so nothing
+    writes cards with nobody looking.
+
+    Quoted with double quotes throughout, which both `sh` and PowerShell read
+    the same way. Single quotes, which the CLI's own examples use, are a
+    literal in PowerShell and would silently pass the quote marks along.
+    """
+    source = str(filters.get("source", ""))
+    section = str(filters.get("section", ""))
+    scope = f' --section "{section}"' if section else ""
+    out: list[dict[str, str]] = []
+
+    if view == "units":
+        if counts.get("new"):
+            out.append({
+                "label": "read the crops here",
+                "run": f"/transcribe {section}" if section else "/transcribe --all",
+                "kind": "claude",
+            })
+        if counts.get("queued"):
+            out.append({
+                "label": "write stubs for what is queued",
+                "run": f"/extract-cards {section}".strip(),
+                "kind": "claude",
+            })
+        out.append({
+            "label": "this list, as JSON",
+            "run": (
+                f'uv run anki-forge units --source "{source}"'
+                f' --state {filters.get("state") or "all"}{scope} --json'
+            ),
+            "kind": "shell",
+        })
+    else:
+        if counts.get("draft"):
+            out.append({"label": "fill in what is thin", "run": "/augment", "kind": "claude"})
+        out.append({"label": "open requests", "run": "/triage claude", "kind": "claude"})
+        out.append({
+            "label": "what would reach Anki",
+            "run": "uv run anki-forge sync --dry-run",
+            "kind": "shell",
+        })
+    return out
+
+
+def source_options(config: Config) -> list[dict[str, Any]]:
+    """The picker's entries, grouped by tag.
+
+    A repo had one source; a shelf of papers has fifty, and a flat list of
+    citekeys is unusable at that size. Grouping is by the source's first tag,
+    which is what `tags` is for, and the visible label stays the source *name*
+    rather than the title: a native select's typeahead matches what is
+    displayed, and a citekey starts with the author you are looking for.
+    Untagged sources come last, under no heading.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for name in source_names(config):
+        spec = config.sources.get(name)
+        tag = spec.tags[0] if spec and spec.tags else ""
+        grouped.setdefault(tag, []).append(
+            {"name": name, "title": spec.title if spec else name}
+        )
+    ordered = [(tag, rows) for tag, rows in grouped.items() if tag]
+    ordered.sort(key=lambda pair: pair[0])
+    if "" in grouped:
+        ordered.append(("", grouped[""]))
+    return [{"tag": tag, "sources": rows} for tag, rows in ordered]
+
+
 def resolve_source(config: Config, source: str) -> str:
     """The source actually in force. An unknown or absent name falls back
     to the first, so a stale link lands somewhere real rather than on an
@@ -762,12 +990,13 @@ def _mtime(path: Path) -> str:
     return str(path.stat().st_mtime_ns) if path.exists() else "0"
 
 
-def pdf_context() -> float:
-    """How much surrounding page the triage view asks for."""
+def pdf_context(config: Config | None = None, source: str = "") -> float:
+    """Points of page shown around a crop at triage."""
     from ..extract.render import TRIAGE_CONTEXT
 
-    return TRIAGE_CONTEXT
-
+    if config is None:
+        return TRIAGE_CONTEXT
+    return config.crop_context_for(source)
 
 def crop_url(unit: Unit, *, context: float = 0.0) -> str:
     """Where the app fetches this unit's crop, rendered on request.
@@ -783,7 +1012,7 @@ def crop_url(unit: Unit, *, context: float = 0.0) -> str:
 
 
 def _unit_payload(unit: Unit, config: Config) -> dict[str, Any]:
-    image = crop_url(unit, context=pdf_context())
+    image = crop_url(unit, context=pdf_context(config, unit.source))
     return {
         "id": unit.id,
         "state": unit.state,
@@ -793,7 +1022,7 @@ def _unit_payload(unit: Unit, config: Config) -> dict[str, Any]:
         "transcription": unit.transcription,
         "authoritative": unit.authoritative,
         "context": unit.context,
-        "locator": unit.locator.label(),
+        "locator": unit.locator.describe(),
         "section": unit.locator.section,
         # The view distinguishes "nothing proposed a skip" from "nothing was
         # allowed to": a numbered equation is off limits to the classifier.
@@ -809,6 +1038,10 @@ def _unit_payload(unit: Unit, config: Config) -> dict[str, Any]:
             _note_text(n) for n in unit.notes if model.annotation_audience(n) != "me"
         ],
         "suggestion": vars(unit.suggestion) if unit.suggestion else None,
+        # How much of the document a card writer will be handed, and whether
+        # this unit asked for it or inherited it.
+        "context_pages": config.context_pages_for(unit.source, unit.context_pages),
+        "context_own": unit.context_pages is not None,
     }
 
 

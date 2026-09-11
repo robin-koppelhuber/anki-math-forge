@@ -1,0 +1,242 @@
+"""Zotero annotations into units.
+
+**What each mark means is yours to declare, and the tool has no opinion.**
+`[zotero] units_from` names the colours and kinds worth a card of their own;
+`[zotero.meanings]` says what any of them mean, and a source can read its own
+scheme differently. Nothing here knows what a colour stands for, and nothing
+should: a scheme is a fact about how one person read one document. What is
+measurable is only that a scheme exists, and that it varies. Across the first
+two real documents the same colour ran a median of twenty words in one and two
+in another, which is an argument for declaring it rather than guessing it.
+
+**A unit is named after the mark it came from.** Zotero's annotation key is
+permanent: assigned once, never reused, never derived from a position. So
+marking up more of a document renumbers nothing.
+
+**Context is pages, not a curated set of marks.** An earlier version worked out
+which marks were nearest in reading order and attached those. That was the tool
+deciding what is relevant, which belongs to whoever reads it. A unit carries
+the marks on the pages around it; a mark appearing beside two units is not a
+problem, because context is a view and not content.
+
+Units arrive `queued` rather than `new`: reading the document and marking it up
+*was* the triage step, performed earlier and by someone paying attention.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from .. import zotero as api
+from ..config import ZoteroConfig
+from ..ledger import Locator, Mark, Unit
+
+# How many pages either side of a unit come with it. One catches an idea that
+# runs over a page break, which is the case a same-page window cuts through.
+# Passes that write cards ask for more; triage wants to stay readable.
+NEIGHBOURHOOD = 1
+
+
+@dataclass
+class ImportReport:
+    item: str = ""
+    documents: int = 0
+    annotations: int = 0
+    units: list[Unit] = field(default_factory=list)
+    unmapped: dict[str, int] = field(default_factory=dict)
+    skipped: list[str] = field(default_factory=list)
+    text_chars: int = 0
+
+    @property
+    def ok(self) -> bool:
+        return not self.skipped
+
+
+def page_heights(pdf: Path) -> dict[int, float]:
+    """Every page's height, which is what turns Zotero's coordinates into ours.
+
+    Zotero measures from the bottom of the page and this project measures from
+    the top, so the flip needs a height and the height has to come from the
+    document. Guessing Letter or A4 would be right most of the time and
+    silently wrong on the rest, which is the worst available failure.
+    """
+    from .render import _fitz
+
+    doc = _fitz().open(str(pdf))
+    try:
+        return {n + 1: float(doc.load_page(n).rect.height) for n in range(doc.page_count)}
+    finally:
+        doc.close()
+
+
+def unit_id(source: str, key: str) -> str:
+    """`<source>:<annotation key>`.
+
+    Zotero's key, not a position and not a page: the one identifier that
+    survives a mark being inserted, deleted or moved. The document is on the
+    locator rather than in the name, because a unit that gets re-filed should
+    not have to be renamed.
+    """
+    return f"{source}:{key}"
+
+
+def to_mark(annotation: api.Annotation, height: float | None) -> Mark:
+    return Mark(
+        key=annotation.key,
+        kind=annotation.kind,
+        colour=annotation.colour_name,
+        text=annotation.text,
+        comment=annotation.comment,
+        bbox=annotation.bbox(height) if height is not None else None,
+        order=annotation.sort_index,
+    )
+
+
+def units_for(
+    source: str,
+    attachment: api.Attachment,
+    annotations: list[api.Annotation],
+    heights: dict[int, float],
+    zotero: ZoteroConfig,
+    *,
+    section: str = "",
+    neighbourhood: int = NEIGHBOURHOOD,
+) -> list[Unit]:
+    """One unit per mark you declared worth a card, with its pages around it."""
+    ordered = sorted(
+        (a for a in annotations if a.page),
+        key=lambda a: (a.sort_index, a.key),
+    )
+    marks = [to_mark(a, heights.get(a.page or 0)) for a in ordered]
+    pages = [a.page or 0 for a in ordered]
+
+    units = []
+    for index, annotation in enumerate(ordered):
+        if not zotero.makes_a_unit(annotation.kind, annotation.colour_name):
+            continue
+        mine, here = marks[index], pages[index]
+        near = [
+            mark
+            for page, mark in zip(pages, marks, strict=True)
+            if abs(page - here) <= neighbourhood and mark.key != mine.key
+        ]
+        units.append(
+            Unit(
+                id=unit_id(source, mine.key),
+                locator=Locator(
+                    section=section or attachment.title,
+                    kind=annotation.kind,
+                    document=attachment.key,
+                    page=here,
+                    # The mark's own box. What is around it is shown by
+                    # rendering with context, not by widening the unit to
+                    # cover things the card is not about.
+                    bbox=mine.bbox,
+                ),
+                # Its own mark first, then everything marked nearby, in reading
+                # order.
+                marks=[mine, *near],
+                state="queued",
+            )
+        )
+    return units
+
+
+def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ()) -> bool:
+    """Give a freshly imported source its own file, if it has none.
+
+    Without one the units exist and the source does not: `config.source()` has
+    never heard of it, so nothing can resolve its deck or its conventions. The
+    import is the only moment that knows the title and the citation, so it is
+    the right moment to write them down.
+
+    Never overwrites. Everything in here is a starting point you will edit, and
+    a re-import must not undo that.
+    """
+    if path.exists():
+        return False
+    quoted = [f'"{t}"' for t in ("paper", *tags)]
+    lines = [
+        "+++",
+        f'title = "{item.title}"',
+        f'citation = "{item.citation}"',
+        f"tags = [{', '.join(quoted)}]",
+        "",
+        "# Which Zotero item this came from. The units carry attachment keys,",
+        "# and this is what they hang off.",
+        f'zotero = "{item.key}"',
+        "+++",
+        "",
+        f"# {item.title}",
+        "",
+        "(No conventions recorded yet. `anki-forge context` says so, which is",
+        "the point: until something is written here, whoever writes a card from",
+        "this source is guessing at what is ambient.)",
+        "",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return True
+
+
+def build(
+    client: api.Zotero,
+    item: api.Item,
+    *,
+    source: str,
+    zotero: ZoteroConfig,
+    text_for: Callable[[str, Path], int] | None = None,
+) -> ImportReport:
+    """Every unit-making mark on every PDF of one Zotero item.
+
+    `text_for` caches a document's text layer and returns its size. Passed in
+    rather than done here, so this stays a function of Zotero and a config and
+    nothing else has to exist for a test to call it.
+    """
+    report = ImportReport(item=item.key)
+    if not zotero.units_from:
+        report.skipped.append(
+            "`[zotero] units_from` is empty, so nothing you marked would become a "
+            "unit. Name the colours or kinds that mean 'this is worth a card'."
+        )
+        return report
+
+    attachments = client.attachments(item.key)
+    if not attachments:
+        report.skipped.append(f"{item.citation}: no PDF attachments")
+        return report
+
+    annotations = client.annotations({a.key for a in attachments})
+    report.annotations = len(annotations)
+    for annotation in annotations:
+        if not zotero.means(annotation.kind, annotation.colour_name):
+            name = f"{annotation.kind}/{annotation.colour_name}"
+            report.unmapped[name] = report.unmapped.get(name, 0) + 1
+
+    by_document: dict[str, list[api.Annotation]] = {}
+    for annotation in annotations:
+        by_document.setdefault(annotation.document, []).append(annotation)
+
+    for attachment in attachments:
+        mine = by_document.get(attachment.key, [])
+        if not mine:
+            continue  # nothing marked here; not a unit, and not a complaint
+        pdf = client.storage_path(attachment, zotero.data_dir)
+        if not pdf.exists():
+            report.skipped.append(
+                f"{attachment.title}: {pdf} is missing, so its marks have no geometry"
+            )
+            continue
+        report.documents += 1
+        # The whole document's text, page by page, next to the ledger. A card
+        # is easier to write and quicker to review when whoever wrote it could
+        # see the paragraph that states the conditions, and that paragraph is
+        # as often on the page before as on this one.
+        if text_for is not None:
+            report.text_chars += text_for(attachment.key, pdf)
+        report.units.extend(
+            units_for(source, attachment, mine, page_heights(pdf), zotero, section=attachment.title)
+        )
+    return report

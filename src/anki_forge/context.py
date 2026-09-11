@@ -12,7 +12,7 @@ It belongs to whoever is writing the card, not to a keyword list here.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .config import Config
@@ -28,6 +28,7 @@ class UnitContext:
     conventions: str
     page_text: str
     page_units: list[dict[str, Any]]
+    marks: list[dict[str, Any]] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -37,6 +38,7 @@ class UnitContext:
             "conventions": self.conventions,
             "page_text": self.page_text,
             "page_units": self.page_units,
+            "marks": self.marks,
         }
 
     def format(self) -> str:
@@ -47,10 +49,21 @@ class UnitContext:
             "\n## the setting this source is read in\n"
             + (
                 self.conventions
-                or "(none recorded -- write sources/<name>/conventions.md, or"
-                " whoever writes a card here is guessing at what is ambient)"
+                or "(none recorded -- write the prose half of sources/<name>/source.md,"
+                " or whoever writes a card here is guessing at what is ambient)"
             )
         )
+        if self.marks:
+            out.append(
+                "\n## what the reader marked here\n"
+                "   The first is why this unit exists; the rest are what was"
+                " marked on the pages around it. What a colour means is"
+                " declared in the config, not inferred here."
+            )
+            for entry in self.marks:
+                flag = "*" if entry["own"] else " "
+                label = entry["meaning"] or f"{entry['kind']}/{entry['colour']}"
+                out.append(f" {flag} {label:<34} {entry['text'][:76]}")
         out.append(f"\n## the page it was printed on\n{self.page_text or '(no text layer)'}")
         if self.page_units:
             out.append(
@@ -66,7 +79,9 @@ class UnitContext:
         return "\n".join(out)
 
 
-def assemble(config: Config, unit_id: str) -> UnitContext | None:
+def assemble(
+    config: Config, unit_id: str, *, spread: int | None = None
+) -> UnitContext | None:
     source = unit_id.split(":", 1)[0]
     ledger = open_ledgers(config.sources_dir).get(source)
     if ledger is None:
@@ -75,26 +90,57 @@ def assemble(config: Config, unit_id: str) -> UnitContext | None:
     if unit is None:
         return None
 
+    if spread is None:
+        spread = config.context_pages_for(source, unit.context_pages)
+    scheme = config.zotero_for(source)
     text = ""
-    path = source_text_path(config, source)
+    path = source_text_path(config, source, unit.locator.document)
     if path.exists():
         text = path.read_text(encoding="utf-8")
 
     return UnitContext(
         unit=unit.id,
-        locator=unit.locator.label(),
+        locator=unit.locator.describe(),
         transcription=unit.tex_source or unit.tex_auto or "",
         conventions=_conventions(config, source),
-        page_text=_page(text, unit.locator.page),
+        page_text=_page(text, unit.locator.page, spread),
         page_units=_page_units(ledger, unit.locator.page),
+        marks=[
+            {
+                "kind": m.kind,
+                "colour": m.colour,
+                # Resolved now, not at import: editing your scheme should
+                # change what every unit reads as, not only the new ones.
+                "meaning": scheme.means(m.kind, m.colour),
+                "text": m.content,
+                "own": m.key in unit.id,
+            }
+            for m in unit.marks
+        ],
     )
 
 
-def _page(text: str, page: int | None) -> str:
+def _page(text: str, page: int | None, spread: int = 0) -> str:
+    """The page, and `spread` pages either side of it.
+
+    Triage wants one page: you are deciding whether a region is worth carding
+    and a wall of text makes that harder. A pass that writes the card wants as
+    much as is reasonable, because an identity's conditions are printed around
+    it and the sentence that states them is as likely to be on the previous
+    page as this one. There is no reason to be stingy there, so `--pages` opens
+    it up rather than making the caller ask page by page.
+    """
     if not text or page is None:
         return ""
-    match = re.search(rf"^## page {page}$(.*?)(?=^## page |\Z)", text, re.S | re.M)
-    return match.group(1).strip() if match else ""
+    wanted = [p for p in range(page - spread, page + spread + 1) if p > 0]
+    out = []
+    for number in wanted:
+        match = re.search(rf"^## page {number}$(.*?)(?=^## page |\Z)", text, re.S | re.M)
+        if not match:
+            continue
+        body = match.group(1).strip()
+        out.append(f"### page {number}\n{body}" if spread else body)
+    return "\n\n".join(out)
 
 
 def _page_units(ledger: Any, page: int | None) -> list[dict[str, Any]]:
@@ -125,9 +171,21 @@ def _conventions(config: Config, source: str) -> str:
     are facts about one book, and a second source brings its own. Keeping them
     in the project's own contract would make that contract wrong the moment
     the deck grows.
+
+    It is the prose half of `sources/<name>/source.md`, below the frontmatter
+    the tool reads. One file, because a convention that lives away from the
+    keys it qualifies is the one nobody opens. `conventions.md` is still read
+    where a repo has not moved it.
     """
-    path = config.sources_dir / source / "conventions.md"
-    if not path.exists():
-        return ""
-    text = re.sub(r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M)
-    return text.strip()
+    from .config import SOURCE_FILE, split_source_file
+
+    folder = config.sources_dir / source
+    path = folder / SOURCE_FILE
+    if path.exists():
+        body = split_source_file(path)[1]
+    else:
+        path = folder / "conventions.md"
+        if not path.exists():
+            return ""
+        body = path.read_text(encoding="utf-8")
+    return re.sub(r"^#.*$", "", body, count=1, flags=re.M).strip()

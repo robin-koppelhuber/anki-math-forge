@@ -1,0 +1,95 @@
+[
+ {
+  "key": "VFD2E2BR",
+  "version": 8258,
+  "itemType": "preprint",
+  "title": "On the sample complexity of semi-supervised multi-objective learning",
+  "abstractNote": "In multi-objective learning (MOL), several possibly competing prediction tasks must be solved jointly by a single model. Achieving good trade-offs may require a model class $\\mathcal{G}$ with larger capacity than what is necessary for solving the individual tasks. This, in turn, increases the statistical cost, as reflected in known MOL bounds that depend on the complexity of $\\mathcal{G}$. We show that this cost is unavoidable for some losses, even in an idealized semi-supervised setting, where the learner has access to the Bayes-optimal solutions for the individual tasks as well as the marginal distributions over the covariates. On the other hand, for objectives defined with Bregman losses, we prove that the complexity of $\\mathcal{G}$ may come into play only in terms of unlabeled data. Concretely, we establish sample complexity upper bounds, showing precisely when and how unlabeled data can significantly alleviate the need for labeled data. These rates are achieved by a simple, semi-supervised algorithm via pseudo-labeling.",
+  "date": "2025-08-26",
+  "libraryCatalog": "arXiv.org",
+  "url": "http://arxiv.org/abs/2508.17152",
+  "accessDate": "2025-11-12T16:49:59Z",
+  "extra": "arXiv:2508.17152 [stat]",
+  "DOI": "10.48550/arXiv.2508.17152",
+  "repository": "arXiv",
+  "citationKey": "wegelSampleComplexitySemisupervised2025",
+  "archiveID": "arXiv:2508.17152",
+  "creators": [
+   {
+    "firstName": "Tobias",
+    "lastName": "Wegel",
+    "creatorType": "author"
+   },
+   {
+    "firstName": "Geelon",
+    "lastName": "So",
+    "creatorType": "author"
+   },
+   {
+    "firstName": "Junhyung",
+    "lastName": "Park",
+    "creatorType": "author"
+   },
+   {
+    "firstName": "Fanny",
+    "lastName": "Yang",
+    "creatorType": "author"
+   }
+  ],
+  "tags": [
+   {
+    "tag": "Computer Science - Machine Learning",
+    "type": 1
+   },
+   {
+    "tag": "Statistics - Machine Learning",
+    "type": 1
+   },
+   {
+    "tag": "anki"
+   }
+  ],
+  "collections": [
+   "RHGJBBQA",
+   "R4WT8V5T"
+  ],
+  "relations": {},
+  "dateAdded": "2025-11-12T16:49:59Z",
+  "dateModified": "2026-09-11T16:33:17Z"
+ },
+ {
+  "key": "EVFSFY49",
+  "version": 8257,
+  "itemType": "book",
+  "title": "High-Dimensional Statistics: A Non-Asymptotic Viewpoint",
+  "date": "2019-02-21",
+  "shortTitle": "High-Dimensional Statistics",
+  "libraryCatalog": "DOI.org (Crossref)",
+  "url": "https://www.cambridge.org/core/product/identifier/9781108627771/type/book",
+  "accessDate": "2025-11-12T21:16:08Z",
+  "rights": "https://www.cambridge.org/core/terms",
+  "publisher": "Cambridge University Press",
+  "ISBN": "978-1-108-62777-1 978-1-108-49802-9",
+  "edition": "1",
+  "DOI": "10.1017/9781108627771",
+  "citationKey": "wainwrightHighDimensionalStatisticsNonAsymptotic2019",
+  "creators": [
+   {
+    "firstName": "Martin J.",
+    "lastName": "Wainwright",
+    "creatorType": "author"
+   }
+  ],
+  "tags": [
+   {
+    "tag": "anki"
+   }
+  ],
+  "collections": [
+   "N3CS6IY4"
+  ],
+  "relations": {},
+  "dateAdded": "2025-11-12T21:16:08Z",
+  "dateModified": "2026-09-11T16:33:00Z"
+ }
+]

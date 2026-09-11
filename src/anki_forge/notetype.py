@@ -122,8 +122,16 @@ CSS = """.card {
 """
 
 
+# The one card template's name, and Anki's own default for a fresh note type.
+# It used to be f"{model} card", which meant renaming the note type left the
+# template still carrying the old name: `template_drift` then compared a
+# template that did not exist, and pushing it would have added a *second*
+# template and a second card for every note.
+CARD_TEMPLATE = "Card 1"
+
+
 def card_template_name(model: str) -> str:
-    return f"{model} card"
+    return CARD_TEMPLATE
 
 
 def spec(model: str) -> dict[str, Any]:

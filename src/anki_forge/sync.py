@@ -78,6 +78,11 @@ def tags_for(card: Card, config: Config) -> list[str]:
         tags.add(f"freq::{card.frequency}")
     if card.derivation:
         tags.add(f"derive::{card.derivation}")
+    # Which kind of card this is, for the same reason: a deck holding both
+    # restatements and explanations is one you want to be able to drill
+    # separately without splitting it.
+    if card.type:
+        tags.add(f"type::{card.type}")
     if card.unit:
         parts = [p for p in card.unit.split(":") if p][:2]
         tags.add("src::" + "::".join(parts))
@@ -170,7 +175,7 @@ def live_uid_counts(client: AnkiConnect, config: Config) -> dict[str, int]:
 
 def decks_for(cards: list[Card], config: Config) -> list[str]:
     """Every deck this run will write to, in a stable order."""
-    return sorted({config.deck_for(card.source_name) for card in cards})
+    return sorted({config.deck_for(card.source_name, card.type) for card in cards})
 
 
 def source_positions(config: Config) -> dict[str, int]:
@@ -333,7 +338,13 @@ def template_drift(client: AnkiConnect, config: Config) -> list[str]:
     live_templates = client.model_templates(config.note_type)
     for template in spec["cardTemplates"]:
         name = template["Name"]
-        live = live_templates.get(name, {})
+        live = live_templates.get(name)
+        if live is None and len(live_templates) == 1:
+            # The note type was renamed and the template has not caught up yet
+            # (Anki does not rename one with the other). Compare content against
+            # the only template there is; `ensure_collection` fixes the name.
+            live = next(iter(live_templates.values()))
+        live = live or {}
         for side in ("Front", "Back"):
             if live.get(side, "") != template[side]:
                 drift.append(f"{name}/{side}")
@@ -355,6 +366,37 @@ def push_templates(
         )
         client.update_model_styling(config.note_type, spec["css"])
     return [CardOutcome("-", "setup", "pushed the card template and styling")]
+
+
+def rename_card_template(
+    client: AnkiConnect, config: Config, *, dry_run: bool
+) -> list[str]:
+    """Bring the one card template's name into line after a note type rename.
+
+    Anki renames a note type without renaming its templates, and cards
+    reference a template by ordinal rather than by name, so this is a label and
+    nothing else. It still has to be right: `updateModelTemplates` keys on the
+    name, so pushing under a name the note type does not have would add a
+    *second* template, and with it a second card for every note.
+    """
+    want = notetype.CARD_TEMPLATE
+    live = client.model_templates(config.note_type)
+    if want in live or not live:
+        return []
+    # This note type has exactly one template, so a single one under any name
+    # is ours, whatever it used to be called. Matching on the old name is not
+    # possible anyway: it was built from the note type's *previous* name, which
+    # is the one piece of information a rename destroys.
+    if len(live) != 1:
+        raise AnkiError(
+            f"note type {config.note_type!r} has card templates {sorted(live)}, "
+            f"expected one named {want!r}. Remove the one that is not ours; "
+            "`sync` will not guess which of them holds your cards."
+        )
+    stale = next(iter(live))
+    if not dry_run:
+        client.model_template_rename(config.note_type, stale, want)
+    return [f"card template {stale!r} renamed to {want!r}"]
 
 
 def ensure_collection(
@@ -391,6 +433,7 @@ def ensure_collection(
             client.create_model(notetype.spec(config.note_type))
         created.append(f"note type {config.note_type!r}")
     else:
+        created.extend(rename_card_template(client, config, dry_run=dry_run))
         existing = client.model_field_names(config.note_type)
         if existing != notetype.FIELDS:
             # A field we have and the collection does not is an *addition*, and
@@ -567,7 +610,7 @@ def _upsert(client: AnkiConnect, config: Config, card: Card, *, dry_run: bool) -
         return CardOutcome(card.uid, "error", f"{len(note_ids)} notes already carry this uid")
 
     if not note_ids:
-        deck = config.deck_for(card.source_name)
+        deck = config.deck_for(card.source_name, card.type)
         if not dry_run:
             client.add_note(deck, config.note_type, fields, tags)
         return CardOutcome(card.uid, "add", f"-> {deck}")

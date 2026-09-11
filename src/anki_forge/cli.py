@@ -26,7 +26,7 @@ from . import extract as extract_mod
 from . import latex, model, todo, verify
 from . import ledger as ledger_mod
 from .anki import AnkiConnect, AnkiError
-from .config import Config, ConfigError, load
+from .config import SOURCE_FILE, Config, ConfigError, load
 
 OK, FAILED, MISUSE = 0, 1, 2
 
@@ -78,6 +78,52 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_extract)
 
+    p = subs.add_parser(
+        "zotero",
+        help="what you marked up in Zotero, as units",
+    )
+    p.add_argument(
+        "item",
+        nargs="?",
+        default=None,
+        help="a cite key or a Zotero item key; omit to take everything tagged",
+    )
+    p.add_argument(
+        "--tag",
+        default=None,
+        help="import every item carrying this Zotero tag",
+    )
+    p.add_argument(
+        "--source",
+        default=None,
+        help="which source to file the units under (default: the cite key)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="say what would be imported and write nothing",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_zotero)
+
+    p = subs.add_parser(
+        "export",
+        help="a deck as an .apkg, for sharing or for keeping",
+    )
+    p.add_argument("source", nargs="?", default=None, help="whose deck to export")
+    p.add_argument("--deck", default=None, help="a deck name, instead of a source")
+    p.add_argument("--out", default=None, metavar="PATH", help="where to write it")
+    p.add_argument(
+        "--scheduling",
+        action="store_true",
+        help=(
+            "include your review history. Off by default: a deck you hand to "
+            "somebody else should arrive unstudied, and your intervals say "
+            "more about you than about the cards"
+        ),
+    )
+    p.set_defaults(run=cmd_export)
+
     p = subs.add_parser("serve", help="the companion app: units triage + card review")
     p.add_argument("--host", default=None)
     p.add_argument("--port", type=int, default=None)
@@ -88,6 +134,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="the page an equation was printed on, for writing its card",
     )
     p.add_argument("unit", help="unit id, shaped <source>:<section>:<equation>")
+    p.add_argument(
+        "--pages",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "pages either side to print. Defaults to whatever the unit, its "
+            "source or the repo asks for, so a unit marked during triage as "
+            "needing more gets it without the caller knowing"
+        ),
+    )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_context)
 
@@ -106,6 +163,18 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="TEX",
         help="record a transcription for --id; gated through KaTeX before it is stored",
+    )
+    p.add_argument(
+        "--context-pages",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "how many pages either side a card writer should get for --id. "
+            "Set it during triage, when you can see the hypotheses are two "
+            "pages back. A large number means the whole document; -1 goes "
+            "back to inheriting the source's setting"
+        ),
     )
     p.add_argument(
         "--resolve-notes",
@@ -289,6 +358,187 @@ def cmd_extract(args: argparse.Namespace, config: Config) -> int:
     return OK
 
 
+def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
+    """Zotero marks into units.
+
+    Reads Zotero's local API directly, the way `sync` reads AnkiConnect: a
+    documented local endpoint with no credentials. Nothing is written back,
+    and nothing could be -- the local API is read-only.
+    """
+    from . import zotero as zotero_api
+    from .extract import zotero as zotero_units
+
+    client = zotero_api.Zotero()
+    try:
+        if args.tag:
+            items = client.tagged(args.tag)
+            if not items:
+                print(f"no Zotero items tagged {args.tag!r}", file=sys.stderr)
+                return MISUSE
+        elif args.item:
+            items = _zotero_lookup(client, args.item)
+            if not items:
+                print(f"no Zotero item matches {args.item!r}", file=sys.stderr)
+                return MISUSE
+        else:
+            print(
+                "name an item (cite key or Zotero key), or --tag to take a whole shelf",
+                file=sys.stderr,
+            )
+            return MISUSE
+
+        reports = []
+        for item in items:
+            source = args.source or _source_name(item)
+            report = zotero_units.build(
+                client,
+                item,
+                source=source,
+                zotero=config.zotero_for(source),
+                text_for=None if args.dry_run else _text_cacher(config, source),
+            )
+            reports.append((source, item, report))
+            if not args.dry_run and report.units:
+                stub = config.sources_dir / source / SOURCE_FILE
+                fresh = zotero_units.write_source_stub(stub, item)
+                ledger = ledger_mod.Ledger.load(config.units_path(source))
+                added, refreshed = ledger.upsert(report.units)
+                ledger.save()
+                report_line = f"{added} new, {refreshed} refreshed"
+                if fresh:
+                    report_line += f"; wrote {stub.relative_to(config.root)}"
+            else:
+                report_line = "nothing written" if args.dry_run else "no units"
+            if not args.json:
+                _print_zotero(source, item, report, report_line)
+    except zotero_api.ZoteroError as exc:
+        print(str(exc), file=sys.stderr)
+        return FAILED
+
+    if args.json:
+        print(
+            json.dumps(
+                [
+                    {
+                        "source": source,
+                        "item": item.key,
+                        "citation": item.citation,
+                        "documents": r.documents,
+                        "marks": r.annotations,
+                        "units": [u.id for u in r.units],
+                        "unmapped": r.unmapped,
+                        "skipped": r.skipped,
+                    }
+                    for source, item, r in reports
+                ],
+                indent=2,
+            )
+        )
+    return OK if all(r.ok for _, _, r in reports) else FAILED
+
+
+def _text_cacher(config: Config, source: str) -> Any:
+    """Bound here rather than in the loop, so the closure keeps this source."""
+
+    def cache(document: str, pdf: Path) -> int:
+        return extract_mod.cache_document_text(config, source, document, pdf)
+
+    return cache
+
+
+def _zotero_lookup(client: Any, wanted: str) -> list[Any]:
+    """A raw Zotero item key, a Better BibTeX cite key, or a title.
+
+    A Zotero key is eight uppercase alphanumerics and resolves directly. A cite
+    key comes from Better BibTeX rather than Zotero, so it is matched against
+    what the search returns rather than asked for by name.
+    """
+    if len(wanted) == 8 and wanted.isalnum() and wanted.upper() == wanted:
+        try:
+            return [client.item(wanted)]
+        except Exception:
+            pass
+    found = client.search(wanted)
+    exact = [item for item in found if item.citation_key == wanted]
+    return exact or found
+
+
+def _source_name(item: Any) -> str:
+    """The cite key if Better BibTeX gave it one, else the Zotero key.
+
+    Never the title: a source name ends up in every unit id, and a title that
+    gets tidied later would orphan every one of them.
+    """
+    return item.citation_key or item.key
+
+
+def _print_zotero(source: str, item: Any, report: Any, written: str) -> None:
+    print(f"{item.citation}  ->  {source}")
+    print(
+        f"  {report.annotations} marks on {report.documents} document(s): "
+        f"{len(report.units)} units; {written}"
+        + (f"; {report.text_chars // 1000}k chars of text layer" if report.text_chars else "")
+    )
+    for name, count in sorted(report.unmapped.items(), key=lambda kv: -kv[1]):
+        print(f"  unmapped: {name} x{count} -- say what it means in [zotero.meanings]")
+    for line in report.skipped:
+        print(f"  skip: {line}", file=sys.stderr)
+
+
+def cmd_export(args: argparse.Namespace, config: Config) -> int:
+    """A deck as an `.apkg`.
+
+    Everything else here describes a pipeline; this is its output, openable by
+    anyone with Anki and nothing else installed. It doubles as a fixture: a
+    deck you can regenerate and diff.
+
+    Anki does the writing, so the path is Anki's to resolve and has to be
+    absolute -- a relative one would land in Anki's working directory, which is
+    not where you are standing.
+    """
+    if args.deck:
+        deck = args.deck
+    elif args.source:
+        deck = config.deck_for(args.source)
+    else:
+        print("name a source, or --deck", file=sys.stderr)
+        return MISUSE
+
+    out = Path(args.out) if args.out else Path(f"{model.slugify(deck)}.apkg")
+    out = out.expanduser().resolve()
+
+    client = AnkiConnect(config.anki_url)
+    try:
+        written = client.export_package(deck, str(out), include_sched=args.scheduling)
+    except AnkiError as exc:
+        print(str(exc), file=sys.stderr)
+        if "sfld" in str(exc):
+            # Measured, not guessed: no note in a 2277-note collection had a
+            # blank sort field, and both scheduling modes failed the same way.
+            # The fault is in the legacy export path AnkiConnect calls, not in
+            # the collection, so there is nothing here to fix by editing cards.
+            print(
+                "\nThis is AnkiConnect's export path, not your cards: a blank "
+                "sort field is what that error means, and there are none. Use "
+                "Anki's own File > Export (Anki Deck Package, scheduling off) "
+                "until the add-on catches up with your Anki version.",
+                file=sys.stderr,
+            )
+        return FAILED
+    if not written:
+        print(
+            f"Anki refused to export {deck!r}. It has to exist and hold cards; "
+            "`anki-forge sync` puts them there.",
+            file=sys.stderr,
+        )
+        return FAILED
+
+    size = out.stat().st_size // 1024 if out.exists() else 0
+    history = "with your review history" if args.scheduling else "no review history"
+    print(f"{deck} -> {out} ({size}k, {history})")
+    return OK
+
+
 def cmd_serve(args: argparse.Namespace, config: Config) -> int:
     from .app import serve
 
@@ -308,7 +558,7 @@ def cmd_context(args: argparse.Namespace, config: Config) -> int:
     """
     from . import context as context_mod
 
-    found = context_mod.assemble(config, args.unit)
+    found = context_mod.assemble(config, args.unit, spread=args.pages)
     if found is None:
         print(f"no unit {args.unit!r}", file=sys.stderr)
         return FAILED
@@ -335,6 +585,7 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
         or args.suggest
         or args.accept
         or args.dismiss
+        or args.context_pages is not None
     ):
         return _mutate_unit(args, ledgers, config)
 
@@ -364,7 +615,7 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
         print(f"no units with state={args.state}")
         return OK
     for row in rows:
-        locator = ledger_mod.Locator(**row.get("locator", {})).label()
+        locator = ledger_mod.Locator(**row.get("locator", {})).describe()
         tex = row.get("tex_source") or row.get("tex_auto") or ""
         flag = "" if row.get("transcription") == "ok" else f"  [{row.get('transcription')}]"
         print(f"{row['state']:8} {row['id']:34} {locator:22}{flag}")
@@ -404,6 +655,20 @@ def _mutate_unit(
                 print(f"{args.id} transcription: {state}" + (f"  {stored[:80]}" if stored else ""))
                 if state == "failed":
                     print("  (did not parse under KaTeX; nothing stored)", file=sys.stderr)
+            if args.context_pages is not None:
+                target = led.get(args.id)
+                if target is None:
+                    print(f"no unit {args.id!r}", file=sys.stderr)
+                    return FAILED
+                # -1 is how you take the override off again, rather than
+                # guessing which number meant "inherit".
+                target.context_pages = None if args.context_pages < 0 else args.context_pages
+                led.save()
+                asked = config.context_pages_for(target.source, target.context_pages)
+                print(
+                    f"{args.id}: card writers get {asked} page(s) either side"
+                    + ("" if target.context_pages is not None else " (inherited)")
+                )
             if args.resolve_notes:
                 # "all" is the only way to reach the clear-everything path, and
                 # it has to be asked for: 7 units carry a `@me` decision beside

@@ -954,3 +954,65 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 /* A `requires` naming no card. `check` errors on it; the UI must not offer a
    link to nowhere. */
 .place code.dead { color: var(--bad); text-decoration: line-through; }
+
+/* How much of the document a card writer gets for this unit. Only shown when
+   it differs from the default, so the common case stays quiet. */
+.badge.context { border-color: var(--line); opacity: 0.75; }
+.badge.context.own { opacity: 1; border-color: var(--accent); color: var(--accent); }
+
+/* Showing the whole page rather than the crop: let it use the height it needs
+   rather than being squeezed into the crop's box. */
+.unit.whole-page .crop img { max-height: none; }
+
+/* Suggested commands: what to run next on exactly what is on screen. */
+.filter-list.runs { display: flex; flex-direction: column; gap: 4px; }
+.filter-list.runs button.run {
+  width: 100%; text-align: left; background: none; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 4px; padding: 5px 7px;
+  display: flex; flex-direction: column; gap: 2px; font: inherit; color: inherit;
+}
+.filter-list.runs button.run:hover { border-color: var(--accent); }
+.filter-list.runs .run-label { font-size: 11px; opacity: 0.7; }
+.filter-list.runs code { font-size: 11px; word-break: break-all; }
+.filter-list.runs .claude code { color: var(--accent); }
+.filter-list.runs button.copied { border-color: var(--accent); }
+.filter-list.runs button.copied .run-label::after { content: " — copied"; }
+
+/* What a reader marked. Zotero's own palette, so the rail looks like the PDF
+   does rather than making you translate. */
+.filter-list .swatch {
+  display: inline-block; width: 9px; height: 9px; border-radius: 2px;
+  margin-right: 6px; border: 1px solid rgba(0, 0, 0, 0.15); flex: none;
+}
+.filter-list .swatch.c-yellow { background: #ffd400; }
+.filter-list .swatch.c-red { background: #ff6666; }
+.filter-list .swatch.c-green { background: #5fb236; }
+.filter-list .swatch.c-blue { background: #2ea8e5; }
+.filter-list .swatch.c-purple { background: #a28ae5; }
+.filter-list .swatch.c-magenta { background: #e56eee; }
+.filter-list .swatch.c-orange { background: #f19837; }
+.filter-list .swatch.c-grey { background: #aaaaaa; }
+
+/* Something wrote to the files while this page was open. Offered, never taken:
+   being moved to a different card mid-decision is worse than a stale list. */
+.reload-hint {
+  margin-left: auto; font: inherit; font-size: 11px; cursor: pointer;
+  color: var(--accent); background: none; border: 1px solid var(--accent);
+  border-radius: 4px; padding: 2px 8px;
+}
+.reload-hint:hover { background: var(--accent); color: var(--bg); }
+
+/* The effective configuration: read-only, so it looks like a document. */
+.config-page { max-width: 62rem; padding: 1.5rem 2rem; }
+.config-page h1 { font-size: 18px; margin: 0 0 0.4rem; }
+.config-page .muted { max-width: 46rem; line-height: 1.5; }
+.config-group { margin-top: 1.6rem; }
+.config-group h2 { font-size: 13px; opacity: 0.75; margin: 0 0 0.4rem; font-weight: 600; }
+.config-table { border-collapse: collapse; width: 100%; }
+.config-table th {
+  text-align: left; font-weight: 500; opacity: 0.75; width: 14rem;
+  padding: 3px 10px 3px 0; vertical-align: top;
+}
+.config-table td { padding: 3px 10px 3px 0; vertical-align: top; }
+.config-table .origin { font-size: 11px; opacity: 0.6; }
+.config-table .origin.inherited { font-style: italic; opacity: 0.4; }

@@ -19,7 +19,12 @@ from pathlib import Path
 from typing import Any
 
 RENDER_ZOOM = 3.0
-TRIAGE_CONTEXT = 40.0  # points of surrounding page shown around a crop at triage
+# Points of surrounding page shown around a crop. Forty was right for a
+# one-line display equation and useless for a theorem with a three-sentence
+# preamble, so it is a default rather than a constant: `[cards] crop_context`,
+# and a source overrides it. Generous on purpose -- a crop too tight to judge
+# costs a review, and a crop with too much around it costs nothing.
+TRIAGE_CONTEXT = 90.0
 OUTLINE_WIDTH = 3  # pixels
 OUTLINE_COLOUR = (210, 120, 90)
 
@@ -29,6 +34,18 @@ class PdfUnavailable(RuntimeError):
 
 
 def _fitz() -> Any:
+    """PyMuPDF, under whichever name this install answers to.
+
+    `pymupdf` is the current name and `fitz` the old one, which prints a
+    deprecation line to stderr on every import. That is once per crop and once
+    per page-height read, which is often enough to bury a message that matters.
+    """
+    try:
+        import pymupdf
+
+        return pymupdf
+    except ImportError:
+        pass
     try:
         import fitz
     except ImportError as exc:  # pragma: no cover - exercised by hand

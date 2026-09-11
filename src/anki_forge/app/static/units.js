@@ -110,8 +110,69 @@ async function annotate() {
   toast("annotated");
 }
 
+/* How much of the document a card writer gets for this unit.
+
+   Triage is the moment you can see it: the theorem is on this page and its
+   hypotheses are two pages back, and no per-source default knows that. `c`
+   cycles a few sizes rather than asking for a number, because the decision is
+   "a bit more" or "all of it", not a measurement. */
+const CONTEXT_STEPS = [0, 1, 3, 10, 999];
+
+async function cycleContext() {
+  const item = currentOf(deck);
+  if (!item) return;
+  const now = Number(item.dataset.contextPages || 1);
+  const next =
+    CONTEXT_STEPS.find((n) => n > now) ?? CONTEXT_STEPS[0];
+  const result = await post(
+    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/context`,
+    { pages: next, mtime: board.dataset.mtime },
+  );
+  board.dataset.mtime = result.mtime;
+  item.dataset.contextPages = String(next);
+  const badge = item.querySelector("[data-context-badge]");
+  if (badge) badge.textContent = contextLabel(next);
+  toast(`card writers get ${contextLabel(next)}`);
+}
+
+function contextLabel(pages) {
+  if (pages === 0) return "this page only";
+  if (pages >= 100) return "the whole document";
+  return `${pages} page${pages === 1 ? "" : "s"} either side`;
+}
+
+/* The whole page, with the unit's own box drawn on it.
+
+   The two ways segmentation fails are only visible against the surroundings:
+   an equation split across units shows its missing lines outside the box, and
+   two merged into one show two numbers inside it. A wide margin usually
+   suffices; when it does not, this is the rest of the page. No pdf.js needed
+   -- the renderer already clips to the page, so asking for more than a page
+   gives exactly a page. */
+const WHOLE_PAGE = 9999;
+
+function togglePage() {
+  const item = currentOf(deck);
+  if (!item) return;
+  const img = item.querySelector("[data-crop]");
+  if (!img) return;
+  const whole = item.dataset.wholePage === "1";
+  if (!item.dataset.cropSrc) item.dataset.cropSrc = img.getAttribute("src");
+  img.setAttribute(
+    "src",
+    whole
+      ? item.dataset.cropSrc
+      : item.dataset.cropSrc.split("?")[0] + `?context=${WHOLE_PAGE}&outline=1`,
+  );
+  item.dataset.wholePage = whole ? "0" : "1";
+  item.classList.toggle("whole-page", !whole);
+  toast(whole ? "back to the crop" : "the whole page, box drawn on it");
+}
+
 bindKeys({
   "?": cycleGuide,
+  c: cycleContext,
+  p: togglePage,
   f: toggleFilters,
   z: undo,
   q: () => setState("queued"),

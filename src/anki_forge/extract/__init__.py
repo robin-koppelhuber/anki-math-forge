@@ -101,8 +101,14 @@ def run(
     return report
 
 
-def source_text_path(config: Config, source_name: str) -> Path:
-    return config.sources_dir / source_name / "text.md"
+def source_text_path(config: Config, source_name: str, document: str = "") -> Path:
+    """Where a source's text layer is cached.
+
+    Per document, because `## page 7` means nothing across fifteen
+    chapter PDFs. A single-document source keeps the plain name it had.
+    """
+    folder = config.sources_dir / source_name
+    return folder / (f"text-{document}.md" if document else "text.md")
 
 
 def cache_source_text(config: Config, source_name: str) -> int:
@@ -133,18 +139,47 @@ def cache_source_text(config: Config, source_name: str) -> int:
     return len(text)
 
 
+def cache_document_text(config: Config, source_name: str, document: str, pdf: Path) -> int:
+    """The same thing, for one attachment of a multi-document source.
+
+    Handing over the whole document is the point: a card is easier to write and
+    quicker to review when whoever wrote it could see the paragraph that states
+    the conditions, and that paragraph is as often on the previous page.
+    """
+    text = _pdf_text(pdf)
+    if not text.strip():
+        return 0
+    header = (
+        f"<!-- {source_name}/{document}: text layer, cached by `anki-forge zotero`.\n"
+        "     Generated; do not edit. -->\n\n"
+    )
+    write_atomic(source_text_path(config, source_name, document), header + text)
+    return len(text)
+
+
 def _pdf_text(pdf_path: Path) -> str:
     """Page-delimited text layer, so a citation can name a page."""
     fitz = render._fitz()
     document = fitz.open(str(pdf_path))
     try:
         pages = [
-            f"\n\n## page {index + 1}\n\n" + document.load_page(index).get_text()
+            f"\n\n## page {index + 1}\n\n" + _printable(document.load_page(index).get_text())
             for index in range(document.page_count)
         ]
     finally:
         document.close()
     return "".join(pages)
+
+
+def _printable(text: str) -> str:
+    """Drop control characters, keeping tab, newline and carriage return.
+
+    A PDF with glyphs its font never mapped extracts them as codepoints 0-31:
+    one paper here produced NUL, backspace, formfeed and a dozen others. They
+    are not text, they make the cache read as a binary file to `grep`, and a
+    card writer reading the page has to see past them.
+    """
+    return "".join(c for c in text if c >= " " or c in "\t\n\r")
 
 
 def _tally(units: list[Unit]) -> dict[str, int]:

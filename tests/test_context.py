@@ -20,7 +20,14 @@ def _source(config: Config, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
-def test_it_returns_the_units_own_page(config: Config) -> None:
+PAGES = (
+    "## page 9\nprevious-page-marker\n\n"
+    "## page 10\nLet A be invertible.\ndaX-1b dX (61)\n\n"
+    "## page 11\nnext-page-marker\n"
+)
+
+
+def _one_unit(config: Config) -> None:
     led = Ledger(config.units_path("demo"))
     led.units.append(
         Unit(
@@ -30,19 +37,46 @@ def test_it_returns_the_units_own_page(config: Config) -> None:
         )
     )
     led.save()
-    _source(
-        config,
-        "## page 9\nprevious-page-marker\n\n"
-        "## page 10\nLet A be invertible.\ndaX-1b dX (61)\n\n"
-        "## page 11\nnext-page-marker\n",
-    )
+    _source(config, PAGES)
+
+
+def test_it_returns_the_page_and_its_neighbours(config: Config) -> None:
+    """The default is generous on purpose. A card is easier to write and
+    quicker to review when whoever wrote it could see the paragraph that states
+    the conditions, and that paragraph is as often on the page before."""
+    _one_unit(config)
 
     found = context.assemble(config, "demo:2.2:61")
     assert found is not None
     assert "Let A be invertible." in found.page_text
+    assert "previous-page-marker" in found.page_text
+    assert "next-page-marker" in found.page_text
+    assert found.transcription == "x = y"
+
+
+def test_one_page_only_when_asked_for_one(config: Config) -> None:
+    """Triage is deciding whether a region is worth carding at all, and a wall
+    of text makes that harder rather than easier."""
+    _one_unit(config)
+
+    found = context.assemble(config, "demo:2.2:61", spread=0)
+    assert found is not None
+    assert "Let A be invertible." in found.page_text
     assert "previous-page-marker" not in found.page_text
     assert "next-page-marker" not in found.page_text
-    assert found.transcription == "x = y"
+
+
+def test_more_pages_when_asked_for_more(config: Config) -> None:
+    """A pass that writes the card should ask for as much as is reasonable."""
+    led = Ledger(config.units_path("demo"))
+    led.units.append(Unit(id="demo:2.2:61", locator=Locator(section="2.2", page=10)))
+    led.save()
+    _source(config, "".join(f"## page {n}\nbody {n}\n\n" for n in range(1, 21)))
+
+    wide = context.assemble(config, "demo:2.2:61", spread=5)
+    assert wide is not None
+    assert "body 5" in wide.page_text and "body 15" in wide.page_text
+    assert "body 4" not in wide.page_text
 
 
 def test_a_missing_text_layer_is_not_an_error(config: Config) -> None:
