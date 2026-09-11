@@ -9,11 +9,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import cli, context
-from anki_forge import config as config_mod
-from anki_forge.config import Config
-from anki_forge.extract import source_text_path
-from anki_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge import cli, context
+from anki_math_forge import config as config_mod
+from anki_math_forge.config import Config
+from anki_math_forge.extract import source_text_path
+from anki_math_forge.ledger import Ledger, Locator, Unit
 
 PAGES = "".join(f"## page {n}\nbody {n}\n\n" for n in range(1, 41))
 

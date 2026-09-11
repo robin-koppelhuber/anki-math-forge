@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from anki_forge.ledger import Ledger, LockTimeout, Unit, lock
+from anki_math_forge.ledger import Ledger, LockTimeout, Unit, lock
 
 WRITERS = 12
 

@@ -81,7 +81,7 @@ an idea running over a page break survives), and a mark beside two units is no
 problem: context is a view, not content.
 
 **Triage wants one page; a pass that writes a card should ask for more.**
-`anki-forge context --pages N` widens the text it prints. There is no reason to
+`forge context --pages N` widens the text it prints. There is no reason to
 be stingy there, since the conditions an identity needs are printed around it,
 as often on the previous page as on this one.
 
@@ -301,7 +301,7 @@ folder:
 prose**, as TOML between `+++` fences with the prose below.
 
 TOML rather than YAML frontmatter, which was the first attempt: every key up
-there overrides one in `anki-forge.toml`, so the two should be the same
+there overrides one in `forge.toml`, so the two should be the same
 language and a block should copy between them unchanged. TOML is also stricter,
 and in YAML a tag or colour written `no`, `on` or `y` is silently a boolean.
 
@@ -336,12 +336,12 @@ tracking the name:
 | | now | after |
 |---|---|---|
 | distribution | `anki-forge` | `anki-math-forge` |
-| import package | `anki_forge` | `anki_math_forge`, once, mechanically |
+| import package | `anki_math_forge` | `anki_math_forge`, once, mechanically |
 | command | `anki-forge` | `forge`, with the long name kept as an alias |
-| config file | `anki-forge.toml` | `forge.toml` |
+| config file | `forge.toml` | `forge.toml` |
 | work dir | `.forge/` | unchanged |
 | tag prefix | `forge` | unchanged |
-| note type | `anki-forge identity v1` | see below |
+| note type | `forge identity v1` | see below |
 
 ### 5a. The two strings Anki already holds. Do this first.
 
@@ -375,15 +375,28 @@ tool quietly creating a *second* one when the configured name is not found, so
 `sync` should recognise a previous-name note type carrying our fields and say
 so, the way `PREVIOUS_FIELDS` already handles a field migration.
 
-### 5b. The source-facing rename. Do this before publishing (§9).
+### 5b. The source-facing rename (done)
 
-About two dozen occurrences across help text, generated file headers and
-comments, plus the package directory. One commit, no effect on anybody's
-collection, and best done before the name goes public rather than after.
+Done, and backwards compatible on purpose: a rename should not be something
+you have to finish in one sitting.
 
-Prose says "the tool"; the literal name stays in install lines and command
-invocations, so the next rename is a small diff. A test asserting that no
-Anki-facing string is derived from the package name keeps it that way.
+| | now |
+|---|---|
+| distribution | `anki-math-forge` |
+| import package | `anki_math_forge` |
+| command | `forge`, with `anki-math-forge` kept as an alias |
+| config file | `forge.toml`, and `anki-forge.toml` still read |
+| work dir, tag prefix | `.forge`, `forge` -- unchanged, which was the point |
+
+Two occurrences of the old name survive deliberately, and both are data rather
+than branding: `notetype.PREVIOUS_NAMES`, which is a string in somebody's Anki
+collection, and `config.LEGACY_CONFIG_NAMES`, which is a filename still read.
+Sweeping either would break a real repo.
+
+`sync --dry-run` after the rename reports 108 updates, and every one of them is
+`+type::identity` from §3 -- the rename itself proposes no change at all. That
+is what "nothing machine-facing derives from the project name" was for: the
+note type is still `Math Card v1` and the tag prefix is still `forge`.
 
 ## 6. Crop context and the whole page (mostly built)
 
@@ -539,7 +552,7 @@ have.
   `--extra pdf` and `npm ci` so the suite exercises the real KaTeX gate rather
   than its weaker fallback.
 - **`.apkg` export** -- written, and **blocked by Anki, not by us**.
-  `anki-forge export <source>` exists and `exportPackage` is confirmed present
+  `forge export <source>` exists and `exportPackage` is confirmed present
   in AnkiConnect (121 actions). It fails with
   `NOT NULL constraint failed: notes.sfld`, which means a blank sort field.
   Measured rather than assumed: **no note in the 2277-note collection has
@@ -761,7 +774,7 @@ Designed, not built. The principle that makes it legitimate: an LLM is not
 mechanical, but **agreement between two independent extractors is**, and the
 equation number is an exact join key.
 
-- **Contiguity**: built (`anki-forge audit`).
+- **Contiguity**: built (`forge audit`).
 - **Transcription**: built (`/transcribe` plus the `transcriber` subagent). One
   extractor, not two, so it reconciles nothing yet.
 - **Cross-extractor join**: a page-level pass that reads the *page* and reports
@@ -951,7 +964,7 @@ is also case §11.
 
 **Refreshing transcriptions on re-extract.** `upsert` used to treat
 `tex_auto`/`transcription` as extraction output, so a single
-`anki-forge extract` silently wiped every transcription in the ledger. They are
+`forge extract` silently wiped every transcription in the ledger. They are
 work product now, like triage state: filled when empty, never overwritten. Two
 regression tests hold the line, and §2's Zotero sync follows the same rule.
 

@@ -1,4 +1,4 @@
-"""`anki-forge` -- the command line (DESIGN.md §2).
+"""`forge` -- the command line (DESIGN.md §2).
 
 Seven verbs: extract, serve, units, check, todo, sync, verify -- plus `new`,
 a scaffold for the stub-writing step so a generated card cannot be malformed
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     except (ConfigError, AnkiError, ValueError, KeyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return FAILED
-    except BrokenPipeError:  # pragma: no cover - `anki-forge source-text | head`
+    except BrokenPipeError:  # pragma: no cover - `forge source-text | head`
         # Downstream closed the pipe. Silence Python's own complaint about it.
         devnull = os.open(os.devnull, os.O_WRONLY)
         os.dup2(devnull, sys.stdout.fileno())
@@ -68,8 +68,8 @@ def _force_utf8() -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="anki-forge", description=__doc__.splitlines()[0])
-    parser.add_argument("--root", default=None, help="repo root (default: nearest anki-forge.toml)")
+    parser = argparse.ArgumentParser(prog="forge", description=__doc__.splitlines()[0])
+    parser.add_argument("--root", default=None, help="repo root (default: nearest forge.toml)")
     subs = parser.add_subparsers(dest="verb", required=True)
 
     p = subs.add_parser("extract", help="segment a source into units; never writes cards")
@@ -343,7 +343,7 @@ def build_parser() -> argparse.ArgumentParser:
 def cmd_extract(args: argparse.Namespace, config: Config) -> int:
     names = [args.source] if args.source else sorted(config.sources)
     if not names:
-        print("no sources configured in anki-forge.toml", file=sys.stderr)
+        print("no sources configured in forge.toml", file=sys.stderr)
         return MISUSE
     reports = []
     for name in names:
@@ -528,7 +528,7 @@ def cmd_export(args: argparse.Namespace, config: Config) -> int:
     if not written:
         print(
             f"Anki refused to export {deck!r}. It has to exist and hold cards; "
-            "`anki-forge sync` puts them there.",
+            "`forge sync` puts them there.",
             file=sys.stderr,
         )
         return FAILED
@@ -544,7 +544,7 @@ def cmd_serve(args: argparse.Namespace, config: Config) -> int:
 
     host = args.host or config.host
     port = args.port or config.port
-    print(f"anki-forge on http://{host}:{port}  (units triage + card review)")
+    print(f"forge on http://{host}:{port}  (units triage + card review)")
     serve(config, host=host, port=port)
     return OK
 
@@ -574,7 +574,7 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
     if args.source:
         ledgers = {k: v for k, v in ledgers.items() if k == args.source}
     if not ledgers:
-        print("no units ledger yet; run `anki-forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
 
     if args.id and (
@@ -705,7 +705,7 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
     if args.source:
         ledgers = {k: v for k, v in ledgers.items() if k == args.source}
     if not ledgers:
-        print("no units ledger yet; run `anki-forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
 
     # Context by default. A bare crop cannot show that an equation continues
@@ -768,7 +768,7 @@ def cmd_classify(args: argparse.Namespace, config: Config) -> int:
     if args.source:
         ledgers = {k: v for k, v in ledgers.items() if k == args.source}
     if not ledgers:
-        print("no units ledger yet; run `anki-forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
 
     reports = []
@@ -805,7 +805,7 @@ def cmd_classify(args: argparse.Namespace, config: Config) -> int:
         if args.dry_run:
             print("  (dry run -- nothing changed)")
         elif report.classified:
-            print(f"  review them with: anki-forge units --state skipped --source {report.source}")
+            print(f"  review them with: forge units --state skipped --source {report.source}")
     return OK
 
 
@@ -814,7 +814,7 @@ def cmd_audit(args: argparse.Namespace, config: Config) -> int:
     if args.source:
         ledgers = {k: v for k, v in ledgers.items() if k == args.source}
     if not ledgers:
-        print("no units ledger yet; run `anki-forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
 
     reports = [audit_mod.audit(led, name) for name, led in ledgers.items()]
@@ -851,7 +851,7 @@ def cmd_source_text(args: argparse.Namespace, config: Config) -> int:
     for name in names:
         path = extract_mod.source_text_path(config, name)
         if not path.exists():
-            print(f"no cached text for {name!r}; run `anki-forge extract`", file=sys.stderr)
+            print(f"no cached text for {name!r}; run `forge extract`", file=sys.stderr)
             return FAILED
         print(path.read_text(encoding="utf-8"))
     return OK

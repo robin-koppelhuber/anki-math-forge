@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from anki_forge import config as config_mod
-from anki_forge import feedback, model, notetype, sync
-from anki_forge.config import Config
+from anki_math_forge import config as config_mod
+from anki_math_forge import feedback, model, notetype, sync
+from anki_math_forge.config import Config
 from conftest import FakeAnki
 
 
@@ -40,9 +40,9 @@ def synced(config: Config, *uids: str) -> FakeAnki:
 
 
 def with_flags(repo: Path, **flags: str) -> Config:
-    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += "\n[anki.flags]\n" + "".join(f'{k.lstrip("f")} = "{v}"\n' for k, v in flags.items())
-    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)
 
 

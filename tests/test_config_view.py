@@ -11,9 +11,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import config as config_mod
-from anki_forge.app import effective_config
-from anki_forge.config import Config
+from anki_math_forge import config as config_mod
+from anki_math_forge.app import effective_config
+from anki_math_forge.config import Config
 
 
 def rows_for(config: Config, where: str) -> dict[str, dict[str, object]]:
@@ -71,7 +71,7 @@ def test_the_anki_url_says_the_environment_can_override_it(config: Config) -> No
 def test_the_page_renders(config: Config) -> None:
     from fastapi.testclient import TestClient
 
-    from anki_forge.app import create_app
+    from anki_math_forge.app import create_app
 
     response = TestClient(create_app(config)).get("/config")
     assert response.status_code == 200

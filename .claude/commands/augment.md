@@ -12,8 +12,8 @@ it. Augment first, review once.
 Load the book before you start, for the same reason `/extract-cards` does:
 
 ```
-uv run anki-forge context <unit-id>     # per card: the frame it was printed in
-uv run anki-forge source-text <source>   # the whole book, when you need it
+uv run forge context <unit-id>     # per card: the frame it was printed in
+uv run forge source-text <source>   # the whole book, when you need it
 ```
 
 `context` prints the page the equation was printed on. Read it — conditions
@@ -28,7 +28,7 @@ is visible.
 1. Find them — cards with only `## front` and `## back`:
 
    ```
-   uv run anki-forge check --json
+   uv run forge check --json
    ```
 
    ...and read the card files under `cards/` directly. Work on
@@ -63,10 +63,10 @@ is visible.
 3. Verify what opted in, then check:
 
    ```
-   uv run anki-forge verify
-   uv run anki-forge check
+   uv run forge verify
+   uv run forge check
    ```
 
 Do not rewrite `front` or `back` unless they are wrong — if they are, say so
 in your report rather than quietly reshaping the card. Leave everything
-`draft`; approval is a human at `anki-forge serve`.
+`draft`; approval is a human at `forge serve`.

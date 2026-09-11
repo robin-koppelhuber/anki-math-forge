@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from anki_forge import latex
+from anki_math_forge import latex
 
 katex_available = latex._katex_js() is not None
 needs_katex = pytest.mark.skipif(

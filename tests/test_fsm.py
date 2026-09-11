@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "templates"
+TEMPLATES = Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "templates"
 FSM = TEMPLATES / "_fsm.html"
 MINI = TEMPLATES / "_fsm_mini.html"
 

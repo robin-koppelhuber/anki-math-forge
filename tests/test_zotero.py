@@ -10,10 +10,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from anki_forge.config import ZoteroConfig
-from anki_forge.extract.zotero import build, unit_id, units_for, write_source_stub
-from anki_forge.ledger import Unit
-from anki_forge.zotero import COLOURS, Annotation, Attachment, Item, Zotero
+from anki_math_forge.config import ZoteroConfig
+from anki_math_forge.extract.zotero import build, unit_id, units_for, write_source_stub
+from anki_math_forge.ledger import Unit
+from anki_math_forge.zotero import COLOURS, Annotation, Attachment, Item, Zotero
 
 FIXTURES = Path(__file__).parent / "fixtures" / "zotero"
 

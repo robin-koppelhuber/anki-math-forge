@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import config as config_mod
-from anki_forge.app import mark_rows, unit_mark
-from anki_forge.config import Config
-from anki_forge.ledger import Mark, Unit
+from anki_math_forge import config as config_mod
+from anki_math_forge.app import mark_rows, unit_mark
+from anki_math_forge.config import Config
+from anki_math_forge.ledger import Mark, Unit
 
 
 def a_unit(uid: str, *marks: tuple[str, str]) -> Unit:
@@ -54,7 +54,7 @@ def test_rows_are_counted_and_ordered_by_weight(config: Config) -> None:
 
 def test_rows_carry_what_you_said_it_means(repo: Path) -> None:
     """The rail should read "a claim worth a card", not "highlight/green"."""
-    path = repo / "anki-forge.toml"
+    path = repo / "forge.toml"
     path.write_text(
         path.read_text(encoding="utf-8") + '\n[zotero.meanings]\ngreen = "a claim worth a card"\n',
         encoding="utf-8",

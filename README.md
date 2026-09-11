@@ -1,4 +1,4 @@
-# anki-forge
+# anki-math-forge
 
 [![checks](https://github.com/robin-koppelhuber/anki-math-forge/actions/workflows/checks.yml/badge.svg)](https://github.com/robin-koppelhuber/anki-math-forge/actions/workflows/checks.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -42,11 +42,11 @@ environment, which is a choice you make rather than a licence you inherit.
 ## First card in ten lines
 
 ```
-uv run anki-forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
-uv run anki-forge serve                     # q to queue one, in the browser
+uv run forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
+uv run forge serve                     # q to queue one, in the browser
 /extract-cards                              # queued units -> a stub card
-uv run anki-forge serve                     # a to approve it, in the browser
-uv run anki-forge sync --dry-run            # then without --dry-run
+uv run forge serve                     # a to approve it, in the browser
+uv run forge sync --dry-run            # then without --dry-run
 ```
 
 Everything below is detail.
@@ -59,14 +59,14 @@ extract  ->  units  ->  triage  ->  cards  ->  review  ->  sync
 ```
 
 ```
-uv run anki-forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
-uv run anki-forge zotero --tag anki         # or: what you marked up in Zotero -> units
+uv run forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
+uv run forge zotero --tag anki         # or: what you marked up in Zotero -> units
 /transcribe                                 # crops -> tex_auto, via subagents
 /classify                                   # propose which units aren't worth carding
-uv run anki-forge serve                     # triage units, then review cards
+uv run forge serve                     # triage units, then review cards
 /extract-cards                              # queued units -> stub cards
 /augment                                    # fill in conditions, proof, prose
-uv run anki-forge sync --dry-run            # then without --dry-run
+uv run forge sync --dry-run            # then without --dry-run
 ```
 
 The slash commands are Claude Code skills in [.claude/](.claude/) — the Python
@@ -87,8 +87,8 @@ Three things, once:
    if they are missing. Set `ANKI_CONNECT_URL` to override the address.
 
 ```
-uv run anki-forge sync --dry-run    # says exactly what it would add or update
-uv run anki-forge sync
+uv run forge sync --dry-run    # says exactly what it would add or update
+uv run forge sync
 ```
 
 `sync` refuses to run at all while `check` reports an error, only ever touches
@@ -121,7 +121,7 @@ content sync silently overwriting it would be a bad trade. It does say when the
 live layout has drifted from `notetype.py`, and `--templates` pushes it.
 
 ```
-uv run anki-forge sync --templates
+uv run forge sync --templates
 ```
 
 ### Two kinds of card
@@ -179,7 +179,7 @@ without splitting the deck itself.
 ### Taking the deck out again
 
 ```
-uv run anki-forge export matrix-cookbook --out cookbook.apkg
+uv run forge export matrix-cookbook --out cookbook.apkg
 ```
 
 Your review history is left out unless you ask for it: a deck you hand to
@@ -197,8 +197,8 @@ You are mid-review, you spot how a card should be better, and there is no
 obvious way to say so. Two, both pulled in by one command:
 
 ```
-uv run anki-forge feedback --dry-run   # what is waiting
-uv run anki-forge feedback             # ...and pull it
+uv run forge feedback --dry-run   # what is waiting
+uv run forge feedback             # ...and pull it
 ```
 
 **A comment**, when you have the words. Press `E` in Anki and type into the
@@ -265,8 +265,8 @@ Cards already in Anki keep whatever position they were first given. To bring
 them into line:
 
 ```
-uv run anki-forge sync --dry-run --reposition    # says how many would move
-uv run anki-forge sync --reposition
+uv run forge sync --dry-run --reposition    # says how many would move
+uv run forge sync --reposition
 ```
 
 Only cards you have never studied are moved. Past the new queue a card's
@@ -283,8 +283,8 @@ set it to random in Anki's deck options, Anki wins.
 |---|---|
 | [sources/](sources/) | one folder per source: its `source.md`, the document, and `units.jsonl` — the ledger |
 | [cards/](cards/) | one markdown file per card, `<source>/<uid>-<slug>.md` |
-| [src/anki_forge/](src/anki_forge/) | the tool |
-| [anki-forge.toml](anki-forge.toml) | all configuration, one file |
+| [src/anki_math_forge/](src/anki_math_forge/) | the tool |
+| [forge.toml](forge.toml) | all configuration, one file |
 
 A **source** describes itself in `sources/<name>/source.md`: TOML between `+++`
 fences for the keys the tool acts on, prose below for the conventions a card

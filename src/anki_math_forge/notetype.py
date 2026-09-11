@@ -16,7 +16,7 @@ from typing import Any
 # Field order matters: the first field is Anki's duplicate key.
 # `Feedback` is inbound only: `sync` never writes it and no template renders
 # it, so it is invisible during review and always present in the editor.
-# That is the whole mechanism behind `anki-forge feedback`.
+# That is the whole mechanism behind `forge feedback`.
 # Field lists this tool has shipped, oldest first. `sync` will add fields to
 # a live note type only when the collection matches one of these exactly --
 # that is an upgrade. Anything else is drift somebody made by hand, and

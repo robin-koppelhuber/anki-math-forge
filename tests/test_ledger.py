@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import config as config_mod
-from anki_forge import extract
-from anki_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge import config as config_mod
+from anki_math_forge import extract
+from anki_math_forge.ledger import Ledger, Locator, Unit
 
 
 def test_resolve_notes_defaults_to_claude_only(repo: Path) -> None:
     """A `@me` decision parked beside a `@claude` request must survive the
     agent resolving its own note. The CLI never registered `--audience`, so
     the default reached `resolve_notes` as "" and cleared both."""
-    from anki_forge import cli
+    from anki_math_forge import cli
 
     config = config_mod.load(repo)
     extract.run(config, "demo")
@@ -30,7 +30,7 @@ def test_resolve_notes_defaults_to_claude_only(repo: Path) -> None:
 
 
 def test_resolve_notes_all_clears_everything(repo: Path) -> None:
-    from anki_forge import cli
+    from anki_math_forge import cli
 
     config = config_mod.load(repo)
     extract.run(config, "demo")

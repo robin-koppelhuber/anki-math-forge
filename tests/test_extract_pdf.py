@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import pytest
 
-from anki_forge import extract
-from anki_forge.config import Config
-from anki_forge.extract import pdf, render
-from anki_forge.ledger import Ledger
+from anki_math_forge import extract
+from anki_math_forge.config import Config
+from anki_math_forge.extract import pdf, render
+from anki_math_forge.ledger import Ledger
 
 fitz = pytest.importorskip("fitz", reason="needs the `pdf` extra: uv sync --extra pdf")
 
@@ -350,8 +350,8 @@ def test_rendering_does_not_depend_on_the_segmenter(pdf_source: Config) -> None:
 
 def test_the_audit_scores_any_extractor(pdf_source: Config) -> None:
     """The completeness oracle reads the ledger, not the code that filled it."""
-    from anki_forge import audit
-    from anki_forge.ledger import Ledger, Locator, Unit
+    from anki_math_forge import audit
+    from anki_math_forge.ledger import Ledger, Locator, Unit
 
     hand_made = Ledger(
         pdf_source.units_path("book"),

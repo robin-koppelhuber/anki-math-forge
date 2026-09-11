@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import audit, extract
-from anki_forge.config import Config
-from anki_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge import audit, extract
+from anki_math_forge.config import Config
+from anki_math_forge.ledger import Ledger, Locator, Unit
 
 
 def ledger_of(tmp_path: Path, units: list[Unit]) -> Ledger:
@@ -104,7 +104,7 @@ def test_front_matter_is_suggested_not_applied(tmp_path: Path) -> None:
     Regression: this used to set the state itself, and 61 units the human had
     never triaged appeared as `skipped` with no explanation.
     """
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     led = Ledger(
         tmp_path / "units.jsonl",
@@ -122,7 +122,7 @@ def test_front_matter_is_suggested_not_applied(tmp_path: Path) -> None:
 
 
 def test_accepting_a_suggestion_applies_it(tmp_path: Path) -> None:
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     led = Ledger(
         tmp_path / "units.jsonl",
@@ -137,7 +137,7 @@ def test_accepting_a_suggestion_applies_it(tmp_path: Path) -> None:
 
 
 def test_dismissing_a_suggestion_leaves_the_unit_alone(tmp_path: Path) -> None:
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     led = Ledger(
         tmp_path / "units.jsonl",
@@ -150,7 +150,7 @@ def test_dismissing_a_suggestion_leaves_the_unit_alone(tmp_path: Path) -> None:
 
 
 def test_deciding_yourself_overrules_a_suggestion(tmp_path: Path) -> None:
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     led = Ledger(
         tmp_path / "units.jsonl",
@@ -166,7 +166,7 @@ def test_deciding_yourself_overrules_a_suggestion(tmp_path: Path) -> None:
 
 def test_a_numbered_equation_is_never_classified(tmp_path: Path) -> None:
     """The book numbered it; no heuristic here overrules that."""
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     led = Ledger(tmp_path / "units.jsonl", [numbered(n, page=6, top=n * 20.0) for n in (1, 2)])
     report = classify.classify(led, None, "src")
@@ -175,7 +175,7 @@ def test_a_numbered_equation_is_never_classified(tmp_path: Path) -> None:
 
 
 def test_a_triaged_unit_is_left_alone(tmp_path: Path) -> None:
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     unit = unnumbered("src:eq:p2", page=2)
     unit.state = "queued"
@@ -186,7 +186,7 @@ def test_a_triaged_unit_is_left_alone(tmp_path: Path) -> None:
 
 
 def test_classify_does_not_churn_an_existing_suggestion(tmp_path: Path) -> None:
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     led = Ledger(
         tmp_path / "units.jsonl",
@@ -198,7 +198,7 @@ def test_classify_does_not_churn_an_existing_suggestion(tmp_path: Path) -> None:
 
 
 def test_dry_run_records_nothing(tmp_path: Path) -> None:
-    from anki_forge import classify
+    from anki_math_forge import classify
 
     led = Ledger(
         tmp_path / "units.jsonl",

@@ -20,7 +20,7 @@ exactly like a good one, and gets reviewed for years.
 1. Read the page it was printed on:
 
    ```
-   uv run --no-sync anki-forge context <unit-id>
+   uv run --no-sync forge context <unit-id>
    ```
 
    That prints the page, prose and all, plus every unit on that page in
@@ -32,7 +32,7 @@ exactly like a good one, and gets reviewed for years.
    whole:
 
    ```
-   uv run --no-sync anki-forge new --unit <a> --unit <b> --unit <c> \
+   uv run --no-sync forge new --unit <a> --unit <b> --unit <c> \
      --front '...' --back '...' --tag <t>
    ```
 
@@ -59,7 +59,7 @@ exactly like a good one, and gets reviewed for years.
 
 4. **Make the card stand alone.** Every object on the front is defined before
    the front uses it: by the conventions the *source* declares, which
-   `anki-forge context <unit>` prints at the top of its output, or on the card
+   `forge context <unit>` prints at the top of its output, or on the card
    itself. Read them rather than assuming — they are per source, so what was
    ambient in the last deck you worked on may not be here. Ask whether someone
    who has never opened this source could answer the front with those
@@ -96,8 +96,8 @@ bulk. **Do not card:**
 For each, **propose the skip and say why**:
 
 ```
-uv run --no-sync anki-forge units --id <unit-id>   --suggest skipped not-cardable --detail '<why, in one sentence>' --by card-writer
-uv run --no-sync anki-forge units --id <unit-id> --annotate '@me not carded: <why>'
+uv run --no-sync forge units --id <unit-id>   --suggest skipped not-cardable --detail '<why, in one sentence>' --by card-writer
+uv run --no-sync forge units --id <unit-id> --annotate '@me not carded: <why>'
 ```
 
 The suggestion is what the human can act on: it shows up under the

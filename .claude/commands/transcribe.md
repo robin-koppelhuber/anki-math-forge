@@ -28,8 +28,8 @@ parallel** — several `Agent` calls in one message.
 1. See what needs doing:
 
    ```
-   uv run anki-forge units --state new --json
-   uv run anki-forge audit
+   uv run forge units --state new --json
+   uv run forge audit
    ```
 
    Units with `transcription: "none"` or `"failed"` need reading. Units with
@@ -38,7 +38,7 @@ parallel** — several `Agent` calls in one message.
 2. Work out the sections and their sizes:
 
    ```
-   uv run anki-forge units --state all --json
+   uv run forge units --state all --json
    ```
 
    Group by `locator.section`. Aim at a few dozen units per subagent: enough
@@ -51,9 +51,9 @@ parallel** — several `Agent` calls in one message.
    section in the prompt and `model` only if `$2` was given:
 
    > Transcribe section `<SECTION>` of `<SOURCE>`. Render the crops with
-   > `uv run anki-forge crops --section <SECTION> --untranscribed --json`,
+   > `uv run forge crops --section <SECTION> --untranscribed --json`,
    > read each one, and record it with
-   > `uv run anki-forge units --id <id> --tex-auto '<latex>'`.
+   > `uv run forge units --id <id> --tex-auto '<latex>'`.
    > Follow your instructions exactly: transcribe what is printed, annotate
    > anything unreadable or suspicious, never guess.
 
@@ -66,8 +66,8 @@ parallel** — several `Agent` calls in one message.
    summaries:
 
    ```
-   uv run anki-forge audit
-   uv run anki-forge units --state new --json    # count transcription: "ok"
+   uv run forge audit
+   uv run forge units --state new --json    # count transcription: "ok"
    ```
 
 5. Report: how many transcribed per section, how many the KaTeX gate refused,

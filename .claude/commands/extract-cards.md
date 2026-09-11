@@ -10,7 +10,7 @@ A card is only as good as the context you had when you wrote it. Before
 writing anything:
 
 ```
-uv run anki-forge source-text <source>
+uv run forge source-text <source>
 ```
 
 That is the source's whole text layer. Read it rather than a snippet if it
@@ -19,7 +19,7 @@ fits; where it does not, read these two parts, which are the ones that matter:
 - **The front matter**, before the numbered body starts. This is where a
   source defines its symbols, and it is the one place that says what its
   notation means. Skipping it means guessing at exactly the symbols that make
-  a card wrong. (`anki-forge context <unit>` gives you the page a unit came
+  a card wrong. (`forge context <unit>` gives you the page a unit came
   from; the front matter you have to go and read.)
 - **The neighbourhood of each unit.** A run of results on one theme is the
   usual shape of a reference work, and knowing you are inside one is what
@@ -33,7 +33,7 @@ never a transcription. The crop is the authority for what a unit says.
 1. Read the work list:
 
    ```
-   uv run anki-forge units --state queued --json
+   uv run forge units --state queued --json
    ```
 
 2. **Read each unit's `notes` and do what they say.** They are the instruction
@@ -48,7 +48,7 @@ never a transcription. The crop is the authority for what a unit says.
    When you have acted on the ones addressed to you, clear only those:
 
    ```
-   uv run anki-forge units --id <unit-id> --resolve-notes --audience claude
+   uv run forge units --id <unit-id> --resolve-notes --audience claude
    ```
 
    `--audience claude` is the default; `--audience all` also deletes the
@@ -61,7 +61,7 @@ never a transcription. The crop is the authority for what a unit says.
 3. **Read the page, then check the mathematics yourself.**
 
    ```
-   uv run anki-forge context <unit-id>
+   uv run forge context <unit-id>
    ```
 
    That prints the page the equation was printed on, prose and all. Conditions
@@ -89,7 +89,7 @@ never a transcription. The crop is the authority for what a unit says.
    is three units and one identity — card it whole:
 
    ```
-   uv run anki-forge new --unit <a> --unit <b> --unit <c> --front '...' --back '...'
+   uv run forge new --unit <a> --unit <b> --unit <c> --front '...' --back '...'
    ```
 
    All three are marked carded and point at the same card. The reverse also
@@ -110,7 +110,7 @@ never a transcription. The crop is the authority for what a unit says.
 4. Write each stub. This writes the file and marks the unit `carded`:
 
    ```
-   uv run anki-forge new --unit <unit-id> \
+   uv run forge new --unit <unit-id> \
      --front '$\frac{\partial}{\partial X}\log\det X$' \
      --back '$X^{-\top}$' \
      --tag matrix-calculus --tag derivatives
@@ -119,12 +119,12 @@ never a transcription. The crop is the authority for what a unit says.
 5. Check the result:
 
    ```
-   uv run anki-forge check
+   uv run forge check
    ```
 
 ## Rules
 
 `front` and `back` only at this stage. Every stub is `status: draft` and stays
 that way — nothing here approves anything; that is the human at
-`anki-forge serve`. Report how many stubs you wrote, and list every unit you
+`forge serve`. Report how many stubs you wrote, and list every unit you
 deliberately did not card, with the reason.

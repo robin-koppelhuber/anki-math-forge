@@ -65,7 +65,7 @@ def render_body(body: str) -> Markup:
 
 
 def create_app(config: Config) -> FastAPI:
-    app = FastAPI(title="anki-forge", docs_url=None, redoc_url=None)
+    app = FastAPI(title="forge", docs_url=None, redoc_url=None)
     templates = Jinja2Templates(directory=str(TEMPLATES))
     templates.env.filters["body"] = render_body
     app.state.config = config
@@ -130,7 +130,7 @@ def create_app(config: Config) -> FastAPI:
                 "empty.html",
                 {
                     "what": "units",
-                    "hint": "run `anki-forge extract`",
+                    "hint": "run `forge extract`",
                     "view": "units",
                     "config": config,
                     "source": resolve_source(config, source),
@@ -823,7 +823,7 @@ def source_names(config: Config) -> list[str]:
     still reachable.
 
     In TOML order, not alphabetical, because the first one is the default and
-    that should be a choice you make by editing `anki-forge.toml` rather than
+    that should be a choice you make by editing `forge.toml` rather than
     an accident of spelling. Ledgers with no `[sources.*]` entry follow.
     """
     names = list(config.sources)
@@ -850,17 +850,17 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     def add(where: str, key: str, value: Any, source: str) -> None:
         rows.append({"where": where, "key": key, "value": value, "from": source})
 
-    add("repo", "layout", config.layout, "anki-forge.toml")
-    add("repo", "language", config.language, "anki-forge.toml")
-    add("repo", "front_char_cap", config.front_char_cap, "anki-forge.toml")
-    add("repo", "crop_context", config.crop_context_for(""), "anki-forge.toml")
-    add("repo", "context_pages", config.context_pages, "anki-forge.toml")
-    add("anki", "deck", config.deck, "anki-forge.toml")
-    add("anki", "note type", config.note_type, "anki-forge.toml")
-    add("anki", "tag prefix", config.tag_prefix, "anki-forge.toml")
-    add("anki", "url", config.anki_url, "ANKI_CONNECT_URL or anki-forge.toml")
-    add("zotero", "data dir", str(config.zotero.data_dir), "anki-forge.toml")
-    add("zotero", "units from", ", ".join(sorted(config.zotero.units_from)), "anki-forge.toml")
+    add("repo", "layout", config.layout, "forge.toml")
+    add("repo", "language", config.language, "forge.toml")
+    add("repo", "front_char_cap", config.front_char_cap, "forge.toml")
+    add("repo", "crop_context", config.crop_context_for(""), "forge.toml")
+    add("repo", "context_pages", config.context_pages, "forge.toml")
+    add("anki", "deck", config.deck, "forge.toml")
+    add("anki", "note type", config.note_type, "forge.toml")
+    add("anki", "tag prefix", config.tag_prefix, "forge.toml")
+    add("anki", "url", config.anki_url, "ANKI_CONNECT_URL or forge.toml")
+    add("zotero", "data dir", str(config.zotero.data_dir), "forge.toml")
+    add("zotero", "units from", ", ".join(sorted(config.zotero.units_from)), "forge.toml")
 
     for name, spec in config.sources.items():
         where = f"source: {name}"
@@ -930,7 +930,7 @@ def commands_for(
         out.append({
             "label": "this list, as JSON",
             "run": (
-                f'uv run anki-forge units --source "{source}"'
+                f'uv run forge units --source "{source}"'
                 f' --state {filters.get("state") or "all"}{scope} --json'
             ),
             "kind": "shell",
@@ -941,7 +941,7 @@ def commands_for(
         out.append({"label": "open requests", "run": "/triage claude", "kind": "claude"})
         out.append({
             "label": "what would reach Anki",
-            "run": "uv run anki-forge sync --dry-run",
+            "run": "uv run forge sync --dry-run",
             "kind": "shell",
         })
     return out

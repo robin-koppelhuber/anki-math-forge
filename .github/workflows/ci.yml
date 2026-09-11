@@ -28,4 +28,4 @@ jobs:
         run: uv run pytest
 
       - name: lint the deck itself
-        run: uv run anki-forge check
+        run: uv run forge check

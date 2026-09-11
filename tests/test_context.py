@@ -8,10 +8,10 @@ judged by whoever writes the card, not by anything here.
 
 from __future__ import annotations
 
-from anki_forge import context
-from anki_forge.config import Config
-from anki_forge.extract import source_text_path
-from anki_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge import context
+from anki_math_forge.config import Config
+from anki_math_forge.extract import source_text_path
+from anki_math_forge.ledger import Ledger, Locator, Unit
 
 
 def _source(config: Config, text: str) -> None:
@@ -107,7 +107,7 @@ def test_no_vocabulary_is_baked_in() -> None:
     from pathlib import Path
 
     source = (
-        Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "context.py"
+        Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "context.py"
     ).read_text(encoding="utf-8")
     body = source.split('"""', 2)[-1]
     for word in ("symmetric", "hermitian", "positive definite", "full rank"):

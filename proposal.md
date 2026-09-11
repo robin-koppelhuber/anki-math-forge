@@ -150,7 +150,7 @@ The matrix analogue of $(\log x)' = 1/x$.
 
 ## 6. The companion app
 
-`anki-forge serve` — FastAPI, KaTeX, local only. Two views over the same files.
+`forge serve` — FastAPI, KaTeX, local only. Two views over the same files.
 
 ### Units view (`/units`)
 
@@ -248,7 +248,7 @@ anki-forge/
   sources/matrix-cookbook/
     units.jsonl
     assets/
-  src/anki_forge/
+  src/anki_math_forge/
     model.py                   # frontmatter + section parsing
     extract/                   # tex/pdf segmenters, transcription, ledger
     app/                       # FastAPI, templates, static

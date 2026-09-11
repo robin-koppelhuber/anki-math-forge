@@ -16,7 +16,7 @@ Two ways in, because they suit different moments:
   but on no template, so it never renders during review and always shows in
   the editor.
 * a **flag**, for when you do not. One keystroke, and `[anki.flags]` in
-  `anki-forge.toml` says what each colour means, so the meaning is yours to
+  `forge.toml` says what each colour means, so the meaning is yours to
   set rather than baked in here.
 """
 

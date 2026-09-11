@@ -171,7 +171,7 @@ def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ())
         "",
         f"# {item.title}",
         "",
-        "(No conventions recorded yet. `anki-forge context` says so, which is",
+        "(No conventions recorded yet. `forge context` says so, which is",
         "the point: until something is written here, whoever writes a card from",
         "this source is guessing at what is ambient.)",
         "",

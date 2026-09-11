@@ -188,7 +188,7 @@ def source_positions(config: Config) -> dict[str, int]:
     whose units get no position and so fall back to an arbitrary but stable
     tiebreak rather than a misleading one.
 
-    Sources are numbered in the order `anki-forge.toml` lists them, for the
+    Sources are numbered in the order `forge.toml` lists them, for the
     same reason the deck list is: which source comes first is a choice you
     make by editing the config, not an accident of spelling.
     """
@@ -446,7 +446,7 @@ def ensure_collection(
                 raise AnkiError(
                     f"note type {config.note_type!r} exists with fields {existing}, "
                     f"expected {notetype.FIELDS}. Bump `note_type_version` in "
-                    "anki-forge.toml rather than mutating a live note type."
+                    "forge.toml rather than mutating a live note type."
                 )
             missing = [f for f in notetype.FIELDS if f not in existing]
             for name in missing:

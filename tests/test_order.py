@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import check, model, sync
-from anki_forge.config import Config
+from anki_math_forge import check, model, sync
+from anki_math_forge.config import Config
 
 
 def card(
@@ -63,7 +63,7 @@ def test_grades_still_outrank_the_source_order(config: Config) -> None:
 
 
 def test_source_positions_number_units_in_reading_order(config: Config) -> None:
-    from anki_forge import extract
+    from anki_math_forge import extract
 
     extract.run(config, "demo")
     positions = sync.source_positions(config)
@@ -191,13 +191,13 @@ def test_an_unapproved_prerequisite_only_warns(config: Config) -> None:
 def test_a_source_whose_order_means_nothing_gets_no_positions(repo: Path) -> None:
     """Following a meaningless print order is worse than not following one:
     it looks deliberate."""
-    from anki_forge import config as config_mod
-    from anki_forge import extract
+    from anki_math_forge import config as config_mod
+    from anki_math_forge import extract
 
-    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
     # `[sources.demo]` already exists, so put the key inside it.
     toml = toml.replace("[sources.demo]", '[sources.demo]\norder = "none"', 1)
-    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
     config = config_mod.load(repo)
     extract.run(config, "demo")
 
@@ -207,12 +207,12 @@ def test_a_source_whose_order_means_nothing_gets_no_positions(repo: Path) -> Non
 def test_sources_are_numbered_in_the_order_the_config_lists_them(repo: Path) -> None:
     """Not alphabetically: which source leads is a decision you make by
     editing the config."""
-    from anki_forge import config as config_mod
-    from anki_forge import extract
+    from anki_math_forge import config as config_mod
+    from anki_math_forge import extract
 
-    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += '\n[sources.aaa]\ntitle = "A"\n'
-    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
     config = config_mod.load(repo)
     extract.run(config, "demo")
     # `demo` is listed first in the base config, so it keeps the low numbers

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set view = "review" %}
 {% set state = "" %}
-{% block title %}review · {{ source | default('', true) }} · anki-forge{% endblock %}
+{% block title %}review · {{ source | default('', true) }} · forge{% endblock %}
 
 {% block filters %}{% endblock %}
 
@@ -57,11 +57,11 @@
         </p>
         {% if card.requires %}
         <p class="dep needs" title="introduced before this card, whatever their grading">
-          needs {% for dep in card.requires %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="go to {{ uid }}"><code>{{ uid }}</code></a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `anki-forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
+          needs {% for dep in card.requires %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="go to {{ uid }}"><code>{{ uid }}</code></a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
         {% endif %}
         {% if card.required_by %}
         <p class="dep needed" title="this card is pulled forward to sit ahead of them">
-          needed by {% for dep in card.required_by %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="go to {{ uid }}"><code>{{ uid }}</code></a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `anki-forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
+          needed by {% for dep in card.required_by %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="go to {{ uid }}"><code>{{ uid }}</code></a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
         {% endif %}
       </div>
 

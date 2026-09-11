@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import check, model, sync, verify
-from anki_forge import config as config_mod
-from anki_forge.config import Config
-from anki_forge.model import Card
+from anki_math_forge import check, model, sync, verify
+from anki_math_forge import config as config_mod
+from anki_math_forge.config import Config
+from anki_math_forge.model import Card
 
 
 def a_card(card_type: str, **sections: str) -> Card:

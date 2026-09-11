@@ -15,7 +15,7 @@ from a bug to whoever met it later.
 
 ## Why you exist
 
-There is a mechanical classifier already (`anki-forge classify`). It knows two
+There is a mechanical classifier already (`forge classify`). It knows two
 rules: units before the first numbered equation, and unnumbered units whose
 text layer holds no relation symbol. Both rules lean on *this* document being
 pdfTeX output with a clean text layer. Neither survives a scanned book, a
@@ -28,7 +28,7 @@ You look at the crop. That generalises.
 1. Render the crops you have been asked for:
 
    ```
-   uv run anki-forge crops --section <SECTION> --state new --json
+   uv run forge crops --section <SECTION> --state new --json
    ```
 
    Omit `--out`: crops land under `work_dir` (`.forge/`), gitignored and
@@ -43,7 +43,7 @@ You look at the crop. That generalises.
 3. Where a unit should not be carded, propose it:
 
    ```
-   uv run anki-forge units --id <UNIT-ID> --suggest skipped <reason> \
+   uv run forge units --id <UNIT-ID> --suggest skipped <reason> \
      --detail 'what you saw, in one sentence' --by claude
    ```
 
@@ -74,7 +74,7 @@ You look at the crop. That generalises.
   numbered crop looks wrong, propose nothing and **annotate** it instead:
 
   ```
-  uv run anki-forge units --id <UNIT-ID> --annotate 'crop holds two numbered results; segmentation merged them'
+  uv run forge units --id <UNIT-ID> --annotate 'crop holds two numbered results; segmentation merged them'
   ```
 
 - An unnumbered display equation that states a relation. Books state plenty of

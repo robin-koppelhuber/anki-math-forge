@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from anki_forge import cli, model, sync
-from anki_forge.config import Config
-from anki_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge import cli, model, sync
+from anki_math_forge.config import Config
+from anki_math_forge.ledger import Ledger, Locator, Unit
 from conftest import FakeAnki
 
 

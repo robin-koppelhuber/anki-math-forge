@@ -11,10 +11,10 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from anki_forge import extract, model
-from anki_forge.app import create_app
-from anki_forge.config import Config
-from anki_forge.ledger import Ledger
+from anki_math_forge import extract, model
+from anki_math_forge.app import create_app
+from anki_math_forge.config import Config
+from anki_math_forge.ledger import Ledger
 
 
 @pytest.fixture
@@ -268,7 +268,7 @@ def test_pipeline_counts_span_units_and_cards(
 ) -> None:
     """Units and cards are separate objects with separate gates; the strip is
     the only place that shape is visible, so it must count both."""
-    from anki_forge.app import pipeline_counts
+    from anki_math_forge.app import pipeline_counts
 
     units.set_state(units.units[0].id, "queued")
     units.set_state(units.units[1].id, "skipped", reason="trivial")
@@ -285,7 +285,7 @@ def test_pipeline_counts_span_units_and_cards(
 def test_an_edited_approval_counts_as_draft_in_the_strip(
     config: Config, units: Ledger, card_path: Path
 ) -> None:
-    from anki_forge.app import pipeline_counts
+    from anki_math_forge.app import pipeline_counts
 
     card = model.load(card_path)
     card.approve()
@@ -321,7 +321,7 @@ def test_the_section_dropdown_says_what_is_transcribed(
     client: TestClient, config: Config, units: Ledger
 ) -> None:
     """So you can pick a section that is ready, rather than discovering it."""
-    from anki_forge import latex
+    from anki_math_forge import latex
 
     units.transcribe(units.units[0].id, r"X^{-\top}", latex.checker(()))
     body = client.get("/units?state=new").text
@@ -336,7 +336,7 @@ def test_units_view_has_a_section_filter_rail(config: Config, units: Ledger) -> 
 
 
 def demo_units() -> list[Any]:
-    from anki_forge.ledger import Locator, Unit
+    from anki_math_forge.ledger import Locator, Unit
 
     return [
         Unit(id="s:eq:1", locator=Locator(section="2.1"), transcription="ok"),
@@ -346,7 +346,7 @@ def demo_units() -> list[Any]:
 
 
 def rows_for(shown: set[str]) -> dict[str, Any]:
-    from anki_forge.app import UNIT_STATES, section_rows
+    from anki_math_forge.app import UNIT_STATES, section_rows
 
     tree = section_rows(
         demo_units(),
@@ -420,7 +420,7 @@ def test_notes_are_titled_and_split_by_audience(config: Config, units: Ledger) -
 
 
 def test_note_prefix_stripping_survives_a_hand_edited_note() -> None:
-    from anki_forge.app import _note_text
+    from anki_math_forge.app import _note_text
 
     assert _note_text("@claude fix it") == "fix it"
     assert _note_text("@me mine") == "mine"
@@ -557,7 +557,7 @@ def test_the_compact_diagram_uses_the_same_counts_as_the_filters(
     led.save()
 
     page = client.get("/units").text
-    from anki_forge.app import pipeline_counts
+    from anki_math_forge.app import pipeline_counts
 
     counts = pipeline_counts(config)
     assert counts["queued"] == 1
@@ -603,7 +603,7 @@ def test_the_guide_size_classes_match_the_stylesheet(client: TestClient, units: 
     """
     from pathlib import Path as _Path
 
-    static = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+    static = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
     js = (static / "app.js").read_text(encoding="utf-8")
     css = (static / "app.css").read_text(encoding="utf-8")
 
@@ -630,7 +630,12 @@ def test_the_splitter_track_is_wide_enough_to_grab(client: TestClient) -> None:
     from pathlib import Path as _Path
 
     css = (
-        _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static" / "app.css"
+        _Path(__file__).resolve().parents[1]
+        / "src"
+        / "anki_math_forge"
+        / "app"
+        / "static"
+        / "app.css"
     ).read_text(encoding="utf-8")
     tracks = re.findall(r"grid-template-columns: var\(--split-[\w-]+[^)]*\) (\d+)px", css)
     assert len(tracks) >= 2, "expected a draggable split in both the units and review views"
@@ -652,14 +657,14 @@ def test_the_full_diagram_keeps_a_legible_minimum_width() -> None:
     """
     from pathlib import Path as _Path
 
-    static = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+    static = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
     css = (static / "app.css").read_text(encoding="utf-8")
     floor = re.search(r"\.in-full \.fsm svg \{ min-width: (\d+)px", css)
     assert floor, "the diagram lost its minimum width"
 
     fsm = (
         _Path(__file__).resolve().parents[1]
-        / "src" / "anki_forge" / "app" / "templates" / "_fsm.html"
+        / "src" / "anki_math_forge" / "app" / "templates" / "_fsm.html"
     ).read_text(encoding="utf-8")
     view = re.search(r'viewBox="0 0 (\d+) (\d+)"', fsm)
     assert view, "the diagram lost its viewBox"
@@ -676,7 +681,7 @@ def test_the_guide_remembers_its_two_widths_separately() -> None:
 
     js = (
         _Path(__file__).resolve().parents[1]
-        / "src" / "anki_forge" / "app" / "static" / "app.js"
+        / "src" / "anki_math_forge" / "app" / "static" / "app.js"
     ).read_text(encoding="utf-8")
     assert '"anki-forge.rail-right"' in js
     assert '"anki-forge.rail-right-full"' in js
@@ -728,7 +733,7 @@ def test_the_template_never_renders_an_empty_katex_base(config: Config, units: L
 
     base = (
         _Path(__file__).resolve().parents[1]
-        / "src" / "anki_forge" / "app" / "templates" / "base.html"
+        / "src" / "anki_math_forge" / "app" / "templates" / "base.html"
     ).read_text(encoding="utf-8")
     assert 'default("", true)' in base, "the global must have a fallback"
     assert "cdn.jsdelivr.net" in base, "and a last-resort URL"
@@ -752,7 +757,7 @@ def test_hidden_beats_every_display_rule() -> None:
 
     css = (
         _Path(__file__).resolve().parents[1]
-        / "src" / "anki_forge" / "app" / "static" / "app.css"
+        / "src" / "anki_math_forge" / "app" / "static" / "app.css"
     ).read_text(encoding="utf-8")
     # Comments quote the rule they explain; searching them finds the wrong one.
     css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
@@ -808,7 +813,7 @@ def test_each_split_remembers_its_own_width() -> None:
 
     js = (
         _Path(__file__).resolve().parents[1]
-        / "src" / "anki_forge" / "app" / "static" / "app.js"
+        / "src" / "anki_math_forge" / "app" / "static" / "app.js"
     ).read_text(encoding="utf-8")
     assert '"anki-forge.split.units"' in js
     assert '"anki-forge.split.card"' in js
@@ -824,7 +829,7 @@ def test_every_bound_key_is_in_the_footer() -> None:
     import re
     from pathlib import Path as _Path
 
-    app = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app"
+    app = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
     for view in ("units", "review"):
         js = (app / "static" / f"{view}.js").read_text(encoding="utf-8")
         block = js[js.index("bindKeys({") :]
@@ -866,7 +871,7 @@ def test_the_counts_have_somewhere_to_be_painted() -> None:
     import re
     from pathlib import Path as _Path
 
-    app = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app"
+    app = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
     js = (app / "static" / "app.js").read_text(encoding="utf-8")
     assert "[data-count]" in js, "nothing repaints the rail"
     assert "[data-fsm-count]" in js, "nothing repaints the diagram"
@@ -889,14 +894,14 @@ def test_undo_survives_a_page_load() -> None:
 
     js = (
         _Path(__file__).resolve().parents[1]
-        / "src" / "anki_forge" / "app" / "static" / "app.js"
+        / "src" / "anki_math_forge" / "app" / "static" / "app.js"
     ).read_text(encoding="utf-8")
     assert "sessionStorage" in js
     assert "anki-forge.undo" in js
     for view in ("units", "review"):
         src = (
             _Path(__file__).resolve().parents[1]
-            / "src" / "anki_forge" / "app" / "static" / f"{view}.js"
+            / "src" / "anki_math_forge" / "app" / "static" / f"{view}.js"
         ).read_text(encoding="utf-8")
         assert "loadUndo()" in src, f"{view} does not restore the stack"
         assert "saveUndo(undoStack)" in src, f"{view} does not persist it"
@@ -934,7 +939,7 @@ def test_code_fences_render_as_code_not_as_backticks() -> None:
     the maths-like parts of the code. `<pre>` is right here for exactly the
     reason it was wrong for notes: KaTeX skips it.
     """
-    from anki_forge.app import render_body
+    from anki_math_forge.app import render_body
 
     out = str(render_body("before\n```python\nlhs = a < b\n```\nafter"))
     assert "```" not in out
@@ -947,7 +952,7 @@ def test_the_filter_returns_markup_not_a_string(config: Config) -> None:
     """A plain str would be escaped again by Jinja and shown as tags."""
     from markupsafe import Markup
 
-    from anki_forge.app import render_body
+    from anki_math_forge.app import render_body
 
     assert isinstance(render_body("```\nx = 1\n```"), Markup)
 
@@ -973,7 +978,7 @@ def test_the_guide_lists_every_bound_key() -> None:
     import re
     from pathlib import Path as _Path
 
-    app = _Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app"
+    app = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
     guide = (app / "templates" / "_guide.html").read_text(encoding="utf-8")
     units_part, review_part = guide.split("{% else %}", 1)
 
@@ -1058,7 +1063,7 @@ def test_unknown_source_falls_back_rather_than_emptying(
 
 
 def test_pipeline_counts_scope_to_one_source(pdf_source: Config) -> None:
-    from anki_forge.app import pipeline_counts
+    from anki_math_forge.app import pipeline_counts
 
     write_card(pdf_source, "aaa111", "demo:2.4:61")
     write_card(pdf_source, "bbb222", "book:1.1:1")
@@ -1102,7 +1107,7 @@ def test_api_counts_take_a_source(pdf_source: Config) -> None:
 def test_the_default_source_is_the_first_in_the_toml(pdf_source: Config) -> None:
     """Not alphabetical: which book you land on is a decision you make by
     editing the config, not a consequence of its name."""
-    from anki_forge.app import resolve_source, source_names
+    from anki_math_forge.app import resolve_source, source_names
 
     assert source_names(pdf_source) == ["demo", "book"]
     assert resolve_source(pdf_source, "") == "demo"
@@ -1149,7 +1154,7 @@ def test_the_annotation_filter_keeps_the_stage_filter(pdf_source: Config) -> Non
 
 
 def test_counts_split_annotations_by_audience(pdf_source: Config) -> None:
-    from anki_forge.app import pipeline_counts
+    from anki_math_forge.app import pipeline_counts
 
     annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
     annotate(pdf_source, "bbb222", "demo:2.4:61", "work for the agent")
@@ -1185,7 +1190,7 @@ def test_resolve_refuses_a_stale_write(pdf_source: Config) -> None:
 
 
 def test_units_filter_by_annotation_audience(pdf_client: TestClient, pdf_units: Config) -> None:
-    from anki_forge.ledger import Ledger
+    from anki_math_forge.ledger import Ledger
 
     path = pdf_units.units_path("book")
     with Ledger.edit(path) as led:
@@ -1265,7 +1270,7 @@ def test_me_and_claude_replace_each_other(client: TestClient, units: Ledger) -> 
 def test_the_annotation_count_matches_the_view_it_links_to(pdf_source: Config) -> None:
     """The repo-wide total read "@me 42" on the review page and then showed no
     cards, because all 42 were on units."""
-    from anki_forge.ledger import Ledger as L
+    from anki_math_forge.ledger import Ledger as L
 
     write_card(pdf_source, "aaa111", "demo:2.4:61")
     card = model.load(next(pdf_source.cards_dir.rglob("aaa111-*.md")))
@@ -1312,7 +1317,7 @@ def test_review_filters_by_section(pdf_source: Config) -> None:
 def test_filter_url_changes_one_key_and_keeps_the_rest() -> None:
     """Every rail link used to assemble its own query string, and each forgot
     a different parameter."""
-    from anki_forge.app import filter_url
+    from anki_math_forge.app import filter_url
 
     current = {"source": "mc", "status": "draft", "section": "2.4", "annotated": "me"}
     assert filter_url("/review", current, status="approved") == (
@@ -1405,7 +1410,7 @@ def test_filtering_to_cards_with_no_annotation(pdf_source: Config) -> None:
 
 
 def test_the_no_notes_count_is_the_complement(pdf_source: Config) -> None:
-    from anki_forge.app import pipeline_counts
+    from anki_math_forge.app import pipeline_counts
 
     annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
     write_card(pdf_source, "bbb222", "demo:2.4:61")
@@ -1429,7 +1434,7 @@ def test_enter_in_the_prompt_means_ok_not_cancel(client: TestClient, card_path: 
     assert submits, "the dialog needs a submit button or Enter does nothing"
     assert 'value="ok"' in submits[0], "the first submit button is what Enter presses"
 
-    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
           / "app.js").read_text(encoding="utf-8")
     assert "prompt-cancel" in js, "a non-submit cancel has to be closed by hand"
 
@@ -1437,7 +1442,7 @@ def test_enter_in_the_prompt_means_ok_not_cancel(client: TestClient, card_path: 
 def test_annotate_advances_like_every_other_decision() -> None:
     """Annotating is a decision: you have said your piece and are done with
     the card. Leaving the cursor put meant reaching for `j` every time."""
-    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
           / "review.js").read_text(encoding="utf-8")
     body = js[js.index("async function annotate"):js.index("async function openEditor")]
     assert "deck.nextPending()" in body or "deck.settle" in body, "annotate must move on"
@@ -1515,7 +1520,7 @@ def test_following_a_dependency_stays_on_the_page_when_it_can() -> None:
     """The target is usually already in the deck, hidden behind the card you
     are looking at, so jumping to it should not cost a page load. The hash
     carries it either way, which is what makes the back button work."""
-    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
           / "review.js").read_text(encoding="utf-8")
     assert "data-goto" in js
     assert "preventDefault" in js, "no reload when the card is already here"
@@ -1559,7 +1564,7 @@ def test_the_order_badge_is_labelled(pdf_source: Config) -> None:
 
 
 def test_a_hash_that_names_a_hidden_card_says_so() -> None:
-    js = (Path(__file__).resolve().parents[1] / "src" / "anki_forge" / "app" / "static"
+    js = (Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
           / "review.js").read_text(encoding="utf-8")
     body = js[js.index("function followHash"):js.index("window.addEventListener")]
     assert "toast" in body, "a miss must not be silent"
@@ -1572,7 +1577,7 @@ def test_the_dependency_list_survives_a_stale_server(config: Config, card_path: 
     this rule; this pins it for the block that broke it."""
     from fastapi.templating import Jinja2Templates
 
-    from anki_forge.app import TEMPLATES
+    from anki_math_forge.app import TEMPLATES
 
     env = Jinja2Templates(directory=str(TEMPLATES)).env
     source = (TEMPLATES / "review.html").read_text(encoding="utf-8")

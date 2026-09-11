@@ -9,7 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-CONFIG_NAME = "anki-forge.toml"
+CONFIG_NAME = "forge.toml"
+# What the file used to be called. Still read, so a repo does not have to
+# be renamed in the same sitting as the tool.
+LEGACY_CONFIG_NAMES = ("anki-forge.toml",)
+CONFIG_NAMES = (CONFIG_NAME, *LEGACY_CONFIG_NAMES)
 
 # Which layout a derivative is written in. A typo here would read as
 # "not denominator" and silently change what every card means, so it is
@@ -254,17 +258,20 @@ class Config:
 
 
 def find_root(start: Path | None = None) -> Path:
-    """Nearest ancestor holding anki-forge.toml, else the start directory."""
+    """Nearest ancestor holding forge.toml, else the start directory."""
     here = (start or Path.cwd()).resolve()
     for candidate in (here, *here.parents):
-        if (candidate / CONFIG_NAME).is_file():
+        if any((candidate / name).is_file() for name in CONFIG_NAMES):
             return candidate
     return here
 
 
 def load(root: Path | None = None) -> Config:
     root = (root or find_root()).resolve()
-    path = root / CONFIG_NAME
+    path = next(
+        (root / name for name in CONFIG_NAMES if (root / name).is_file()),
+        root / CONFIG_NAME,
+    )
     raw: dict[str, Any] = {}
     if path.is_file():
         with path.open("rb") as fh:
@@ -338,7 +345,7 @@ def split_source_file(path: Path) -> tuple[dict[str, Any], str]:
     """A source file: TOML between `+++` fences, then prose.
 
     **TOML, not YAML**, because everything above the fence overrides a key in
-    `anki-forge.toml` and the two should be the same language: a block you copy
+    `forge.toml` and the two should be the same language: a block you copy
     from one to the other has to work unchanged. TOML is also the stricter of
     the two, which matters for exactly this data. In YAML a colour or tag
     written `no`, `on` or `y` is silently a boolean.

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge.classify import RELATION, classify
-from anki_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge.classify import RELATION, classify
+from anki_math_forge.ledger import Ledger, Locator, Unit
 
 
 def test_relation_matches_both_alphabets() -> None:

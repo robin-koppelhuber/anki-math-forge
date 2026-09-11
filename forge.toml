@@ -1,4 +1,4 @@
-# anki-forge configuration. One file, all knobs (DESIGN.md ss11).
+# anki-math-forge configuration. One file, all knobs (DESIGN.md ss11).
 
 [repo]
 cards_dir = "cards"

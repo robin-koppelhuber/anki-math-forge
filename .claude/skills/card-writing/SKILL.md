@@ -69,7 +69,7 @@ do not write the card.
 
 **Every object on the front is defined before the front uses it**, either
 ambiently or on the card itself. **Ambient means whatever the source declares**
-— `anki-forge context <unit>` prints it, and it is per source, because
+— `forge context <unit>` prints it, and it is per source, because
 "entries are real" and "denominator layout" are facts about one book rather
 than about this tool. Read it rather than assuming. Everything it does not
 cover is the card's job.
@@ -111,7 +111,7 @@ positive definiteness, conformability, layout convention. One line. If a card
 has no real conditions, leave the section out rather than writing "none".
 
 Every card whose shape depends on layout says so. Which layout is the
-source's to declare, not this file's: `anki-forge context <unit>` prints it.
+source's to declare, not this file's: `forge context <unit>` prints it.
 
 ### Form: mathematics, in a fixed order
 
@@ -528,14 +528,14 @@ no two sessions would apply the same way.
 **A card is not one-to-one with a unit.** A display equation the segmenter cut
 into three lines is three units and one identity: card it whole with repeated
 `--unit`, and all three are marked carded. Conversely one unit stating two
-independent facts is two cards citing the same unit. `anki-forge context
+independent facts is two cards citing the same unit. `forge context
 <unit>` lists every unit on the page in reading order so the pieces are
 visible. Most units are still one card — merge when the pieces are meaningless
 apart, split when one card would have two answers.
 
 
 **Read the book's notation section before you write anything.**
-`anki-forge source-text <source>` prints the cached text layer; the Notation
+`forge source-text <source>` prints the cached text layer; the Notation
 and Nomenclature table near the front defines every symbol the book uses. A
 card that says `$A^+$` without knowing it means the pseudo-inverse is a card
 that teaches you the wrong thing. Read the surrounding section too — it tells
@@ -548,7 +548,7 @@ crop. Where the two disagree,
 the crop wins, and if the crop is unreadable, annotate the unit rather than
 guessing.
 
-Keep the source citation exact — whatever `anki-forge new` generated from the
+Keep the source citation exact — whatever `forge new` generated from the
 unit's locator, down to the section and the number — because the review view
 links back to it, and that is how a suspect card gets settled.
 

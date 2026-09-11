@@ -2,7 +2,7 @@
 
 `sources/<name>/source.md`: TOML between `+++` fences for the keys the tool
 acts on, prose below for the conventions a card writer needs. TOML because
-every key up there overrides one in `anki-forge.toml`, and a block you copy
+every key up there overrides one in `forge.toml`, and a block you copy
 between the two files has to work unchanged.
 """
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from anki_forge import config as config_mod
+from anki_math_forge import config as config_mod
 
 
 def write_source(repo: Path, name: str, frontmatter: str, prose: str = "") -> None:
@@ -23,7 +23,7 @@ def write_source(repo: Path, name: str, frontmatter: str, prose: str = "") -> No
 
 
 def add_toml(repo: Path, block: str) -> None:
-    path = repo / "anki-forge.toml"
+    path = repo / "forge.toml"
     path.write_text(path.read_text(encoding="utf-8") + "\n" + block, encoding="utf-8")
 
 
@@ -160,9 +160,9 @@ def test_the_more_specific_meaning_wins() -> None:
 
 
 def test_context_reads_the_prose_under_the_frontmatter(repo: Path) -> None:
-    """`anki-forge context` prints it, so whoever writes a card sees the right
+    """`forge context` prints it, so whoever writes a card sees the right
     conventions without having to know the file exists."""
-    from anki_forge.context import _conventions
+    from anki_math_forge.context import _conventions
 
     write_source(repo, "book", 'title = "A Book"', "# A Book\n\nEntries are real.\n")
     config = config_mod.load(repo)
@@ -174,7 +174,7 @@ def test_context_reads_the_prose_under_the_frontmatter(repo: Path) -> None:
 
 def test_conventions_still_read_from_the_older_file(repo: Path) -> None:
     """A repo that has not migrated keeps working."""
-    from anki_forge.context import _conventions
+    from anki_math_forge.context import _conventions
 
     folder = repo / "sources" / "book"
     folder.mkdir(parents=True, exist_ok=True)

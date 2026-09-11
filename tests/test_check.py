@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from anki_forge import check, model
-from anki_forge.config import Config
+from anki_math_forge import check, model
+from anki_math_forge.config import Config
 
 HEAD = """---
 uid: {uid}

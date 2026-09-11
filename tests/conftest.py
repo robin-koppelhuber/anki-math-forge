@@ -9,9 +9,9 @@ from typing import Any
 
 import pytest
 
-from anki_forge import config as config_mod
-from anki_forge.anki import AnkiConnect, AnkiError
-from anki_forge.config import Config
+from anki_math_forge import config as config_mod
+from anki_math_forge.anki import AnkiConnect, AnkiError
+from anki_math_forge.config import Config
 
 CONFIG_TOML = """
 [repo]
@@ -90,7 +90,7 @@ The determinant identity everyone forgets. % a comment
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    (tmp_path / "anki-forge.toml").write_text(CONFIG_TOML, encoding="utf-8")
+    (tmp_path / "forge.toml").write_text(CONFIG_TOML, encoding="utf-8")
     (tmp_path / "cards").mkdir()
     (tmp_path / "sources" / "demo").mkdir(parents=True)
     (tmp_path / "sources" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
@@ -145,9 +145,9 @@ def pdf_source(repo: Path) -> Config:
     """A repo with a PDF-backed source registered alongside the tex one."""
     (repo / "sources" / "book").mkdir(parents=True)
     build_pdf(repo / "sources" / "book" / "book.pdf")
-    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += '\n[sources.book]\ntitle = "A Book"\ncitation = "Book"\npdf = "sources/book/book.pdf"\n'
-    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)
 
 

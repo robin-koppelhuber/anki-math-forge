@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from anki_forge import model
-from anki_forge.model import Card, CardError, Section, StaleFileError
+from anki_math_forge import model
+from anki_math_forge.model import Card, CardError, Section, StaleFileError
 
 
 def test_round_trip_is_byte_stable(card_path: Path) -> None:
@@ -235,7 +235,7 @@ def test_uses_is_a_recognised_section() -> None:
 
 
 def test_uses_reaches_anki_as_its_own_field() -> None:
-    from anki_forge import notetype
+    from anki_math_forge import notetype
 
     assert "Uses" in notetype.FIELDS
     assert "{{#Uses}}" in notetype.BACK_TEMPLATE

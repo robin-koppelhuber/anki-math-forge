@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import check, model, notetype, sync
-from anki_forge import config as config_mod
-from anki_forge.config import Config
+from anki_math_forge import check, model, notetype, sync
+from anki_math_forge import config as config_mod
+from anki_math_forge.config import Config
 from conftest import FakeAnki
 
 
@@ -290,7 +290,7 @@ def test_conditions_are_shown_with_the_prompt() -> None:
     answer was already given. That made "could someone answer this front from
     the ambient conventions alone" a rule no card could satisfy.
     """
-    from anki_forge import notetype
+    from anki_math_forge import notetype
 
     assert "{{#Conditions}}" in notetype.FRONT_TEMPLATE, "the setting must be on the prompt"
     assert "{{Conditions}}" in notetype.FRONT_TEMPLATE
@@ -315,9 +315,9 @@ def min_card(config: Config, uid: str, unit: str) -> Path:
 
 
 def with_book_deck(repo: Path, deck: str) -> Config:
-    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += f'\n[sources.book]\ntitle = "A Book"\ndeck = "{deck}"\n'
-    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)
 
 

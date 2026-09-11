@@ -22,7 +22,7 @@ transcriber.
 1. Render the crops you have been asked for:
 
    ```
-   uv run anki-forge crops --section <SECTION> --untranscribed --json
+   uv run forge crops --section <SECTION> --untranscribed --json
    ```
 
    That prints a manifest: one entry per unit with `unit`, `file`, `equation`,
@@ -34,7 +34,7 @@ transcriber.
 3. Record what you read:
 
    ```
-   uv run anki-forge units --id <UNIT-ID> --tex-auto '<latex>'
+   uv run forge units --id <UNIT-ID> --tex-auto '<latex>'
    ```
 
    Quote the LaTeX in **single** quotes so the shell leaves backslashes alone.
@@ -48,7 +48,7 @@ transcriber.
   wrong to you, transcribe it as shown and *annotate* it:
 
   ```
-  uv run anki-forge units --id <UNIT-ID> --annotate 'eq (N) looks wrong: <why>'
+  uv run forge units --id <UNIT-ID> --annotate 'eq (N) looks wrong: <why>'
   ```
 
 - **Bare math only.** No `$` delimiters, no `\begin{equation}`, no equation
@@ -90,14 +90,14 @@ transcriber.
   cat > tex.tmp << 'EOF'
   ...your LaTeX, exactly as you mean it...
   EOF
-  uv run anki-forge units --id <UNIT-ID> --tex-auto "$(cat tex.tmp)"
+  uv run forge units --id <UNIT-ID> --tex-auto "$(cat tex.tmp)"
   ```
 
   After recording anything containing `array`, `matrix`, `bmatrix`, `cases`
   or `aligned`, read it back and check the separators survived:
 
   ```
-  uv run anki-forge units --id <UNIT-ID> --json
+  uv run forge units --id <UNIT-ID> --json
   ```
 
 - **A block of prose is transcribed, not skipped.** Parts of a source explain
@@ -105,7 +105,7 @@ transcriber.
   real", a bullet list of properties, a sentence defining a term. Record it:
 
   ```
-  uv run anki-forge units --id <UNIT-ID> --tex-auto '\text{The inverse of an orthogonal matrix is orthogonal too.}'
+  uv run forge units --id <UNIT-ID> --tex-auto '\text{The inverse of an orthogonal matrix is orthogonal too.}'
   ```
 
   Wrap it in `\text{...}`. Bare prose passes the gate but renders as a
@@ -119,7 +119,7 @@ transcriber.
 - **Do not guess.** If a crop is unreadable, cut off, or contains two
   equations, annotate it and move on:
   ```
-  uv run anki-forge units --id <UNIT-ID> --annotate 'crop is cut off on the left'
+  uv run forge units --id <UNIT-ID> --annotate 'crop is cut off on the left'
   ```
 
   A missing transcription is a small problem. A confident wrong one is a bad
@@ -127,7 +127,7 @@ transcriber.
 
 - **Watch for split and merged crops.** Segmentation is heuristic. A crop
   holding two numbered equations, or holding only part of one, is a finding
-  worth annotating — `uv run anki-forge audit` flags many of these already.
+  worth annotating — `uv run forge audit` flags many of these already.
 
 ## Reporting back
 

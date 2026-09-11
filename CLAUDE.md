@@ -1,4 +1,4 @@
-# anki-forge
+# anki-math-forge
 
 Turns mathematical source material into reviewed Anki cards. Design doc:
 [proposal.md](proposal.md) (referred to as DESIGN.md in code comments).
@@ -24,7 +24,7 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
    generates or rewrites card text.
 7. **A crop is authoritative for what is printed, and silent about the rest.**
    Conditions are usually printed around an identity, not inside it.
-   `anki-forge context <unit>` prints the page it came from — that is all it
+   `forge context <unit>` prints the page it came from — that is all it
    does. Whether the identity needs a condition is mathematics, and belongs to
    whoever writes the card: check it, prefer the source's wording where there
    is one, and note in `## notes` any condition you add that the source does
@@ -43,7 +43,7 @@ Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 **A card is not one-to-one with a unit, in either direction.** One unit splits
 into several cards (`uids` on the unit); several units merge into one card
 (`unit` accepts a list, or a comma-separated string) — which is what a
-multi-line display cut into pieces needs. `anki-forge context <unit>` lists
+multi-line display cut into pieces needs. `forge context <unit>` lists
 every unit on the page in reading order, so the pieces are visible and
 nameable; `new` takes `--unit` repeatedly and marks each one carded.
 
@@ -98,18 +98,18 @@ So they live with the source, in **`sources/<name>/source.md`**: TOML between
   that source means.
 - **Below it** is what a key cannot: the ambient mathematical
   setting, what is assumed constant, how a contested convention was settled.
-  `anki-forge context <unit>` prints it, so whoever writes or reviews a card
+  `forge context <unit>` prints it, so whoever writes or reviews a card
   sees the right one without knowing it exists. If a source has no such file,
   `context` says so — an absent convention is a card writer guessing.
 
 TOML rather than YAML, because every key up there overrides one in
-`anki-forge.toml` and a block copied between the two has to work unchanged.
+`forge.toml` and a block copied between the two has to work unchanged.
 It is also the stricter language: in YAML a tag or colour written `no`, `on` or
 `y` is silently a boolean. One file rather than two, because a convention kept
 away from the keys it qualifies is the one nobody opens. A folder with no
 `source.md` is not a source: discovery does not guess.
 
-`anki-forge.toml` keeps what is genuinely repo-wide — `[cards] language`, the
+`forge.toml` keeps what is genuinely repo-wide — `[cards] language`, the
 note type, `[anki] deck` and `[cards] layout` as fallbacks, `[zotero]` defaults
 — and a `[sources.<name>]` block there still works for a repo that has not
 moved yet.
@@ -128,21 +128,21 @@ What is true of the *tool* stays here:
 ## Commands
 
 ```
-uv run anki-forge extract [source]   # source -> units; never reads the maths
-uv run anki-forge zotero --tag anki  # what you marked up in Zotero -> units
-uv run anki-forge classify           # *propose* skips; applies nothing
-uv run anki-forge audit              # is the index trustworthy? 1..N, no gaps
-uv run anki-forge crops --section 2.4 --untranscribed --out DIR --json
-uv run anki-forge context <unit-id>  # the page it was printed on (--pages N for more)
-uv run anki-forge source-text <src>  # the book text, for card-writing context
-uv run anki-forge check              # lint (always; blocks sync)
-uv run anki-forge units --state queued --json
-uv run anki-forge new --unit <id> --front '$...$' --back '$...$'
-uv run anki-forge todo               # open @claude annotations
-uv run anki-forge serve              # units triage + card review
-uv run anki-forge sync --dry-run     # then without --dry-run
-uv run anki-forge feedback           # Anki review comments/flags -> @claude notes
-uv run anki-forge verify             # opt-in numeric check
+uv run forge extract [source]   # source -> units; never reads the maths
+uv run forge zotero --tag anki  # what you marked up in Zotero -> units
+uv run forge classify           # *propose* skips; applies nothing
+uv run forge audit              # is the index trustworthy? 1..N, no gaps
+uv run forge crops --section 2.4 --untranscribed --out DIR --json
+uv run forge context <unit-id>  # the page it was printed on (--pages N for more)
+uv run forge source-text <src>  # the book text, for card-writing context
+uv run forge check              # lint (always; blocks sync)
+uv run forge units --state queued --json
+uv run forge new --unit <id> --front '$...$' --back '$...$'
+uv run forge todo               # open @claude annotations
+uv run forge serve              # units triage + card review
+uv run forge sync --dry-run     # then without --dry-run
+uv run forge feedback           # Anki review comments/flags -> @claude notes
+uv run forge verify             # opt-in numeric check
 ```
 
 Every verb that prints for a human takes `--json` for a machine. That is the
@@ -163,7 +163,7 @@ interface to read from, not the human output.
 
 ## Frozen
 
-`src/anki_forge/extract/pdf.py` is **frozen**, see [ROADMAP.md](ROADMAP.md)
+`src/anki_math_forge/extract/pdf.py` is **frozen**, see [ROADMAP.md](ROADMAP.md)
 §13. It works and it is verified, but it is a heuristic specialised to this one
 book, so it is one selectable backend rather than the default. The default is a
 model reading pages, checked by the same contiguity oracle.

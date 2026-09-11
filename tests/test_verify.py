@@ -7,9 +7,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from anki_forge import model, verify
-from anki_forge.config import Config
-from anki_forge.model import Card, Section
+from anki_math_forge import model, verify
+from anki_math_forge.config import Config
+from anki_math_forge.model import Card, Section
 
 # d/dX log|det X| = X^-T, on a *non-symmetric* X so the transpose is load-bearing.
 LOGDET = """```python
@@ -145,11 +145,11 @@ def test_verify_refuses_a_layout_its_gradient_cannot_compute(repo: Path) -> None
     """`grad` computes denominator layout only. The two agree on every square
     matrix, so checking a numerator source against it would pass most cards and
     fail the rectangular ones for a reason nobody would guess."""
-    from anki_forge import config as config_mod
+    from anki_math_forge import config as config_mod
 
-    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += '\n[sources.book]\ntitle = "A Book"\nlayout = "numerator"\n'
-    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
     config = config_mod.load(repo)
 
     card = model.parse(

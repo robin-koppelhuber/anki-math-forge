@@ -156,7 +156,7 @@ Every `@claude` note the transcribe and classify passes left on a unit,
 cleared once acted on. They recorded three things, and each has a better
 home now:
 
-- **which units make up a multi-line display.** `anki-forge context <unit>`
+- **which units make up a multi-line display.** `forge context <unit>`
   computes this from the ledger and prints it under *every unit on this
   page, in reading order*, so a hand-written note could only go stale.
 - **why a crop could not be transcribed.** Where that settles the unit, it

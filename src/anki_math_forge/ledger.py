@@ -525,7 +525,7 @@ def lock(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
             if time.monotonic() > deadline:
                 raise LockTimeout(
                     f"{lockfile} held for over {timeout:g}s -- another "
-                    f"anki-forge is writing, or a stale lock needs deleting"
+                    f"forge is writing, or a stale lock needs deleting"
                 ) from None
             time.sleep(LOCK_POLL)
     try:

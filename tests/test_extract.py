@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from anki_forge import extract, latex
-from anki_forge.config import Config
-from anki_forge.extract import tex, transcribe
-from anki_forge.ledger import Ledger
+from anki_math_forge import extract, latex
+from anki_math_forge.config import Config
+from anki_math_forge.extract import tex, transcribe
+from anki_math_forge.ledger import Ledger
 
 # -- tex segmentation ------------------------------------------------------
 
@@ -166,7 +166,7 @@ def test_rerunning_extract_never_destroys_a_transcription(config: Config) -> Non
     """Re-extract fixes geometry; it must not undo what `/transcribe` read.
 
     Regression: `tex_auto` and `transcription` used to be refreshed along with
-    the locator, so a single `anki-forge extract` silently wiped every
+    the locator, so a single `forge extract` silently wiped every
     transcription in the ledger.
     """
     extract.run(config, "demo")

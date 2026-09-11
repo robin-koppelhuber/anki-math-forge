@@ -27,7 +27,7 @@ and a guess that silently moved units would be indistinguishable from a bug.
    exact where they apply:
 
    ```
-   uv run anki-forge classify
+   uv run forge classify
    ```
 
    It proposes `front-matter` and `no-relation` skips. It never touches a
@@ -37,8 +37,8 @@ and a guess that silently moved units would be indistinguishable from a bug.
 2. See what it left unremarked:
 
    ```
-   uv run anki-forge units --state new --json
-   uv run anki-forge units --state new --suggested --json   # already proposed
+   uv run forge units --state new --json
+   uv run forge units --state new --suggested --json   # already proposed
    ```
 
 3. Dispatch **classifier** subagents over the sections that still have
@@ -49,8 +49,8 @@ and a guess that silently moved units would be indistinguishable from a bug.
 4. Verify by counting rather than by reading summaries:
 
    ```
-   uv run anki-forge units --state new --suggested --json
-   uv run anki-forge units --state all --json    # states must be unchanged
+   uv run forge units --state new --suggested --json
+   uv run forge units --state all --json    # states must be unchanged
    ```
 
    If any unit's *state* changed, something is wrong: this pass proposes only.
@@ -66,7 +66,7 @@ and a guess that silently moved units would be indistinguishable from a bug.
 Review them yourself:
 
 ```
-uv run anki-forge serve
+uv run forge serve
 ```
 
 The **suggested** chip filters to units with an open proposal. Each shows what

@@ -7,7 +7,7 @@ writes cards with nobody looking.
 
 from __future__ import annotations
 
-from anki_forge.app import commands_for
+from anki_math_forge.app import commands_for
 
 
 def runs(view: str, filters: dict[str, object], counts: dict[str, int]) -> list[str]:

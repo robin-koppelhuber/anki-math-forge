@@ -28,7 +28,7 @@ the urgent ones queue behind the speculative ones.
    imported:
 
    ```
-   uv run anki-forge feedback
+   uv run forge feedback
    ```
 
 2. Read the list. `todo` filters on `--audience`, `--kind` and `--status`,
@@ -36,8 +36,8 @@ the urgent ones queue behind the speculative ones.
    command; do not match on the prose:
 
    ```
-   uv run anki-forge todo --audience claude --json
-   uv run anki-forge todo --audience claude --kind unit --status queued
+   uv run forge todo --audience claude --json
+   uv run forge todo --audience claude --kind unit --status queued
    ```
 
    Then say in your report how many you left untouched, so the rest are not
@@ -50,7 +50,7 @@ the urgent ones queue behind the speculative ones.
      fix it, or explain why it is right.
    - *"add a proof sketch"* — see the **card-writing** skill for when a proof
      earns its place.
-   - *"split this into two cards"* — `anki-forge new` for the second, and
+   - *"split this into two cards"* — `forge new` for the second, and
      add both uids to the unit's `uids`.
    - *"this duplicates 4b2e1c"* — compare, keep the better one, delete the
      other file. Say which you kept and why.
@@ -69,15 +69,15 @@ the urgent ones queue behind the speculative ones.
 5. Confirm nothing is left dangling:
 
    ```
-   uv run anki-forge check
-   uv run anki-forge todo
+   uv run forge check
+   uv run forge todo
    ```
 
 For a **unit** annotation, act on it and then clear it:
 
 ```
-uv run anki-forge units --id <unit-id> --resolve-notes
-uv run anki-forge units --id <unit-id> --set-state queued     # or skipped --reason ...
+uv run forge units --id <unit-id> --resolve-notes
+uv run forge units --id <unit-id> --set-state queued     # or skipped --reason ...
 ```
 
 `--resolve-notes` clears `@claude` only, which is its default. `--audience all`
@@ -97,8 +97,8 @@ card) or clear it with `--resolve-notes --audience claude` (on a unit).
 
 `@me ...` is a decision only the human can make — a question parked where it
 will be found again. **Report those; do not act on them and do not clear
-them.** `anki-forge todo --json` carries an `audience` field for exactly this
-split, and `anki-forge todo` marks them `(me)`.
+them.** `forge todo --json` carries an `audience` field for exactly this
+split, and `forge todo` marks them `(me)`.
 
 Either kind blocks `sync`, because either kind means the thing is not
 finished.

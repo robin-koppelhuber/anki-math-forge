@@ -424,9 +424,9 @@ the Anki collection and are the only expensive part of a rename:
 
 | | where | cost later |
 |---|---|---|
-| `anki-forge identity v1` | the note type, on all 108 notes | renaming in Anki keeps history, but the tool must not silently create a second note type when the configured name is missing |
+| `forge identity v1` | the note type, on all 108 notes | renaming in Anki keeps history, but the tool must not silently create a second note type when the configured name is missing |
 | `forge` | `tag_prefix`, on every synced note | sync can retag, but stale tags linger until it does |
-| package, CLI, `anki-forge.toml`, `.forge/`, docs | source only | cheap, any time |
+| package, CLI, `forge.toml`, `.forge/`, docs | source only | cheap, any time |
 
 Both Anki-facing names are config values, so they get neutral values **now**,
 while there are 108 notes, and the eventual rename never touches Anki.

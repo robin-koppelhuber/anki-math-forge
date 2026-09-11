@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from anki_forge import config as config_mod
+from anki_math_forge import config as config_mod
 
 
 def two_source_repo(repo: Path, **book: str) -> config_mod.Config:
     """`demo` inherits the repo defaults; `book` overrides whatever is given."""
-    toml = (repo / "anki-forge.toml").read_text(encoding="utf-8")
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += '\n[sources.book]\ntitle = "A Book"\n'
     for key, value in book.items():
         toml += f'{key} = "{value}"\n'
-    (repo / "anki-forge.toml").write_text(toml, encoding="utf-8")
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)
 
 

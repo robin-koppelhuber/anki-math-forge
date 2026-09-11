@@ -130,7 +130,7 @@ def cache_source_text(config: Config, source_name: str) -> int:
         return 0
     path = source_text_path(config, source_name)
     header = (
-        f"<!-- {source.title}: text layer, cached by `anki-forge extract`.\n"
+        f"<!-- {source.title}: text layer, cached by `forge extract`.\n"
         "     Generated; do not edit. The mathematics here is mangled -- it is\n"
         "     context for writing cards, never a transcription. The crop is\n"
         "     the authority for what an equation says. -->\n\n"
@@ -150,7 +150,7 @@ def cache_document_text(config: Config, source_name: str, document: str, pdf: Pa
     if not text.strip():
         return 0
     header = (
-        f"<!-- {source_name}/{document}: text layer, cached by `anki-forge zotero`.\n"
+        f"<!-- {source_name}/{document}: text layer, cached by `forge zotero`.\n"
         "     Generated; do not edit. -->\n\n"
     )
     write_atomic(source_text_path(config, source_name, document), header + text)
