@@ -186,10 +186,18 @@ Your review history is left out unless you ask for it: a deck you hand to
 somebody else should arrive unstudied, and your intervals say more about you
 than about the cards.
 
-**Currently blocked by Anki, not by this.** AnkiConnect's `exportPackage`
-fails with `NOT NULL constraint failed: notes.sfld`, which means a blank sort
-field — and there are none, in a 2277-note collection, under either scheduling
-mode. Until the add-on catches up, Anki's own *File > Export* does it.
+**One thing to set first, once.** Anki keeps a note's sort field in a column
+that takes a number or text, and the sort field is `uid`. A uid shaped
+`4e6166` is a valid float literal — 4 × 10^6166 — which overflows a double and
+lands as NULL, and a single such note takes the whole deck's export down with
+`NOT NULL constraint failed: notes.sfld`.
+
+In Anki: *Tools > Manage Note Types > Fields > `Front` > "Sort by this field in
+the browser"*. The uid stays the first field, so duplicate detection and `sync`
+are unaffected, and the browser starts sorting by the question, which is what
+you wanted anyway. AnkiConnect cannot set this, so it is a one-time click.
+
+`check` warns about any uid with this shape, and new ones never have it.
 
 ### Feeding an idea back from review
 

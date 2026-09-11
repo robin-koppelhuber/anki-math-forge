@@ -84,6 +84,21 @@ def check_card(
         add(ERROR, "uid-missing", "no `uid` in frontmatter")
     elif not model.UID_RE.match(card.uid):
         add(ERROR, "uid-malformed", f"uid {card.uid!r} is not 6 lowercase hex characters")
+    elif model.looks_numeric(card.uid):
+        # `uid` is the note type's first field, and Anki keeps the sort field in
+        # a column that takes a number or text. A uid shaped `4e6166` is a float
+        # literal that overflows a double, lands as NULL, and takes the whole
+        # deck's export down with a NOT NULL constraint on `notes.sfld`.
+        # A warning rather than an error: the card is fine, and renaming a uid
+        # would orphan the note already synced under it.
+        add(
+            WARN,
+            "uid-numeric",
+            f"uid {card.uid!r} reads as a number to Anki, which sorts it oddly in "
+            "the browser and can break `export`. Set the note type to sort by "
+            "`Front` instead of `uid` (Manage Note Types > Fields). New uids "
+            "avoid this shape.",
+        )
 
     if card.type not in model.SECTIONS_BY_TYPE:
         known = ", ".join(sorted(model.SECTIONS_BY_TYPE))

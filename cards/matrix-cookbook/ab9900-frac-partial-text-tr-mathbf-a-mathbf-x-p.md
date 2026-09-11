@@ -2,7 +2,7 @@
 uid: ab9900
 type: identity
 status: approved
-content_hash: ddf6b9dc1aaf2dee
+content_hash: 58b8c98f4e4dea8d
 source: "Matrix Cookbook §2.8, eq. 142, p. 15"
 unit: "matrix-cookbook:2.8:142"
 frequency: common

@@ -513,15 +513,25 @@ def cmd_export(args: argparse.Namespace, config: Config) -> int:
     except AnkiError as exc:
         print(str(exc), file=sys.stderr)
         if "sfld" in str(exc):
-            # Measured, not guessed: no note in a 2277-note collection had a
-            # blank sort field, and both scheduling modes failed the same way.
-            # The fault is in the legacy export path AnkiConnect calls, not in
-            # the collection, so there is nothing here to fix by editing cards.
+            # Bisected a 108-card deck down to one card to find this. `uid` is
+            # the note type's first field, and Anki keeps the sort field in a
+            # column that takes a number or text. A uid shaped `4e6166` is a
+            # float literal -- 4 x 10^6166 -- which overflows a double and
+            # lands as NULL. One such note takes the whole export down.
+            offenders = sorted(
+                card.uid
+                for card in model.load_all(config.cards_dir)
+                if model.looks_numeric(card.uid)
+            )
             print(
-                "\nThis is AnkiConnect's export path, not your cards: a blank "
-                "sort field is what that error means, and there are none. Use "
-                "Anki's own File > Export (Anki Deck Package, scheduling off) "
-                "until the add-on catches up with your Anki version.",
+                "\nA uid that Anki reads as a number: it stores the sort field "
+                "in a column that takes a number or text, and one like "
+                "`4e6166` overflows to NULL and takes the whole export with it."
+                f"\nCandidates here: {', '.join(offenders) or '(none)'}."
+                "\n\nFix it once, in Anki: Tools > Manage Note Types > "
+                f"{config.note_type} > Fields > Front > 'Sort by this field in "
+                "the browser'. The uid stays the first field, so duplicate "
+                "detection and `sync` are unaffected. New uids avoid the shape.",
                 file=sys.stderr,
             )
         return FAILED

@@ -2,7 +2,7 @@
 uid: dfa67d
 type: identity
 status: approved
-content_hash: b43c0c31e9879331
+content_hash: 7de86747dbe77d3b
 source: "Matrix Cookbook §2.5, eq. 114, p. 13"
 unit: "matrix-cookbook:2.5:114"
 frequency: rare

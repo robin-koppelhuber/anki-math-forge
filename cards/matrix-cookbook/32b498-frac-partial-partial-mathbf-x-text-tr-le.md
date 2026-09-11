@@ -2,7 +2,7 @@
 uid: 32b498
 type: identity
 status: approved
-content_hash: 3292b8436cbf50b9
+content_hash: 1e371656dbf3ec4d
 source: "Matrix Cookbook §2.5, eq. 127, p. 14"
 unit: "matrix-cookbook:2.5:p14y256, matrix-cookbook:2.5:127"
 frequency: rare

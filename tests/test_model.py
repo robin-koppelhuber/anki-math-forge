@@ -74,6 +74,32 @@ def test_editing_content_changes_the_hash(card_path: Path) -> None:
     assert card.content_hash() != before
 
 
+def test_turning_verify_on_does_not_un_approve(card_path: Path) -> None:
+    """Both halves of opting in, or neither.
+
+    The `## verify` section was exempt because hashing it meant that fixing a
+    test un-approved a card whose mathematics had not changed. The `verify:`
+    flag was not, so turning a test *on* did exactly that -- demonstrated on
+    four identities that passed numerically and went `hash-stale` anyway.
+    """
+    card = model.load(card_path)
+    before = card.content_hash()
+
+    card.frontmatter["verify"] = True
+    card.set_section("verify", "```python\nlhs = 1\nrhs = 1\n```")
+
+    assert card.content_hash() == before, "a numeric check is not a claim on the card"
+
+
+def test_changing_what_the_card_claims_still_does(card_path: Path) -> None:
+    """The exemption is narrow: only whether a check runs, never what it says
+    about the mathematics."""
+    card = model.load(card_path)
+    before = card.content_hash()
+    card.frontmatter["frequency"] = "rare"
+    assert card.content_hash() != before
+
+
 def test_approve_stamps_a_matching_hash(card_path: Path) -> None:
     card = model.load(card_path)
     card.approve()

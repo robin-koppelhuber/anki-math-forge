@@ -2,7 +2,7 @@
 uid: df0689
 type: identity
 status: approved
-content_hash: 2e9eabe0074aba5b
+content_hash: 412e0509e430081f
 source: "Matrix Cookbook §2.5, p. 12"
 unit: "matrix-cookbook:2.5:p12y482"
 frequency: common

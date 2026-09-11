@@ -2,7 +2,7 @@
 uid: 9a12f9
 type: identity
 status: approved
-content_hash: bcd5ad344e05623a
+content_hash: 94decb578f51328d
 source: "Matrix Cookbook §2.1, eq. 51, p. 9"
 unit: "matrix-cookbook:2.1:51"
 frequency: rare

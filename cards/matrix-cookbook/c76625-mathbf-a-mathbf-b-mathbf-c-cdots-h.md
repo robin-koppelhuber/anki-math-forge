@@ -2,7 +2,7 @@
 uid: c76625
 type: identity
 status: approved
-content_hash: 8575eb88d941353a
+content_hash: f103c33e6681a425
 source: "Matrix Cookbook §1, eq. 9, p. 6"
 unit: "matrix-cookbook:1:9, matrix-cookbook:1:10"
 frequency: common

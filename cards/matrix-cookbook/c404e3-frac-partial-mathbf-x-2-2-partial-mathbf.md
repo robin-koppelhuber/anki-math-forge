@@ -2,7 +2,7 @@
 uid: c404e3
 type: identity
 status: approved
-content_hash: c94b430fb8bf1657
+content_hash: b3dafc61941023f8
 source: "Matrix Cookbook §2.6, eq. 131, p. 14"
 unit: "matrix-cookbook:2.6:131"
 frequency: core

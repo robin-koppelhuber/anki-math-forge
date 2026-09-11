@@ -2,7 +2,7 @@
 uid: cdaadb
 type: identity
 status: approved
-content_hash: 08ba8f43d4fbda91
+content_hash: dbc84db3896fee34
 source: "Matrix Cookbook §2.7, eq. 132, p. 14"
 unit: "matrix-cookbook:2.7:132"
 frequency: core

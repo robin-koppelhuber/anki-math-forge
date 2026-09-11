@@ -2,13 +2,13 @@
 uid: 1adf44
 type: identity
 status: approved
-content_hash: 75a61b942e080aec
+content_hash: 9cb39b9bf1bc7521
 source: "Matrix Cookbook §2.6, eq. 129, p. 14"
 unit: "matrix-cookbook:2.6:129"
 frequency: core
 derivation: short
 tags: [derivatives, norms, two-norm]
-verify: false
+verify: true
 ---
 
 ## front
@@ -25,5 +25,13 @@ The square root is what divides: its derivative $1/(2\sqrt{u})$ puts the norm in
 
 ## proof
 $\|\mathbf{x}-\mathbf{a}\|_2 = \sqrt{u}$ with $u = (\mathbf{x}-\mathbf{a})^T(\mathbf{x}-\mathbf{a})$. Then $\partial u/\partial\mathbf{x} = 2(\mathbf{x}-\mathbf{a})$ and $d\sqrt{u}/du = 1/(2\sqrt{u})$, so the two factors of $2$ cancel and one factor of the norm is left downstairs.
+
+## verify
+```python
+x = randn(5, 1)
+a = randn(5, 1)
+lhs = grad(lambda v: float(np.linalg.norm(v - a)), x)
+rhs = (x - a) / np.linalg.norm(x - a)
+```
 
 ## notes

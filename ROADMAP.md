@@ -551,15 +551,25 @@ have.
 - **Built: CI** running ruff, mypy and pytest on push and pull request, with
   `--extra pdf` and `npm ci` so the suite exercises the real KaTeX gate rather
   than its weaker fallback.
-- **`.apkg` export** -- written, and **blocked by Anki, not by us**.
-  `forge export <source>` exists and `exportPackage` is confirmed present
-  in AnkiConnect (121 actions). It fails with
-  `NOT NULL constraint failed: notes.sfld`, which means a blank sort field.
-  Measured rather than assumed: **no note in the 2277-note collection has
-  one**, the note type sorts on `uid` (index 0, never empty), and both
-  scheduling modes fail identically. So the fault is in the legacy export path
-  the add-on calls on this Anki version. The verb says so and points at Anki's
-  own *File > Export*; revisit when the add-on catches up.
+- **`.apkg` export** -- written, and the bug it hit was **ours**.
+  `exportPackage` failed with `NOT NULL constraint failed: notes.sfld`. The
+  first guess was the add-on's export path; bisecting a 108-card deck down to
+  a single card said otherwise.
+
+  `uid` is the note type's first field, and Anki keeps the sort field in a
+  column that takes a number or text. **A uid shaped `4e6166` is a valid float
+  literal** -- 4 x 10^6166 -- which overflows a double and lands as NULL. One
+  such note takes the whole deck's export with it. Twelve of 108 uids parse as
+  floats; two (`4e6166`, `77e454`) overflow. Exporting the other 106 succeeds
+  and writes a 46 KB package, which is the proof.
+
+  Two halves of a fix. `mint_uid` never produces one again, and `check` warns
+  about the twelve already out there. The existing ones cannot be renamed --
+  that would orphan the note already synced under the old uid -- so the
+  collection side is one click: set the note type to sort by `Front` rather
+  than `uid`. AnkiConnect has no action for it. The uid stays field 0, so
+  duplicate detection and `sync` are untouched, and the browser starts sorting
+  by the question.
 
   The other thing to check first: the Cookbook's front matter states **no
   licence at all** -- a disclaimer, an errata address and acknowledgements,
@@ -835,25 +845,34 @@ behind a shim, or a second book where it is chosen and then found to mislead.
 in" this section used to say was years stale. 66 do not: 8 `definitional`
 (nothing to derive), 57 `short`, 1 `long`.
 
-**Adding more is blocked by a contradiction in the hash, not by the maths.**
+**The contradiction is fixed.** `verify` is now in `UNHASHED_FRONTMATTER`, so
+both halves of opting in are exempt rather than one. Re-stamping was proved
+before it was done: all 108 approved cards matched their stored hash under the
+old rule and none had drifted, so nothing was waved through. One line changed
+per card, the hash itself. Coverage is **46 of 108** and rising without costing
+a re-review.
+
+What it used to be:
 `## verify` the *section* is exempt from `content_hash`, for a reason the code
 states plainly: it is a check on the author rather than card content, and
 hashing it meant that fixing a test un-approved a card whose mathematics had
 not changed. But `verify:` the *frontmatter flag* is **not** exempt. So turning
 a test on does precisely what the exemption exists to prevent.
 
-Demonstrated: four identities were opted in (norm gradient, derivative of an
-inverse and of a determinant with respect to a scalar, and `d det(X^-1)/dX`).
-All four passed numerically on the first run, and all four cards went
-`hash-stale`. Reverted.
+Four identities were opted in to demonstrate it: the norm gradient, the
+derivative of an inverse and of a determinant with respect to a scalar, and
+`d det(X^-1)/dX`. All four passed numerically on the first run, and all four
+cards went `hash-stale` anyway. They are in now, and they do not.
 
-**The fix is one line and a decision.** Adding `verify` to
-`UNHASHED_FRONTMATTER` makes the rule consistent with its own stated rationale.
-The cost is that it changes how *every* hash is computed, so all 108 stored
-hashes go stale at once and have to be re-stamped. That is provably safe --
-check each card against the old scheme first, and re-stamp only if it matches,
-so nothing whose content actually drifted gets waved through -- but it is a
-change to the approval mechanism, and that is not a call to make quietly.
+Two of them differentiate with respect to a **scalar**, which `grad` does not
+cover -- it walks the entries of a matrix. A central difference in one variable
+is three lines, so the snippet does it rather than the helper growing a second
+mode for two cards.
+
+**Still open:** the gnarly identities (Woodbury, block inverses, anything with
+three transposes) are where this earns its keep, and 62 cards still skip. Also
+unchanged: `verify` casts to real, so a complex-valued identity cannot be
+expressed at all.
 
 **Measure it against `identity` cards only.** An `intuition` card (§3) has
 nothing to check numerically, so counting it in the denominator would make

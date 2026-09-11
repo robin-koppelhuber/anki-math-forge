@@ -2,7 +2,7 @@
 uid: 13ddb7
 type: identity
 status: approved
-content_hash: 470f1e3b90e4c851
+content_hash: 597599d62ad35abb
 source: "Matrix Cookbook §1.3, eq. 31, p. 7"
 unit: "matrix-cookbook:1.3:31"
 frequency: core

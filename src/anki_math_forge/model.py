@@ -98,7 +98,12 @@ REQUIRED_SECTIONS = ("front", "back")
 # a test un-approved a card whose mathematics had not changed. If the claim
 # itself changes, `front` or `back` changes with it and the hash moves anyway.
 UNHASHED_SECTIONS = frozenset({"notes", "verify"})
-UNHASHED_FRONTMATTER = frozenset({"status", "content_hash", "requires"})
+# `verify` joins them for the same reason `## verify` is unhashed: it says
+# whether a numeric check runs, not what the card claims. It never reaches
+# Anki and no reviewer sees it. Leaving it hashed meant turning a test *on*
+# un-approved a card whose mathematics had not changed -- precisely what
+# exempting the section was for, undone by the flag that enables it.
+UNHASHED_FRONTMATTER = frozenset({"status", "content_hash", "requires", "verify"})
 
 STATUSES = ("draft", "approved", "rejected")
 
@@ -515,13 +520,37 @@ def write_atomic(path: Path, text: str) -> None:
 # -- new cards ------------------------------------------------------------
 
 
+def looks_numeric(uid: str) -> bool:
+    """Would Anki read this uid as a number rather than as text?
+
+    `uid` is the note type's first field, and Anki stores the sort field in a
+    column that takes either. A six-hex uid shaped `4e6166` is a valid float
+    literal -- 4 x 10^6166 -- which overflows a double, lands as NULL, and
+    breaks `exportPackage` with a NOT NULL constraint on `notes.sfld`. Found
+    by bisecting a 108-card deck down to one card.
+
+    8.4% of the 6-hex space parses as a float; a handful of those overflow.
+    Only the overflowing ones break an export, but a uid that sorts as a number
+    is wrong in the browser too, so the test is the broader one: does it parse.
+    The cheap half of the fix is never to mint another.
+    """
+    try:
+        float(uid)
+    except ValueError:
+        return False
+    return True
+
+
 def mint_uid(seed: str, taken: set[str] | None = None) -> str:
-    """Deterministic 6-hex uid from a seed, bumped on collision."""
+    """Deterministic 6-hex uid from a seed, bumped on collision.
+
+    Skips any uid Anki would read as a number; see `looks_numeric`.
+    """
     taken = taken or set()
     for salt in range(1000):
         material = seed if salt == 0 else f"{seed}#{salt}"
         uid = hashlib.sha256(material.encode("utf-8")).hexdigest()[:6]
-        if uid not in taken:
+        if uid not in taken and not looks_numeric(uid):
             return uid
     raise CardError(f"could not mint a free uid for {seed!r}")
 

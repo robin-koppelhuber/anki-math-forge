@@ -2,7 +2,7 @@
 uid: "644726"
 type: identity
 status: approved
-content_hash: d43df7a1141b00a0
+content_hash: d5aee07934bff027
 source: "Matrix Cookbook §2.5, eq. 123, p. 13"
 unit: "matrix-cookbook:2.5:p13y636, matrix-cookbook:2.5:p13y667, matrix-cookbook:2.5:123"
 frequency: rare

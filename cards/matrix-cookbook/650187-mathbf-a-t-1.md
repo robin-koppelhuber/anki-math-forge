@@ -2,7 +2,7 @@
 uid: "650187"
 type: identity
 status: approved
-content_hash: a9e5382654ffda8f
+content_hash: 6b4b4ec54acbc23d
 source: "Matrix Cookbook §1, eq. 3, p. 6"
 unit: "matrix-cookbook:1:3"
 frequency: common

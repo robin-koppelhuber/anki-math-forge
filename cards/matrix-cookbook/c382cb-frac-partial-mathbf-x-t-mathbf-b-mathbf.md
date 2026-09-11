@@ -2,7 +2,7 @@
 uid: c382cb
 type: identity
 status: approved
-content_hash: ce860de30245bc9b
+content_hash: b2fb43ad8132aaa9
 source: "Matrix Cookbook §2.4, eq. 81, p. 11"
 unit: "matrix-cookbook:2.4:81"
 frequency: core
