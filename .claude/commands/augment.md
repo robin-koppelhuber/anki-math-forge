@@ -35,12 +35,20 @@ is visible.
    `status: draft` cards only; never touch an approved one (editing it would
    silently reset it to draft, which is correct but rude to do in bulk).
 
-2. For each, consult the **card-writing** skill and add what earns its place:
+2. For each, consult the **card-writing** skill and add what earns its place.
+   **Check `type:` first.** An `identity` takes everything below. An
+   `intuition` explains rather than states: it has no `## conditions` and no
+   `## verify` at all, and `check` refuses both. What it wants is a sharper
+   `## front`, the explanation in `## back`, and `## uses` where the point is
+   where this actually bites.
+
 
    - `## conditions` — when the identity is false without them. One line.
-     Say the layout convention whenever the shape depends on it. Prefer the
+     Name the source's declared layout when the shape depends on it, and only
+     then; a source that declares none gets no layout clause. Prefer the
      source's own wording where it gives one; where it gives none and the
      mathematics still needs a condition, state it and note the addition.
+     **Not on an `intuition` card** — it has no `conditions` section.
    - `## proof` — only when short and load-bearing (2–4 lines).
    - `## prose` — one sentence of intuition, or nothing.
    - `## uses` — only where the answer alone leaves you asking *why would I

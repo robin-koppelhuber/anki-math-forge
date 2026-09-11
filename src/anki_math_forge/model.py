@@ -221,13 +221,25 @@ class Card:
 
     @property
     def section_name(self) -> str:
-        """The source section, read off the unit id: `2.3` in
-        `<source>:<section>:<equation>`. Derived for the same reason as
-        `source_name`: a card filed under a section it does not come from is
-        a second truth waiting to disagree with the first."""
+        """The source section, when the unit id encodes one.
+
+        `<source>:<section>:<number>` is one shape a unit id takes, and it is
+        the shape a segmenter working from a numbered book produces: `2.3` in
+        `matrix-cookbook:2.3:66`. It is not the only shape. A unit imported
+        from a marked-up PDF is `<source>:<annotation key>`, which has no
+        section in it at all, and reading the middle segment there returned the
+        annotation key -- so every card got its own "section", the review
+        view's section rail listed one row per card, and the `src::` tag meant
+        to suspend a batch wholesale named exactly one note.
+
+        Derived rather than stored for the same reason as `source_name`: a card
+        filed under a section it does not come from is a second truth waiting
+        to disagree with the first. Two segments means there is nothing to
+        derive, so it says so.
+        """
         for unit in self.units:
             parts = unit.split(":")
-            if len(parts) >= 2 and parts[1].strip():
+            if len(parts) >= 3 and parts[1].strip():
                 return parts[1].strip()
         return ""
 

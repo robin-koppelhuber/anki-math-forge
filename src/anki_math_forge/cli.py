@@ -347,7 +347,18 @@ def cmd_extract(args: argparse.Namespace, config: Config) -> int:
         return MISUSE
     reports = []
     for name in names:
-        report = extract_mod.run(config, name, pages=_page_range(args.pages))
+        try:
+            report = extract_mod.run(config, name, pages=_page_range(args.pages))
+        except ConfigError as exc:
+            # A source with no `tex`/`pdf` is not a broken source: a Zotero
+            # import has its documents on `locator.document` and is filled by
+            # `forge zotero`, not by segmentation. Taking the whole run down
+            # over one such source meant the bare `forge extract` in the docs
+            # always exited non-zero once a second kind of source existed.
+            if args.source:
+                raise
+            print(f"  skipped {name}: {exc}", file=sys.stderr)
+            continue
         reports.append(report)
         if not args.json:
             print(report.summary())
@@ -728,11 +739,9 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
     out = Path(args.out) if args.out else config.scratch("crops", args.section or "all")
     out.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, Any]] = []
+    missing: set[str] = set()
 
     for name, led in ledgers.items():
-        document = config.source(name).pdf
-        if document is None or not document.exists():
-            continue
         units = [
             u
             for u in led.select(state=args.state, section=args.section)
@@ -742,11 +751,26 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
             units = units[: args.limit]
         if not units:
             continue
-        with render_mod.CropRenderer(document) as renderer:
+        # Per unit, not per source. A source used to be one PDF named in the
+        # config, so `source.pdf` answered this and a source without one was
+        # skipped in silence -- which is every Zotero source, whose documents
+        # hang off `locator.document`. The app's crop route already resolved it
+        # this way; this verb did not, so `/transcribe` and `/classify` saw an
+        # empty manifest and reported nothing to do.
+        renderers: dict[str, render_mod.CropRenderer] = {}
+        try:
             for unit in units:
                 geometry = unit.crop_geometry()
                 if geometry is None:
                     continue
+                key = unit.locator.document
+                if key not in renderers:
+                    document = config.document_for(name, key)
+                    if document is None or not document.exists():
+                        missing.add(f"{name}/{key}" if key else name)
+                        continue
+                    renderers[key] = render_mod.CropRenderer(document)
+                renderer = renderers[key]
                 path = out / (re.sub(r"[^A-Za-z0-9._-]+", "_", unit.id) + ".png")
                 path.write_bytes(
                     renderer.render(
@@ -758,11 +782,18 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
                         "unit": unit.id,
                         "file": str(path),
                         "section": unit.locator.section,
+                        # The general form; `equation` is what the frozen
+                        # segmenter writes and is null for everything else.
+                        "kind": unit.locator.ref[0],
+                        "label": unit.locator.ref[1],
                         "equation": unit.locator.equation,
                         "page": unit.locator.page,
                         "context": unit.context,
                     }
                 )
+        finally:
+            for renderer in renderers.values():
+                renderer.close()
 
     if args.json:
         print(json.dumps(manifest, indent=2, ensure_ascii=False))
@@ -770,6 +801,8 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
         for entry in manifest:
             print(f"{entry['unit']:<34} {entry['file']}")
         print(f"\n{len(manifest)} crops written to {out}")
+    for where in sorted(missing):
+        print(f"  no document on disk for {where}; its crops were skipped", file=sys.stderr)
     return OK
 
 

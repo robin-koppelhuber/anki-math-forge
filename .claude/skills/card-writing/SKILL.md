@@ -3,7 +3,7 @@ name: card-writing
 description: How to turn a mathematical unit into a card worth reviewing - what makes a cardable unit, how to phrase a front so it admits exactly one answer, when a proof section earns its place, and how long any of it should be. Use when writing or augmenting cards in cards/, running /extract-cards or /augment, or judging whether a unit is worth carding at all.
 ---
 
-# Writing matrix-calculus cards
+# Writing cards
 
 The Python enforces structure. This file is the craft: nothing here is
 checkable by a linter, which is exactly why it is written down.
@@ -14,6 +14,26 @@ examples are matrix calculus because that is what this deck currently holds,
 and they are illustrations, not part of the rule. If an example stops making
 sense because the deck moved on, replace the example — the rule above it
 should still stand.
+
+## Two kinds of card
+
+`type: identity` states a fact: it has one definite answer, and `verify` can
+check it numerically. Everything below is written for one.
+
+`type: intuition` explains a fact instead — why a bound is tight, what a term
+is really measuring, which of two hypotheses is doing the work. It is what a
+passage you marked in a prose source becomes. Three differences, and the rest
+of this file still applies:
+
+- **no `## conditions`** — a hypothesis belongs to the statement, not to a
+  reading of it. If a card genuinely needs one, it is an identity wearing the
+  wrong type.
+- **no `## verify`** — there is nothing numeric to check about an explanation.
+- **the front asks *why* or *which*, not *what*.** "Why does the bound need
+  independence?" has one answer; "tell me about the bound" has none. The
+  one-answer rule below is the same rule, applied to a different question.
+
+Both are still a single idea, still short, and still refuse to be a paragraph.
 
 ## What makes a cardable unit
 
@@ -122,8 +142,11 @@ separated by `;`, always in this order:
 2. **structural properties** — `$\mathbf{A}$ invertible`, `$\mathbf{A} = \mathbf{A}^T$`,
    `$\text{rank}(\mathbf{X}) = m$`
 3. **domain restrictions** — `$\det(\mathbf{X}) > 0$`, `$\mathbf{X} \neq 0$`
-4. **layout**, last and only when the shape depends on it, as exactly
-   `Denominator layout.` — nothing appended to it.
+4. **layout**, last and only when the shape depends on it, naming whichever
+   layout the source declares, and nothing appended to it. `forge context`
+   prints the source's setting; when a source declares none, there is no
+   layout clause to write and inventing one would be asserting a convention
+   the source never claimed.
 
 **The typographic convention gives you the type, not the shape.** The source's
 declared setting says `\mathbf{X}` is a matrix with real entries. It does not say
@@ -384,10 +407,10 @@ belong in it, whatever the book prints. Correct it, and record both the
 book's form and the evidence in `## notes` — the deck is a record of the
 mathematics, and `sources/<name>/README.md` is the record of the book.
 
-The bar is evidence, not suspicion. `verify` exists for this: eq. 95's printed
-denominator is wrong by 8.6 against a numerical gradient while the transposed
-form matches to 1.8e-08, and that is what licenses changing the back. Where
-you only suspect, card it as printed and say so.
+The bar is evidence, not suspicion. `verify` exists for this: one identity in
+this deck has a printed denominator wrong by 8.6 against a numerical gradient
+while the transposed form matches to 1.8e-08, and *that* is what licenses
+changing the back. Where you only suspect, card it as printed and say so.
 
 ## What earns a `@me` note
 

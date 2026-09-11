@@ -241,6 +241,13 @@ class Config:
         two silently is the failure that poisons a deck: on a square matrix
         the conventions are indistinguishable, so the error survives review
         and first bites on a rectangular one.
+
+        **Empty is an answer.** It used to default to `denominator`, so a
+        statistics paper that had declared nothing was told it writes matrix
+        calculus in denominator layout -- the same silent mixing, arriving
+        through the default rather than through a mistake. A source that has
+        not said gets no layout, `verify` refuses to run rather than checking
+        against a guess, and a card from it carries no layout clause.
         """
         spec = self.sources.get(source)
         return spec.layout if spec and spec.layout else self.layout
@@ -318,7 +325,7 @@ def load(root: Path | None = None) -> Config:
         sources_dir=root / repo.get("sources_dir", "sources"),
         work_dir=root / repo.get("work_dir", ".forge"),
         language=cards.get("language", "en"),
-        layout=_layout(cards.get("layout", "denominator"), "[cards]") or "denominator",
+        layout=_layout(cards.get("layout", ""), "[cards]"),
         front_char_cap=int(cards.get("front_char_cap", 160)),
         crop_context=float(cards.get("crop_context", 0.0)),
         context_pages=int(cards.get("context_pages", 1)),

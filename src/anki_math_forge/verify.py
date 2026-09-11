@@ -189,7 +189,20 @@ def run(
         # numerator-layout source would pass most cards and fail the
         # rectangular ones for a reason nobody would guess. Say so instead.
         layout = config.layout_for(card.source_name)
-        if layout and layout != "denominator":
+        if not layout:
+            # Not "assume denominator". `grad` computes one convention, the
+            # two agree on every square matrix, and a guess would pass review
+            # and first bite on a rectangular one.
+            results.append(
+                VerifyResult(
+                    card.uid,
+                    SKIP,
+                    f"source {card.source_name!r} declares no layout; "
+                    "`verify` will not guess which one its derivatives use",
+                )
+            )
+            continue
+        if layout != "denominator":
             results.append(
                 VerifyResult(
                     card.uid,

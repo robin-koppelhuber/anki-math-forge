@@ -601,6 +601,66 @@ having no LLM code in the tool. The `.apkg` and the committed ledger are the
 mitigation: they show the output without running the half a stranger cannot.
 BYOK is the real fix and is not scheduled.
 
+## 9a. Cookbook leakage, audited 2026-09-12
+
+A whole-repo audit for facts about one book that had got into code claiming to
+be general. Seven of the findings were live defects on the two Zotero sources,
+not cosmetics, and the pattern in all of them is the same: a unit id was
+assumed to be `<source>:<section>:<number>`, and a source was assumed to be one
+PDF named in config.
+
+**Fixed:**
+
+- **`src::` tags named one note each.** `tags_for` took the first two segments
+  of any unit id, so a marked-up source got `src::<source>::<annotation key>`
+  -- defeating the only thing that tag exists for, and filling a collection
+  with one tag per card. Now the section goes in only when the id has one.
+- **`Card.section_name` returned an annotation key**, so the review view's
+  section rail listed one section per card. Two segments means nothing to
+  derive, and it says so.
+- **`forge crops` produced nothing for a Zotero source, silently.** It read
+  `source.pdf`; the app's crop route had already been generalised to
+  `document_for(source, unit.locator.document)` and this verb had not. Both
+  `/transcribe` and `/classify` drive off this manifest, so both reported
+  nothing to do. Now 16 crops where there were 0.
+- **Bare `forge extract` failed the whole run** over a source with no
+  `tex`/`pdf` -- which every Zotero source legitimately is. Per-source guard;
+  naming a source explicitly still raises.
+- **`layout` defaulted to `denominator` repo-wide**, so a statistics paper that
+  declared nothing was told it writes matrix calculus. That is the silent
+  mixing CLAUDE.md names, arriving through the default rather than a mistake.
+  The default is empty, `verify` now refuses a source that declares none
+  rather than guessing, and the skill no longer mandates the clause.
+- **The `intuition` type had no instructions anywhere.** `/augment` told a
+  writer to add `## conditions` and `verify: true`, both of which `check`
+  refuses on one. The skill now opens by naming both types.
+- **The guard that should have caught all of this was too narrow.**
+  `test_instructions.py` skipped `.claude/skills/**` and the app templates, and
+  checked for source *numbers* but not source *conventions*. Widened on all
+  three axes, and it immediately found three more: a Cookbook equation number
+  in the skill, "UNIT -- an equation in the book" in the state diagram every
+  user sees, and the guide teaching that a unit id is stable because of its
+  equation number.
+- **No test used a two-segment unit id.** That is precisely why the first two
+  bugs shipped: `test_sync.py` asserted `src::demo::2.4` and passed. There is
+  now a fixture for both shapes.
+
+**Left, and why:** the `§` prefix on every section label (cosmetic, but it
+reaches a card's `Source` field), `locator.equation` read directly in five
+places instead of through `ref` (latent until something emits `kind`/`label`
+with a number, then it silently disarms the contiguity oracle), chapter
+splitting on `.` in the section rail, `front_char_cap` not being per-source,
+and the "hand over the whole book" reasoning in `extract/__init__.py` -- which
+was written about a 26k-token reference and now also applies to a 700-page
+textbook.
+
+`extract/pdf.py` is **not** on either list. Every heuristic in it is
+Cookbook-specific and documented as such, with an ablation showing exactly
+which signals carry it. That is honest specialisation behind a seam, and it is
+what §13 is about.
+
+---
+
 ---
 
 # Defects the Cookbook taught us

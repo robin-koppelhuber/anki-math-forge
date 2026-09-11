@@ -84,8 +84,14 @@ def tags_for(card: Card, config: Config) -> list[str]:
     if card.type:
         tags.add(f"type::{card.type}")
     if card.unit:
-        parts = [p for p in card.unit.split(":") if p][:2]
-        tags.add("src::" + "::".join(parts))
+        # The source, and the section only when the id actually encodes one.
+        # Taking the first two segments unconditionally assumed every id was
+        # `<source>:<section>:<number>`. A unit imported from a marked-up PDF
+        # is `<source>:<annotation key>`, so that produced one unique tag per
+        # card -- defeating the only thing this tag is for, and filling the
+        # collection with tags that name a single note each.
+        parts = [p for p in card.unit.split(":") if p]
+        tags.add("src::" + "::".join(parts[:2] if len(parts) >= 3 else parts[:1]))
     elif card.source:
         tags.add("src::" + model.slugify(card.source))
     return sorted(_TAG_SAFE.sub("_", t).strip("_") for t in tags if t.strip())

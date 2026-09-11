@@ -18,7 +18,20 @@ ROOT = Path(__file__).resolve().parents[1]
 INSTRUCTIONS = sorted(
     list((ROOT / ".claude" / "agents").glob("*.md"))
     + list((ROOT / ".claude" / "commands").glob("*.md"))
+    # The skill was excluded, which is how "as exactly `Denominator layout.`"
+    # survived: a rule about one book, in the file that tells a card writer
+    # what the rules are.
+    + list((ROOT / ".claude" / "skills").rglob("*.md"))
 )
+
+# What a *user* is shown. The guide taught that a unit is an equation with a
+# number, which is true of one source out of three.
+SURFACES = sorted((ROOT / "src" / "anki_math_forge" / "app" / "templates").glob("*.html"))
+
+# Facts about matrix calculus, not about this tool. Stated as a rule rather
+# than shown as an example, any of these is the deck-poisoning failure
+# CLAUDE.md names, arriving through an instruction.
+CONVENTIONS = ("denominator layout", "numerator layout", "entries are real")
 
 
 @pytest.mark.parametrize("path", INSTRUCTIONS, ids=lambda p: p.name)
@@ -40,6 +53,37 @@ def test_no_bare_equation_or_section_numbers(path: Path) -> None:
     text = re.sub(r"DESIGN\.md §\d+", "", text)  # our own design doc, not a source
     offenders = re.findall(r"(?:\beq\.? \d+|\bequation \d+|§\d+(?:\.\d+)*)", text)
     assert not offenders, f"{path.name} cites {offenders}; describe the case instead"
+
+
+@pytest.mark.parametrize("path", INSTRUCTIONS, ids=lambda p: p.name)
+def test_no_convention_is_mandated(path: Path) -> None:
+    """An instruction may *illustrate* a convention; it may not require one.
+
+    "as exactly `Denominator layout.`" made every card from every source claim
+    a matrix-calculus convention, whatever the source had declared. The
+    difference is a rule versus an example, so this checks the imperative
+    forms rather than the words themselves.
+    """
+    text = path.read_text(encoding="utf-8").lower()
+    for convention in CONVENTIONS:
+        for lead in ("as exactly `", "always say ", "must say ", "say the "):
+            assert lead + convention not in text, (
+                f"{path.name} mandates {convention!r}; the source declares it, "
+                "so name whatever `forge context` prints"
+            )
+
+
+@pytest.mark.parametrize("path", SURFACES, ids=lambda p: p.name)
+def test_no_surface_claims_every_unit_is_an_equation(path: Path) -> None:
+    """Two of three sources have no equations and no numbers.
+
+    The guide said "the equation number is the book's own, and it is what makes
+    this unit's id stable" -- which is the opposite of true for a unit imported
+    from a marked-up PDF, where the id is the annotation key.
+    """
+    text = path.read_text(encoding="utf-8").lower()
+    for claim in ("an equation in the book", "the equation number is the book's own"):
+        assert claim not in text, f"{path.name} says {claim!r}, true of one source in three"
 
 
 @pytest.mark.parametrize("path", INSTRUCTIONS, ids=lambda p: p.name)
