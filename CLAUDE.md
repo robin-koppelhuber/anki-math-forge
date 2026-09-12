@@ -5,6 +5,9 @@ Turns mathematical source material into reviewed Anki cards.
 Full reasoning behind every rule below: [docs/CONTRACT.md](docs/CONTRACT.md).
 Design doc: [docs/DESIGN.md](docs/DESIGN.md) (cited as DESIGN.md in code
 comments). What is left to build: [docs/ROADMAP.md](docs/ROADMAP.md).
+How prose here is written, and what each object is called:
+[docs/STYLE.md](docs/STYLE.md). Read it before writing docs, template text or
+anything in `.claude/`.
 
 ## Invariants
 

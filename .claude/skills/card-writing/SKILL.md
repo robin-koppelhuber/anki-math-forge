@@ -48,8 +48,8 @@ A unit is worth a card when **you would be annoyed to have to look it up**.
 
 Card it when:
 
-- it is a named or reusable result (`∂/∂X log det X`, Woodbury, the cyclic
-  property of the trace);
+- it is a named or reusable result ($\partial/\partial X \log\det X$, Woodbury,
+  the cyclic property of the trace);
 - the answer is short and the prompt is unambiguous;
 - getting it wrong quietly (a stray transpose) would cost you real time.
 
@@ -58,7 +58,8 @@ Skip it when:
 - it is a step in a derivation rather than a result — you would never recall
   it out of context;
 - it is trivially recoverable from another card you already have (if you know
-  `∂ tr(AX)/∂X = Aᵀ`, `∂ tr(XA)/∂X` is not a second card);
+  $\partial \operatorname{tr}(AX)/\partial X = A^\top$, then
+  $\partial \operatorname{tr}(XA)/\partial X$ is not a second card);
 - it is notation-specific to that book;
 - it is a special case of a card you already have, with nothing new in it.
 
@@ -225,9 +226,9 @@ If the answer is specific, it is often the more valuable card of the two:
 
 | identity | the interesting question |
 |---|---|
-| `∂ln det(X)/∂X` | not "is `X` invertible" but `det(X) > 0`, over ℝ |
-| `∂ln det(XᵀX)/∂X` | `X` of full **column** rank, not merely nonzero |
-| `∂Tr[(A + XᵀCX)⁻¹XᵀBX]/∂X` | the printed form needs `A` **symmetric**, which the book never says |
+| $\partial \ln\det(X)/\partial X$ | not "is `X` invertible" but $\det(X) > 0$, over $\mathbb{R}$ |
+| $\partial \ln\det(X^\top X)/\partial X$ | `X` of full **column** rank, not merely nonzero |
+| $\partial \operatorname{Tr}[(A + X^\top CX)^{-1}X^\top BX]/\partial X$ | the printed form needs `A` **symmetric**, which the book never says |
 
 So: **do not** add "when does this exist?" as a second card by reflex. Across
 a table of derivative identities the answer is the same generic sentence, and
@@ -272,7 +273,7 @@ understanding the *answer*, and the answer is where it should sit.
 ### Define, don't rename
 
 A gloss that swaps a symbol for a proper name has not glossed anything.
-*"Here $\circ$ Hadamard product"* tells a reader who does not know `∘` the
+*"Here $\circ$ Hadamard product"* tells a reader who does not know $\circ$ the
 name of a thing they also do not know; *"here $\circ$ multiplies entry by
 entry (the Hadamard product)"* is shorter and usable. The same trap catches
 "the transposed cofactor matrix", "the elementary symmetric polynomials",
@@ -343,17 +344,18 @@ setting, it is ambient, not a condition.
 Three tiers, and only the middle one belongs on a card.
 
 1. **Ambient, declared once.** Finite-dimensional; entries real unless the card
-   says otherwise; `ᵀ` transpose and `ᴴ` conjugate transpose. Those are
-   examples; the source declares its own. In its `source.md`, not on 500
-   cards. A sentence repeated on every card stops being read, and then
+   says otherwise; $A^\top$ transpose and $A^\mathsf{H}$ conjugate transpose.
+   Those are examples; the source declares its own. In its `source.toml`, not
+   on 500 cards. A sentence repeated on every card stops being read, and then
    the one card where it is load-bearing reads like all the others.
 2. **On the card, because the identity turns on it.** Conformability
-   (`Tr(AB) = Tr(BA)` needs A to be m×n and B n×m, and *neither* square).
-   Dimension (`det(I+A) = 1 + det(A) + Tr(A)` holds at n = 2 and nowhere
-   else). Field, when it changes the claim or the reading: eigenvalues are
-   counted over ℂ with algebraic multiplicity, or a real matrix with no real
-   eigenvalues breaks the identity; `aᵀa` is `Σaᵢ²` in both fields but is the
-   squared norm only over ℝ.
+   ($\operatorname{Tr}(AB) = \operatorname{Tr}(BA)$ needs A to be $m \times n$
+   and B $n \times m$, and *neither* square). Dimension
+   ($\det(I+A) = 1 + \det(A) + \operatorname{Tr}(A)$ holds at $n = 2$ and
+   nowhere else). Field, when it changes the claim or the reading: eigenvalues
+   are counted over $\mathbb{C}$ with algebraic multiplicity, or a real matrix
+   with no real eigenvalues breaks the identity; $a^\top a$ is $\sum_i a_i^2$
+   in both fields but is the squared norm only over $\mathbb{R}$.
 3. **Out of scope, not stated.** Infinite dimensions, trace-class operators,
    Fredholm determinants. The source is about matrices. Saying "finite
    dimensional" on every card buys nothing, because nothing in the deck is
@@ -555,7 +557,7 @@ subject rather than the identity.
 `derivation: definitional | short | long` — what reconstructing it would take.
 
 - `definitional` — true by definition; there is nothing to derive. "An
-  orthogonal matrix satisfies `QᵀQ = I`" is not a result, it is what the word
+  orthogonal matrix satisfies $Q^\top Q = I$" is not a result, it is what the word
   means. These are **recognised, not reconstructed**, which is a different
   kind of review, and it is why "how hard to derive" is the wrong question
   for them rather than merely an easy one.

@@ -64,7 +64,7 @@ Rules, in order of how often they are broken:
 
 - **One line, under about twelve words.** A gist that runs to a sentence with
   a verb and a clause is a card being written at the wrong stage.
-- **No maths.** `∂/∂X log det X` is a transcription, which is a different pass
+- **No maths.** $\partial/\partial X \log\det X$ is a transcription, which is a different pass
   and a different field. Write `derivative of a log determinant`.
 - **Say what kind of thing it is** where that is not obvious: `definition:`,
   `why …`, `interpretation of …`. That distinction is most of what the human

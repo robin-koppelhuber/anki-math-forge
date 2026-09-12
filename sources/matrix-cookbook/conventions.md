@@ -3,13 +3,14 @@
 ## The setting
 
 - Finite-dimensional. Matrix and vector entries are real unless a card says
-  otherwise; `ᵀ` is transpose and `ᴴ` conjugate transpose.
-- **Denominator layout.** `∂(scalar)/∂X` has the shape of **`X`**: entry
-  `(i,j)` of the result is `∂f/∂X_ij`. `∂y/∂x` for vectors has shape
-  `(dim x, dim y)`. Any card that could be read either way says so in
-  `## conditions`.
+  otherwise; $A^\top$ is transpose and $A^\mathsf{H}$ conjugate transpose.
+- **Denominator layout.** $\partial(\text{scalar})/\partial X$ has the shape of
+  **`X`**: entry `(i,j)` of the result is $\partial f/\partial X_{ij}$.
+  $\partial y/\partial x$ for vectors has shape `(dim x, dim y)`. Any card that
+  could be read either way says so in `## conditions`.
 - **In a derivative, every symbol other than the variable of differentiation
-  is constant in it.** `∂Tr(AX)/∂X = Aᵀ` holds because `A` does not depend on
+  is constant in it.** $\partial \operatorname{Tr}(AX)/\partial X = A^\top$
+  holds because `A` does not depend on
   `X`. The book states this once, in §2.4's preamble; around thirty cards
   depend on it and none of them repeats it, which is right — a sentence on
   every card stops being read.
@@ -53,12 +54,13 @@ one-parameter family.
 
 ## How the layout convention was settled
 
-It was recorded backwards, as the shape of `Xᵀ`, until two card-writing passes
+It was recorded backwards, as the shape of $X^\top$, until two card-writing passes
 flagged the contradiction independently. `verify.grad()` has always computed
 the `X`-shaped gradient and the book uses it. On a square `X` the two are
 indistinguishable, which is why the error survived every review; it first
-bites on a rectangular `X`, where eq. 55 gives `2(X⁺)ᵀ`, an `X`-shaped matrix.
-Checked numerically against `grad()` on a 5×3 `X`, residual 7e-10.
+bites on a rectangular `X`, where eq. 55 gives $2(X^{+})^\top$, an `X`-shaped
+matrix. Checked numerically against `grad()` on a $5 \times 3$ `X`, residual
+7e-10.
 
 Kept because it is the argument, not the conclusion: the next source will have
 its own layout question, and this is what settling one looks like.
