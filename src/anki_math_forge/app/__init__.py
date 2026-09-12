@@ -893,7 +893,11 @@ def section_rows(
         items = by_section[name]
         split = {state: sum(1 for i in items if state_of(i) == state) for state in states}
         row = {
-            "name": name or "(none)",
+            # A name, not a placeholder in brackets. `(none)` sat at the top
+            # level beside the real chapters and read as one of them; what it
+            # actually is, is the units the segmenter could not place.
+            "name": name,
+            "label": name or "no section",
             "total": len(items),
             "matching": sum(1 for i in items if id_of(i) in shown),
             "states": split,

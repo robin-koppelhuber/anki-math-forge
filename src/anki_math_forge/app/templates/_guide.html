@@ -432,26 +432,30 @@
        something to click; this is the legend, and it includes what you
        declared but have not used and -- more usefully -- what you have used
        and not declared. #}
-    {# Grouped by what a mark *means*, not by which line of the config says so.
-       Zotero gives eight colours and six kinds, so a source can reach
-       forty-eight combinations and the rail is 240px wide -- but nobody has
-       forty-eight meanings. `kind` beats `colour` in the config's own lookup,
-       so one `note = "..."` already covers every colour of sticky note, and
-       listing those separately is one sentence printed eight times.
+    {# The scheme, bounded by what it *does* rather than by what it says.
 
-       The ones you have not decided about fold away on their own. They are
-       real -- an unmapped mark reaches a card writer as a coloured box with no
-       caption -- but they are a backlog, not a legend, and open by default
-       they pushed the scheme you actually use off the bottom. #}
+       The thing that does not scale about a legend is that a meaning is an
+       arbitrary sentence and a source may declare forty of them -- and then
+       half a 240px rail is prose you read once and never again. What is
+       genuinely small, in any source, is the set of marks that **become units
+       of their own**: that is `units_from`, and a scheme with twenty of those
+       would produce a queue nobody could work. So those are the rows that
+       stay open, and everything else is one click away.
+
+       Context colours fold because during triage you do not look them up one
+       at a time -- the mark's own sentence is in the middle panel, already
+       read. The ones you have not declared fold separately: they are a
+       backlog, not a legend, and open by default they pushed the scheme you
+       actually use off the bottom. #}
     {% if scheme is defined and scheme %}
-    {% set decided = scheme | selectattr('declared') | list %}
+    {% set makes_units = scheme | selectattr('makes_a_unit') | list %}
+    {% set context = scheme | rejectattr('makes_a_unit') | selectattr('declared') | list %}
     {% set undecided = scheme | rejectattr('declared') | list %}
-    <section class="rail-card scheme">
-      <h3>what the marks mean</h3>
+    {% macro legend(rows) %}
       <ul class="scheme-list">
-        {% for row in decided %}
+        {% for row in rows %}
         <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}"
-            title="{{ row.entries | map(attribute='key') | join(' · ') }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}">
+            title="{{ row.entries | map(attribute='key') | join(' · ') }} — {{ row.meaning }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}">
           <span class="sl-mark">
             {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
             <b class="sl-label">{{ row.label }}</b>
@@ -461,25 +465,26 @@
         </li>
         {% endfor %}
       </ul>
+    {% endmacro %}
+    <section class="rail-card scheme">
+      <h3>what the marks mean</h3>
+      {% if makes_units %}
+      <p class="scheme-note">these become units of their own</p>
+      {{ legend(makes_units) }}
+      {% endif %}
+      {% if context %}
+      <details class="scheme-fold">
+        <summary>{{ context | length }} more, context only<b>{{ context | sum(attribute='count') }}</b></summary>
+        {{ legend(context) }}
+      </details>
+      {% endif %}
       {% if undecided %}
-      <details class="scheme-undecided">
+      <details class="scheme-fold warn">
         <summary>{{ undecided | length }} you have not decided about<b>{{ undecided | sum(attribute='count') }}</b></summary>
         <p class="scheme-default">These read as what Zotero's annotation kind
           <em>is</em>, which is not what you used it to mean. Until one is
           declared it reaches a card writer as a coloured box with no caption.</p>
-        <ul class="scheme-list">
-          {% for row in undecided %}
-        <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}"
-            title="{{ row.entries | map(attribute='key') | join(' · ') }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}">
-          <span class="sl-mark">
-            {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
-            <b class="sl-label">{{ row.label }}</b>
-          </span>
-          <span class="sl-meaning">{{ row.meaning }}</span>
-          <b class="sl-count">{{ row.count }}</b>
-        </li>
-          {% endfor %}
-        </ul>
+        {{ legend(undecided) }}
       </details>
       {% endif %}
       <p class="rail-more">declared in <code>[zotero.meanings]</code>, or per source in

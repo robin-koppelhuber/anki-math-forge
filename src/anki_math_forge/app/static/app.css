@@ -560,7 +560,12 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   font-size: 13px;
   background: var(--panel);
   flex: none;
-  max-height: 45%;
+  /* A third, not nearly a half. This panel is pinned to the bottom and the
+     filters scroll above it, so every pixel it takes is one the section list
+     and the mark grid do not get -- and adding a sentence to each command
+     pushed the grid off the bottom of the rail. It scrolls inside itself, so
+     the cap costs nothing but a scroll on a view with four commands. */
+  max-height: 33%;
   overflow-y: auto;
 }
 .rail-actions > summary {
@@ -1122,7 +1127,13 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
    how much is waiting; it does not say what the pass *is*, and these are
    commands you run rarely enough to have forgotten between times. */
 .filter-list.runs .run-why {
-  display: block;
+  /* Two lines, with the rest on hover. Long enough to say what the pass does,
+     short enough that four commands cannot crowd out the filters above. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   font-size: 10.5px;
   line-height: 1.35;
   color: var(--muted);
@@ -1396,22 +1407,42 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
    wrap, and it wrapped on exactly the rows where it mattered. */
 .scheme-list li.makes-units { border-left: 2px solid var(--accent); padding-left: 0.3rem; }
 .scheme-list li.makes-units .sl-label { color: var(--accent); }
-.sl-meaning { color: var(--muted); line-height: 1.3; }
+/* A meaning nobody kept short still gets exactly one row: two lines and an
+   ellipsis, with the whole sentence in the row's tooltip. A rail cannot be
+   held hostage by how chatty one entry in a config happens to be. */
+.sl-meaning {
+  color: var(--muted);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .sl-count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
-/* The backlog, folded. These are real -- an unmapped mark reaches a card
-   writer as a coloured box with no caption -- but open by default they pushed
-   the scheme you actually use off the bottom of the rail. */
-.scheme-undecided { margin-top: 0.5rem; }
-.scheme-undecided > summary {
+/* A meaning is an arbitrary sentence and a source may declare forty of them,
+   so the *visible* part is bounded by something that cannot grow: the marks
+   that become units of their own. Everything else folds. */
+.scheme-note {
+  margin: 0 0 0.2rem;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.scheme-fold { margin-top: 0.45rem; }
+.scheme-fold > summary {
   display: flex;
   justify-content: space-between;
   gap: 0.4rem;
   cursor: pointer;
   font-size: 11px;
-  color: var(--warn);
+  color: var(--muted);
   padding: 0.15rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
-.scheme-undecided > summary b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.scheme-fold.warn > summary { color: var(--warn); }
+.scheme-fold > summary b { font-weight: 500; font-variant-numeric: tabular-nums; }
 
 /* -- the marks on a unit ------------------------------------------------
    The crop shows where they are; this is what they say. Deciding whether a
@@ -1598,7 +1629,11 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 /* -- the guide's two panes ----------------------------------------------- */
 .guide-panes {
   display: grid;
-  grid-template-rows: var(--split-guide, 1fr) 14px var(--split-guide-bottom, 1fr);
+  /* `fit-content`, not a bare track: a pane shorter than its share should
+     hand the surplus to the one below rather than sit above a band of
+     nothing. The split still caps it -- drag it smaller and the content
+     scrolls -- it just never claims room it is not using. */
+  grid-template-rows: fit-content(var(--split-guide, 55%)) 14px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -1978,7 +2013,10 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
    second was always below the fold. */
 .beside-panes {
   display: grid;
-  grid-template-rows: var(--split-beside, 1fr) 14px var(--split-beside-bottom, 1fr);
+  /* Same: a unit with nothing annotated has two one-line empty states in the
+     top pane, and an `fr` track gave them a third of the column -- a band of
+     nothing between the notes and the marks that read as a footer. */
+  grid-template-rows: fit-content(var(--split-beside, 35%)) 14px minmax(0, 1fr);
   min-height: 0;
   flex: 1;
 }

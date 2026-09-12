@@ -452,8 +452,22 @@ function applySplit(name, fraction) {
   const split = SPLITS[name];
   if (!split) return 0;
   const clamped = Math.min(0.85, Math.max(0.15, fraction));
-  document.documentElement.style.setProperty(split.left, `${clamped}fr`);
-  document.documentElement.style.setProperty(split.right, `${1 - clamped}fr`);
+  /* A vertical pane can be *shorter* than its share -- a unit with nothing
+     annotated has two one-line empty states in it -- and an `fr` track takes
+     its share regardless, leaving a band of nothing under the notes that reads
+     as a footer. As a percentage the stylesheet can wrap it in `fit-content`,
+     which shrinks the row to its content and hands the surplus to the pane
+     below while still capping it where you dragged it to.
+
+     Columns keep `fr`: two of those plus a fixed gutter add up exactly, and
+     percentages would overflow by the width of the handle. */
+  const unit = split.axis === "y" ? "%" : "fr";
+  const scale = split.axis === "y" ? 100 : 1;
+  document.documentElement.style.setProperty(split.left, `${clamped * scale}${unit}`);
+  document.documentElement.style.setProperty(split.right, `${(1 - clamped) * scale}${unit}`);
+  // Remembered as the fraction, not re-read from the CSS: `parseFloat("35%")`
+  // is 35, which on the next load clamps to the maximum and pins the split.
+  split.fraction = clamped;
   return clamped;
 }
 
@@ -517,7 +531,7 @@ function applyRail(name, px) {
       remember(rail.key, read(rail.var));
     } else {
       const split = SPLITS[drag.name];
-      if (split) remember(split.key, read(split.left));
+      if (split) remember(split.key, split.fraction);
     }
     drag = null;
   });

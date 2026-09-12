@@ -396,10 +396,22 @@ def test_the_legend_groups_by_meaning_rather_than_by_key() -> None:
     # The colour leads: you arrive holding one, so it is the lookup key. The
     # meaning used to lead, with the colour name on a second line.
     assert GUIDE.index("sl-label") < GUIDE.index("sl-meaning")
-    assert "scheme-undecided" in GUIDE, "the backlog folds away"
-    # Undecided rows are a backlog, not a legend: open by default they pushed
-    # the scheme you actually use off the bottom of the rail.
-    assert "rejectattr('declared')" in GUIDE
+
+
+def test_the_legend_is_bounded_by_what_makes_units() -> None:
+    """A meaning is an arbitrary sentence and a source may declare forty of
+    them, so a legend that lists all of them puts half a 240px rail out of the
+    author's hands. What is structurally small in *any* source is the set of
+    marks that become units of their own -- a scheme with twenty of those would
+    make a queue nobody could work -- so those stay open and the rest folds.
+
+    Context colours in particular: during triage you do not look one up at a
+    time, because the mark's own sentence is in the middle panel already."""
+    assert "selectattr('makes_a_unit')" in GUIDE, "the open rows"
+    assert "rejectattr('makes_a_unit')" in GUIDE, "and the folded ones"
+    assert "rejectattr('declared')" in GUIDE, "the backlog folds separately"
+    # And one entry cannot take the rail hostage however long it is written.
+    assert "line-clamp" in rule(".sl-meaning")
 
 
 def test_the_gist_is_labelled_as_a_reading(zotero_config: Config) -> None:
