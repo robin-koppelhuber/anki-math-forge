@@ -161,17 +161,7 @@
 {% endblock %}
 
 {% block keys %}
-<span class="key-group"><b>a</b> approve</span>
-<span class="key-group"><b>r</b> reject</span>
-<span class="key-group"><b>u</b> back to draft</span>
-<span class="key-group sep"><b>z</b> undo</span>
-<span class="key-group"><b>e</b> $EDITOR</span>
-<span class="key-group"><b>n</b>/<b>N</b> note for claude/me</span>
-<span class="key-group"><b>x</b> resolve first note</span>
-<span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
-<span class="key-group"><b>f</b> filters</span>
-<span class="key-group"><b>g</b> sources</span>
-<span class="key-group"><b>?</b> guide</span>
+{% include "_keys.html" %}
 {% endblock %}
 
 {% block scripts %}<script defer src="/static/review.js"></script>{% endblock %}

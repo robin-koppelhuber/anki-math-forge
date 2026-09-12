@@ -129,7 +129,7 @@
         carries its own sentence. A boxed figure carries none and is still
         obviously worth a card, or obviously not.</p>
       <p>If the answer needs more than <i>yes, and it is about X</i>, write a
-        <b>brief</b>. <b>Q</b> queues and records one in the same keystroke.</p>
+        <b>brief</b>. <b>{{ key('queue-with-brief') }}</b> queues and records one in the same keystroke.</p>
       <p>Depth belongs to the card stage, where <code>/extract-cards</code>
         and <code>/augment</code> have the page, the pages either side and the
         source's conventions, and iterate until the card can be approved. Here
@@ -153,7 +153,7 @@
           <code>crop_context</code>, and a source may set its own. <b>The box
           is what this unit claims to be.</b> If it holds two numbered
           equations, or the equation runs on outside it, segmentation got it
-          wrong: annotate the unit rather than card it. <b>p</b> cycles the
+          wrong: annotate the unit rather than card it. <b>{{ key('pdf-view') }}</b> cycles the
           crop, the whole page, and the whole document scrolling.</dd>
       <dt>the colours on it</dt>
       <dd>what a reader marked, painted back on in the colours they used. The
@@ -188,40 +188,40 @@
 
     <h3>what each key does</h3>
     <dl>
-      <dt><b>q</b> queue</dt>
+      <dt><b>{{ key('queue') }}</b> queue</dt>
       <dd><b>This becomes a card.</b> <code>/extract-cards</code> reads
           everything queued and writes a stub for it. Nothing reaches Anki
           until you approve the card afterwards, in the review view.</dd>
-      <dt><b>Q</b> queue, and say what it is about</dt>
+      <dt><b>{{ key('queue-with-brief') }}</b> queue, and say what it is about</dt>
       <dd>The same, plus the <code>@claude</code> brief, in one keystroke.
           <b>This is the second half of what this stage decides.</b> One
           sentence is enough: <i>two cards, one per convention</i>, <i>this is
           about why the bound is tight, not the bound</i>, <i>merge with the
-          one above</i>. Symmetric with <b>s</b>/<b>S</b>: the bare key does
+          one above</i>. Symmetric with <b>{{ key('skip') }}</b>/<b>{{ key('skip-with-reason') }}</b>: the bare key does
           not stop to ask, and the shifted one records the sentence that makes
           the decision useful a month later.</dd>
-      <dt><b>s</b> skip</dt>
+      <dt><b>{{ key('skip') }}</b> skip</dt>
       <dd><b>Never offer this again.</b> Sticky, so it survives
           re-extraction.</dd>
-      <dt><b>S</b> skip, with a reason</dt>
-      <dd>The same, but asks for one word first. Plain <b>s</b> does not,
+      <dt><b>{{ key('skip-with-reason') }}</b> skip, with a reason</dt>
+      <dd>The same, but asks for one word first. Plain <b>{{ key('skip') }}</b> does not,
           because a skip is the commonest key in triage and stopping to type
           turns one keystroke into a dialogue.</dd>
-      <dt><b>u</b> back to new</dt>
+      <dt><b>{{ key('back-to-new') }}</b> back to new</dt>
       <dd>Undo a decision: the unit returns to the untriaged pool. This is the
           only way back from a skip.</dd>
-      <dt><b>a</b> accept &middot; <b>d</b> dismiss</dt>
+      <dt><b>{{ key('accept-suggestion') }}</b> accept &middot; <b>{{ key('dismiss-suggestion') }}</b> dismiss</dt>
       <dd>Act on a suggestion, or throw it away. Suggestions come from
           <code>forge classify</code> or <code>/classify</code>, and both only
-          ever <em>propose</em>. Pressing <b>q</b> or <b>s</b> yourself also
+          ever <em>propose</em>. Pressing <b>{{ key('queue') }}</b> or <b>{{ key('skip') }}</b> yourself also
           clears the suggestion, since you overruled it.</dd>
-      <dt><b>n</b> / <b>N</b> the brief, and what you parked</dt>
-      <dd><b>n</b> writes the <code>@claude</code> brief: the instruction
+      <dt><b>{{ key('note-claude') }}</b> / <b>{{ key('note-me') }}</b> the brief, and what you parked</dt>
+      <dd><b>{{ key('note-claude') }}</b> writes the <code>@claude</code> brief: the instruction
           <code>/extract-cards</code> reads before it writes anything. "Two
           cards, one per layout convention", "the transcription is wrong, read
           the crop", "merge with the one above". <b>It is the only instruction
           that pass gets</b>, which is why it sits open in the panel rather
-          than behind a fold. <b>N</b> parks an <code>@me</code> decision for
+          than behind a fold. <b>{{ key('note-me') }}</b> parks an <code>@me</code> decision for
           yourself instead. Both show up in <code>forge todo</code>.</dd>
       <dt>answering an <code>@me</code></dt>
       <dd><b>yes</b>, <b>no</b>, or your own words. The answer is written back
@@ -229,17 +229,17 @@
           unaddressed, so it reads as a record rather than new work. The
           <b>&times;</b> deletes without recording anything, which is right
           when the note was a reminder rather than a question.</dd>
-      <dt><b>c</b> context size</dt>
+      <dt><b>{{ key('context-size') }}</b> context size</dt>
       <dd>How much of the document whoever writes this card is handed. <b>The
           numbers are pages <em>either side</em></b>: 3 hands over seven
           pages, this one and three each way. Every size is on the chip, so
-          click one or press <b>c</b> to walk them. Sizes rather than a number
+          click one or press <b>{{ key('context-size') }}</b> to walk them. Sizes rather than a number
           box, because the decision is "a bit more" or "all of it" and not a
           measurement. Triage is the moment you can tell, when the theorem is
           here and its hypotheses are two pages back and no per-source default
           knows that. The badge is always on screen and says whose number it
           is, <b>source</b> until this unit overrides it.</dd>
-      <dt><b>w</b> web lookups</dt>
+      <dt><b>{{ key('web-lookups') }}</b> web lookups</dt>
       <dd>Whether whoever writes this card may look things up on the web.
           <b>Off everywhere unless you grant it.</b> A card is supposed to say
           what <em>this source</em> says, hypotheses and notation included,
@@ -253,7 +253,7 @@
           clear the override. A card written from a granted unit inherits the
           grant, and <code>forge context</code> says which of the three
           answered.</dd>
-      <dt><b>p</b> crop / page / document</dt>
+      <dt><b>{{ key('pdf-view') }}</b> crop / page / document</dt>
       <dd>Three ways to look at the same geometry. <b>page</b> is the whole
           page with the unit's own box drawn on it, which is the only way to
           see how segmentation failed: a split equation shows its missing
@@ -265,22 +265,22 @@
           <b>Clicking the picture itself does nothing</b>, deliberately: it
           used to cycle the view, so leaning in to read a highlight jumped you
           to the whole document.</dd>
-      <dt><b>z</b> undo</dt>
+      <dt><b>{{ key('undo') }}</b> undo</dt>
       <dd>Undo the last decision, however it was made: a state change, an
           accepted suggestion, a dismissed one. It restores what was actually
           there before, including the reason and any suggestion the action
           cleared, so a mis-pressed key costs one keystroke. Repeat to walk
           further back.</dd>
-      <dt><b>j</b> / <b>k</b></dt>
+      <dt><b>{{ key('next') }}</b> / <b>{{ key('prev') }}</b></dt>
       <dd>Next / previous. Queuing and skipping move you on to the next unit
           still awaiting a decision, but the one you just acted on <b>stays in
-          the list</b>, so <b>k</b> always gets you back to it.</dd>
-      <dt><b>f</b> filters &middot; <b>?</b> this guide</dt>
+          the list</b>, so <b>{{ key('prev') }}</b> always gets you back to it.</dd>
+      <dt><b>{{ key('filters') }}</b> filters &middot; <b>{{ key('guide') }}</b> this guide</dt>
       <dd>Both panels toggle. The guide cycles three sizes: counts, then
           everything, then hidden. Drag either edge to resize it. The left
           rail is what <b>acts</b>; this one only tells you what you are
           looking at.</dd>
-      <dt><b>g</b> sources</dt>
+      <dt><b>{{ key('sources') }}</b> sources</dt>
       <dd>Every source at once, with how far along each one is. Narrow it by
           tag or by where the material came from.</dd>
     </dl>
@@ -301,7 +301,7 @@
           result rather than a gap: the classifier may not propose a skip for
           an equation the book gave a number, because numbering it is the
           document asserting it is a result. Those take a direct decision, and
-          <b>a</b>/<b>d</b> do nothing on them.</dd>
+          <b>{{ key('accept-suggestion') }}</b>/<b>{{ key('dismiss-suggestion') }}</b> do nothing on them.</dd>
     </dl>
 {% else %}
     <section class="rail-card stage-note">
@@ -323,37 +323,37 @@
 
     <h3>what each key does</h3>
     <dl>
-      <dt><b>a</b> approve</dt>
+      <dt><b>{{ key('approve') }}</b> approve</dt>
       <dd>This card is right. Stamps <code>content_hash</code>, and
           <code>sync</code> will push it to Anki. <b>Editing it afterwards
           un-approves it</b>: the hash stops matching and it returns
           here.</dd>
-      <dt><b>u</b> back to draft</dt>
+      <dt><b>{{ key('back-to-draft') }}</b> back to draft</dt>
       <dd>Un-approve a card you have changed your mind about. Editing one does
           this as a side effect, since <code>content_hash</code> stops
           matching, but changing your mind is not an edit and a token change
           in the editor would be a worse way to say so. Clears the hash, so
           nothing syncs it.</dd>
-      <dt><b>r</b> reject</dt>
+      <dt><b>{{ key('reject') }}</b> reject</dt>
       <dd>This card is wrong and is not worth fixing. It stays on disk and
           nothing syncs it.</dd>
-      <dt><b>e</b> open in $EDITOR</dt>
+      <dt><b>{{ key('editor') }}</b> open in $EDITOR</dt>
       <dd>Fix it yourself. The app re-reads from disk, and refuses to write
           over a file that changed underneath it.</dd>
-      <dt><b>z</b> undo</dt>
+      <dt><b>{{ key('undo') }}</b> undo</dt>
       <dd>Undo the last approve or reject. Approving stamps
           <code>content_hash</code> and rejecting drops it, so this restores
           the hash too: the card goes back to the state it was actually in,
           not merely to the same status. The card you just acted on stays in
-          the list, so <b>k</b> reaches it.</dd>
-      <dt><b>n</b> / <b>N</b> annotate</dt>
-      <dd><b>n</b> leaves an <code>@claude</code> note, a request for Claude.
-          <b>N</b> parks an <code>@me</code> decision instead. <b>Sync refuses
+          the list, so <b>{{ key('prev') }}</b> reaches it.</dd>
+      <dt><b>{{ key('note-claude') }}</b> / <b>{{ key('note-me') }}</b> annotate</dt>
+      <dd><b>{{ key('note-claude') }}</b> leaves an <code>@claude</code> note, a request for Claude.
+          <b>{{ key('note-me') }}</b> parks an <code>@me</code> decision instead. <b>Sync refuses
           any card with an open annotation of either kind, whatever its
           status</b>, so the note alone holds the card back and you do not
           touch its status. Annotating moves you on to the next card, like
-          every other decision here; <b>k</b> goes back.</dd>
-      <dt><b>r</b> reject, and what it is not</dt>
+          every other decision here; <b>{{ key('prev') }}</b> goes back.</dd>
+      <dt><b>{{ key('reject') }}</b> reject, and what it is not</dt>
       <dd><code>rejected</code> means <b>this card should not exist</b>. It is
           not a way to park something: an annotated card is already refused by
           sync <em>whatever</em> its status, so a note alone holds it back.
@@ -361,7 +361,7 @@
           still showing you while the repo says never sync it, and
           <code>sync</code> never deletes. Use <b>no notes</b> in the filter
           rail to review only what is actually waiting on you.</dd>
-      <dt><b>x</b> resolve</dt>
+      <dt><b>{{ key('resolve-note') }}</b> resolve</dt>
       <dd>Resolve the card's first annotation, or click <b>resolve</b> on any
           one of them. <b>Resolving is deleting the line.</b> There is no
           reply and no done-flag, because a note still in the file still
@@ -372,13 +372,13 @@
           <code>## notes</code>, which is outside <code>content_hash</code>,
           so resolving does <em>not</em> send an approved card back to
           draft.</dd>
-      <dt><b>j</b> / <b>k</b></dt>
+      <dt><b>{{ key('next') }}</b> / <b>{{ key('prev') }}</b></dt>
       <dd>Next / previous. Approving or rejecting moves you on to the next
           card still awaiting a decision; the one you just acted on stays in
-          the list, so <b>k</b> reaches it.</dd>
-      <dt><b>f</b> filters &middot; <b>?</b> this guide</dt>
+          the list, so <b>{{ key('prev') }}</b> reaches it.</dd>
+      <dt><b>{{ key('filters') }}</b> filters &middot; <b>{{ key('guide') }}</b> this guide</dt>
       <dd>Both panels toggle; drag either edge to resize it.</dd>
-      <dt><b>g</b> sources</dt>
+      <dt><b>{{ key('sources') }}</b> sources</dt>
       <dd>Every source at once, with how far along each one is.</dd>
     </dl>
 

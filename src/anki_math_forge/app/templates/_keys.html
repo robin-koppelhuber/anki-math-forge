@@ -1,0 +1,11 @@
+{# The footer legend, rendered from `app/keys.py`.
+
+   It used to be typed out per view, beside a keymap typed out in JavaScript
+   and a third copy in the guide, with two regex tests holding them together.
+   Now a remapped key moves all three or none.
+
+   An entry with no label is a second key for an action the legend already
+   names once -- Backspace beside Delete -- so it binds and stays out of the
+   row. #}
+{% for k in keymap %}{% if k.label %}<span class="key-group{{ ' sep' if k.sep }}"><b>{{ k.key }}</b> {{ k.label }}</span>
+{% endif %}{% endfor %}

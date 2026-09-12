@@ -1021,28 +1021,33 @@ def test_each_split_remembers_its_own_width() -> None:
     assert '"anki-forge.split.card"' in js
 
 
-def test_every_bound_key_is_in_the_footer() -> None:
-    """The footer is the only place the keys are advertised.
+def test_every_declared_key_has_a_handler_and_every_handler_is_declared() -> None:
+    """The keys were written three times per view -- bound in JavaScript,
+    listed in the footer, explained in the guide -- and two tests here held the
+    three together by regex. `app/keys.py` is the one declaration now, so the
+    legend cannot drift from the bindings: they render from the same list.
 
-    `u` (send an approved card back to draft) was bound and unlisted, so it
-    existed only for whoever read the source. A keymap and a legend maintained
-    by hand drift; this notices.
+    What can still drift is this: an action declared with nothing to run, or a
+    handler for an action that no longer exists. Both fail silently -- a key
+    that does nothing, or a legend entry for a key that does nothing.
     """
     import re
     from pathlib import Path as _Path
 
+    from anki_math_forge.app import keys as keymod
+
     app = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
-    for view in ("units", "review"):
+    for view in keymod.VIEWS:
         js = (app / "static" / f"{view}.js").read_text(encoding="utf-8")
-        block = js[js.index("bindKeys({") :]
-        bound = {k for k in re.findall(r'^\s{2}"?([A-Za-z?])"?:', block, re.M)}
-
-        html = (app / "templates" / f"{view}.html").read_text(encoding="utf-8")
-        start = html.index("{% block keys %}")
-        keys = html[start : html.index("{% endblock %}", start)]
-        listed = {k for entry in re.findall(r"<b>([^<]+)</b>", keys) for k in entry.split("/")}
-
-        assert bound <= listed, f"{view}: bound but not in the footer: {sorted(bound - listed)}"
+        block = js[js.index("bindKeys({") : js.index("});", js.index("bindKeys({"))]
+        handled = set(re.findall(r'^\s{2}"?([a-z][a-z-]*)"?[,:]', block, re.M))
+        declared = {k.action for k in keymod.BY_VIEW[view]}
+        assert declared - handled == set(), (
+            f"{view}: declared with no handler: {sorted(declared - handled)}"
+        )
+        assert handled - declared == set(), (
+            f"{view}: handled but not declared: {sorted(handled - declared)}"
+        )
 
 
 def test_every_mutation_returns_fresh_counts(config: Config, units: Ledger) -> None:
@@ -1105,8 +1110,10 @@ def test_undo_survives_a_page_load() -> None:
             _Path(__file__).resolve().parents[1]
             / "src" / "anki_math_forge" / "app" / "static" / f"{view}.js"
         ).read_text(encoding="utf-8")
-        assert "loadUndo()" in src, f"{view} does not restore the stack"
-        assert "saveUndo(undoStack)" in src, f"{view} does not persist it"
+        # Scoped per view: one shared key had the two pushing entries of
+        # different shapes onto one stack. See `test_keys.py`.
+        assert f'loadUndo("{view}")' in src, f"{view} does not restore the stack"
+        assert f'saveUndo("{view}", undoStack)' in src, f"{view} does not persist it"
 
 
 def test_the_review_view_matches_the_anki_prompt(config: Config) -> None:
@@ -1171,30 +1178,25 @@ def test_the_filter_returns_markup_not_a_string(config: Config) -> None:
     assert "<pre class='code'>" in page
 
 
-def test_the_guide_lists_every_bound_key() -> None:
-    """The guide is where a key is explained, the footer only names it.
+def test_the_guide_explains_every_key_it_shows(config: Config) -> None:
+    """The guide is where a key is *explained*; the footer only names it.
 
-    Six keys were bound and absent from the guide -- including `?`, which
-    opens the guide. Two hand-maintained lists against one keymap drift.
+    It reads its letters out of the keymap now, so remapping a key in
+    `[app.keys]` does not leave the guide teaching the old one.
     """
     import re
     from pathlib import Path as _Path
 
     app = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
     guide = (app / "templates" / "_guide.html").read_text(encoding="utf-8")
-    units_part, review_part = guide.split("{% else %}", 1)
+    assert "key(" in guide, "the guide renders its key letters from the keymap"
+    # And a remap really reaches it, rather than the helper being unused.
+    import dataclasses
 
-    for view, part in (("units", units_part), ("review", review_part)):
-        js = (app / "static" / f"{view}.js").read_text(encoding="utf-8")
-        block = js[js.index("bindKeys({") :]
-        bound = set(re.findall(r'^\s{2}"?([A-Za-z?])"?:', block, re.M))
-        listed: set[str] = set()
-        for dt in re.findall(r"<dt>(.*?)</dt>", part, re.S):
-            listed |= set(re.findall(r"<b>([A-Za-z?])</b>", dt))
-        assert bound <= listed, f"{view}: bound but unexplained: {sorted(bound - listed)}"
-
-
-# -- the source picker -----------------------------------------------------
+    remapped = dataclasses.replace(config, keys={"queue": "1"})
+    body = TestClient(create_app(remapped)).get("/units").text
+    assert re.search(r"<b>1</b>\s*queue", body), "the footer follows the remap"
+    assert "<b>1</b>" in body[body.index("what each key does") :], "and so does the guide"
 
 
 def write_card(config: Config, uid: str, unit: str) -> Path:

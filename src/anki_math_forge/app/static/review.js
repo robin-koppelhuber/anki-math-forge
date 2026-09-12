@@ -90,11 +90,11 @@ function paintAnnotations(item, card) {
    `z` restores exactly that. Approving stamps `content_hash` and rejecting
    drops it, so a status-only undo would leave the card in a state it was
    never in. */
-const undoStack = loadUndo();
+const undoStack = loadUndo("review");
 
 async function undo() {
   const step = undoStack.pop();
-  saveUndo(undoStack);
+  saveUndo("review", undoStack);
   if (!step) {
     toast("nothing to undo");
     return;
@@ -123,7 +123,7 @@ async function act(verb) {
   });
   if (result.before) {
     undoStack.push({ uid: item.dataset.uid, before: result.before, what: verb });
-    saveUndo(undoStack);
+    saveUndo("review", undoStack);
   }
   repaintCounts(result.pipeline);
   refresh(item, result.card);
@@ -241,21 +241,21 @@ async function openEditor() {
 }
 
 bindKeys({
-  "?": cycleGuide,
-  f: toggleFilters,
-  g: openGallery,
-  z: undo,
-  a: () => act("approve"),
-  u: () => act("unapprove"),
-  r: () => act("reject"),
-  e: openEditor,
-  n: () => annotate("claude"),
-  N: () => annotate("me"),
-  x: () => resolveAnnotation(0),
-  j: () => deck.nextPending(),
-  k: () => deck.prev(),
-  ArrowDown: () => deck.nextPending(),
-  ArrowUp: () => deck.prev(),
+  approve: () => act("approve"),
+  reject: () => act("reject"),
+  "back-to-draft": () => act("unapprove"),
+  undo,
+  editor: openEditor,
+  "note-claude": () => annotate("claude"),
+  "note-me": () => annotate("me"),
+  "resolve-note": () => resolveAnnotation(0),
+  next: () => deck.nextPending(),
+  prev: () => deck.prev(),
+  "next-alt": () => deck.nextPending(),
+  "prev-alt": () => deck.prev(),
+  filters: toggleFilters,
+  sources: openGallery,
+  guide: cycleGuide,
 });
 
 /* Resolving an annotation is deleting it. There is no reply and no done-flag:

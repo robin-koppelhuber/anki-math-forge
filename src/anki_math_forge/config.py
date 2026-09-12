@@ -237,6 +237,11 @@ class Config:
     # decides the study order exactly as before. It changes what the app shows
     # and nothing about what any file means.
     graph: bool = True
+    # `[app.keys]`: action name -> the key that runs it. Empty means every
+    # shortcut is its default. `app/keys.py` owns the list and the reasoning;
+    # this is only the override table, validated at load so a typo'd action
+    # says so rather than quietly changing nothing.
+    keys: dict[str, str] = field(default_factory=dict)
     # Whether whoever writes a card may look things up on the web. Off, and
     # the default is the whole point: a card is supposed to say what *this
     # source* says, and the web is where a plausible statement of the general
@@ -516,9 +521,24 @@ def load(root: Path | None = None) -> Config:
         port=int(app.get("port", 8000)),
         katex_base=app.get("katex_base", ""),
         graph=bool(app.get("graph", True)),
+        keys=_keys(app.get("keys", {})),
         sources=sources,
         zotero=_zotero(raw.get("zotero", {})),
     )
+
+
+def _keys(raw: Any) -> dict[str, str]:
+    """`[app.keys]`, checked against the actions that exist.
+
+    Imported here rather than at module scope: `app.keys` is a leaf with no
+    imports of its own, but `config` is imported by everything and the app
+    package is not.
+    """
+    from .app import keys as keymap
+
+    table = {str(k): v for k, v in dict(raw or {}).items()}
+    keymap.validate(table)
+    return {k: str(v) for k, v in table.items()}
 
 
 SOURCE_TOML = "source.toml"

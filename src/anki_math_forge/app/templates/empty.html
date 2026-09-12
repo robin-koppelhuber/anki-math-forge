@@ -7,3 +7,10 @@
 <p class="nothing">no {{ what }} here yet.</p>
 <p class="muted">{{ hint }}</p>
 {% endblock %}
+
+{# The deck is empty; the view is not. `f`, `g` and `?` still work here, and
+   the footer was blank, so the one screen where you have never seen this app
+   before was also the one that said nothing about how to drive it. #}
+{% block keys %}
+{% include "_keys.html" %}
+{% endblock %}

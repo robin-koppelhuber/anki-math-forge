@@ -822,19 +822,16 @@ document.getElementById("add-card").addEventListener("close", () => {
 });
 
 bindKeys({
-  a: () => document.getElementById("graph-all").click(),
-  0: recentre,
-  x: () => putBack(hover),
-  n: () => togglePicker(true),
-  z: undo,
-  Delete: () => disconnect(selected),
-  Backspace: () => disconnect(selected),
-  /* The one shared key this view can honour. `f` and `?` toggle the filter
-     rail and the guide, and this view has neither; `g` opens the source
-     picker, whose button is in the header here like everywhere else, and
-     leaving it unbound made the same button answer to the mouse on three
-     views and to the keyboard on two. */
-  g: openGallery,
+  "every-card": () => document.getElementById("graph-all").click(),
+  "add-card": () => togglePicker(true),
+  recentre,
+  "forget-position": () => putBack(hover),
+  undo,
+  "drop-edge": () => disconnect(selected),
+  "drop-edge-alt": () => disconnect(selected),
+  /* The one shared key this view can honour beyond undo. `filters` here is
+     the only filter the canvas has, and `guide` has no guide to open. */
+  sources: openGallery,
 });
 
 load();

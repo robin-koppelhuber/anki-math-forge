@@ -248,7 +248,7 @@ def test_the_picture_cycles_three_ways_and_says_so() -> None:
     view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
     assert "data-pdf-view" in units
     assert '["crop", "page", "document"]' in view_js
-    assert "p: cyclePdfView," in view_js
+    assert '"pdf-view": cyclePdfView,' in view_js
 
 
 def test_clicking_the_picture_does_not_change_the_view() -> None:
@@ -341,8 +341,14 @@ def test_queueing_can_record_what_the_card_is_about() -> None:
     records the sentence that makes the decision useful later."""
     view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
     units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
-    assert "Q: queueWithABrief," in view_js
-    assert "<b>Q</b> queue + brief" in units, "and the footer names it"
+    assert '"queue-with-brief": queueWithABrief,' in view_js
+    # The footer renders from `app/keys.py` now, so the label lives there and
+    # the template is one include.
+    from anki_math_forge.app import keys as keymod
+
+    labels = {k.action: k.label for k in keymod.UNITS}
+    assert labels["queue-with-brief"] == "queue + brief"
+    assert '_keys.html' in units, "and the footer names it"
     # The state change first: a failure writing the note leaves a queued unit
     # with no brief, which `n` fixes -- nothing fixes a decision that never
     # landed.

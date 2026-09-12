@@ -214,7 +214,32 @@ function currentOf(deck) {
   return item;
 }
 
+/* Which key runs which action, from `app/keys.py` by way of the page.
+   Empty if the server predates it, in which case nothing binds and the footer
+   is empty too -- which is the honest pair, rather than a legend listing keys
+   that do nothing. */
+function keymap() {
+  const tag = document.getElementById("keymap");
+  try {
+    return tag ? JSON.parse(tag.textContent) : {};
+  } catch {
+    return {};
+  }
+}
+
+/* `handlers` is keyed by **action**, not by key.
+
+   The letter is a setting and the action is the contract, so a view's script
+   says what `approve` does and never mentions `a`. That is also what lets the
+   legend and the bindings come from one declaration: they are two renderings
+   of the same map rather than two lists someone has to keep equal. */
 function bindKeys(handlers) {
+  const map = keymap();
+  const bound = {};
+  Object.keys(handlers).forEach((action) => {
+    const key = map[action];
+    if (key) bound[key] = handlers[action];
+  });
   document.addEventListener("keydown", (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (document.getElementById("prompt").open) return;
@@ -223,7 +248,7 @@ function bindKeys(handlers) {
     if (aModalIsOpen()) return;
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
-    const handler = handlers[event.key];
+    const handler = bound[event.key];
     if (!handler) return;
     event.preventDefault();
     handler();
@@ -620,20 +645,38 @@ function paintCounts(pipeline) {
    which used to throw the stack away -- so a mis-pressed key became permanent
    the moment you changed filter, which is exactly when you would go looking
    for it. Session storage, so it dies with the tab and never with a click. */
+/* One stack per view, not one for the app.
+
+   It was a single key, so the two views shared a stack while pushing entries
+   of different shapes: a unit step is `{id, before}` and a card step is
+   `{uid, before}`. Triage three units, switch to the review view, press undo,
+   and it popped a *unit* step, read `step.uid` off it as undefined, and posted
+   to `/api/cards/undefined/restore`. Measured: a 400 either way, `unknown
+   status ''` in one direction and `no unit 'None'` in the other -- and the
+   step was popped and saved before the request went out, so each press
+   destroyed one entry of the other view's history.
+
+   Scoped by view, they cannot meet. The graph view keeps its own in memory:
+   its undo is an inverse operation rather than a snapshot, so there is nothing
+   to restore and nothing worth surviving a reload. */
 const UNDO_KEY = "anki-forge.undo";
 
-function loadUndo() {
+function undoKey(scope) {
+  return `${UNDO_KEY}.${scope}`;
+}
+
+function loadUndo(scope) {
   try {
-    const raw = sessionStorage.getItem(UNDO_KEY);
+    const raw = sessionStorage.getItem(undoKey(scope));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-function saveUndo(stack) {
+function saveUndo(scope, stack) {
   try {
-    sessionStorage.setItem(UNDO_KEY, JSON.stringify(stack.slice(-50)));
+    sessionStorage.setItem(undoKey(scope), JSON.stringify(stack.slice(-50)));
   } catch {
     /* private window: undo still works within this page */
   }

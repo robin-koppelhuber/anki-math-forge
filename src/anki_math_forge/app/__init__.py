@@ -16,6 +16,7 @@ hand -- the app is one entry point, not the entry point.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -31,6 +32,7 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
 from markupsafe import Markup
 
 from .. import check, latex, model
@@ -39,11 +41,34 @@ from ..config import DEFAULT_MEANINGS, Config
 from ..ledger import Ledger, Unit, open_ledgers
 from ..model import Card, StaleFileError
 from ..sync import in_study_order, source_positions
+from . import keys as keymod
 
 HERE = Path(__file__).parent
 TEMPLATES = HERE / "templates"
 STATIC = HERE / "static"
 CDN_KATEX = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist"
+
+
+def key_context(config: Config, view: str) -> dict[str, Any]:
+    """Both renderings of one keymap: the legend, and what the browser binds.
+
+    Handed to every view rather than assembled per template, so a view cannot
+    ship a footer without the bindings that go with it -- which is the shape
+    the three hand-written copies were in before `app/keys.py`.
+    """
+    resolved = keymod.resolve(view, config.keys)
+    return {
+        "keymap": resolved,
+        "keymap_keys": {k.action: k.key for k in resolved},
+        # `Markup`, because Jinja autoescapes and a JSON payload run through
+        # the HTML escaper comes out as `{&#34;approve&#34;: ...}`, which
+        # `JSON.parse` refuses -- so *every* key silently stops binding, the
+        # whole keyboard at once. `<` is escaped by hand instead, so a key
+        # spelling `</script>` cannot close the tag it is inside.
+        "keymap_json": Markup(
+            json.dumps({k.action: k.key for k in resolved}).replace("<", "\u003c")
+        ),
+    }
 
 
 def render_body(body: str) -> Markup:
@@ -72,6 +97,19 @@ def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="forge", docs_url=None, redoc_url=None)
     templates = Jinja2Templates(directory=str(TEMPLATES))
     templates.env.filters["body"] = render_body
+
+    @pass_context
+    def key_of(ctx: Any, action: str) -> str:
+        """The key bound to `action` in the view being rendered.
+
+        So the guide teaches the keymap in force rather than the defaults it
+        was written against. A context function and not a global, because the
+        answer differs per view: `a` approves on one and accepts a suggestion
+        on the other, and `[app.keys]` can move either.
+        """
+        return str((ctx.get("keymap_keys") or {}).get(action, "")) or "?"
+
+    templates.env.globals["key"] = key_of
     app.state.config = config
 
     app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
@@ -166,6 +204,7 @@ def create_app(config: Config) -> FastAPI:
                     "what": "units",
                     "hint": "run `forge extract`",
                     "view": "units",
+                    **key_context(config, "units"),
                     "config": config,
                     "source": resolve_source(config, source),
                     "sources": source_names(config),
@@ -238,6 +277,7 @@ def create_app(config: Config) -> FastAPI:
             request,
             "units.html",
             {
+                **key_context(config, "units"),
                 "config": config,
                 "source": name,
                 "sources": source_names(config),
@@ -318,6 +358,7 @@ def create_app(config: Config) -> FastAPI:
                     "what": "cards",
                     "hint": ("queue some units in the units view, then run `/extract-cards`"),
                     "view": "review",
+                    **key_context(config, "review"),
                     "config": config,
                     "source": name,
                     "sources": source_names(config),
@@ -413,6 +454,7 @@ def create_app(config: Config) -> FastAPI:
             request,
             "review.html",
             {
+                **key_context(config, "review"),
                 "config": config,
                 "cards": [
                     _card_payload(c, findings, config, places.get(c.uid)) for c in selected
@@ -477,6 +519,7 @@ def create_app(config: Config) -> FastAPI:
             request,
             "graph.html",
             {
+                **key_context(config, "graph"),
                 "config": config,
                 "source": name,
                 "sources": source_names(config),

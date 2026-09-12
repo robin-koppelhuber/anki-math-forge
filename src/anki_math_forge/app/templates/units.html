@@ -302,23 +302,7 @@
 {% endblock %}
 
 {% block keys %}
-{# Ordered by how often a hand reaches for it: decide, repair, move, then the
-   view itself. The old order put `?` in the middle of the decision keys. #}
-<span class="key-group"><b>q</b> queue</span>
-<span class="key-group"><b>Q</b> queue + brief</span>
-<span class="key-group"><b>s</b> skip</span>
-<span class="key-group"><b>a</b>/<b>d</b> accept/dismiss</span>
-<span class="key-group sep"><b>z</b> undo</span>
-<span class="key-group"><b>n</b>/<b>N</b> note for claude/me</span>
-<span class="key-group"><b>c</b> context size</span>
-<span class="key-group"><b>w</b> web lookups</span>
-<span class="key-group"><b>p</b> crop/page/doc</span>
-<span class="key-group"><b>S</b> skip + reason</span>
-<span class="key-group"><b>u</b> back to new</span>
-<span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
-<span class="key-group"><b>f</b> filters</span>
-<span class="key-group"><b>g</b> sources</span>
-<span class="key-group"><b>?</b> guide</span>
+{% include "_keys.html" %}
 {% endblock %}
 
 {% block scripts %}<script defer src="/static/units.js"></script>{% endblock %}

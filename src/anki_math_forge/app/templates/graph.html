@@ -59,15 +59,11 @@
 {% endblock %}
 
 {% block keys %}
-<span><b>drag a dot</b> to connect two cards</span>
-<span><b>drag</b> a box to arrange · the background to pan</span>
-<span><b>click</b> a box opens the card · an arrow selects it</span>
-<span><b>del</b> removes the selected arrow</span>
-<span><b>n</b> add a card · <b>x</b> takes one off</span>
-<span><b>z</b> undo · <b>a</b> every card · <b>0</b> recentre · <b>g</b> sources</span>
-{# An arrow is a `requires` line in a card file, written by dragging. Saying so
-   is the difference between a canvas that edits a picture and one that edits
-   the deck. #}
+{# Gestures, which are not keys and so are not in the keymap. #}
+<span class="key-group"><b>drag a dot</b> connect two cards</span>
+<span class="key-group"><b>drag</b> a box to arrange · the background to pan</span>
+<span class="key-group"><b>click</b> a box opens the card · an arrow selects it</span>
+{% include "_keys.html" %}
 <span class="muted">an arrow writes <code>requires</code> into the card that needs the other</span>
 {% endblock %}
 

@@ -75,6 +75,13 @@
 
 <footer class="bar keys">{% block keys %}{% endblock %}</footer>
 
+{# The keymap the view's script binds against. One declaration in
+   `app/keys.py` renders the legend above and fills this, so a key configured
+   in `[app.keys]` moves both or neither. JSON in a script tag rather than a
+   data attribute: a key can be `Delete` or `+`, and attribute-escaping a map
+   is how you end up with `&quot;` in a keycode. #}
+<script id="keymap" type="application/json">{{ keymap_json | default('{}', true) }}</script>
+
 <div class="toast" id="toast" hidden></div>
 <dialog class="prompt" id="prompt">
   <form method="dialog">

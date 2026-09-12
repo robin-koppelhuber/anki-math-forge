@@ -11,12 +11,12 @@ const activeState = new URLSearchParams(location.search).get("state") || "new";
    before it acted, so `z` restores exactly that -- state, reason and any
    suggestion -- rather than guessing. A mis-pressed key costs one keystroke,
    which is the point of a keyboard-driven triage view. */
-const undoStack = loadUndo();
+const undoStack = loadUndo("units");
 
 function recordUndo(item, result, what) {
   if (!result || !result.before) return;
   undoStack.push({ id: item.dataset.id, before: result.before, what });
-  saveUndo(undoStack);
+  saveUndo("units", undoStack);
 }
 
 function paintState(item, unit) {
@@ -30,7 +30,7 @@ function paintState(item, unit) {
 
 async function undo() {
   const step = undoStack.pop();
-  saveUndo(undoStack);
+  saveUndo("units", undoStack);
   if (!step) {
     toast("nothing to undo");
     return;
@@ -599,31 +599,31 @@ document.addEventListener("click", (event) => {
 });
 
 bindKeys({
-  "?": cycleGuide,
-  c: cycleContext,
-  w: cycleWeb,
-  p: cyclePdfView,
-  f: toggleFilters,
-  g: openGallery,
-  z: undo,
-  q: () => setState("queued"),
-  Q: queueWithABrief,
+  queue: () => setState("queued"),
+  "queue-with-brief": queueWithABrief,
   /* No prompt. A skip is the commonest action in triage, and stopping to type
-     a word turned one keystroke into a dialogue. `S` still asks, for the times
-     the reason is worth recording. */
-  s: () => setState("skipped"),
-  S: async () => {
+     a word turned one keystroke into a dialogue. `skip-with-reason` still
+     asks, for the times the reason is worth recording. */
+  skip: () => setState("skipped"),
+  "skip-with-reason": async () => {
     const reason = await ask("skip reason (optional)");
     if (reason === null) return;
     setState("skipped", reason);
   },
-  u: () => setState("new"),
-  a: () => decideOnSuggestion("accept"),
-  d: () => decideOnSuggestion("dismiss"),
-  n: () => annotate("claude"),
-  N: () => annotate("me"),
-  j: () => deck.nextPending(),
-  k: () => deck.prev(),
-  ArrowDown: () => deck.nextPending(),
-  ArrowUp: () => deck.prev(),
+  "accept-suggestion": () => decideOnSuggestion("accept"),
+  "dismiss-suggestion": () => decideOnSuggestion("dismiss"),
+  "back-to-new": () => setState("new"),
+  undo,
+  "note-claude": () => annotate("claude"),
+  "note-me": () => annotate("me"),
+  "context-size": cycleContext,
+  "web-lookups": cycleWeb,
+  "pdf-view": cyclePdfView,
+  next: () => deck.nextPending(),
+  prev: () => deck.prev(),
+  "next-alt": () => deck.nextPending(),
+  "prev-alt": () => deck.prev(),
+  filters: toggleFilters,
+  sources: openGallery,
+  guide: cycleGuide,
 });

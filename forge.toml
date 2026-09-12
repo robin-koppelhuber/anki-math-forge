@@ -109,6 +109,22 @@ katex_base = ""
 # the app shows you a picture of it.
 graph = true
 
+# Keyboard shortcuts, by action. The defaults are in
+# `src/anki_math_forge/app/keys.py`, which is also where the reasoning for
+# each one is; naming an action here moves it in the bindings, the footer
+# legend and the guide at once. An action that does not exist is an error at
+# load, because a typo'd one reads exactly like the feature not working.
+#
+# A TOML sub-table swallows every bare key below it, so this goes *after*
+# the ones above.
+#
+# [app.keys]
+# units: queue = 'q', queue-with-brief = 'Q', skip = 's', accept-suggestion = 'a', ...
+# review: approve = 'a', reject = 'r', back-to-draft = 'u', undo = 'z', ...
+# graph: add-card = '+', every-card = 'f', drop-edge = 'Delete', undo = 'z', ...
+# approve = "y"
+
+
 # Reading a marked-up PDF out of Zotero. Needs Zotero running with its local
 # API enabled (Settings > Advanced), the way `sync` needs Anki running with
 # AnkiConnect.
