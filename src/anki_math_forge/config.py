@@ -46,8 +46,15 @@ class SourceConfig:
     order: str = "printed"
     # Points of page shown around this source's crops; 0 inherits.
     crop_context: float = 0.0
+    # `box` or `page`; empty inherits, and what it inherits depends on where
+    # the geometry came from -- see `Config.crop_width_for`.
+    crop_width: str = ""
     # Pages either side handed to a card writer; -1 inherits.
     context_pages: int = -1
+    # The Zotero item this source was imported from, when it was. Not used to
+    # find anything -- the units carry their own attachment keys -- but it is
+    # what makes "where did this come from" answerable without opening Zotero.
+    zotero_key: str = ""
     # Card type -> deck, for a source whose restatements and explanations want
     # different new-card rates. Empty means every type lands in `deck`.
     decks: Mapping[str, str] = field(default_factory=dict)
@@ -114,6 +121,7 @@ class Config:
     layout: str
     front_char_cap: int
     crop_context: float
+    crop_width: str
     context_pages: int
     anki_url: str
     deck: str
@@ -179,6 +187,27 @@ class Config:
         if spec and spec.crop_context:
             return spec.crop_context
         return self.crop_context or TRIAGE_CONTEXT
+
+    def crop_width_for(self, source: str, from_a_mark: bool = False) -> str:
+        """`box` or `page`: how wide this source's crops are cut.
+
+        The default depends on where the geometry came from, because the
+        left and right edges of a box mean different things in the two cases.
+        A segmenter that found a display equation stopped where the equation
+        stopped, so its edges are the answer. A mark's box is the union of the
+        lines a sentence happened to span, so its edges are wherever that
+        sentence started and stopped mid-column -- cutting there slices words
+        in half and drops the paragraph that gives them their meaning.
+
+        So a mark gets the whole page width unless the source says otherwise.
+        A source that says otherwise is believed in both directions.
+        """
+        spec = self.sources.get(source)
+        if spec and spec.crop_width:
+            return spec.crop_width
+        if self.crop_width:
+            return self.crop_width
+        return "page" if from_a_mark else "box"
 
     def context_pages_for(self, source: str, unit: int | None = None) -> int:
         """How many pages either side a card writer gets, most specific first.
@@ -312,7 +341,9 @@ def load(root: Path | None = None) -> Config:
             layout=_layout(spec.get("layout", ""), f"[sources.{name}]"),
             order=_order(spec.get("order", "printed"), f"[sources.{name}]"),
             crop_context=float(spec.get("crop_context", 0.0)),
+            crop_width=_crop_width(spec.get("crop_width", ""), f"[sources.{name}]"),
             context_pages=int(spec.get("context_pages", -1)),
+            zotero_key=str(spec.get("zotero", "") or ""),
             decks={str(k): str(v) for k, v in (spec.get("decks") or {}).items()},
             tags=tuple(str(x) for x in spec.get("tags", ())),
             units_from=frozenset(str(x) for x in spec.get("units_from", ())),
@@ -328,6 +359,7 @@ def load(root: Path | None = None) -> Config:
         layout=_layout(cards.get("layout", ""), "[cards]"),
         front_char_cap=int(cards.get("front_char_cap", 160)),
         crop_context=float(cards.get("crop_context", 0.0)),
+        crop_width=_crop_width(cards.get("crop_width", ""), "[cards]"),
         context_pages=int(cards.get("context_pages", 1)),
         anki_url=os.environ.get("ANKI_CONNECT_URL", anki.get("url", "http://127.0.0.1:8765")),
         deck=anki.get("deck", "Default"),
@@ -436,6 +468,19 @@ def _layout(value: Any, where: str) -> str:
             "A layout that is not recognised would silently be treated as "
             "'not denominator' and change what every card from it means."
         )
+    return text
+
+
+def _crop_width(value: Any, where: str) -> str:
+    """`box`, `page`, or unset. Refused rather than guessed at, for the same
+    reason `layout` is: an unrecognised value would fall through to whichever
+    branch happens to be the `else`, and you would find out by wondering why
+    half the crops look wrong."""
+    from .extract.render import WIDTHS
+
+    text = str(value or "").strip()
+    if text and text not in WIDTHS:
+        raise ConfigError(f"{where} crop_width = {text!r}; expected one of {', '.join(WIDTHS)}")
     return text
 
 

@@ -29,7 +29,12 @@ STATES = ("new", "queued", "skipped", "carded")
 # Fields extraction owns: refreshed on re-extract, because re-segmenting is
 # exactly how you fix a wrong bounding box. Everything else -- state, reason,
 # uids, notes -- belongs to the human and survives untouched.
-EXTRACTED_FIELDS = ("locator", "context")
+#
+# `marks` is extraction output for the same reason the locator is: what a
+# reader marked around a unit changes every time they read further, and
+# re-importing is how that reaches the ledger. It is still only refreshed
+# while a unit is `new`, so nothing moves under something already triaged.
+EXTRACTED_FIELDS = ("locator", "context", "marks")
 
 # Transcriptions are *not* extraction output any more: `/transcribe` reads the
 # crops and writes them. Re-extracting must never destroy that work, so these
@@ -82,10 +87,17 @@ class Locator:
         return "", ""
 
     def describe(self) -> str:
-        """A human reading of where this is, for a citation line."""
+        """A human reading of where this is, for a citation line.
+
+        `§` only where the source actually numbers its sections. A source that
+        does not puts something else in the field -- a Zotero attachment puts
+        its filename there -- and `§MOL_appendix.pdf` claims a numbering that
+        does not exist. The test is the same one a reader would apply: does it
+        start with a digit.
+        """
         bits = []
         if self.section:
-            bits.append(f"§{self.section}")
+            bits.append(f"§{self.section}" if self.section[:1].isdigit() else self.section)
         kind, label = self.ref
         if label:
             # An unnumbered kind contributes nothing to a citation: "p. 8" is
@@ -127,6 +139,17 @@ class Mark:
     comment: str = ""  # what the reader wrote about it
     bbox: list[float] | None = None  # top-left origin, like every other bbox
     order: str = ""  # the source's own reading-order key
+    # Which page it is on, 1-based, the way `locator.page` counts. A unit
+    # carries the marks from the pages *around* it too, so "the unit's page"
+    # does not answer this and anything drawing a mark needs it: a highlight
+    # from the next page painted onto this one lands on unrelated text.
+    page: int | None = None
+    # One box per line the mark spans, same origin as `bbox` -- which is their
+    # union. The union is the right thing to *crop* to and the wrong thing to
+    # *draw*: a highlight running over a line break unions into a rectangle
+    # covering both lines end to end, including the half of each line the
+    # reader did not mark.
+    rects: list[list[float]] | None = None
 
     @property
     def content(self) -> str:

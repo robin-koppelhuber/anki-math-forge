@@ -1,5 +1,8 @@
-{# The guide: what am I looking at. It changes nothing -- its counterpart is
-   the filter rail on the left, which changes what the deck shows.
+{# The right rail is for **knowing**: it changes nothing, and everything on it
+   answers "what am I looking at". Its counterpart is the filter rail on the
+   left, which is where anything that acts belongs. What the source is set to,
+   and what your own marks mean, live here for exactly that reason -- they are
+   facts about the material in front of you, not things to press.
 
    Three sizes, cycled with `?` and remembered:
 
@@ -18,6 +21,72 @@
       <button type="button" class="guide-cycle" id="guide-cycle"
               title="guide — cycle: counts / everything / hidden (?)">?</button>
     </div>
+
+    {# The source itself, before any of the counting. Which layout a card
+       resolved to, which deck it will land in, how much page a card writer
+       gets -- all of it decided how the card in front of you was written, and
+       none of it was visible without leaving the view and reading Python.
+
+       Shown at every size, because it is the thing you look up mid-decision.
+       Read-only, and the link goes to the full resolution table: the config
+       is read at startup, so a box that edited it would take effect at some
+       unrelated later moment. #}
+    {% if source_facts is defined and source_facts %}
+    {% set sf = source_facts %}
+    <section class="rail-card source-facts">
+      <h3>this source</h3>
+      <p class="sf-title" title="{{ sf.citation }}">{{ sf.title }}</p>
+      <dl>
+        <dt>material</dt>
+        <dd>{% if sf.origin == 'zotero' %}Zotero, marked up while reading
+            {%- elif sf.origin == 'pdf' %}a PDF in this repo
+            {%- elif sf.origin == 'tex' %}LaTeX source
+            {%- else %}<span class="warn">not configured</span>{% endif %}</dd>
+        <dt>deck</dt><dd><code>{{ sf.deck }}</code>
+          {%- for type, deck in sf.decks %}<br><code>{{ type }} → {{ deck }}</code>{% endfor %}</dd>
+        <dt>layout</dt>
+        <dd>{% if sf.layout %}<code>{{ sf.layout }}</code>
+            {%- else %}<span class="warn">none declared</span> — <code>verify</code>
+            refuses rather than checking against a guess{% endif %}</dd>
+        <dt>crops</dt>
+        <dd>{{ 'full page width' if sf.crop_width == 'page' else 'the box itself' }},
+            {{ sf.crop_context | round | int }}pt around it</dd>
+        <dt>context</dt>
+        <dd>{{ sf.context_pages }} page{{ '' if sf.context_pages == 1 else 's' }}
+            either side, per card written</dd>
+        <dt>conventions</dt>
+        <dd>{% if sf.conventions %}recorded in <code>source.md</code>
+            {%- else %}<span class="warn">none written</span> — whoever writes a
+            card from this is guessing at what is ambient{% endif %}</dd>
+      </dl>
+      <p class="rail-more"><a href="/config?source={{ sf.name }}">every setting, and where it came from &rarr;</a></p>
+    </section>
+    {% endif %}
+
+    {# What you meant by each colour. The filter rail lists the same marks as
+       something to click; this is the legend, and it includes what you
+       declared but have not used and -- more usefully -- what you have used
+       and not declared. #}
+    {% if scheme is defined and scheme %}
+    <section class="rail-card scheme">
+      <h3>what your marks mean</h3>
+      <ul class="scheme-list">
+        {% for row in scheme %}
+        <li class="{{ 'unused' if not row.count }}">
+          <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
+          <span class="scheme-text">
+            <b>{{ row.key }}</b>
+            {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
+            <span class="scheme-meaning">{{ row.meaning or 'nothing declared — it reaches a card writer as a coloured box with no caption' }}</span>
+          </span>
+          <b class="scheme-count">{{ row.count }}</b>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="rail-more">declared in <code>[zotero.meanings]</code>, or per source in
+        <code>source.md</code></p>
+    </section>
+    {% endif %}
 
     <div class="at-a-glance">
       {# Which population the diagram is counting. "all" is the whole source,
@@ -65,6 +134,20 @@
           what this unit claims to be.</b> If the box holds two numbered
           equations, or the equation continues outside it, segmentation got it
           wrong — annotate rather than card it. <b>p</b> shows the whole page.</dd>
+      <dt>the colours on it</dt>
+      <dd>what a reader marked, painted back on in the colours they used. The
+          mark this unit came from is at <b>full strength</b>; everything
+          marked nearby is faded, so a page with six highlights on it still
+          says which one the card is about. A unit that came from a mark is cut
+          to the <b>full width of the page</b> — a mark's box is the union of
+          the lines a sentence happened to span, so its left and right edges
+          are wherever that sentence started and stopped mid-column.</dd>
+      <dt>the marks underneath</dt>
+      <dd>what each one actually says — the sentence it covers, and anything
+          written beside it. <b>Whether a marked claim is worth a card on its
+          own is mostly a question about its neighbours</b>, and this is them.
+          One marked <b>its own unit</b> you will meet again; the rest are only
+          context for this decision.</dd>
       <dt>the maths beside it</dt>
       <dd>the transcription, rendered. A <b>hint, not content</b>: where it
           disagrees with the picture, the picture wins. <span class="badge ocr">transcribed</span>
@@ -126,7 +209,12 @@
           <b>stays in the list</b>, so <b>k</b> always gets you back to it.</dd>
       <dt><b>f</b> filters &middot; <b>?</b> this guide</dt>
       <dd>Both panels toggle. The guide cycles three sizes: counts, then
-          everything, then hidden. Drag either edge to resize it.</dd>
+          everything, then hidden. Drag either edge to resize it. The left
+          rail is what <b>acts</b>; this one only tells you what you are
+          looking at.</dd>
+      <dt><b>g</b> sources</dt>
+      <dd>Every source at once, with how far along each one is. Narrow it by
+          tag or by where the material came from.</dd>
     </dl>
 
     <h3>filters</h3>
@@ -208,6 +296,8 @@
           the list, so <b>k</b> reaches it.</dd>
       <dt><b>f</b> filters &middot; <b>?</b> this guide</dt>
       <dd>Both panels toggle; drag either edge to resize it.</dd>
+      <dt><b>g</b> sources</dt>
+      <dd>Every source at once, with how far along each one is.</dd>
     </dl>
 
     <h3>what a card is made of</h3>

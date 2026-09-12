@@ -169,11 +169,43 @@ function togglePage() {
   toast(whole ? "back to the crop" : "the whole page, box drawn on it");
 }
 
+/* Jumping to a neighbouring mark that is a unit in its own right. It is
+   usually already in the deck on screen, just hidden behind the one you are
+   looking at, so this should not cost a page load. Same shape as the review
+   view's dependency links, for the same reason. */
+function showById(id) {
+  const index = deck.items.findIndex((item) => item.dataset.id === id);
+  if (index < 0) return false;
+  deck.show(index);
+  return true;
+}
+
+function followHash() {
+  const id = decodeURIComponent(location.hash.replace(/^#/, ""));
+  if (!id) return;
+  // Say so rather than doing nothing: a link that lands on a filter which
+  // still excludes its target is otherwise indistinguishable from a dead one.
+  if (!showById(id)) toast(`${id} is not in this view — try the state filter`);
+}
+
+window.addEventListener("hashchange", followHash);
+followHash();
+
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("[data-goto]");
+  if (!link || event.metaKey || event.ctrlKey || event.shiftKey) return;
+  if (deck.items.some((item) => item.dataset.id === link.dataset.goto)) {
+    event.preventDefault();
+    location.hash = encodeURIComponent(link.dataset.goto);
+  }
+});
+
 bindKeys({
   "?": cycleGuide,
   c: cycleContext,
   p: togglePage,
   f: toggleFilters,
+  g: openGallery,
   z: undo,
   q: () => setState("queued"),
   /* No prompt. A skip is the commonest action in triage, and stopping to type

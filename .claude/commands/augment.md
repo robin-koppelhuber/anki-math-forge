@@ -1,8 +1,14 @@
 ---
 description: Fill in conditions, proof, prose and tags on stub cards
+argument-hint: [--source NAME]
 ---
 
 Add the optional sections to stubs that are still bare.
+
+Arguments: `$ARGUMENTS` — **`--source NAME`** narrows to one source's drafts.
+Worth asking for when the repo has several: conventions are per source, and a
+pass that hops between two books is one that has to reload the setting between
+every card.
 
 **This is not the command for working my annotations** — that is `/triage`.
 And run this *before* approval: augmenting an approved card changes its
@@ -71,7 +77,7 @@ is visible.
 3. Verify what opted in, then check:
 
    ```
-   uv run forge verify
+   uv run forge verify --source <SOURCE>
    uv run forge check
    ```
 

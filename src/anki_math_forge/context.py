@@ -102,7 +102,7 @@ def assemble(
         unit=unit.id,
         locator=unit.locator.describe(),
         transcription=unit.tex_source or unit.tex_auto or "",
-        conventions=_conventions(config, source),
+        conventions=source_conventions(config, source),
         page_text=_page(text, unit.locator.page, spread),
         page_units=_page_units(ledger, unit.locator.page),
         marks=[
@@ -164,7 +164,7 @@ def _page_units(ledger: Any, page: int | None) -> list[dict[str, Any]]:
         for u in rows
     ]
 
-def _conventions(config: Config, source: str) -> str:
+def source_conventions(config: Config, source: str) -> str:
     """The ambient setting cards from this source are read in.
 
     Per source, not per project: "denominator layout" and "entries are real"

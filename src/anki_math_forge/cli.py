@@ -330,6 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = subs.add_parser("verify", help="opt-in numeric check of identities")
     p.add_argument("--uid", default=None)
+    p.add_argument("--source", default=None, help="only this source's cards")
     p.add_argument("--trials", type=int, default=verify.TRIALS)
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_verify)
@@ -772,9 +773,17 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
                     renderers[key] = render_mod.CropRenderer(document)
                 renderer = renderers[key]
                 path = out / (re.sub(r"[^A-Za-z0-9._-]+", "_", unit.id) + ".png")
+                # The same crop the app shows. Whatever reads these PNGs is
+                # reading what a human would be shown for the same unit, and
+                # two things called "the crop" that disagree about what is on
+                # it would break the one thing the review model rests on.
                 path.write_bytes(
                     renderer.render(
-                        *geometry, context=context, outline=not args.no_outline
+                        *geometry,
+                        context=context,
+                        outline=not args.no_outline,
+                        width=config.crop_width_for(name, from_a_mark=bool(unit.marks)),
+                        regions=render_mod.regions_for(unit, geometry[0]),
                     )
                 )
                 manifest.append(
@@ -1065,6 +1074,11 @@ def cmd_sync(args: argparse.Namespace, config: Config) -> int:
 
 def cmd_verify(args: argparse.Namespace, config: Config) -> int:
     cards = model.load_all(config.cards_dir)
+    if args.source:
+        # Layout is per source and `verify` refuses a source that declares
+        # none, so "check this paper" is a question worth being able to ask
+        # without the other books' skips burying the answer.
+        cards = [c for c in cards if c.source_name == args.source]
     results = verify.run(cards, config, trials=args.trials, only=args.uid)
     if args.json:
         print(json.dumps([vars(r) for r in results], indent=2))

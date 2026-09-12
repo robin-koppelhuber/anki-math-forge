@@ -11,9 +11,15 @@
     <div class="unit-head">
       <span class="locator">{{ unit.locator or unit.id }}</span>
       <span class="badge state-{{ unit.state }}">{{ unit.state }}</span>
+      {# "not transcribed" is a red badge because on a segmented source it is
+         work outstanding. On a unit that came from a mark it is not a state at
+         all -- a highlight carries the text it covers, and nothing will ever
+         read a picture of it -- so the badge says what the unit is instead of
+         accusing it of missing something it cannot have. #}
       {% if unit.authoritative %}<span class="badge src">tex source</span>
       {% elif unit.transcription == 'ok' %}<span class="badge ocr">transcribed</span>
       {% elif unit.transcription == 'failed' %}<span class="badge bad">transcription failed</span>
+      {% elif unit.marks %}<span class="badge">marked while reading</span>
       {% else %}<span class="badge bad">not transcribed</span>{% endif %}
       {% if unit.uids %}<span class="badge carded">{{ unit.uids|join(', ') }}</span>{% endif %}
       {# How much of the document a card writer gets. Shown only when this
@@ -24,7 +30,13 @@
             {{ 'hidden' if not unit.context_own }}>{{ unit.context_pages }}p</span>
     </div>
 
-    <div class="side-by-side">
+    {# The transcription pane is dropped for a unit that came from a mark and
+       has none. There is nothing to put there and never will be: a highlight
+       already carries the text it covers, so the panel read "no transcription;
+       read the crop" while taking half the width away from the crop it was
+       telling you to read. A mark that *has* been transcribed keeps it. #}
+    {% set reads = unit.tex or not unit.marks %}
+    <div class="side-by-side {{ 'one-column' if not reads }}">
       {% if unit.image %}
       <figure class="crop">
         <img src="{{ unit.image }}" alt="crop of {{ unit.id }}" loading="lazy" data-crop>
@@ -35,6 +47,7 @@
       {% else %}
       <p class="crop-missing">no crop geometry for this unit</p>
       {% endif %}
+      {% if reads %}
       <div class="splitter" data-splitter="units" title="drag to resize — double-click to reset"></div>
       <div class="transcription">
         {% if unit.tex and unit.transcription == 'ok' %}
@@ -46,7 +59,39 @@
         <p class="muted">no transcription; read the crop</p>
         {% endif %}
       </div>
+      {% endif %}
     </div>
+
+    {# What the reader actually wrote. The crop shows *where* the marks are;
+       this is what they say -- the sentence each one covers and the note left
+       beside it. Deciding whether a marked claim is worth a card on its own
+       is mostly a question about its neighbours, and until now the only way
+       to read them was to open the PDF. #}
+    {% if unit.marks %}
+    <details class="marks-list" open>
+      <summary>{{ unit.marks | length }} mark{{ '' if unit.marks|length == 1 else 's' }} here and nearby
+        <span class="hint">— in reading order; the first is this unit's own</span></summary>
+      <ul>
+        {% for m in unit.marks %}
+        <li class="{{ 'own' if m.own }}">
+          <span class="swatch c-{{ m.colour or m.kind }}" aria-hidden="true"></span>
+          <div class="mark-body">
+            <p class="mark-meta">
+              {% if m.own %}<b class="this-one">this one</b>{% endif %}
+              <span class="mark-what">{{ m.colour or m.kind }}{% if m.colour and m.kind != 'highlight' %} {{ m.kind }}{% endif %}</span>
+              {% if m.meaning %}<span class="mark-meaning">{{ m.meaning }}</span>{% endif %}
+              {% if m.page %}<span class="mark-page">p{{ m.page }}</span>{% endif %}
+              {% if m.unit and not m.own %}<a class="mark-goto" href="#{{ m.unit }}"
+                 data-goto="{{ m.unit }}" title="this one is a unit of its own — you will meet it again">its own unit</a>{% endif %}
+            </p>
+            {% if m.text %}<blockquote>{{ m.text }}</blockquote>{% endif %}
+            {% if m.comment %}<p class="mark-comment">{{ m.comment }}</p>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
 
     {% if unit.suggestion %}
     <p class="suggestion">
@@ -102,6 +147,7 @@
 <span class="key-group"><b>u</b> back to new</span>
 <span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
 <span class="key-group"><b>f</b> filters</span>
+<span class="key-group"><b>g</b> sources</span>
 <span class="key-group"><b>?</b> guide</span>
 {% endblock %}
 

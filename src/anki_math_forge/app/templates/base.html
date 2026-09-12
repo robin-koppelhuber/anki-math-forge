@@ -20,7 +20,11 @@
 {# The source in force, carried on every in-header link so switching
    view does not silently switch book. #}
 {% set src = source | default('', true) %}
-<header class="bar">
+{# Sticky and above both rails. The rails are fixed panels that start below
+   it: they used to start at y=0 with a higher stacking order, which put the
+   filter panel on top of the view links -- the one row that is supposed to be
+   reachable from everywhere. #}
+<header class="bar" id="topbar">
   <nav class="views">
     <a href="/units?source={{ src }}" class="{{ 'on' if view == 'units' }}">units</a>
     <a href="/review?source={{ src }}" class="{{ 'on' if view == 'review' }}">review</a>
@@ -28,24 +32,15 @@
        title="what every setting resolved to, and where it came from">config</a>
   </nav>
   {% if sources is defined and sources %}
-  {# Rendered even for a single source: which book you are working on is
-     worth stating, and it is the one control whose absence made the units
-     view look like it was showing everything. #}
-  <select class="source-pick" id="source-pick" aria-label="source"
-          title="the source you are working on">
-    {# Grouped by tag, because a shelf of papers is fifty entries and a flat
-       list of citekeys is unusable at that size. The label is the source
-       *name*: a select's typeahead matches what is shown, and a citekey
-       starts with the author you are looking for. #}
-    {% for group in sources %}
-    {% if group.tag %}<optgroup label="{{ group.tag }}">{% endif %}
-    {% for row in group.sources %}
-    <option value="{{ row.name }}" title="{{ row.title }}"
-            {{ 'selected' if row.name == src }}>{{ row.name }}</option>
-    {% endfor %}
-    {% if group.tag %}</optgroup>{% endif %}
-    {% endfor %}
-  </select>
+  {# A button rather than a select. A dropdown answers "which one am I on" and
+     nothing else; with a shelf of papers the question is which one to work on
+     next, and that is a comparison -- so this opens the gallery, which shows
+     where each source came from and how far along it is. #}
+  <button type="button" class="source-pick" id="source-pick"
+          title="all sources, with their counts (g)">
+    <span class="source-pick-name">{{ src or 'no source' }}</span>
+    <span class="source-pick-caret" aria-hidden="true">▾</span>
+  </button>
   {% endif %}
   {% block filters %}{% endblock %}
   <span class="position" id="position"></span>
@@ -53,12 +48,15 @@
 
 
 <main id="main">
-  {% if pipeline is defined %}{% include "_filters.html" %}{% endif %}
+  {% if pipeline is defined %}{% include "_filters.html" %}
+  {# Always on screen, including when the rail is hidden -- the button inside
+     it slides away with it, which left no way back. #}
+  <button type="button" class="rail-tab left" id="filters-tab"
+          title="filters and actions (f)" aria-controls="filter-rail">&#9776;</button>
+  {% endif %}
   <div class="deck-column">{% block main %}{% endblock %}</div>
   {% if pipeline is defined %}{% include "_guide.html" %}
-  {# Always on screen, including when the guide is hidden -- the button
-     inside it slides away with it, which left no way back. #}
-  <button type="button" class="guide-tab" id="guide-tab"
+  <button type="button" class="rail-tab right" id="guide-tab"
           title="what am I looking at? — cycles counts / everything / hidden (?)"
           aria-controls="guide">?</button>
   {% endif %}
@@ -83,6 +81,27 @@
     </div>
   </form>
 </dialog>
+
+{% if sources is defined and sources %}
+{# The source gallery: the whole window, over whatever you were doing. Filled
+   from /api/sources when it is first opened, because it walks every ledger and
+   every card and that is not a price to pay on every page load. #}
+<dialog class="gallery" id="gallery" aria-label="sources">
+  <header class="gallery-head">
+    <div class="gallery-title">
+      <h2>sources</h2>
+      <p class="gallery-totals" id="gallery-totals">counting…</p>
+    </div>
+    <input type="search" class="gallery-search" id="gallery-search"
+           placeholder="name, title or citation" autocomplete="off" spellcheck="false">
+    <button type="button" class="gallery-close" id="gallery-close"
+            title="close (esc)">&times;</button>
+  </header>
+  <div class="gallery-chips" id="gallery-chips"></div>
+  <div class="gallery-grid" id="gallery-grid"></div>
+  <p class="gallery-empty" id="gallery-empty" hidden>nothing matches that.</p>
+</dialog>
+{% endif %}
 {% block scripts %}{% endblock %}
 </body>
 </html>

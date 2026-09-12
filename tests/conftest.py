@@ -103,6 +103,36 @@ def config(repo: Path) -> Config:
 
 
 @pytest.fixture
+def zotero_config(repo: Path) -> Config:
+    """A repo with a source imported from Zotero and a colour scheme declared.
+
+    Deliberately declares more than it uses: the legend has to show a colour
+    you set aside and have not marked anything with yet, and `purple` is here
+    to be a meaning that does *not* make a unit.
+    """
+    (repo / "sources" / "paper").mkdir(parents=True)
+    (repo / "sources" / "paper" / "source.md").write_text(
+        "+++\n"
+        'title = "A Paper"\n'
+        'citation = "Someone 2025"\n'
+        'tags = ["paper"]\n'
+        'zotero = "VFD2E2BR"\n'
+        "+++\n",
+        encoding="utf-8",
+    )
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
+    toml += (
+        '\n[zotero]\nunits_from = ["green", "note", "image"]\n'
+        "[zotero.meanings]\n"
+        'green = "a claim or result worth a card"\n'
+        'purple = "a term to know"\n'
+        'note = "something I thought while reading"\n'
+    )
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
+    return config_mod.load(repo)
+
+
+@pytest.fixture
 def card_path(repo: Path) -> Path:
     path = repo / "cards" / "7f3a2b-log-det.md"
     path.write_text(GOOD_CARD, encoding="utf-8")

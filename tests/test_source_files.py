@@ -162,21 +162,21 @@ def test_the_more_specific_meaning_wins() -> None:
 def test_context_reads_the_prose_under_the_frontmatter(repo: Path) -> None:
     """`forge context` prints it, so whoever writes a card sees the right
     conventions without having to know the file exists."""
-    from anki_math_forge.context import _conventions
+    from anki_math_forge.context import source_conventions
 
     write_source(repo, "book", 'title = "A Book"', "# A Book\n\nEntries are real.\n")
     config = config_mod.load(repo)
 
-    prose = _conventions(config, "book")
+    prose = source_conventions(config, "book")
     assert "Entries are real." in prose
     assert "title" not in prose, "the frontmatter is for the tool, not the writer"
 
 
 def test_conventions_still_read_from_the_older_file(repo: Path) -> None:
     """A repo that has not migrated keeps working."""
-    from anki_math_forge.context import _conventions
+    from anki_math_forge.context import source_conventions
 
     folder = repo / "sources" / "book"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("conventions.md").write_text("# Old\n\nStill read.\n", encoding="utf-8")
-    assert "Still read." in _conventions(config_mod.load(repo), "book")
+    assert "Still read." in source_conventions(config_mod.load(repo), "book")

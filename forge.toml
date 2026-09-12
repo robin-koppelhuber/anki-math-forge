@@ -16,6 +16,14 @@ front_char_cap = 160     # rendered `## front` length cap, enforced by `check`
 # nothing. A source may override it, since how much context a unit needs is a
 # fact about how the book is set. 0 falls back to the built-in default.
 crop_context = 0
+# How wide a crop is cut: `box` for the unit's own bounding box, `page` for the
+# full width of the page with `crop_context` still deciding the height. Empty
+# lets the geometry decide, which is almost always what you want: a segmenter
+# that found a display equation stopped where the equation stopped, while a
+# mark's box is the union of the lines a sentence happened to span and its
+# edges are wherever that sentence ran out mid-column. So marks get the page,
+# everything else gets the box. Set it here or per source to overrule that.
+crop_width = ""
 # Pages either side of a unit handed to whoever writes its card. A source may
 # override it, and a single unit may override that from triage (`c`), which is
 # where you can see that a theorem's hypotheses are two pages back. A large

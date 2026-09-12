@@ -19,8 +19,13 @@ deciding what is relevant, which belongs to whoever reads it. A unit carries
 the marks on the pages around it; a mark appearing beside two units is not a
 problem, because context is a view and not content.
 
-Units arrive `queued` rather than `new`: reading the document and marking it up
-*was* the triage step, performed earlier and by someone paying attention.
+**Units arrive `new`, like every other unit.** They used to arrive `queued`, on
+the argument that marking the document up *was* the triage step. It is not the
+same step: marking says "this mattered while I was reading", and triage says
+"this is worth a card, on its own, out of context" -- which is a judgement you
+can only make once you see the mark next to its neighbours, which is what this
+view is for. Skipping it also skipped the one gate that stops an import from
+silently filling the card queue.
 """
 
 from __future__ import annotations
@@ -91,6 +96,11 @@ def to_mark(annotation: api.Annotation, height: float | None) -> Mark:
         comment=annotation.comment,
         bbox=annotation.bbox(height) if height is not None else None,
         order=annotation.sort_index,
+        page=annotation.page,
+        # Kept alongside the union, because the two answer different
+        # questions: the union is what to crop to, the rects are where the
+        # reader's pen actually went.
+        rects=annotation.boxes(height) if height is not None else None,
     )
 
 
@@ -138,7 +148,6 @@ def units_for(
                 # Its own mark first, then everything marked nearby, in reading
                 # order.
                 marks=[mine, *near],
-                state="queued",
             )
         )
     return units

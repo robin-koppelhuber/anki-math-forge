@@ -15,7 +15,11 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
 3. **Extraction produces units, never cards.** If `extract` is tempted to write
    a `front`, it is overstepping. It produces *geometry*, never image files:
    each unit carries `locator.bbox` and crops render from the source document
-   on demand.
+   on demand. **Every unit arrives `new`, whichever door it came in by.**
+   Importing what someone marked in Zotero is not triage: marking says "this
+   mattered while I was reading", and triage says "this is worth a card, on
+   its own". Landing an import in `queued` answered the second question on the
+   reader's behalf and removed the only gate before the card queue.
 4. **`tex_auto` is a hint.** When writing a stub from a unit, the crop is
    authoritative. A transcription error must not become a card by inheritance.
 5. **Editing an approved card un-approves it.** Enforced by `content_hash`,
@@ -29,6 +33,15 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
    whoever writes the card: check it, prefer the source's wording where there
    is one, and note in `## notes` any condition you add that the source does
    not state.
+8. **A bounding box means what its origin means.** A segmenter that found a
+   display equation stopped where the equation stopped, so the box's edges are
+   an answer. A *mark's* box is the union of the lines a sentence happened to
+   span, so its left and right edges are wherever that sentence started and
+   stopped mid-column and carry no information — those crops are cut to the
+   full page width (`crop_width`). Marks are painted back onto the crop in the
+   colours the reader used, the unit's own at full strength and its neighbours
+   faded, because a page with six highlights on it has to say which one the
+   card is about.
 
 ## Card format
 
@@ -91,11 +104,12 @@ So they live with the source, in **`sources/<name>/source.md`**: TOML between
 `+++` fences, then prose. One file, two halves.
 
 - **Above the fence** is what a key can express, and it is what the tool acts
-  on: `title`, `citation`, `pdf`/`tex`, `deck`, `layout`, `order`, `tags`, and
-  a source's own reading of its Zotero marks. A `layout` outside
-  `denominator | numerator` is refused at load, because an unrecognised one
-  would read as "not denominator" and silently change what every card from
-  that source means.
+  on: `title`, `citation`, `pdf`/`tex`, `zotero`, `deck`, `layout`, `order`,
+  `tags`, `crop_context`/`crop_width`, `context_pages`, and a source's own
+  reading of its Zotero marks. A `layout` outside `denominator | numerator` is
+  refused at load, because an unrecognised one would read as "not denominator"
+  and silently change what every card from that source means; `crop_width`
+  outside `box | page` is refused for the same reason.
 - **Below it** is what a key cannot: the ambient mathematical
   setting, what is assumed constant, how a contested convention was settled.
   `forge context <unit>` prints it, so whoever writes or reviews a card

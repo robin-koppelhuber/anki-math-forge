@@ -1021,13 +1021,40 @@ def test_source_picker_is_on_both_views(client: TestClient, card_path: Path) -> 
     for url in ("/units", "/review"):
         body = client.get(url).text
         assert 'id="source-pick"' in body, url
-        assert 'value="demo"' in body, url
+        assert "demo" in body, url
+        assert 'id="gallery"' in body, url
 
 
-def test_picker_lists_every_configured_source(pdf_source: Config) -> None:
-    body = TestClient(create_app(pdf_source)).get("/units").text
-    assert 'value="demo"' in body
-    assert 'value="book"' in body
+def test_the_gallery_lists_every_configured_source(pdf_source: Config) -> None:
+    """The picker is a gallery now, filled from the API: a dropdown answers
+    "which one am I on" and nothing else, and the question with a shelf of
+    papers is which to work on next."""
+    rows = TestClient(create_app(pdf_source)).get("/api/sources").json()
+    assert [row["name"] for row in rows["sources"]] == ["demo", "book"]
+
+
+def test_the_gallery_counts_both_halves_of_the_pipeline(pdf_source: Config) -> None:
+    """Which source to work on next is a comparison, and a name cannot make
+    it. Units and cards both, because a source can be fully triaged and have
+    no cards written, which looks identical to an untouched one by unit count."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "book:1.1:1")
+    rows = TestClient(create_app(pdf_source)).get("/api/sources").json()
+    by_name = {row["name"]: row for row in rows["sources"]}
+    assert by_name["demo"]["counts"]["draft"] == 1
+    assert by_name["book"]["counts"]["draft"] == 1
+    assert rows["cards"] == 2
+    assert rows["totals"]["draft"] == 2
+
+
+def test_the_gallery_says_where_each_source_came_from(pdf_source: Config) -> None:
+    """A paper imported from Zotero and a PDF sitting in the repo looked
+    identical in every view, and they are not: it decides which passes make
+    sense and where to go when a document is missing."""
+    rows = TestClient(create_app(pdf_source)).get("/api/sources").json()
+    by_name = {row["name"]: row for row in rows["sources"]}
+    assert by_name["book"]["origin"] == "pdf"
+    assert "pdf" in rows["origins"]
 
 
 def test_review_scopes_to_the_selected_source(pdf_source: Config) -> None:

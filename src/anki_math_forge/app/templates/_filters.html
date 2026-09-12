@@ -1,20 +1,26 @@
-{# The filter rail: everything that changes *what the deck shows*. States,
-   the two things waiting on you, and the sections -- one column, so there is
-   no longer a top strip and a rail disagreeing about the same counts.
+{# The left rail is for **doing**: everything that changes what the deck shows,
+   and the commands that act on it. Its counterpart is the guide on the right,
+   which changes nothing and only tells you what you are looking at. That split
+   is the whole layout -- when something here explains rather than acts, it
+   belongs over there.
 
    Every link is built by `filter_url`, which carries the filters already in
    force and changes only the one named. Hand-assembled query strings each
    forgot a different parameter: picking a section dropped `@me`, toggling
    `@me` dropped `suggested`.
 
-   Its counterpart is the guide on the right, which changes nothing and only
-   explains what you are looking at. Toggled with `f`. #}
+   Toggled with `f`. #}
 {% set src = source | default('', true) %}
 {% set here = '/review' if view == 'review' else '/units' %}
 {% set f = filters | default({}, true) %}
-<aside class="filter-rail" id="filter-rail" aria-label="filters">
+<aside class="filter-rail" id="filter-rail" aria-label="filters and actions">
   <div class="rail-grip left" data-rail="left"
        title="drag to resize — double-click to reset"></div>
+  <div class="rail-head">
+    <span class="rail-title">filters</span>
+    <button type="button" class="rail-fold" id="filters-fold"
+            title="hide this rail (f)">&#8249;</button>
+  </div>
   <div class="filter-rail-scroll">
 
     {# The pipeline, as counts rather than as a diagram. Each row is a filter,
@@ -146,43 +152,53 @@
     </details>
     {% endif %}
 
-    {# What a reader marked, and what you said it meant. A prose source is
-       triaged by meaning rather than by state -- "the claims first, the terms
-       never" -- and nothing renders for a source with no marks, so the
-       Cookbook's rail is unchanged. #}
+    {# Filter by what a reader marked. Labelled by the mark itself -- the
+       colour and kind you can see on the crop -- and not by what it means:
+       what it means is the guide's job, in "what your marks mean", and the
+       same sentence in both places is one of them not being read. A source
+       with no marks renders nothing, so the Cookbook's rail is unchanged. #}
     {% if mark_rows is defined and mark_rows %}
     <details class="filter-group marks" open>
-      <summary>what you marked</summary>
+      <summary>marked as</summary>
       <ul class="filter-list">
         {% for row in mark_rows %}
         <li><a class="{{ 'on' if mark == row.key }}"
                title="{{ row.key }}{{ ' — ' ~ row.meaning if row.meaning }}"
                href="{{ filter_url(here, f, mark=(none if mark == row.key else row.key)) }}">
-          {% if mark == row.key %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}
-          <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
-          {{ row.meaning or row.key }}<b>{{ row.count }}</b></a></li>
-        {% endfor %}
-      </ul>
-    </details>
-    {% endif %}
-
-    {# What to run next on exactly what is on screen. Copied, not launched:
-       you paste it where you can watch it, so nothing writes cards with
-       nobody looking. #}
-    {% if commands is defined and commands %}
-    <details class="filter-group commands" open>
-      <summary>next on this</summary>
-      <ul class="filter-list runs">
-        {% for cmd in commands %}
-        <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
-                    title="copy — {{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
-          <span class="run-label">{{ cmd.label }}</span>
-          <code>{{ cmd.run }}</code>
-        </button></li>
+          <span class="mark-name">
+            {% if mark == row.key %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}
+            <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
+            {{ row.colour or row.kind }}{% if row.colour and row.kind != 'highlight' %}
+            <i class="mark-kind">{{ row.kind }}</i>{% endif %}
+          </span>
+          <b>{{ row.count }}</b></a></li>
         {% endfor %}
       </ul>
     </details>
     {% endif %}
 
   </div>
+
+  {# Pinned to the bottom rather than left at the end of the scroll: with
+     sixty-four sections above it, the one panel that says what to do next was
+     four screens down. Copied, not launched -- you paste it where you can
+     watch it, so nothing writes cards with nobody looking. #}
+  {% if commands is defined and commands %}
+  <details class="rail-actions" id="rail-actions" open>
+    <summary>copy a command<span class="rail-actions-hint">for what is on screen</span></summary>
+    <ul class="filter-list runs">
+      {% for cmd in commands %}
+      {% if cmd.kind == 'note' %}
+      <li class="run-note">{{ cmd.label }}</li>
+      {% else %}
+      <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
+                  title="copy — {{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
+        <span class="run-label">{{ cmd.label }}</span>
+        <code>{{ cmd.run }}</code>
+      </button></li>
+      {% endif %}
+      {% endfor %}
+    </ul>
+  </details>
+  {% endif %}
 </aside>

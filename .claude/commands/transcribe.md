@@ -1,6 +1,6 @@
 ---
 description: Read unit crops and record their LaTeX, via transcriber subagents
-argument-hint: [section|--all] [haiku|sonnet|opus]
+argument-hint: [--source NAME] [--section SECTION|--all] [haiku|sonnet|opus]
 ---
 
 Fill in `tex_auto` for units that have a crop but no transcription, by
@@ -10,10 +10,21 @@ decide whether a unit is worth carding if all you can see is a picture
 
 Arguments: `$ARGUMENTS`
 
-- **`$1`** — a section, as `locator.section` spells it, or `--all` for the
-  whole source. Default: ask.
-- **`$2`** — model override: `haiku`, `sonnet`, or `opus`. Default: the
+- **`--source NAME`** — which source. **Ask if it is not given and the repo
+  has more than one**: none of the commands below defaults to a source, so
+  leaving it out silently means *every* source in the repo.
+- **`--section SECTION`** — one section, as `locator.section` spells it, or
+  `--all` for the whole source. Default: ask.
+- a bare word — model override: `haiku`, `sonnet`, or `opus`. Default: the
   transcriber agent's own setting (`sonnet`).
+
+Pass `--source` and `--section` straight through to every `forge` command
+here; they are the same flags. The units view writes this line for you with
+whatever you had filtered to, which is where the quoting comes from.
+
+**Nothing to do here for a source whose units come from marks** (a document
+someone highlighted in Zotero). A mark already carries the text it covers;
+there is no picture of an equation to read. Say so and stop.
 
 ## Why a subagent
 
@@ -28,17 +39,18 @@ parallel** — several `Agent` calls in one message.
 1. See what needs doing:
 
    ```
-   uv run forge units --state new --json
+   uv run forge units --source <SOURCE> --state new --json
    uv run forge audit
    ```
 
    Units with `transcription: "none"` or `"failed"` need reading. Units with
-   `tex_source` came from real LaTeX and need nothing.
+   `tex_source` came from real LaTeX and need nothing. A unit carrying `marks`
+   came from someone reading rather than from segmentation — leave it alone.
 
 2. Work out the sections and their sizes:
 
    ```
-   uv run forge units --state all --json
+   uv run forge units --source <SOURCE> --state all --json
    ```
 
    Group by `locator.section`. Aim at a few dozen units per subagent: enough
@@ -51,7 +63,7 @@ parallel** — several `Agent` calls in one message.
    section in the prompt and `model` only if `$2` was given:
 
    > Transcribe section `<SECTION>` of `<SOURCE>`. Render the crops with
-   > `uv run forge crops --section <SECTION> --untranscribed --json`,
+   > `uv run forge crops --source <SOURCE> --section <SECTION> --untranscribed --json`,
    > read each one, and record it with
    > `uv run forge units --id <id> --tex-auto '<latex>'`.
    > Follow your instructions exactly: transcribe what is printed, annotate
@@ -67,7 +79,7 @@ parallel** — several `Agent` calls in one message.
 
    ```
    uv run forge audit
-   uv run forge units --state new --json    # count transcription: "ok"
+   uv run forge units --source <SOURCE> --state new --json   # count "ok"
    ```
 
 5. Report: how many transcribed per section, how many the KaTeX gate refused,

@@ -46,6 +46,28 @@ COLOURS = {
     "#aaaaaa": "grey",
 }
 
+# The way back, for anything that has to *draw* a mark rather than name it.
+# The ledger stores the name, because a name is what a config maps and what a
+# person reads; a renderer needs the paint.
+HEX_BY_NAME = {name: code for code, name in COLOURS.items()}
+
+
+def colour_rgb(colour: str) -> tuple[float, float, float] | None:
+    """`"purple"` or `"#a28ae5"` to the 0..1 triple PDF drawing wants.
+
+    Both spellings, because a mark records the name when it recognises one and
+    falls back to the raw hex when it does not -- and a colour this project has
+    never seen should still come out the colour it was.
+    """
+    code = HEX_BY_NAME.get(colour.strip().lower(), colour.strip().lower())
+    if not code.startswith("#") or len(code) != 7:
+        return None
+    try:
+        parts = (int(code[1:3], 16), int(code[3:5], 16), int(code[5:7], 16))
+    except ValueError:
+        return None
+    return (parts[0] / 255, parts[1] / 255, parts[2] / 255)
+
 
 class ZoteroError(Exception):
     """Zotero is not reachable, or said no."""
@@ -99,13 +121,25 @@ class Annotation:
         The union rather than the first box: a highlight running over a line
         break is two rects, and the mark is both of them.
         """
-        if not self.rects:
+        boxes = self.boxes(page_height)
+        if not boxes:
             return None
-        x0 = min(r[0] for r in self.rects)
-        y0 = min(r[1] for r in self.rects)
-        x1 = max(r[2] for r in self.rects)
-        y1 = max(r[3] for r in self.rects)
-        return [x0, page_height - y1, x1, page_height - y0]
+        return [
+            min(b[0] for b in boxes),
+            min(b[1] for b in boxes),
+            max(b[2] for b in boxes),
+            max(b[3] for b in boxes),
+        ]
+
+    def boxes(self, page_height: float) -> list[list[float]]:
+        """Every rect, flipped to top-left origin, kept apart.
+
+        `bbox` unions these because a crop wants one rectangle. Drawing wants
+        them separate: the union of a highlight that runs over a line break
+        covers both lines end to end, including the part of each the reader
+        left unmarked, so painting it would claim more than they marked.
+        """
+        return [[r[0], page_height - r[3], r[2], page_height - r[1]] for r in self.rects]
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> Annotation:

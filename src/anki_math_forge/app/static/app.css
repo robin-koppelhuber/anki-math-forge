@@ -51,6 +51,16 @@ body {
   border-bottom: 1px solid var(--line);
   font-size: 13px;
 }
+/* Above both rails, and staying put. The rails are fixed panels; with the
+   header unpositioned they stacked on top of it and covered the view links,
+   which are the one row that has to be reachable from anywhere. Its measured
+   height is what the rails start at -- see `--header-h` in app.js, measured
+   because this bar wraps to two rows on a narrow window. */
+header.bar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+}
 footer.bar { border-bottom: 0; border-top: 1px solid var(--line); margin-top: auto; }
 
 .views a {
@@ -65,15 +75,22 @@ footer.bar { border-bottom: 0; border-top: 1px solid var(--line); margin-top: au
 .filters { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
 .source-pick {
   font: inherit;
+  font-size: 13px;
   font-weight: 600;
   color: var(--ink);
   background: transparent;
   border: 1px solid var(--line);
   border-radius: 4px;
-  padding: 0.1rem 0.3rem;
-  max-width: 14rem;
+  padding: 0.15rem 0.45rem;
+  max-width: 18rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 .source-pick:hover { border-color: var(--accent); }
+.source-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-pick-caret { color: var(--muted); font-size: 10px; }
 
 .chip {
   color: var(--muted);
@@ -118,6 +135,11 @@ main {
 
 /* -- units --------------------------------------------------------------- */
 
+/* Moving between items scrolls the new one to the top of the window. The
+   header is sticky and would sit on top of the first line, so leave it its
+   own height plus a little. */
+.item { scroll-margin-top: calc(var(--header-h, 2.6rem) + 0.6rem); }
+
 .unit-head { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.9rem; }
 .locator { font-weight: 600; }
 
@@ -148,6 +170,10 @@ main {
   align-items: start;
 }
 .side-by-side > * { min-width: 0; }
+/* A unit that came from a mark has no transcription pane, so the crop gets
+   the width. It is a page-wide strip of small type; half a column of it is
+   not readable, which is the whole reason the crop is there. */
+.side-by-side.one-column { grid-template-columns: 1fr; }
 /* The handle IS the grid track. It used to carry a 0.6rem margin inside a 6px
    track, which collapsed its box to nothing -- present in the markup, and
    impossible to grab. */
@@ -451,7 +477,7 @@ footer.bar {
    open/closed groups persist, because a triage session is long. */
 .filter-rail {
   position: fixed;
-  top: 0;
+  top: var(--header-h, 2.6rem);
   bottom: 0;
   left: 0;
   width: var(--left-rail);
@@ -467,8 +493,70 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 
 .filter-rail-scroll {
   overflow-y: auto;
-  padding: 0.7rem 0.6rem 2.6rem;
+  padding: 0.2rem 0.6rem 1rem;
   font-size: 13px;
+  flex: 1;
+}
+
+/* The rail's own header: what it is, and the way to fold it away. */
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem 0.2rem;
+}
+.rail-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.rail-fold {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  border-radius: 5px;
+  width: 1.5rem;
+  height: 1.5rem;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+}
+.rail-fold:hover { color: var(--ink); border-color: var(--muted); }
+
+/* What to run next, pinned to the bottom of the rail rather than left at the
+   end of the scroll. With sixty-four sections above it, the one panel that
+   says what to do next was four screens down. */
+.rail-actions {
+  border-top: 1px solid var(--line);
+  padding: 0.3rem 0.6rem 0.6rem;
+  font-size: 13px;
+  background: var(--panel);
+  flex: none;
+  max-height: 45%;
+  overflow-y: auto;
+}
+.rail-actions > summary {
+  cursor: pointer;
+  padding: 0.3rem 0.1rem;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.rail-actions > summary:hover { color: var(--ink); }
+.rail-actions-hint { text-transform: none; letter-spacing: 0; opacity: 0.7; font-size: 10.5px; }
+.rail-actions .run-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 4px 2px;
+  line-height: 1.4;
 }
 
 
@@ -517,6 +605,7 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   .filter-rail { transform: translateX(-100%); }
   body { --left-rail: 0rem; }
   body.filters-on .filter-rail { transform: translateX(0); }
+  body:not(.filters-on) .rail-tab.left { display: block; }
 }
 
 /* Transcription is a property a unit gains, not a state it enters -- drawn
@@ -621,7 +710,7 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
    and only occasionally the whole explanation. */
 .guide {
   position: fixed;
-  top: 0;
+  top: var(--header-h, 2.6rem);
   bottom: 0;
   right: 0;
   width: var(--right-rail);
@@ -708,19 +797,16 @@ body.guide-off .guide { transform: translateX(100%); }
   body.guide-full .guide { transform: translateX(0); }
 }
 
-/* The always-present handle for the guide. The button inside the panel is
+/* The always-present handle for each rail. The button inside a panel is
    unreachable once the panel is hidden, which is precisely when you need it. */
-.guide-tab {
+.rail-tab {
   position: fixed;
-  right: 0;
   top: 50%;
   transform: translateY(-50%);
   z-index: 31;
   width: 1.4rem;
   height: 3rem;
   border: 1px solid var(--line);
-  border-right: 0;
-  border-radius: 6px 0 0 6px;
   background: var(--panel);
   color: var(--muted);
   cursor: pointer;
@@ -728,8 +814,16 @@ body.guide-off .guide { transform: translateX(100%); }
   font-size: 12px;
   padding: 0;
 }
-.guide-tab:hover { color: var(--ink); }
-body:not(.guide-off) .guide-tab { display: none; }
+.rail-tab.right { right: 0; border-right: 0; border-radius: 6px 0 0 6px; }
+.rail-tab.left { left: 0; border-left: 0; border-radius: 0 6px 6px 0; }
+.rail-tab:hover { color: var(--ink); }
+body:not(.guide-off) .rail-tab.right { display: none; }
+/* Shown only when the rail it opens is actually away. Written the positive
+   way round because with no stored preference *neither* state class is set,
+   and `:not(.filters-off)` then hid the handle on a narrow window -- where
+   the rail starts folded and the handle is the only way in. */
+.rail-tab.left { display: none; }
+body.filters-off .rail-tab.left { display: block; }
 
 /* A hair of space before each group of keys, so the footer reads as
    decide / repair / move / view rather than as one undifferentiated row. */
@@ -978,20 +1072,27 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .filter-list.runs button.copied { border-color: var(--accent); }
 .filter-list.runs button.copied .run-label::after { content: " — copied"; }
 
-/* What a reader marked. Zotero's own palette, so the rail looks like the PDF
-   does rather than making you translate. */
-.filter-list .swatch {
+/* What a reader marked. Zotero's own palette, so every place a mark is named
+   looks like the PDF does rather than making you translate. Unscoped, because
+   the same square appears in the filter, in the legend and beside the marks
+   themselves, and three copies of one palette is three chances to drift. */
+.swatch {
   display: inline-block; width: 9px; height: 9px; border-radius: 2px;
   margin-right: 6px; border: 1px solid rgba(0, 0, 0, 0.15); flex: none;
+  background: #aaaaaa;
 }
-.filter-list .swatch.c-yellow { background: #ffd400; }
-.filter-list .swatch.c-red { background: #ff6666; }
-.filter-list .swatch.c-green { background: #5fb236; }
-.filter-list .swatch.c-blue { background: #2ea8e5; }
-.filter-list .swatch.c-purple { background: #a28ae5; }
-.filter-list .swatch.c-magenta { background: #e56eee; }
-.filter-list .swatch.c-orange { background: #f19837; }
-.filter-list .swatch.c-grey { background: #aaaaaa; }
+.swatch.c-yellow { background: #ffd400; }
+.swatch.c-red { background: #ff6666; }
+.swatch.c-green { background: #5fb236; }
+.swatch.c-blue { background: #2ea8e5; }
+.swatch.c-purple { background: #a28ae5; }
+.swatch.c-magenta { background: #e56eee; }
+.swatch.c-orange { background: #f19837; }
+.swatch.c-grey { background: #aaaaaa; }
+/* A sticky note has no colour of its own in the scheme -- it is a kind, and
+   any colour of pin is one. Outlined, so it does not claim to be yellow. */
+.swatch.c-note { background: transparent; border-color: var(--muted); }
+.swatch.c-image, .swatch.c-ink { background: transparent; border: 1px dashed var(--muted); }
 
 /* Something wrote to the files while this page was open. Offered, never taken:
    being moved to a different card mid-decision is worse than a stale list. */
@@ -1016,3 +1117,197 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .config-table td { padding: 3px 10px 3px 0; vertical-align: top; }
 .config-table .origin { font-size: 11px; opacity: 0.6; }
 .config-table .origin.inherited { font-style: italic; opacity: 0.4; }
+
+/* -- the source gallery -------------------------------------------------
+   A dropdown answers "which one am I on" and nothing else. With a shelf of
+   papers the question is which one to work on next, which is a comparison --
+   so this takes the window and carries the counts. */
+.gallery {
+  /* Effectively the window. Choosing what to work on next is its own task,
+     not a peek at a list, and with a shelf of papers the grid needs the room. */
+  width: 95vw;
+  max-width: 96rem;
+  height: min(90vh, 60rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--ink);
+  padding: 0;
+  overflow: auto;
+}
+.gallery::backdrop { background: rgba(0, 0, 0, 0.45); }
+
+.gallery-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.1rem 0.6rem;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  z-index: 2;
+}
+.gallery-title h2 { margin: 0; font-size: 16px; }
+.gallery-title .gallery-totals {
+  margin: 0.15rem 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.gallery-search {
+  margin-left: auto;
+  font: inherit;
+  font-size: 13px;
+  padding: 0.3rem 0.5rem;
+  min-width: 14rem;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.gallery-close {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 5px; width: 1.7rem; height: 1.7rem; cursor: pointer;
+  font: inherit; font-size: 16px; line-height: 1;
+}
+.gallery-close:hover { color: var(--ink); }
+
+.gallery-chips {
+  display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;
+  padding: 0.6rem 1.1rem 0.2rem; font-size: 12px;
+}
+.gallery-chips .chip { background: none; font: inherit; font-size: 12px; cursor: pointer; }
+.gallery-chips .chip-label {
+  color: var(--muted); text-transform: uppercase; font-size: 10px;
+  letter-spacing: 0.06em; margin: 0 0.15rem 0 0.6rem;
+}
+.gallery-chips .chip-label:first-child { margin-left: 0; }
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 0.7rem;
+  padding: 0.7rem 1.1rem 1.2rem;
+}
+.gallery-empty { padding: 0 1.1rem 1.4rem; color: var(--muted); }
+
+.gsource {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 0.6rem 0.7rem 0.7rem;
+  background: var(--panel); color: inherit; text-decoration: none;
+}
+.gsource:hover { border-color: var(--accent); }
+.gsource.current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.gsource-head { display: flex; align-items: baseline; gap: 0.5rem; }
+.gsource-name {
+  font-weight: 600; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.gsource-origin {
+  margin-left: auto; flex: none; font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted); border: 1px solid var(--line);
+  border-radius: 4px; padding: 0 0.35rem;
+}
+.gsource-origin.warn { color: var(--warn); border-color: var(--warn); }
+.gsource-title {
+  font-size: 12px; color: var(--muted); line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.gsource-tags { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.1rem; }
+.gsource-tags i {
+  font-style: normal; font-size: 10px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 99px; padding: 0 0.4rem;
+}
+.gsource-lane {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); margin-top: 0.45rem;
+}
+.gsource-bar {
+  display: flex; height: 5px; border-radius: 3px; overflow: hidden;
+  background: var(--line); margin: 0.15rem 0 0.2rem;
+}
+.gsource-counts { display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 11px; color: var(--muted); }
+.gsource-counts i { font-style: normal; font-variant-numeric: tabular-nums; opacity: 0.5; }
+.gsource-counts i.on { opacity: 1; }
+.gsource-counts b { font-weight: 600; }
+
+/* -- the right rail's information panels --------------------------------
+   The left rail acts, this one tells you what you are looking at. These two
+   are the facts you look up mid-decision: what the source is set to, and what
+   your own colours meant. */
+.rail-card { margin: 0 0 1rem; }
+.rail-card h3 {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted); margin: 0 0 0.3rem;
+}
+.rail-card .warn { color: var(--warn); }
+.sf-title { margin: 0 0 0.4rem; font-size: 12.5px; line-height: 1.35; }
+.source-facts dl {
+  display: grid; grid-template-columns: 5.2rem 1fr; gap: 0.2rem 0.5rem;
+  margin: 0; font-size: 11.5px;
+}
+.source-facts dt { color: var(--muted); }
+.source-facts dd { margin: 0; line-height: 1.4; }
+.source-facts code { font-family: ui-monospace, monospace; font-size: 11px; }
+.rail-more { margin: 0.4rem 0 0; font-size: 11px; color: var(--muted); }
+.rail-more a { color: var(--accent); text-decoration: none; }
+.rail-more a:hover { text-decoration: underline; }
+
+.scheme-list { list-style: none; margin: 0; padding: 0; font-size: 11.5px; }
+.scheme-list li { display: flex; gap: 0.1rem; align-items: baseline; padding: 0.2rem 0; }
+.scheme-list li.unused { opacity: 0.45; }
+.scheme-text { flex: 1; min-width: 0; }
+.scheme-text > b { font-weight: 600; }
+.scheme-unit {
+  font-style: normal; font-size: 9px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 3px; padding: 0 0.25rem; margin-left: 0.3rem;
+}
+.scheme-meaning { display: block; color: var(--muted); line-height: 1.35; }
+.scheme-count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* -- the marks on a unit ------------------------------------------------
+   The crop shows where they are; this is what they say. Deciding whether a
+   marked claim is worth a card of its own is mostly a question about its
+   neighbours, and reading them used to mean opening the PDF. */
+.marks-list { margin: 1.1rem 0 0; }
+.marks-list > summary {
+  cursor: pointer; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted); font-weight: 600;
+}
+.marks-list > summary .hint { font-weight: 400; text-transform: none; letter-spacing: 0; opacity: 0.8; }
+.marks-list ul {
+  list-style: none; margin: 0.5rem 0 0; padding: 0;
+  max-height: 24rem; overflow-y: auto;
+}
+.marks-list li { display: flex; gap: 0.1rem; padding: 0.35rem 0; border-top: 1px solid var(--line); }
+.marks-list li:first-child { border-top: 0; }
+.marks-list li.own { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.marks-list .swatch { margin-top: 0.35rem; }
+.mark-body { min-width: 0; flex: 1; }
+.mark-meta {
+  margin: 0; display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: baseline;
+  font-size: 11px; color: var(--muted);
+}
+.mark-meta .this-one { color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+.mark-what { text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
+.mark-meaning { color: var(--ink); }
+.mark-page { font-variant-numeric: tabular-nums; }
+.mark-goto { color: var(--accent); text-decoration: none; }
+.mark-goto:hover { text-decoration: underline; }
+.marks-list blockquote {
+  margin: 0.2rem 0 0; padding-left: 0.6rem; border-left: 2px solid var(--line);
+  font-size: 13px; line-height: 1.45;
+}
+.mark-comment {
+  margin: 0.25rem 0 0; font-size: 13px; line-height: 1.45; color: var(--ink);
+  white-space: pre-wrap;
+}
+.mark-comment::before { content: "— "; color: var(--muted); }
+
+/* The focused source's block, when the config page was reached from the rail. */
+.config-group.focus > h2 { color: var(--accent); }
+.config-group.focus { border-left: 2px solid var(--accent); padding-left: 0.8rem; }

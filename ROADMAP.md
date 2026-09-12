@@ -41,11 +41,17 @@ prose" is a different document from one that says "one book".
 
 ## 2. Zotero as a source
 
-Highlighting a passage while reading **is the triage step**, performed earlier
-and in a better tool by someone who was paying attention. So an imported page
-is not a `new` unit waiting to be judged: it arrives `queued`, with a human
-decision already attached. That it lands on the existing state machine without
-bending it is the test of whether a feature belongs here.
+Highlighting a passage while reading **is not the triage step**, and this
+section used to claim it was: an imported unit arrived `queued`, with a human
+decision supposedly already attached. Two things were wrong with that. Marking
+says "this mattered while I was reading" and triage says "this is worth a card,
+on its own, out of context" -- and the second is a judgement you can only make
+once you see the mark beside its neighbours, which is exactly what the triage
+view is for. It also removed the only gate between an import and a full card
+queue: twenty units landed ready for `/extract-cards` with nobody having looked
+at them. **Every unit arrives `new`, whichever door it came in by.** That it
+lands on the existing state machine without bending it is still the test of
+whether a feature belongs here -- and bending it was the tell.
 
 **Some marks start a unit; the rest are context.** Which ones is yours to say,
 in `[zotero] triggers`, because it is a fact about your colour scheme rather
@@ -419,9 +425,34 @@ preamble.
   hypotheses are two pages back and no per-source default knows that. `c`
   cycles this page / 1 / 3 / 10 / all, and the badge only appears once a unit
   asks for something other than the default
+- **built:** `crop_width`, and a default that reads the geometry rather than a
+  setting. A segmenter that found a display equation stopped where the equation
+  stopped, so the box's left and right edges are an answer. A **mark's** box is
+  the union of the lines a sentence happened to span, so its edges are wherever
+  that sentence ran out mid-column -- and a sticky note's box is a 22pt pin in
+  the margin, which with 90pt of context cropped to a sliver with every line
+  cut mid-word. Marks get the full page width, everything else gets the box,
+  and a source overrides either way. `box | page`, refused at load if it is
+  neither, for the same reason `layout` is
+- **built:** the marks painted back onto the crop in the colours the reader
+  used, as real PDF annotations so the blend over text is the viewer's rather
+  than one written by hand. The unit's own mark at full strength and its
+  neighbours faded, because a page with six highlights on it has to say which
+  one the card is about. Faded is **per kind**, not one number: a highlight is
+  a band and reads as a tint at a third of the opacity, an underline is a
+  hairline and disappears, an area selection is an outline whose interior
+  belongs to the figure it points at, and a sticky note has no extent at all.
+  Each mark's lines are drawn separately -- their union covers both lines end
+  to end, including the half of each the reader left unmarked. About 65ms for
+  28 marks on top of the 70ms the document open already costs
+- **built:** what the marks *say*, listed under the crop -- the sentence each
+  one covers and anything written beside it, the unit's own first. Deciding
+  whether a marked claim is worth a card on its own is mostly a question about
+  its neighbours, and reading them meant opening the PDF. A neighbour that is a
+  unit in its own right is flagged and links to it
 - **left:** `+` and `-` in the triage view, to widen without a reload
-- **left:** a whole-page toggle, rendering the page with the unit's own box
-  drawn on it. The renderer already draws that box
+- **built:** a whole-page toggle (`p`), rendering the page with the unit's own
+  box drawn on it
 
 No pdf.js. For the question actually being asked (what surrounds this, did the
 segmenter cut it) a marked-up page beats a scrollable viewer, because box and
@@ -490,6 +521,27 @@ have.
 
 ## 8. Triage and review at scale (partly built)
 
+- **Built: one job per rail.** The left one **acts** -- filters, and the
+  commands that run on what they leave. The right one **tells you what you are
+  looking at** and changes nothing. That is the whole layout rule, and it
+  decides where anything new goes: what a colour *means* moved right, into a
+  legend that also shows what you declared and have not used and -- more
+  usefully -- what you have marked and never declared, which reaches a card
+  writer as a coloured box with no caption. The filter rows kept the marks but
+  are labelled by the colour you can see on the crop, because the same sentence
+  in two places is one of them not being read.
+- **Built: the header stopped being something to hide behind.** Both rails are
+  `position: fixed` at a higher stacking order than an unpositioned header, so
+  at `top: 0` the filter panel sat on top of the view links -- the one row that
+  has to be reachable from anywhere. They now start at a measured `--header-h`,
+  measured rather than assumed because the bar wraps to two rows on a narrow
+  window, which is exactly when a hard-coded height is wrong.
+- **Built: the left rail folds, and can be got back.** It had a keyboard
+  toggle and no affordance at all. A fold arrow inside it and a tab that shows
+  only when it is away -- the guide had already learnt this, and the tab's rule
+  is written the positive way round, because with no stored preference
+  *neither* state class is set and `:not(.filters-off)` hid the handle on a
+  narrow window, where the rail starts folded and the handle is the only way in.
 - **Built: filters gain the marks.** One row per `kind/colour` present in the
   source, labelled with what you said it means and swatched in Zotero's own
   palette, so the rail looks like the PDF rather than making you translate. A
@@ -498,20 +550,40 @@ have.
   Nothing renders for a source with no marks, so the Cookbook's rail is
   unchanged. The earlier worry about five types times eight colours did not
   materialise -- a real source uses three.
-- **Built: the source picker groups by tag.** A flat list of fifty citekeys is
-  unusable; the label stays the source *name* rather than its title, because a
-  native select's typeahead matches what is shown and a citekey starts with the
-  author you are looking for.
+- **Built: the source picker is a gallery, not a dropdown.** It started as a
+  tag-grouped `<select>`, which answers "which one am I on" and nothing else.
+  The question with a shelf of papers is *which one to work on next*, and that
+  is a comparison: one card per source over the whole window, filterable by tag
+  and by where the material came from, each carrying the counts for both halves
+  of the pipeline. Units and cards both, because a source fully triaged with no
+  cards written looks identical to an untouched one by unit count. Served from
+  `/api/sources` on first open rather than rendered into every page, since it
+  walks every ledger and every card. `g` opens it.
+- **Built: switching source drops the filters that belonged to the old one.**
+  A section number from one book means nothing in another, and the old handler
+  carried it across -- landing you on an empty deck that read as a failed
+  import.
 - **Built: copyable commands**, per view and built from the active filter --
   the CLI form and the Claude slash command, each saying where it is pasted.
   Nothing is launched, which is the whole difference between a command you ran
   and one that ran itself. Quoted with double quotes throughout, since single
   quotes are a literal in PowerShell and the CLI's own examples use them.
-- **Copyable commands**, built from the active filter: both the CLI command and
-  the Claude slash command to paste into a session where you can watch it run.
-  That is the honest version of "trigger Claude from the website", and it
-  teaches the CLI as a side effect. The CLI half has to quote correctly for
-  PowerShell, which the existing single-quoted examples do not.
+- **Built: the commands are scoped, and pinned where they can be found.** They
+  are the last thing in the rail, so with sixty-four sections above them they
+  were four screens down the scroll; now they sit in a panel at the bottom of
+  it. Renamed, too: "next on this" read as "the next item", which is what `j`
+  does. The edge cases were the real work, and every one of them shipped
+  broken: **no `--source`** on any generated command, so `/extract-cards` from
+  a filtered view wrote stubs for every queued unit in the repo; **a section
+  name with spaces in it** (a Zotero attachment is called `MOL appendix.pdf`)
+  arrived as two arguments; **a value with a double quote in it** has no
+  spelling that works in both `sh` and PowerShell, so the flag is dropped
+  rather than mis-quoted -- a command that does too much is visible, one that
+  does something else is not; and **`/transcribe` and `/classify` were offered
+  for a marked-up source**, where there is no picture of an equation to read.
+  The four slash commands gained the `--source` and `--section` contract to
+  match, and `forge verify` gained `--source`, since the rail was generating a
+  flag it did not have.
 - **A progress strip that updates itself.** Everything worth showing is already
   on disk: transcription is `count(transcription == ok) / total`, triage is the
   state counts `pipeline_counts` already computes, cards are the status counts.
@@ -520,6 +592,14 @@ have.
   that would need an append-only `.forge/runs/*.jsonl` the CLI writes and the
   app tails, and it is only worth building if derived progress proves not to be
   enough.
+- **Built: `/config`, and the settings that matter beside the deck.** The page
+  lists every resolved value with its provenance and now puts the source in
+  force first -- arriving from the rail is a question about *this* book. The
+  rail itself carries a "this source" panel, because the answer is wanted
+  mid-decision and not one navigation away: what the material is, which deck
+  and layout a card from it resolves to, how wide its crops are cut, how much
+  page a card writer gets, and whether anyone has written down what is ambient.
+  Originally specified as:
 - **A read-only `/config` page**, effective configuration per source with the
   provenance of each value. There is no way today to tell which layout a card
   resolved to, or whether that came from the source override or the default,

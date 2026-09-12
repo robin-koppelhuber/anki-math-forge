@@ -61,13 +61,22 @@ extract  ->  units  ->  triage  ->  cards  ->  review  ->  sync
 ```
 uv run forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
 uv run forge zotero --tag anki         # or: what you marked up in Zotero -> units
-/transcribe                                 # crops -> tex_auto, via subagents
-/classify                                   # propose which units aren't worth carding
+/transcribe --source <name>                 # crops -> tex_auto, via subagents
+/classify --source <name>                   # propose which units aren't worth carding
 uv run forge serve                     # triage units, then review cards
-/extract-cards                              # queued units -> stub cards
-/augment                                    # fill in conditions, proof, prose
+/extract-cards --source <name>              # queued units -> stub cards
+/augment --source <name>                    # fill in conditions, proof, prose
 uv run forge sync --dry-run            # then without --dry-run
 ```
+
+Every unit arrives `new` and nothing leaves it without you, whichever door it
+came in by. Marking a paper up while reading says "this mattered"; triage says
+"this is worth a card, on its own" -- a different question, and the only gate
+between an import and a full card queue.
+
+The triage view writes these command lines for you, scoped to whatever you had
+filtered to: press `f` for the rail, and copy from the panel at the bottom of
+it. Nothing is launched from the browser.
 
 The slash commands are Claude Code skills in [.claude/](.claude/) — the Python
 contains no LLM API code at all. `serve` runs at http://127.0.0.1:8000; press

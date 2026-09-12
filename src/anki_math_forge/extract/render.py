@@ -15,6 +15,7 @@ the next time anything re-segments.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,109 @@ RENDER_ZOOM = 3.0
 TRIAGE_CONTEXT = 90.0
 OUTLINE_WIDTH = 3  # pixels
 OUTLINE_COLOUR = (210, 120, 90)
+
+# How wide a crop is cut.
+#
+#   box  -- the unit's own bounding box, plus `context` on every side.
+#   page -- the full width of the page, `context` still deciding the height.
+#
+# Which one is right is a fact about where the geometry came from. A display
+# equation's box has meaningful left and right edges: the segmenter found the
+# equation and stopped. A mark's box does not -- it is the union of the lines
+# a sentence happened to span, so its edges are wherever that sentence started
+# and stopped mid-column, and cutting there slices words in half and drops the
+# rest of the paragraph that gives them their meaning.
+WIDTHS = ("box", "page")
+
+
+@dataclass(frozen=True)
+class Region:
+    """Somewhere on the page a reader marked, and how to draw it.
+
+    Deliberately not a `Mark`: this module knows PDFs and geometry and nothing
+    about where marks come from or what a colour means. Whoever holds the
+    marks decides which ones are on this page and what colour they are; this
+    puts paint on the page.
+
+    `rects` are one box per line, top-left origin, not their union -- see
+    `Mark.rects`. `faded` is a neighbouring mark: still on the page, drawn far
+    enough back that the one this unit is *about* is unmistakable.
+    """
+
+    kind: str = "highlight"
+    rects: tuple[tuple[float, ...], ...] = ()
+    rgb: tuple[float, float, float] = (0.55, 0.55, 0.55)
+    faded: bool = False
+
+
+# What each kind of mark looks like, at full strength and faded.
+#
+# The fading is not one number, because what "less saturation" does to a mark
+# depends on its shape. A highlight is a filled band: a third of the opacity
+# still reads as a tint. An underline is a hairline, and at a third of the
+# opacity it is gone -- so it fades much less and relies on being thin to stay
+# quiet. An area selection is an outline around a figure, and *filling* it
+# would hide the figure it is pointing at, so it stays an outline either way
+# and loses its weight instead. A sticky note has no extent at all -- its box
+# is where the pin sits -- so it keeps enough opacity to be findable.
+OPACITY = {
+    "highlight": (0.42, 0.13),
+    "underline": (0.90, 0.45),
+    "squiggly": (0.90, 0.45),
+    "strikeout": (0.90, 0.45),
+    "note": (0.85, 0.38),
+    "image": (0.95, 0.40),
+    "ink": (0.95, 0.40),
+}
+DEFAULT_OPACITY = (0.85, 0.35)
+# Outlined kinds, the ones whose interior belongs to the page rather than to
+# the mark.
+OUTLINED = ("image", "ink", "note", "text")
+# For a mark whose colour this project does not recognise. Drawn rather than
+# dropped: "something is marked here" is most of what a crop has to say.
+UNKNOWN_COLOUR = (0.55, 0.55, 0.55)
+# ...except a sticky note, whose box is a pin in the margin covering nothing
+# at all. An empty square there reads as "something is missing here"; a filled
+# one reads as the pin it is.
+FILLED = ("note",)
+
+
+def regions_for(unit: Any, page: int) -> list[Region]:
+    """The marks to paint on this page of a unit's crop.
+
+    Here rather than in the app, because the app is not the only thing that
+    renders a crop: `forge crops` writes them to disk for a reading pass, and
+    two things called "the crop" that disagree about what is on it is exactly
+    the drift this project cannot afford -- the whole review model rests on the
+    crop being the authority.
+
+    The unit's own mark at full strength and its neighbours faded, because a
+    crop with six highlights on it has to say which one the card is about.
+    Only marks recorded as being on **this** page: one from the page after,
+    painted here, lands on unrelated text, so a mark imported before marks
+    knew their page is skipped rather than guessed at. The first mark is the
+    one the unit came from, so the locator's page is its page by construction,
+    which is what lets an older ledger still draw the one that matters.
+    """
+    from ..zotero import colour_rgb
+
+    out: list[Region] = []
+    for index, mark in enumerate(unit.marks):
+        where = mark.page if mark.page is not None else (unit.locator.page if not index else None)
+        boxes = mark.rects or ([mark.bbox] if mark.bbox else [])
+        if where != page or not boxes:
+            continue
+        out.append(
+            Region(
+                kind=mark.kind or "highlight",
+                rects=tuple(tuple(float(v) for v in box) for box in boxes),
+                # A colour this project has never seen still gets drawn, in
+                # grey: "something is marked here" is most of the information.
+                rgb=colour_rgb(mark.colour) or UNKNOWN_COLOUR,
+                faded=bool(index),
+            )
+        )
+    return out
 
 
 class PdfUnavailable(RuntimeError):
@@ -74,6 +178,8 @@ class CropRenderer:
         *,
         context: float = 0.0,
         outline: bool = False,
+        width: str = "box",
+        regions: Sequence[Region] = (),
     ) -> bytes:
         """PNG bytes for a 1-based page number and a top-left-origin bbox.
 
@@ -83,17 +189,72 @@ class CropRenderer:
         split across units shows its missing lines just outside the box, and
         two equations merged into one show two numbers inside it. A bare crop
         cannot show either, because a bare crop *is* the mistake.
+
+        `width="page"` keeps the full width of the page and lets `context`
+        decide only the height -- see `WIDTHS`. `regions` are painted on
+        first, which is what makes a highlight look on the crop the way it
+        looked in the reader that recorded it.
         """
         if not 1 <= page <= self._doc.page_count:
             raise ValueError(f"page {page} is outside the document")
+        if width not in WIDTHS:
+            raise ValueError(f"unknown crop width {width!r}; expected one of {', '.join(WIDTHS)}")
         target = self._doc.load_page(page - 1)
         box = self._fitz.Rect(*bbox)
         # Rect + tuple is PyMuPDF's expand operator, not concatenation.
         clip = (box + (-context, -context, context, context)) & target.rect  # noqa: RUF005
-        pixmap = target.get_pixmap(matrix=self._matrix, clip=clip)
+        if width == "page":
+            clip = self._fitz.Rect(target.rect.x0, clip.y0, target.rect.x1, clip.y1)
+        drawn = self._draw_regions(target, regions)
+        try:
+            pixmap = target.get_pixmap(matrix=self._matrix, clip=clip)
+        finally:
+            # Removed whatever happens, because this renderer stays open
+            # across a whole book: leaving them would stack one page's marks
+            # onto every later crop of the same page, darker each time.
+            for annot in reversed(drawn):
+                target.delete_annot(annot)
         if outline and context > 0:
             self._draw_outline(pixmap, box, clip)
         return bytes(pixmap.tobytes("png"))
+
+    def _draw_regions(self, page: Any, regions: Sequence[Region]) -> list[Any]:
+        """Paint the marks onto the page, as real PDF annotations.
+
+        Annotations rather than pixels, because that is what they are: the
+        viewer already knows how to blend a highlight over text so the words
+        stay readable, and reimplementing that by hand over a pixmap gets the
+        blend wrong in exactly the case that matters. They are added here and
+        deleted by the caller; nothing is ever saved, so the file on disk is
+        untouched.
+        """
+        drawn: list[Any] = []
+        for region in regions:
+            rects = [self._fitz.Rect(*r) for r in region.rects if len(r) == 4]
+            rects = [r for r in rects if not (r.is_empty or r.is_infinite)]
+            if not rects:
+                continue
+            full, faded = OPACITY.get(region.kind, DEFAULT_OPACITY)
+            opacity = faded if region.faded else full
+            if region.kind in OUTLINED:
+                for rect in rects:
+                    annot = page.add_rect_annot(rect)
+                    if region.kind in FILLED:
+                        annot.set_colors(stroke=region.rgb, fill=region.rgb)
+                    else:
+                        annot.set_colors(stroke=region.rgb)
+                    annot.set_border(width=0.6 if region.faded else 1.6)
+                    annot.set_opacity(opacity)
+                    annot.update()
+                    drawn.append(annot)
+                continue
+            adder = getattr(page, f"add_{region.kind}_annot", None) or page.add_highlight_annot
+            annot = adder(rects)
+            annot.set_colors(stroke=region.rgb)
+            annot.set_opacity(opacity)
+            annot.update()
+            drawn.append(annot)
+        return drawn
 
     def _draw_outline(self, pixmap: Any, box: Any, clip: Any) -> None:
         """Trace the unit's bounding box onto the rendered page fragment.
@@ -135,7 +296,11 @@ def render_crop(
     *,
     context: float = 0.0,
     outline: bool = False,
+    width: str = "box",
+    regions: Sequence[Region] = (),
 ) -> bytes:
     """One-off crop, for the app's per-request rendering."""
     with CropRenderer(pdf_path) as renderer:
-        return renderer.render(page, bbox, context=context, outline=outline)
+        return renderer.render(
+            page, bbox, context=context, outline=outline, width=width, regions=regions
+        )

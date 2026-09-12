@@ -96,17 +96,25 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/config", response_class=HTMLResponse)
     def config_view(request: Request, source: str = "") -> Any:
         """Every resolved setting, and where it came from. Read-only."""
+        name = resolve_source(config, source)
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in effective_config(config):
             grouped.setdefault(str(row["where"]), []).append(row)
+        # The source in force comes first. Arriving here from the rail asks
+        # about *this* book; with fifty of them, landing at the top of an
+        # alphabetical list and scrolling is not an answer.
+        focus = f"source: {name}"
+        if focus in grouped:
+            grouped = {focus: grouped[focus], **{k: v for k, v in grouped.items() if k != focus}}
         return templates.TemplateResponse(
             request,
             "config.html",
             {
                 "config": config,
-                "source": resolve_source(config, source),
-                "sources": source_options(config),
+                "source": name,
+                "sources": source_names(config),
                 "grouped": grouped,
+                "focus": focus,
             },
         )
 
@@ -134,7 +142,7 @@ def create_app(config: Config) -> FastAPI:
                     "view": "units",
                     "config": config,
                     "source": resolve_source(config, source),
-                    "sources": source_options(config),
+                    "sources": source_names(config),
                     "pipeline": pipeline_counts(config),
                 },
             )
@@ -166,6 +174,13 @@ def create_app(config: Config) -> FastAPI:
             # Triage is much faster when you can read the maths rather than
             # squint at a picture of it.
             units = [u for u in units if u.transcription == "ok"]
+        everything = list(ledger)
+        known = {u.id for u in everything}
+        # Whether this source was read and marked up, or segmented. It decides
+        # which passes are offered and how wide a crop is cut, and it is a
+        # property of the units rather than a setting: a source is what it is.
+        from_marks = any(u.marks for u in everything)
+        pipeline = pipeline_counts(config, name)
         filters = {
             "source": name,
             "state": state,
@@ -182,12 +197,12 @@ def create_app(config: Config) -> FastAPI:
             {
                 "config": config,
                 "source": name,
-                "sources": source_options(config),
-                "units": [_unit_payload(u, config) for u in units],
+                "sources": source_names(config),
+                "units": [_unit_payload(u, config, known) for u in units],
                 "counts": ledger.counts(),
                 "sections": ledger.sections(),
                 "section_tree": section_rows(
-                    list(ledger),
+                    everything,
                     {u.id for u in unsectioned},
                     lambda u: u.locator.section,
                     lambda u: u.state,
@@ -204,21 +219,23 @@ def create_app(config: Config) -> FastAPI:
                 },
                 "state": state,
                 "section": section,
-                "pipeline": pipeline_counts(config, name),
+                "pipeline": pipeline,
                 "transcribed": transcribed,
                 "annotated": annotated,
                 "suggested": suggested,
                 "counts_scope": counts_scope,
                 "filters": filters,
-                "commands": commands_for("units", filters, ledger.counts()),
+                "commands": commands_for("units", filters, pipeline, from_marks=from_marks),
                 "mark": mark,
                 "mark_rows": mark_rows(
                     ledger.select(state=state or "all", section=section or None), config, name
                 ),
+                "scheme": scheme_rows(everything, config, name),
+                "source_facts": source_facts(config, name, from_marks=from_marks),
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
                     if counts_scope == "filtered"
-                    else pipeline_counts(config, name)
+                    else pipeline
                 ),
                 "suggested_count": sum(
                     1
@@ -259,7 +276,7 @@ def create_app(config: Config) -> FastAPI:
                     "view": "review",
                     "config": config,
                     "source": name,
-                    "sources": source_options(config),
+                    "sources": source_names(config),
                     "pipeline": pipeline_counts(config),
                 },
             )
@@ -318,6 +335,9 @@ def create_app(config: Config) -> FastAPI:
             "counts_scope": counts_scope,
         }
         counts = {s: sum(1 for c in cards if c.effective_status == s) for s in model.STATUSES}
+        pipeline = pipeline_counts(config, name)
+        units_here = list(_ledgers(config).get(name, Ledger(config.units_path(name))))
+        from_marks = any(u.marks for u in units_here)
         return templates.TemplateResponse(
             request,
             "review.html",
@@ -327,15 +347,17 @@ def create_app(config: Config) -> FastAPI:
                     _card_payload(c, findings, config, places.get(c.uid)) for c in selected
                 ],
                 "counts": counts,
-                "pipeline": pipeline_counts(config, name),
+                "pipeline": pipeline,
                 "total": len(cards),
                 "status": status,
                 "source": name,
-                "sources": source_options(config),
+                "sources": source_names(config),
                 "annotated": annotated,
                 "section": section,
                 "filters": filters,
-                "commands": commands_for("review", filters, counts),
+                "commands": commands_for("review", filters, pipeline, from_marks=from_marks),
+                "scheme": scheme_rows(units_here, config, name),
+                "source_facts": source_facts(config, name, from_marks=from_marks),
                 "section_tree": section_rows(
                     in_source,
                     {c.uid for c in unsectioned},
@@ -348,10 +370,20 @@ def create_app(config: Config) -> FastAPI:
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
                     if counts_scope == "filtered"
-                    else pipeline_counts(config, name)
+                    else pipeline
                 ),
             },
         )
+
+    @app.get("/api/sources")
+    def sources_api() -> Any:
+        """Every source with its counts, for the picker.
+
+        On demand rather than on every page, because it walks every ledger and
+        every card. Nothing is cached: the picker is opened once in a while
+        and being right matters more there than being instant.
+        """
+        return source_gallery(config)
 
     @app.get("/api/counts")
     def counts(
@@ -500,12 +532,24 @@ def create_app(config: Config) -> FastAPI:
         return _mutate_card(config, uid, body, lambda card: card.add_annotation(text))
 
     @app.get("/crop/{source}/{unit_id:path}.png")
-    def crop(source: str, unit_id: str, context: float = 0.0, outline: bool = False) -> Response:
+    def crop(
+        source: str,
+        unit_id: str,
+        context: float = 0.0,
+        outline: bool = False,
+        width: str = "",
+        marks: bool = True,
+    ) -> Response:
         """Render a unit's crop from the source document, on request.
 
         The ledger stores geometry, not pictures (DESIGN.md §4: the crop is
         the authority, but it is derived). About 4ms a crop, and it can never
         go stale against the bounding box it came from.
+
+        `width` overrides how wide it is cut; left empty the config decides,
+        which is where the "a mark's box has no meaningful left edge" rule
+        lives. `marks` paints what the reader marked back onto the page, in
+        the colours they used.
         """
         from ..extract import render as render_mod
 
@@ -518,6 +562,10 @@ def create_app(config: Config) -> FastAPI:
         geometry = unit.crop_geometry()
         if geometry is None:
             raise HTTPException(404, f"unit {unit_id!r} has no page geometry")
+        if width and width not in render_mod.WIDTHS:
+            raise HTTPException(400, f"unknown crop width {width!r}")
+        width = width or config.crop_width_for(source, from_a_mark=bool(unit.marks))
+        regions = render_mod.regions_for(unit, geometry[0]) if marks else []
 
         document = config.document_for(source, unit.locator.document)
         if document is None or not document.exists():
@@ -527,7 +575,14 @@ def create_app(config: Config) -> FastAPI:
                 f"({document or 'unset'}); crops are rendered from it on demand",
             )
         try:
-            png = render_mod.render_crop(document, *geometry, context=context, outline=outline)
+            png = render_mod.render_crop(
+                document,
+                *geometry,
+                context=context,
+                outline=outline,
+                width=width,
+                regions=regions,
+            )
         except (render_mod.PdfUnavailable, ValueError) as exc:
             raise HTTPException(409, str(exc)) from exc
         return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
@@ -768,6 +823,41 @@ def has_annotation(notes: list[str], audience: str) -> bool:
     return any(model.annotation_audience(n) == audience for n in notes)
 
 
+def mark_payloads(
+    unit: Unit, config: Config, known: set[str] | None = None
+) -> list[dict[str, Any]]:
+    """Every mark on or around this unit, as the triage view shows them.
+
+    What the reader wrote is the most useful thing on the page and it was
+    nowhere in the app: the crop showed a highlight and said nothing about the
+    sentence beside it in the margin. Text and comment are both here, kept
+    apart, because they are not the same claim -- one is the document's words
+    and one is the reader's.
+
+    `meaning` is resolved now rather than stored, so editing `[zotero.meanings]`
+    changes every unit at once instead of only the ones imported since.
+    """
+    scheme = config.zotero_for(unit.source)
+    rows: list[dict[str, Any]] = []
+    for index, mark in enumerate(unit.marks):
+        own = not index
+        elsewhere = f"{unit.source}:{mark.key}"
+        rows.append({
+            "key": mark.key,
+            "kind": mark.kind,
+            "colour": mark.colour,
+            "meaning": scheme.means(mark.kind, mark.colour),
+            "text": mark.text,
+            "comment": mark.comment,
+            "page": mark.page if mark.page is not None else (unit.locator.page if own else None),
+            "own": own,
+            # Whether this neighbour is a unit in its own right, and so
+            # something you will meet again rather than context for this one.
+            "unit": elsewhere if known and elsewhere in known else "",
+        })
+    return rows
+
+
 def unit_mark(unit: Unit) -> str:
     """`kind/colour` of the mark this unit came from, or empty.
 
@@ -805,6 +895,179 @@ def mark_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, 
         })
     rows.sort(key=lambda row: (-int(row["count"]), str(row["key"])))
     return rows
+
+
+def _scheme_key(scheme: Any, kind: str, colour: str) -> str:
+    """Which line of the scheme a mark of this kind and colour falls under.
+
+    The same walk `ZoteroConfig.means` does, so the legend groups marks exactly
+    the way the config resolves them: an entry for `note` really does collect
+    every colour of sticky note, and seeing that is the point of showing it.
+    An undeclared mark falls back to its own colour, which is what you would
+    reach for if you were about to declare it.
+    """
+    for probe in (f"{kind}/{colour}", kind, colour):
+        if scheme.meanings.get(probe):
+            return probe
+    return colour or kind
+
+
+def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
+    """What this source's marks mean, and which of them make units.
+
+    The legend, not the filter. Every colour and kind declared for this source
+    -- including ones nothing is marked with yet -- plus anything marked that
+    has *not* been declared, which is the row worth seeing: an unmapped mark is
+    one whose meaning exists only in your head, and it will reach a card
+    writer as a coloured box with no caption.
+
+    Counted over marks rather than units, deduplicated by key, because a mark
+    appears in the neighbour list of every unit near it and counting those
+    would report the same highlight five times.
+    """
+    from ..zotero import HEX_BY_NAME
+
+    scheme = config.zotero_for(source)
+    seen: dict[str, set[str]] = {}
+    for unit in units:
+        for mark in unit.marks:
+            seen.setdefault(_scheme_key(scheme, mark.kind, mark.colour), set()).add(mark.key)
+    if not seen:
+        # Nothing in this source was marked, so there is no scheme in force
+        # here. `[zotero.meanings]` is repo-wide and would otherwise render a
+        # full colour legend, every count zero, beside a book nobody has ever
+        # highlighted -- the rail saying something about a different source.
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for probe in {*scheme.meanings, *seen}:
+        left, slash, right = probe.partition("/")
+        if slash:
+            kind, colour = left, right
+        elif left in HEX_BY_NAME:
+            kind, colour = "", left
+        else:
+            kind, colour = left, ""
+        rows.append({
+            "key": probe,
+            "kind": kind,
+            "colour": colour,
+            "meaning": scheme.meanings.get(probe, ""),
+            "count": len(seen.get(probe, ())),
+            "makes_a_unit": scheme.makes_a_unit(kind, colour),
+        })
+    rows.sort(key=lambda r: (not r["makes_a_unit"], -int(r["count"]), str(r["key"])))
+    return rows
+
+
+def source_origin(config: Config, source: str) -> str:
+    """Where this source's material comes from: `zotero`, `pdf`, `tex`, or ``.
+
+    Not cosmetic. It decides which passes make sense, how wide crops are cut,
+    and where to go when a document is missing -- and it was invisible, so a
+    paper imported from Zotero and a PDF sitting in the repo looked identical
+    in every view.
+    """
+    spec = config.sources.get(source)
+    if spec is None:
+        return ""
+    if spec.zotero_key:
+        return "zotero"
+    if spec.pdf:
+        return "pdf"
+    return "tex" if spec.tex else ""
+
+
+def source_facts(config: Config, source: str, *, from_marks: bool = False) -> dict[str, Any]:
+    """This source's resolved settings, for the information rail.
+
+    The same numbers `/config` lists, for the one source you are actually
+    looking at. There was no way to see which layout the card in front of you
+    resolved to without leaving the view, and layout decides what every
+    derivative on it means.
+    """
+    from ..context import source_conventions
+
+    spec = config.sources.get(source)
+    return {
+        "name": source,
+        "configured": spec is not None,
+        "title": spec.title if spec else source,
+        "citation": spec.citation if spec else "",
+        "tags": list(spec.tags) if spec else [],
+        "origin": source_origin(config, source),
+        "zotero_key": spec.zotero_key if spec else "",
+        "deck": config.deck_for(source),
+        "decks": sorted(spec.decks.items()) if spec else [],
+        # Empty is an answer, and a meaningful one: a source that declares no
+        # layout gets no layout, and `verify` refuses rather than guessing.
+        "layout": config.layout_for(source),
+        "order": spec.order if spec else "",
+        "crop_width": config.crop_width_for(source, from_a_mark=from_marks),
+        "crop_context": config.crop_context_for(source),
+        "context_pages": config.context_pages_for(source),
+        # Whether anyone has written down what is ambient here. An absent
+        # convention is a card writer guessing, so it is worth saying out loud
+        # rather than leaving as a blank.
+        "conventions": bool(source_conventions(config, source).strip()) if spec else False,
+    }
+
+
+def source_gallery(config: Config) -> dict[str, Any]:
+    """Every source, with where it came from and how far along it is.
+
+    A dropdown answers "which one am I on" and nothing else. With a shelf of
+    papers the question is which one to work on next, and that is a comparison
+    -- so this carries the counts for both halves of the pipeline per source,
+    the tags to narrow by, and where each one came from.
+
+    Everything is recomputed per request, like every other read here. It walks
+    every ledger and every card, which is why it is asked for on demand rather
+    than rendered into each page.
+    """
+    ledgers = _ledgers(config)
+    by_source: dict[str, list[Card]] = {}
+    for card in model.load_all(config.cards_dir):
+        by_source.setdefault(card.source_name, []).append(card)
+
+    rows: list[dict[str, Any]] = []
+    for name in source_names(config):
+        spec = config.sources.get(name)
+        units = list(ledgers.get(name, ()))
+        counts = dict.fromkeys((*UNIT_STATES, *CARD_STATES), 0)
+        for unit in units:
+            counts[unit.state] = counts.get(unit.state, 0) + 1
+        for card in by_source.get(name, []):
+            counts[card.effective_status] = counts.get(card.effective_status, 0) + 1
+        rows.append({
+            "name": name,
+            "title": spec.title if spec else name,
+            "citation": spec.citation if spec else "",
+            "tags": list(spec.tags) if spec else [],
+            "origin": source_origin(config, name),
+            "from_marks": any(u.marks for u in units),
+            "counts": counts,
+            "units": len(units),
+            "cards": len(by_source.get(name, [])),
+            "deck": config.deck_for(name),
+            "layout": config.layout_for(name),
+            "configured": spec is not None,
+        })
+
+    totals = dict.fromkeys((*UNIT_STATES, *CARD_STATES), 0)
+    for row in rows:
+        for state, number in row["counts"].items():
+            totals[state] += number
+    return {
+        "sources": rows,
+        "totals": totals,
+        "units": sum(int(r["units"]) for r in rows),
+        "cards": sum(int(r["cards"]) for r in rows),
+        "tags": sorted({t for r in rows for t in r["tags"]}),
+        # Only the origins actually present, so the filter never offers a
+        # button that matches nothing.
+        "origins": sorted({str(r["origin"]) for r in rows if r["origin"]}),
+    }
 
 
 def card_in_source(card: Card, source: str) -> bool:
@@ -854,6 +1117,12 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     add("repo", "language", config.language, "forge.toml")
     add("repo", "front_char_cap", config.front_char_cap, "forge.toml")
     add("repo", "crop_context", config.crop_context_for(""), "forge.toml")
+    add(
+        "repo",
+        "crop_width",
+        config.crop_width or "page for marks, box for the rest",
+        "forge.toml" if config.crop_width else "by where the geometry came from",
+    )
     add("repo", "context_pages", config.context_pages, "forge.toml")
     add("anki", "deck", config.deck, "forge.toml")
     add("anki", "note type", config.note_type, "forge.toml")
@@ -866,6 +1135,7 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         where = f"source: {name}"
         origin = f"sources/{name}/source.md"
         inherited = "inherited"
+        add(where, "material", source_origin(config, name) or "unset", origin)
         add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
         add(where, "layout", config.layout_for(name), origin if spec.layout else inherited)
         add(where, "order", spec.order, origin)
@@ -874,6 +1144,12 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
             "crop_context",
             config.crop_context_for(name),
             origin if spec.crop_context else inherited,
+        )
+        add(
+            where,
+            "crop_width",
+            spec.crop_width or "page for marks, box for the rest",
+            origin if spec.crop_width else "by where the geometry came from",
         )
         add(
             where,
@@ -896,79 +1172,110 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     return rows
 
 
+def flag(name: str, value: str) -> str:
+    """` --name "value"`, or nothing at all.
+
+    Double quotes throughout, which both `sh` and PowerShell read the same
+    way. Single quotes, which the CLI's own examples use, are a literal in
+    PowerShell and would pass the quote marks along.
+
+    A value containing a double quote gets **no flag**, because there is no
+    spelling that quotes it correctly for both shells: `""` escapes it in
+    PowerShell and concatenates two strings in `sh`. Dropping the scope makes
+    a command that does too much, which you can see; mis-quoting makes one
+    that does something else, which you cannot.
+    """
+    return "" if not value or '"' in value else f' {name} "{value}"'
+
+
 def commands_for(
-    view: str, filters: dict[str, Any], counts: dict[str, int]
+    view: str,
+    filters: dict[str, Any],
+    counts: dict[str, int],
+    *,
+    from_marks: bool = False,
 ) -> list[dict[str, str]]:
-    """What to run next on exactly what is on screen.
+    """What to run next, scoped to the source and section on screen.
 
     The honest version of "trigger Claude from the website": you filter here,
     copy, and paste it where you can watch it. Nothing is launched, so nothing
     writes cards with nobody looking.
 
-    Quoted with double quotes throughout, which both `sh` and PowerShell read
-    the same way. Single quotes, which the CLI's own examples use, are a
-    literal in PowerShell and would silently pass the quote marks along.
+    `counts` is the whole source rather than the filtered deck, deliberately:
+    you triage in the `new` view and the units you queue as you go are the
+    reason to run `/extract-cards` next. Counting only what is on screen would
+    hide that step at exactly the moment you earned it, so the number in each
+    label says which population it is talking about.
+
+    `from_marks` says the units came from someone marking the document up
+    rather than from segmenting it. Both crop-reading passes are off for those:
+    `/transcribe` records what an equation says as LaTeX, and a highlight
+    already carries its own text; `/classify` proposes skipping fragments and
+    table rows, which is a judgement about a page of formulas.
     """
     source = str(filters.get("source", ""))
     section = str(filters.get("section", ""))
-    scope = f' --section "{section}"' if section else ""
+    src, sec = flag("--source", source), flag("--section", section)
+    scope = sec or " --all"
     out: list[dict[str, str]] = []
 
     if view == "units":
-        if counts.get("new"):
+        if from_marks:
             out.append({
-                "label": "read the crops here",
-                "run": f"/transcribe {section}" if section else "/transcribe --all",
+                "kind": "note",
+                "label": "nothing to transcribe here — a mark carries its own text",
+                "run": "",
+            })
+        elif counts.get("new"):
+            out.append({
+                "label": f"read the crops — {counts['new']} still untranscribed",
+                "run": f"/transcribe{src}{scope}",
+                "kind": "claude",
+            })
+            out.append({
+                "label": "propose which of them to skip",
+                "run": f"/classify{src}{scope}",
                 "kind": "claude",
             })
         if counts.get("queued"):
             out.append({
-                "label": "write stubs for what is queued",
-                "run": f"/extract-cards {section}".strip(),
+                "label": f"write stubs for {counts['queued']} queued",
+                "run": f"/extract-cards{src}{sec}",
                 "kind": "claude",
             })
         out.append({
             "label": "this list, as JSON",
             "run": (
-                f'uv run forge units --source "{source}"'
-                f' --state {filters.get("state") or "all"}{scope} --json'
+                f"uv run forge units{src}"
+                f" --state {filters.get('state') or 'all'}{sec} --json"
             ),
             "kind": "shell",
         })
     else:
         if counts.get("draft"):
-            out.append({"label": "fill in what is thin", "run": "/augment", "kind": "claude"})
-        out.append({"label": "open requests", "run": "/triage claude", "kind": "claude"})
+            out.append({
+                "label": f"fill in {counts['draft']} thin drafts",
+                "run": f"/augment{src}",
+                "kind": "claude",
+            })
+        if counts.get("annotated_claude_card"):
+            out.append({
+                "label": f"{counts['annotated_claude_card']} open requests",
+                "run": "/triage claude",
+                "kind": "claude",
+            })
+        if counts.get("approved"):
+            out.append({
+                "label": "check the maths numerically",
+                "run": f"uv run forge verify{src}",
+                "kind": "shell",
+            })
         out.append({
             "label": "what would reach Anki",
             "run": "uv run forge sync --dry-run",
             "kind": "shell",
         })
     return out
-
-
-def source_options(config: Config) -> list[dict[str, Any]]:
-    """The picker's entries, grouped by tag.
-
-    A repo had one source; a shelf of papers has fifty, and a flat list of
-    citekeys is unusable at that size. Grouping is by the source's first tag,
-    which is what `tags` is for, and the visible label stays the source *name*
-    rather than the title: a native select's typeahead matches what is
-    displayed, and a citekey starts with the author you are looking for.
-    Untagged sources come last, under no heading.
-    """
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for name in source_names(config):
-        spec = config.sources.get(name)
-        tag = spec.tags[0] if spec and spec.tags else ""
-        grouped.setdefault(tag, []).append(
-            {"name": name, "title": spec.title if spec else name}
-        )
-    ordered = [(tag, rows) for tag, rows in grouped.items() if tag]
-    ordered.sort(key=lambda pair: pair[0])
-    if "" in grouped:
-        ordered.append(("", grouped[""]))
-    return [{"tag": tag, "sources": rows} for tag, rows in ordered]
 
 
 def resolve_source(config: Config, source: str) -> str:
@@ -1011,9 +1318,15 @@ def crop_url(unit: Unit, *, context: float = 0.0) -> str:
     return f"{url}?context={context:g}&outline=1" if context else url
 
 
-def _unit_payload(unit: Unit, config: Config) -> dict[str, Any]:
+def _unit_payload(
+    unit: Unit, config: Config, known: set[str] | None = None
+) -> dict[str, Any]:
     image = crop_url(unit, context=pdf_context(config, unit.source))
     return {
+        # What the reader marked here and on the pages around it: the text
+        # each one covers and whatever they wrote about it. The crop shows
+        # where the marks are; this is what they say.
+        "marks": mark_payloads(unit, config, known),
         "id": unit.id,
         "state": unit.state,
         "reason": unit.reason,

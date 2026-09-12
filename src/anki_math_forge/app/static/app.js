@@ -125,7 +125,17 @@ class Deck {
           ? `${this.index + 1} / ${total}`
           : `${this.index + 1} / ${total} · ${pending} left`;
     }
-    if (item) item.scrollIntoView({ block: "nearest" });
+    // `start`, not `nearest`. A unit that is taller than the window -- a
+    // page-wide crop with thirty marks listed under it -- is scrolled by
+    // `nearest` so that its *bottom* comes into view, which lands you in the
+    // middle of a card you have not read yet. `scroll-margin-top` keeps the
+    // sticky header from covering the line you land on.
+    //
+    // Not on the first paint, though: the page is already at the top and
+    // scrolling it anywhere else is the browser moving under you before you
+    // have touched anything.
+    if (item && this.painted) item.scrollIntoView({ block: "start" });
+    this.painted = true;
   }
 
   next() {
@@ -194,6 +204,9 @@ function bindKeys(handlers) {
   document.addEventListener("keydown", (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (document.getElementById("prompt").open) return;
+    // A modal over the deck owns the keyboard: `s` in the gallery's search box
+    // would otherwise skip whatever unit was behind it.
+    if (galleryIsOpen()) return;
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
     const handler = handlers[event.key];
@@ -216,6 +229,22 @@ document.addEventListener(
   },
   true,
 );
+
+/* Both rails are fixed panels that start *under* the header. They used to
+   start at y=0 with a higher stacking order, which put the filter panel on top
+   of the view links -- the one row that has to be reachable from everywhere.
+
+   Measured rather than assumed, because the header wraps: at a narrow window
+   it is two rows tall, which is exactly when a hard-coded height is wrong. */
+(function trackHeaderHeight() {
+  const bar = document.getElementById("topbar");
+  if (!bar) return;
+  const set = () =>
+    document.documentElement.style.setProperty("--header-h", `${bar.offsetHeight}px`);
+  set();
+  if (window.ResizeObserver) new ResizeObserver(set).observe(bar);
+  else window.addEventListener("resize", set);
+})();
 
 /* The filter-rail. Its state persists: a triage session is long, and being asked
    to re-open the same panel every reload is its own small tax. */
@@ -241,6 +270,14 @@ try {
 } catch {
   /* no stored preference is the same as the default */
 }
+
+/* Two buttons, one job. The fold arrow lives inside the rail and goes away
+   with it; the tab stays on screen, which is the only state where an
+   affordance is essential. `f` still does it from the keyboard. */
+["filters-fold", "filters-tab"].forEach((id) => {
+  const button = document.getElementById(id);
+  if (button) button.addEventListener("click", toggleFilters);
+});
 
 /* The guide cycles through three sizes rather than toggling two, because
    the question it answers changes: mid-session you want the counts, and only
@@ -487,19 +524,188 @@ function saveUndo(stack) {
   }
 }
 
-/* The source picker. It rewrites one query parameter and leaves the rest
-   alone, so switching book keeps the state, section and status filter you
-   were on -- the old inline handler rebuilt the whole query string and threw
-   those away. */
-(function sourcePicker() {
-  const pick = document.getElementById("source-pick");
-  if (!pick) return;
-  pick.addEventListener("change", () => {
-    const url = new URL(location.href);
-    url.searchParams.set("source", pick.value);
-    location.href = url.toString();
+/* The source gallery.
+
+   A dropdown answers "which one am I on" and nothing else. With a shelf of
+   papers the question is which one to work on next, and that is a comparison:
+   how far along each is, where it came from, what it is about. So this is the
+   window rather than a list, and it carries the counts.
+
+   Loaded once per page, on first open, because it walks every ledger and
+   every card. */
+const gallery = {
+  data: null,
+  tag: "",
+  origin: "",
+  query: "",
+};
+
+const ORIGIN_LABEL = {
+  zotero: "from Zotero",
+  pdf: "a PDF here",
+  tex: "LaTeX source",
+};
+const UNIT_LANE = ["new", "queued", "carded", "skipped"];
+const CARD_LANE = ["draft", "approved", "rejected"];
+
+function sourceHref(name) {
+  /* Keep the view and the state you were on; drop the filters that belong to
+     the source you are leaving. A section number from one book means nothing
+     in another, and carrying it over lands you on an empty deck that looks
+     like the import failed. */
+  const url = new URL(location.href);
+  ["section", "mark"].forEach((key) => url.searchParams.delete(key));
+  url.searchParams.set("source", name);
+  url.hash = "";
+  return url.toString();
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function countBar(counts, lane) {
+  const total = lane.reduce((sum, state) => sum + (counts[state] || 0), 0);
+  const bar = el("span", "gsource-bar");
+  if (!total) return bar;
+  lane.forEach((state) => {
+    const n = counts[state] || 0;
+    if (!n) return;
+    const seg = el("i", `seg state-${state}`);
+    seg.style.width = `${(100 * n) / total}%`;
+    seg.title = `${n} ${state}`;
+    bar.appendChild(seg);
+  });
+  return bar;
+}
+
+function countRow(counts, lane) {
+  const row = el("span", "gsource-counts");
+  lane.forEach((state) => {
+    const n = counts[state] || 0;
+    const cell = el("i", n ? `on state-${state}` : "");
+    cell.appendChild(el("b", "", String(n)));
+    cell.appendChild(document.createTextNode(` ${state}`));
+    row.appendChild(cell);
+  });
+  return row;
+}
+
+function sourceCard(row, current) {
+  const card = el("a", "gsource" + (row.name === current ? " current" : ""));
+  card.href = sourceHref(row.name);
+  const head = el("span", "gsource-head");
+  head.appendChild(el("span", "gsource-name", row.name));
+  if (row.origin) {
+    head.appendChild(el("span", `gsource-origin o-${row.origin}`, ORIGIN_LABEL[row.origin] || row.origin));
+  } else {
+    head.appendChild(el("span", "gsource-origin warn", "no source.md"));
+  }
+  card.appendChild(head);
+  card.appendChild(el("span", "gsource-title", row.title));
+  if (row.tags.length) {
+    const tags = el("span", "gsource-tags");
+    row.tags.forEach((tag) => tags.appendChild(el("i", "", tag)));
+    card.appendChild(tags);
+  }
+  card.appendChild(el("span", "gsource-lane", `units · ${row.units}`));
+  card.appendChild(countBar(row.counts, UNIT_LANE));
+  card.appendChild(countRow(row.counts, UNIT_LANE));
+  card.appendChild(el("span", "gsource-lane", `cards · ${row.cards}`));
+  card.appendChild(countBar(row.counts, CARD_LANE));
+  card.appendChild(countRow(row.counts, CARD_LANE));
+  return card;
+}
+
+function chip(label, active, onPick) {
+  const button = el("button", "chip" + (active ? " on" : ""), label);
+  button.type = "button";
+  button.addEventListener("click", onPick);
+  return button;
+}
+
+function paintGallery() {
+  const data = gallery.data;
+  if (!data) return;
+  const current = new URL(location.href).searchParams.get("source") || "";
+  const chips = document.getElementById("gallery-chips");
+  chips.textContent = "";
+  const pick = (key) => (value) => () => {
+    gallery[key] = gallery[key] === value ? "" : value;
+    paintGallery();
+  };
+  const byTag = pick("tag");
+  const byOrigin = pick("origin");
+  if (data.tags.length) {
+    chips.appendChild(el("span", "chip-label", "tag"));
+    data.tags.forEach((tag) => chips.appendChild(chip(tag, gallery.tag === tag, byTag(tag))));
+  }
+  if (data.origins.length > 1) {
+    chips.appendChild(el("span", "chip-label", "from"));
+    data.origins.forEach((origin) =>
+      chips.appendChild(
+        chip(ORIGIN_LABEL[origin] || origin, gallery.origin === origin, byOrigin(origin)),
+      ),
+    );
+  }
+
+  const needle = gallery.query.trim().toLowerCase();
+  const shown = data.sources.filter((row) => {
+    if (gallery.tag && !row.tags.includes(gallery.tag)) return false;
+    if (gallery.origin && row.origin !== gallery.origin) return false;
+    if (!needle) return true;
+    return `${row.name} ${row.title} ${row.citation}`.toLowerCase().includes(needle);
+  });
+
+  const grid = document.getElementById("gallery-grid");
+  grid.textContent = "";
+  shown.forEach((row) => grid.appendChild(sourceCard(row, current)));
+  document.getElementById("gallery-empty").hidden = shown.length > 0;
+
+  const t = data.totals;
+  document.getElementById("gallery-totals").textContent =
+    `${shown.length} of ${data.sources.length} sources · ` +
+    `${data.units} units (${t.new} new, ${t.queued} queued) · ` +
+    `${data.cards} cards (${t.draft} draft, ${t.approved} approved)`;
+}
+
+async function openGallery() {
+  const dialog = document.getElementById("gallery");
+  if (!dialog) return;
+  dialog.showModal();
+  if (!gallery.data) {
+    try {
+      const response = await fetch("/api/sources");
+      gallery.data = await response.json();
+    } catch {
+      document.getElementById("gallery-totals").textContent = "could not read the sources";
+      return;
+    }
+  }
+  paintGallery();
+  document.getElementById("gallery-search").focus();
+}
+
+(function wireGallery() {
+  const dialog = document.getElementById("gallery");
+  if (!dialog) return;
+  const open = document.getElementById("source-pick");
+  if (open) open.addEventListener("click", openGallery);
+  document.getElementById("gallery-close").addEventListener("click", () => dialog.close());
+  const search = document.getElementById("gallery-search");
+  search.addEventListener("input", () => {
+    gallery.query = search.value;
+    paintGallery();
   });
 })();
+
+function galleryIsOpen() {
+  const dialog = document.getElementById("gallery");
+  return Boolean(dialog && dialog.open);
+}
 
 /* The mini diagram counts either the whole source or what the filters leave.
    It has its own attribute because the rail shows the unfiltered numbers on
@@ -607,3 +813,4 @@ const COUNT_POLL_MS = 4000;
   document.addEventListener("visibilitychange", tick);
   tick();
 })();
+

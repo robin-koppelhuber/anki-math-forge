@@ -1,8 +1,21 @@
 ---
 description: Turn queued units into stub cards
+argument-hint: [--source NAME] [--section SECTION]
 ---
 
 Write stub cards for every queued unit. Stubs only — augmentation is `/augment`.
+
+Arguments: `$ARGUMENTS`
+
+- **`--source NAME`** — which source. **Ask if it is not given and the repo
+  has more than one.** Nothing here defaults to a source, so leaving it out
+  writes cards for every queued unit in the repo — including books you were
+  not looking at.
+- **`--section SECTION`** — narrow to one section, as `locator.section`
+  spells it. Optional; without it, the whole source's queue.
+
+Pass both straight through to the `forge` commands below. The units view
+writes this line for you from whatever you had filtered to.
 
 ## Load the context first
 
@@ -33,7 +46,7 @@ never a transcription. The crop is the authority for what a unit says.
 1. Read the work list:
 
    ```
-   uv run forge units --state queued --json
+   uv run forge units --source <SOURCE> --state queued --json
    ```
 
 2. **Read each unit's `notes` and do what they say.** They are the instruction

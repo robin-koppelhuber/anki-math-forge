@@ -229,11 +229,13 @@ def test_the_unit_box_is_its_own_mark_not_the_whole_page() -> None:
     assert unit.locator.bbox == unit.marks[0].bbox
 
 
-def test_a_marked_page_arrives_queued() -> None:
-    """Reading the document and marking it up *was* the triage step. Landing it
-    in `new` would ask the human the same question twice."""
+def test_a_marked_page_arrives_new() -> None:
+    """Marking says "this mattered while I was reading"; triage says "this is
+    worth a card on its own". They are different questions, and arriving
+    `queued` answered the second one on the reader's behalf -- which let an
+    import fill the card queue with no gate in between."""
     unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note"))[0]
-    assert unit.state == "queued"
+    assert unit.state == "new"
 
 
 def test_the_document_is_on_the_locator_not_in_the_name() -> None:

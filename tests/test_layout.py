@@ -1,0 +1,158 @@
+"""Where things are on screen, and why.
+
+Two rails with one job each: the left one **acts** -- filters, and the commands
+that run on what they leave -- and the right one **tells you what you are
+looking at**. When something on one of them explains rather than changes, it is
+on the wrong side.
+
+The assertions here are against the markup and the stylesheet rather than
+against a rendered browser. That is weaker, but each one pins a bug that
+actually shipped, and every one of them was invisible to every other test in
+this suite: a panel can cover the navigation, or scroll four screens out of
+reach, while every view still returns 200.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from anki_math_forge.app import create_app
+from anki_math_forge.config import Config
+
+APP = Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
+CSS = (APP / "static" / "app.css").read_text(encoding="utf-8")
+JS = (APP / "static" / "app.js").read_text(encoding="utf-8")
+FILTERS = (APP / "templates" / "_filters.html").read_text(encoding="utf-8")
+GUIDE = (APP / "templates" / "_guide.html").read_text(encoding="utf-8")
+BASE = (APP / "templates" / "base.html").read_text(encoding="utf-8")
+
+
+def rule(selector: str) -> str:
+    """The body of the first rule for `selector`, so a test can ask what it
+    sets without depending on the order of the declarations in it."""
+    match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", CSS)
+    assert match, f"no rule for {selector!r}"
+    return match.group(1)
+
+
+# -- the header is not something to hide behind ----------------------------
+
+
+def test_the_rails_start_below_the_header() -> None:
+    """Both are `position: fixed` at a higher stacking order than an
+    unpositioned header, so at `top: 0` the filter panel sat on top of the
+    view links -- the one row that has to be reachable from anywhere."""
+    for selector in (".filter-rail", ".guide"):
+        assert "top: var(--header-h" in rule(selector), selector
+
+
+def test_the_header_outranks_both_rails() -> None:
+    header = rule("header.bar")
+    assert "position: sticky" in header
+    z = int(re.search(r"z-index:\s*(\d+)", header).group(1))
+    for selector in (".filter-rail", ".guide"):
+        assert z > int(re.search(r"z-index:\s*(\d+)", rule(selector)).group(1)), selector
+
+
+def test_the_header_height_is_measured_rather_than_assumed() -> None:
+    """It wraps: on a narrow window it is two rows tall, which is exactly when
+    a hard-coded height is wrong."""
+    assert "--header-h" in JS
+    assert "offsetHeight" in JS
+
+
+# -- the left rail folds, and can be got back ------------------------------
+
+
+def test_the_rail_has_both_a_fold_and_a_way_back() -> None:
+    """The button inside the panel slides away with it, which is precisely
+    when an affordance is essential. The guide learnt this already."""
+    assert 'id="filters-fold"' in FILTERS
+    assert 'id="filters-tab"' in BASE
+    assert '"filters-fold"' in JS and '"filters-tab"' in JS
+
+
+def test_the_handle_shows_exactly_when_the_rail_is_away() -> None:
+    """Written the positive way round: with no stored preference *neither*
+    state class is set, and `:not(.filters-off)` then hid the handle on a
+    narrow window, where the rail starts folded and it is the only way in."""
+    assert ".rail-tab.left { display: none; }" in CSS
+    assert "body.filters-off .rail-tab.left { display: block; }" in CSS
+    assert "body:not(.filters-on) .rail-tab.left { display: block; }" in CSS
+
+
+# -- one job per side -------------------------------------------------------
+
+
+def test_what_to_run_is_pinned_to_the_bottom_of_the_rail() -> None:
+    """With sixty-four sections above it, the one panel that says what to do
+    next was four screens down the scroll.
+
+    Pinning it means being a sibling of the scrolling column rather than the
+    last thing inside it, so the test is that the column has closed by the
+    time the panel starts: `<div>` depth back to zero.
+    """
+    start = FILTERS.index('<div class="filter-rail-scroll"')
+    segment = FILTERS[start : FILTERS.index('class="rail-actions"')]
+    assert segment.count("<div") >= 1
+    assert segment.count("<div") == segment.count("</div>"), "still inside the scroll column"
+    assert "flex: 1" in rule(".filter-rail-scroll"), "the column takes the slack"
+    assert "flex: none" in rule(".rail-actions"), "the panel keeps its height"
+
+
+def test_the_actions_panel_says_what_it_is() -> None:
+    """"Next on this" read as "the next item", which is what `j` does."""
+    assert "copy a command" in FILTERS
+    assert "next on this" not in FILTERS
+
+
+def test_the_meaning_of_a_mark_is_on_the_information_side() -> None:
+    """The left rail lists marks as something to click, labelled by the colour
+    you can see on the crop. What one *means* is a fact about the material, so
+    it belongs on the right -- and the same sentence in both places is one of
+    them not being read."""
+    assert "what your marks mean" in GUIDE
+    assert "scheme-meaning" in GUIDE
+    assert "scheme-meaning" not in FILTERS
+
+
+def test_the_resolved_settings_are_reachable_without_leaving_the_view() -> None:
+    """Which layout a card resolved to decides what every derivative on it
+    means, and there was no way to see it but to read Python."""
+    assert "source-facts" in GUIDE
+    assert "/config?source=" in GUIDE
+
+
+# -- the picker -------------------------------------------------------------
+
+
+def test_the_picker_opens_the_gallery_rather_than_a_dropdown() -> None:
+    assert 'id="gallery"' in BASE
+    assert "<select" not in BASE, "a dropdown cannot compare fifty papers"
+    assert "openGallery" in JS
+
+
+def test_switching_source_drops_the_filters_that_belonged_to_the_old_one() -> None:
+    """A section number from one book means nothing in another, and carrying
+    it over lands you on an empty deck that looks like the import failed."""
+    match = re.search(r"function sourceHref[\s\S]*?\n}", JS)
+    assert match and 'searchParams.delete' in match.group(0)
+    assert '"section"' in match.group(0) and '"mark"' in match.group(0)
+
+
+def test_a_modal_over_the_deck_owns_the_keyboard() -> None:
+    """`s` typed into the gallery's search box would otherwise skip whatever
+    unit was behind it."""
+    block = JS[JS.index("function bindKeys") : JS.index("function bindKeys") + 600]
+    assert "galleryIsOpen()" in block
+
+
+def test_the_gallery_is_on_every_view_that_has_a_picker(pdf_source: Config) -> None:
+    client = TestClient(create_app(pdf_source))
+    for url in ("/units", "/review", "/config"):
+        body = client.get(url).text
+        assert 'id="gallery"' in body, url
+        assert 'id="source-pick"' in body, url

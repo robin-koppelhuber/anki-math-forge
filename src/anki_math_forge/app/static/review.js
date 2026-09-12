@@ -107,6 +107,7 @@ async function openEditor() {
 bindKeys({
   "?": cycleGuide,
   f: toggleFilters,
+  g: openGallery,
   z: undo,
   a: () => act("approve"),
   u: () => act("unapprove"),

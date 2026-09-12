@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set view = "config" %}
-{% block title %}config · forge{% endblock %}
+{% block title %}config · {{ source }} · forge{% endblock %}
 
 {% block main %}
 <div class="config-page">
@@ -12,9 +12,15 @@
     that already exists. <code>layout</code> decides what every derivative on
     every card from that source means.
   </p>
+  {# The source in force comes first. Arriving here from the rail is a question
+     about *this* book; with fifty of them, landing at the top of an
+     alphabetical list and scrolling is not an answer. #}
+  {% if source %}
+  <p class="muted">Showing <b>{{ source }}</b> first — its block is marked.</p>
+  {% endif %}
 
   {% for group, rows in grouped.items() %}
-  <section class="config-group">
+  <section class="config-group {{ 'focus' if group == focus }}">
     <h2>{{ group }}</h2>
     <table class="config-table">
       <tbody>
