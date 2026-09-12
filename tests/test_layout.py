@@ -367,6 +367,30 @@ def test_the_control_stays_on_the_picture_in_every_view() -> None:
     assert "position: sticky" in bare[0]
 
 
+def test_the_stale_check_works_against_a_server_older_than_itself() -> None:
+    """The counts poll reports staleness, but only from a server new enough to
+    know the word -- which is no help on the one restart it matters most for,
+    the one that would have shipped the check. Three rounds of "this feature
+    does not exist" were all the same unrestarted process.
+
+    So the template asks for something only a current Python can answer. Old
+    code renders the attribute empty and the page says so on load."""
+    base = (APP / "templates" / "base.html").read_text(encoding="utf-8")
+    assert 'data-app="{{ app_build' in base
+    assert '"app_build"' in (APP / "__init__.py").read_text(encoding="utf-8")
+    assert "document.body.dataset.app" in JS
+
+
+def test_a_horizontal_divider_looks_like_a_control() -> None:
+    """`inset: 6px 0` inside a 14px row left a 2px hairline at 55% opacity --
+    present, draggable, and invisible, which is the same thing as absent. A
+    column splitter is a tall bar between two panels and reads as a divider on
+    its own; a row splitter is a thin line across a column and reads as a
+    border, so it needs a grip to say it is a control."""
+    assert "::after" in CSS[CSS.index(".splitter.y {") :][:900]
+    assert "min-height: 14px" in rule(".splitter.y")
+
+
 def test_the_app_says_when_its_own_code_is_stale() -> None:
     """Jinja re-reads a template every request and Python is imported once, so
     editing both and not restarting leaves new markup on old code: every new

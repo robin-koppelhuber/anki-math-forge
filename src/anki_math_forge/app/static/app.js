@@ -987,6 +987,13 @@ const COUNT_POLL_MS = 4000;
      Louder than the reload hint beside it, and it does not offer a button:
      reloading fixes nothing here, and a button that looked like it might
      would send you round the same loop. Only a restart moves this. */
+  /* The template asked the server for a build stamp and got nothing, which
+     only an old Python does. Checked once at load rather than on the poll,
+     because a server that old does not report staleness either -- it predates
+     the field the poll reads, which is exactly the restart where a warning
+     would have helped most. */
+  if (!document.body.dataset.app) setTimeout(showStale, 0);
+
   function showStale() {
     if (document.getElementById("stale-code")) return;
     const bar = document.createElement("div");

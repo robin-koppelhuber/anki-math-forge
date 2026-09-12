@@ -81,6 +81,52 @@ def wanted(attachment: api.Attachment, documents: tuple[str, ...]) -> bool:
     return not documents or attachment.title in documents or attachment.key in documents
 
 
+def outline(pdf: Path) -> list[tuple[int, str]]:
+    """`(first page, title)` for each section the document declares, in order.
+
+    A paper's own table of contents, which most PDFs built from LaTeX carry as
+    bookmarks. Without it every mark in a paper landed in one section named
+    after the *attachment* -- "PDF" -- so the section rail offered a single row
+    that filtered nothing, and a card's `Source` field cited the filename where
+    it should have cited a section.
+
+    Titles as the document wrote them, and no numbering invented on top: this
+    one names its sections "Introduction" and "Multi-objective learning", and
+    turning those into "1" and "2.3" would be asserting a numbering the paper
+    does not print. Order is the document's, which is why this returns a list.
+
+    Empty for a PDF with no bookmarks -- a scan, or a chapter exported on its
+    own -- and the caller falls back to the attachment title, which for a book
+    split into one file per chapter is exactly right.
+    """
+    from .render import _fitz
+
+    doc = _fitz().open(str(pdf))
+    try:
+        found = [
+            (int(page), " ".join(str(title).split()))
+            for _level, title, page in doc.get_toc()
+            if int(page) > 0 and str(title).strip()
+        ]
+    except Exception:
+        # A malformed outline is not a reason to refuse the import; the
+        # attachment title is a workable fallback and the marks are the point.
+        return []
+    finally:
+        doc.close()
+    return sorted(found, key=lambda entry: entry[0])
+
+
+def section_at(toc: list[tuple[int, str]], page: int) -> str:
+    """The last section to have started at or before this page."""
+    name = ""
+    for starts, title in toc:
+        if starts > page:
+            break
+        name = title
+    return name
+
+
 def page_heights(pdf: Path) -> dict[int, float]:
     """Every page's height, which is what turns Zotero's coordinates into ours.
 
@@ -134,6 +180,7 @@ def units_for(
     zotero: ZoteroConfig,
     *,
     section: str = "",
+    toc: list[tuple[int, str]] | None = None,
     neighbourhood: int = NEIGHBOURHOOD,
 ) -> list[Unit]:
     """One unit per mark you declared worth a card, with its pages around it."""
@@ -158,7 +205,11 @@ def units_for(
             Unit(
                 id=unit_id(source, mine.key),
                 locator=Locator(
-                    section=section or attachment.title,
+                    # The document's own section, where it declares one. The
+                    # attachment title is the fallback and not the answer: it
+                    # is the name of a *file*, so every mark in a paper landed
+                    # in one section called "PDF".
+                    section=section_at(toc or [], here) or section or attachment.title,
                     kind=annotation.kind,
                     document=attachment.key,
                     page=here,
@@ -297,6 +348,14 @@ def build(
         if text_for is not None:
             report.text_chars += text_for(attachment.key, pdf)
         report.units.extend(
-            units_for(source, attachment, mine, page_heights(pdf), zotero, section=attachment.title)
+            units_for(
+                source,
+                attachment,
+                mine,
+                page_heights(pdf),
+                zotero,
+                section=attachment.title,
+                toc=outline(pdf),
+            )
         )
     return report

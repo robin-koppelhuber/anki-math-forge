@@ -16,7 +16,18 @@
 <script defer src="/static/app.js"></script>
 {% block head %}{% endblock %}
 </head>
-<body>
+{# A handshake between this template and the Python serving it.
+
+   Templates are re-read every request and Python is imported once, so an
+   unrestarted server runs *new markup on old code*: new panels render empty
+   and new endpoints 404, and the whole page reads as a pile of features that
+   were never built. The counts poll reports staleness -- but only a server new
+   enough to know the word, which is no help the one time it matters most, the
+   restart that would have shipped the check itself.
+
+   So the template asks for something only a current Python can answer. Old
+   code leaves the attribute empty, `app.js` sees that, and says so. #}
+<body data-app="{{ app_build | default('', true) }}">
 {# The source in force, carried on every in-header link so switching
    view does not silently switch book. #}
 {% set src = source | default('', true) %}

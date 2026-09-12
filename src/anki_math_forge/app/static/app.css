@@ -1671,12 +1671,32 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .guide-pane { overflow-y: auto; min-height: 0; }
 .guide-pane.bottom { border-top: 0; padding-top: 0.2rem; }
 /* The vertical handle. Same machinery as the column splitters, one axis over. */
+/* The horizontal handle. `inset: 6px 0` inside a 14px row left a 2px hairline
+   at 55% opacity -- present, draggable, and invisible, which is the same thing
+   as absent. A column splitter is a tall bar between two panels and reads as a
+   divider on its own; a row splitter is a thin line across a column and reads
+   as a border, so it needs a grip to say it is a control. */
 .splitter.y {
   cursor: row-resize;
-  min-height: 0;
+  min-height: 14px;
   align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.splitter.y::before { inset: 6px 0; }
+.splitter.y::before { inset: auto 0; height: 1px; opacity: 0.8; }
+/* Three dots in the middle, the way a resize handle is normally drawn. */
+.splitter.y::after {
+  content: "";
+  position: relative;
+  width: 26px;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--line);
+  box-shadow: 0 0 0 3px var(--bg);
+}
+.splitter.y:hover::after,
+.splitter.y.dragging::after { background: var(--accent); }
 
 /* Beside the crop: the transcription, the marks, or both. A page-wide crop of
    small type next to what was written about it is the whole triage decision. */

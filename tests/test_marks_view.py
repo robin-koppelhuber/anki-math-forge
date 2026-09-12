@@ -344,3 +344,30 @@ def test_the_page_number_is_a_query_not_a_path_segment(zotero_config: Config) ->
     unit id already contains the colons that make it look like a path."""
     paths = {getattr(route, "path", "") for route in create_app(zotero_config).routes}
     assert "/page/{source}/{unit_id:path}.png" in paths
+
+
+# -- the section a mark is in, from the document's own outline --------------
+
+
+def test_a_paper_gets_its_own_section_names(tmp_path: Path) -> None:
+    """Every mark in a paper used to land in one section named after the
+    *attachment* -- "PDF" -- so the section rail offered a single row that
+    filtered nothing, and a card's `Source` field cited a filename where it
+    should have cited a section."""
+    from anki_math_forge.extract.zotero import section_at
+
+    toc = [(1, "Introduction"), (3, "Preliminaries"), (3, "Scalarization"), (9, "Proofs")]
+    assert section_at(toc, 1) == "Introduction"
+    assert section_at(toc, 2) == "Introduction", "until the next one starts"
+    assert section_at(toc, 3) == "Scalarization", "the last to start on this page"
+    assert section_at(toc, 40) == "Proofs"
+
+
+def test_a_mark_before_the_first_section_keeps_the_attachment_title() -> None:
+    """A title page is not in a section, and neither is a document with no
+    outline at all -- a scan, or a chapter exported on its own, for which the
+    attachment title is exactly the right name."""
+    from anki_math_forge.extract.zotero import section_at
+
+    assert section_at([(3, "Introduction")], 1) == ""
+    assert section_at([], 7) == ""

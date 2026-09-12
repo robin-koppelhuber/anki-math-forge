@@ -93,6 +93,11 @@ def create_app(config: Config) -> FastAPI:
     # re-implementing the rule in Jinja -- which is how it came to split on
     # `.`, a Cookbook convention, in a template shown for every source.
     templates.env.globals["section_chapter"] = _chapter_of
+    # The other half of the staleness handshake: a value only a current Python
+    # can supply, so a template newer than the process renders it empty and
+    # `app.js` can tell. `_STARTED_AT` is enough -- what matters is that the
+    # attribute is *there*, not what it says.
+    templates.env.globals["app_build"] = str(int(_STARTED_AT))
     templates.env.globals["mark_selection"] = mark_selection
     templates.env.globals["mark_toggle"] = mark_toggle
 
@@ -907,8 +912,21 @@ def section_rows(
     for item in everything:
         by_section.setdefault(section_of(item) or "", []).append(item)
 
+    # Numbered sections sort numerically -- `2.10` after `2.9` -- and named
+    # ones sort in the order the document introduced them. A paper's own
+    # sections are titles, not numbers ("Introduction", "A uniform learning
+    # bound"), and alphabetising those puts the conclusion in the middle.
+    # Insertion order is document order: every ledger is written by a pass that
+    # walks pages forwards.
+    first_seen = {name: n for n, name in enumerate(by_section)}
+
+    def order(name: str) -> tuple[Any, ...]:
+        if name[:1].isdigit():
+            return (0, *_section_key(name))
+        return (1, first_seen[name]) if name else (2, 0)
+
     chapters: dict[str, dict[str, Any]] = {}
-    for name in sorted(by_section, key=_section_key):
+    for name in sorted(by_section, key=order):
         items = by_section[name]
         split = {state: sum(1 for i in items if state_of(i) == state) for state in states}
         row = {
