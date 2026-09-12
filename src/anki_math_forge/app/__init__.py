@@ -346,12 +346,20 @@ def create_app(config: Config) -> FastAPI:
         # hash lookup would find nothing and say nothing.
         homes = {c.uid: c.source_name for c in everywhere}
 
+        by_uid_everywhere = {c.uid: c for c in everywhere}
+
         def link(uid: str) -> dict[str, Any]:
             known = uid in homes
             where = homes.get(uid) or name
+            target = by_uid_everywhere.get(uid)
             return {
                 "uid": uid,
                 "known": known,
+                # What the dependency *is*. A row of six-hex uids says a card
+                # needs two other cards and nothing about which two, which is
+                # the one thing you want to know while deciding whether the
+                # edge is real.
+                "gist": card_gist(target, config) if target else "",
                 # `status=all` and no annotation filter, so following a link
                 # never lands on a deck that excludes what you asked for.
                 "href": filter_url("/review", {}, source=where, status="all") + f"#{uid}",

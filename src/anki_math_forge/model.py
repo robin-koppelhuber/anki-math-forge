@@ -142,7 +142,18 @@ UNHASHED_FRONTMATTER = frozenset({
 # This decays on its own. Any re-approval writes the current digest, and the
 # only cards it can rescue are ones that were already approved before the rule
 # changed. See `Card.hash_matches`.
-LEGACY_UNHASHED_FRONTMATTER = frozenset({"status", "content_hash", "requires", "verify"})
+# `gist` is in here too, and that is not a claim about what the old rule said.
+# The legacy digest's whole job is to reproduce the number a card was stamped
+# with, and no card stamped under the old rule carries a `gist` key -- the
+# field did not exist. A key that is absent contributes nothing to either
+# digest, so exempting it reproduces every old stamp unchanged. What it does
+# buy is the case that matters: adding a caption to a card still pinned to a
+# legacy hash leaves that hash matching. Without it, `/augment` writing gists
+# demotes all 108 approvals at once, which is the mass demotion invariant 5
+# exists to make impossible. Measured on `af5ca1`, which demoted.
+LEGACY_UNHASHED_FRONTMATTER = frozenset(
+    {"status", "content_hash", "requires", "verify", "gist"}
+)
 
 STATUSES = ("draft", "approved", "rejected")
 
@@ -718,8 +729,15 @@ def stub(
     unit: str,
     card_type: str = "identity",
     tags: list[str] | None = None,
+    gist: str = "",
 ) -> Card:
-    """A minimal valid card: `check` passes on it, it is just not good yet."""
+    """A minimal valid card: `check` passes on it, it is just not good yet.
+
+    `gist` is written here rather than patched in afterwards because whoever
+    calls this has just decided what the card is, and that is the cheapest
+    moment to say so. Omitted entirely when empty, so a stub carries no
+    `gist: ''` for a later pass to mistake for a considered blank.
+    """
     return Card(
         frontmatter={
             "uid": uid,
@@ -727,6 +745,7 @@ def stub(
             "status": "draft",
             "source": source,
             "unit": unit,
+            **({"gist": gist.strip()} if gist.strip() else {}),
             "tags": tags or [],
             "verify": False,
         },

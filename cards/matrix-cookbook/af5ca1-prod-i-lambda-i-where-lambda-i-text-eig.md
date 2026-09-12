@@ -5,6 +5,7 @@ status: approved
 content_hash: a387921e4a30222d
 source: "Matrix Cookbook §1.2, eq. 18, p. 6"
 unit: "matrix-cookbook:1.2:18"
+gist: the determinant as a product of eigenvalues
 frequency: core
 derivation: short
 tags: [determinant, eigenvalues]

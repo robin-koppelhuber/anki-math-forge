@@ -96,7 +96,7 @@ uv run forge check              # lint (always; blocks sync)
 uv run forge units --state queued --json
 uv run forge units --ungisted   # no one-line subject yet; `/gist` fills them
 uv run forge units --id <id> --gist 'Lemma 2'
-uv run forge new --unit <id> --front '$...$' --back '$...$'
+uv run forge new --unit <id> --front '$...$' --back '$...$' --gist 'what it is'
 uv run forge todo               # open @claude annotations
 uv run forge serve              # units triage + card review
 uv run forge sync --dry-run     # then without --dry-run

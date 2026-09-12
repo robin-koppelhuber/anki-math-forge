@@ -1938,6 +1938,22 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 }
 .meta .gist.inherited { color: var(--muted); font-style: italic; }
 
+/* The caption beside a dependency's uid. The uid is the thing you paste and
+   the thing `check` reports, so it keeps the monospace and leads; the caption
+   is what tells you whether the edge is real. Truncated rather than wrapped:
+   a `needs` line with three entries on it should stay one line. */
+.dep-gist {
+  margin-left: 0.35rem;
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  display: inline-block;
+  color: var(--muted);
+}
+.goto:hover .dep-gist { color: var(--ink); }
+
 /* The context chip: every size on screen, the one in force written out. A row
    of bare numbers is five things to decode; this reads as a sentence with the
    answer in it -- `context 1 · 3 pages either side · 10 · all`. */

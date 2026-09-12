@@ -145,8 +145,15 @@ never a transcription. The crop is the authority for what a unit says.
    uv run forge new --unit <unit-id> \
      --front '$\frac{\partial}{\partial X}\log\det X$' \
      --back '$X^{-\top}$' \
+     --gist 'derivative of log det' \
      --tag matrix-calculus --tag derivatives
    ```
+
+   **`--gist` is a few words naming the card**, at most about sixty
+   characters. You have just decided what this card is, which is the cheapest
+   moment to say so: every later pass is reading it back off the LaTeX. It is
+   a caption for a list, a dependency link or a graph node, it never reaches
+   Anki, and `/augment` refines it. Write one on every card.
 
 5. Check the result:
 

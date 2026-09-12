@@ -312,6 +312,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source", default=None, help="citation text (defaults to the unit's)")
     p.add_argument("--type", default="identity")
     p.add_argument("--tag", action="append", default=[])
+    p.add_argument(
+        "--gist",
+        default="",
+        help="a few words naming the card, for a list or a graph node where the "
+        "LaTeX front is unreadable. Never reaches Anki, and unhashed, so a later "
+        "pass may improve the wording without un-approving anything.",
+    )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_new)
 
@@ -1103,6 +1110,7 @@ def cmd_new(args: argparse.Namespace, config: Config) -> int:
         unit=", ".join(unit_ids),
         card_type=args.type,
         tags=list(args.tag),
+        gist=args.gist,
     )
     # Filed under the source it came from. This is filing only: `unit:` stays
     # the one place a card's source is recorded, because a directory and a

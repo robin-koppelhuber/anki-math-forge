@@ -447,6 +447,7 @@ def test_one_card_can_be_built_from_several_units(tmp_path: Path, config: Config
         type="identity",
         tag=[],
         source="",
+        gist="",
         json=False,
     )
     assert cli.cmd_new(args, config) == cli.OK
