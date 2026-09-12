@@ -22,7 +22,9 @@ out of habit.
 ## 1. The dependency canvas, per source
 
 The substantial one, and the only thing here that is a feature rather than a
-repair.
+repair. **[graph-canvas.md](graph-canvas.md) is the design to build from**:
+the seam, the layout, the file on disk, and what v1 deliberately stops short
+of.
 
 `requires` decides the order new cards are introduced in, and the review view
 shows it one card at a time: what this card needs, what needs it, where it
