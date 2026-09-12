@@ -106,9 +106,12 @@ Most of this shipped. What has not:
 - **Rename the repository.** The README badge points at
   `robin-koppelhuber/anki-math-forge`; the remote is `robin-koppelhuber/Anki`.
   The badge is broken until they agree.
-- **The demo recording.** `assets/README.md` has the shot list. Not scriptable:
-  the interesting part is the pace of triage and no script knows how long to
-  pause.
+- **The demo recording.** `assets/make_assets.py` carries the shot list in its
+  docstring. Not scriptable: the interesting part is the pace of triage and no
+  script knows how long to pause.
+- **The marked-up screenshot.** `make_assets.py` will take it as soon as one
+  Zotero source tags itself `demo`, and refuses until then, because that shot
+  is a legible page of whatever you were reading.
 - **The Cookbook's licence.** Its front matter states none at all: a
   disclaimer, an errata address, acknowledgements, nothing granting
   redistribution or derivative rights. Freely downloadable is not licensed, and

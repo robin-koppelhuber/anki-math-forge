@@ -2185,7 +2185,6 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   cursor: pointer;
 }
 .note-add:hover { color: var(--ink); border-color: var(--accent); }
-.note-empty { font-size: 12px; line-height: 1.45; margin: 0; }
 .note-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }
 .note-list li {
   display: flex;

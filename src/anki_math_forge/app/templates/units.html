@@ -149,8 +149,14 @@
       {% set for_claude = unit.annotations | selectattr('audience', 'ne', 'me') | list %}
       {% set for_me = unit.annotations | selectattr('audience', 'eq', 'me') | list %}
       <section class="notes-pane">
+        {# The explanation is on hover, not on screen. It is four lines long
+           and it is only ever read once, so on a unit with no notes -- which
+           is most of them -- it was the tallest thing in the panel, above the
+           marks that are the actual reason to look here. An empty section is
+           its heading and its `add` button, which is all the affordance a
+           place to write needs. #}
         <details class="note-section" open>
-        <summary><h3>the brief for whoever writes the card
+        <summary title="Read by /extract-cards before it writes — &#34;two cards, one per convention&#34;, &#34;the transcription is wrong, read the crop&#34;, &#34;merge with the one above&#34;. It is the only instruction that pass gets."><h3>the brief for whoever writes the card
           <span class="at">@claude</span>
           <button type="button" class="note-add" data-annotate="claude">add</button></h3></summary>
         {% if for_claude %}
@@ -162,16 +168,11 @@
           </li>
           {% endfor %}
         </ul>
-        {% else %}
-        <p class="muted note-empty">Nothing yet. Anything here is read by
-          <code>/extract-cards</code> before it writes — "two cards, one per
-          convention", "the transcription is wrong, read the crop", "merge with
-          the one above". It is the only instruction that pass gets.</p>
         {% endif %}
         </details>
 
         <details class="note-section" open>
-        <summary><h3>parked for a decision <span class="at me">@me</span>
+        <summary title="A decision that cannot be taken yet. Answering one leaves the question and the answer behind, so the reasoning survives."><h3>parked for a decision <span class="at me">@me</span>
           <button type="button" class="note-add" data-annotate="me">add</button></h3></summary>
         {% if for_me %}
         <ul class="note-list mine">
@@ -190,10 +191,6 @@
           </li>
           {% endfor %}
         </ul>
-        {% else %}
-        <p class="muted note-empty">Nothing parked. <code>@me</code> holds a
-          decision that cannot be taken yet — answering one leaves the question
-          and the answer behind, so the reasoning survives.</p>
         {% endif %}
         </details>
       </section>

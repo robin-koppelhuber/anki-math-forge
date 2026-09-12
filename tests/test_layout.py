@@ -542,7 +542,9 @@ def test_answering_is_offered_only_for_what_you_parked() -> None:
     The brief gets a delete and nothing else."""
     units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
     at = units.index("note-list mine")
-    mine = units[at : units.index("note-empty", at)]
+    # The panel ends where the section does. This used to anchor on the empty
+    # state's own class, which vanished when that explainer moved to a hover.
+    mine = units[at : units.index("</section>", at)]
     claude = units[units.index('note-list"') : at]
     assert 'data-answer="yes"' in mine and 'data-answer="no"' in mine
     assert 'data-answer="yes"' not in claude
