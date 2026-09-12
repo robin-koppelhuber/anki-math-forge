@@ -94,10 +94,14 @@
         {# Two lines above answer "what does this one card rest on". The shape
            of the whole thing -- which results everything sits on, whether a
            chapter recorded any dependencies at all -- is not a question about
-           one card. Offered only where the source has an edge somewhere. #}
-        {% if graph_href is defined and graph_href and (card.requires or card.required_by) %}
+           one card, and the canvas is also where an arrow gets drawn. So it is
+           offered on every card of a source with more than one, not only on
+           the ones that already have a dependency: those are the cards you are
+           looking at when you notice a missing one. #}
+        {% if graph_href is defined and graph_href %}
         <p class="dep"><a class="to-graph" href="{{ graph_href }}"
-           title="every card in this source that needs another one, on one canvas">see the whole graph &rarr;</a></p>
+           title="every card in this source that needs another one, on one canvas. Drag between two boxes to add one.">{%
+           if graph_empty %}draw the dependencies{% else %}see the whole graph{% endif %} &rarr;</a></p>
         {% endif %}
       </div>
 

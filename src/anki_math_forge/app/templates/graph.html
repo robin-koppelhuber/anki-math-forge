@@ -6,6 +6,16 @@
    is about what is drawn, the header is where the source picker already lives,
    and a floating panel would cover the part of the picture it describes. #}
 {% block filters %}
+{# The one view link in the app.
+
+   The header deliberately carries none: the left rail holds both lanes as
+   counts you can click, which says where the work is as well as where to go,
+   and two bare words never did. That reasoning does not reach this page --
+   there is no rail here -- and without this the graph view linked to nothing
+   at all, so an empty canvas was a dead end. In the header rather than among
+   the key hints, because this is navigation and that row is a legend. #}
+<a class="back-link" href="/review?source={{ source | urlencode }}&amp;status=all"
+   title="back to the cards themselves">&larr; review</a>
 <button type="button" class="chip" id="graph-all"
         title="draw every card, including the ones nothing needs and that need nothing (a)">every card</button>
 <button type="button" class="chip" id="graph-add"
@@ -54,7 +64,7 @@
 <span><b>click</b> a box opens the card · an arrow selects it</span>
 <span><b>del</b> removes the selected arrow</span>
 <span><b>n</b> add a card · <b>x</b> takes one off</span>
-<span><b>z</b> undo · <b>a</b> every card · <b>0</b> recentre</span>
+<span><b>z</b> undo · <b>a</b> every card · <b>0</b> recentre · <b>g</b> sources</span>
 {# An arrow is a `requires` line in a card file, written by dragging. Saying so
    is the difference between a canvas that edits a picture and one that edits
    the deck. #}

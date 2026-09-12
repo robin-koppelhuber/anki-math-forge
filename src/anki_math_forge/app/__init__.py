@@ -382,12 +382,19 @@ def create_app(config: Config) -> FastAPI:
         for uid, place in places.items():
             place["requires"] = [link(n) for n in by_uid_card[uid].requires]
         # The way into the canvas, and the only one: the header carries no view
-        # links, and the moment you want the whole graph is while looking at a
-        # card that has dependencies. A source where nothing needs anything
-        # never offers it, so nothing points at an empty picture.
-        linked = config.graph and any(
-            p["required_by"] or p["requires"] for p in places.values()
-        )
+        # links, and this is the view you are on when the question comes up.
+        #
+        # It was offered only on a card that already had a dependency, in a
+        # source that already had one, so that nothing pointed at an empty
+        # picture. That was right while the canvas could only be read. Now that
+        # an arrow is *drawn* there, a source with no arrows is exactly when
+        # you want it, and the old rule made the canvas unreachable from 90 of
+        # this deck's 108 cards and from a new source altogether. Two cards is
+        # the real floor: one card cannot depend on anything.
+        linked = config.graph and len(in_source) > 1
+        # Which way round to word it. "See the whole graph" promises something
+        # to look at, and a source that has recorded no dependencies has none.
+        any_edges = any(p["required_by"] or p["requires"] for p in places.values())
 
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         filters = {
@@ -432,6 +439,7 @@ def create_app(config: Config) -> FastAPI:
                 ),
                 "counts_scope": counts_scope,
                 "graph_href": filter_url("/graph", {}, source=name) if linked else "",
+                "graph_empty": not any_edges,
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
                     if counts_scope == "filtered"

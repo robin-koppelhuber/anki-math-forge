@@ -44,14 +44,23 @@
       <div class="at-a-glance">
         {% include "_fsm_mini.html" %}
 
-        {# The order Anki introduces new cards in. A picture would be a poor
-           one: nine dependency edges across a hundred cards is a near-empty
-           graph, and the rule is four keys long. #}
+        {# The order Anki introduces new cards in, stated rather than drawn:
+           the rule is four keys long and a picture of four keys is worse than
+           the four keys. The *graph* the last one makes is a picture worth
+           having, and it has its own view. #}
         <p class="order-key" title="what decides which new card you meet next">
           <b>study order</b>
           <span>frequency</span><span>derivation</span><span>source order</span>
           <em>requires wins</em>
         </p>
+        {% if graph_href is defined and graph_href %}
+        <p class="order-note">
+          <code>requires</code> outranks the other three, and it is the only
+          one that is a shape rather than a value.
+          <a class="to-graph" href="{{ graph_href }}">see it on a canvas
+            &rarr;</a>
+        </p>
+        {% endif %}
       </div>
 
     {# The source itself, before any of the counting. Which layout a card

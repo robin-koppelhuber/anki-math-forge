@@ -996,8 +996,14 @@ document.addEventListener("click", async (event) => {
 const COUNT_POLL_MS = 4000;
 
 (function followTheFiles() {
-  const rail = document.getElementById("filter-rail");
-  if (!rail) return;
+  /* On every view, including the ones with no rail to paint. `paintCounts` and
+     `paintFsm` are already no-ops when their elements are absent, so the only
+     thing the old `#filter-rail` guard bought was silence on the graph view --
+     which is the view most in need of both warnings below. It is the newest
+     code in the app, so it is the likeliest to be running against a server
+     that predates it, and a canvas cannot show a half-rendered panel the way
+     a page of markup can: a drag would simply 404 with `error 404` in a
+     toast. */
   let baseline = null;
 
   async function tick() {

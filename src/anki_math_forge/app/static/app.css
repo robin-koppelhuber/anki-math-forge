@@ -2329,7 +2329,17 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 
 /* The card picker: which card to put on the canvas. Narrower than the source
    gallery, because a row is one line of text rather than a tile with counts. */
-.gallery.adder { max-width: 44rem; }
+.gallery.adder {
+  max-width: 44rem;
+  /* The source gallery is deliberately the window: choosing what to work on
+     next is its own task. This is a list of one-line rows answering one
+     question, so it takes the room it needs and stops. */
+  height: auto;
+  max-height: min(80vh, 44rem);
+  display: flex;
+  flex-direction: column;
+}
+.gallery.adder .add-list { flex: 1; min-height: 0; }
 
 .add-list {
   overflow-y: auto;
@@ -2363,3 +2373,25 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   font-size: 11px;
   white-space: nowrap;
 }
+
+/* `requires` is the one study-order key that is a shape rather than a value,
+   and the canvas is where the shape is. */
+.order-note {
+  margin: 0.4rem 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.order-note a { display: inline-block; margin-top: 0.15rem; }
+
+/* The graph view's way back. The header carries no view links anywhere else,
+   because the filter rail carries both lanes as counts you can click; this
+   view has no rail, so it is the one page where a bare word is the whole
+   navigation. */
+.back-link {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.back-link:hover { color: var(--ink); }

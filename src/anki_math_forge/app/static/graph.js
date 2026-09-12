@@ -462,10 +462,15 @@ function describe() {
 
   note.hidden = data.nodes.length > 0;
   if (data.nodes.length) return;
+  /* The empty state has to name the way out of it, and the way out is now on
+     this page: add two cards and drag between their dots. It used to say
+     "add `requires: [<uid>]` to a card", which was the only way when nothing
+     here could write one. */
   note.textContent = data.total
     ? `No card in ${data.source} needs another one yet. ` +
-      "Add `requires: [<uid>]` to a card, or press a to see every card."
-    : `No cards in ${data.source} yet.`;
+      "Press n to put a card on the canvas, then drag from a dot on its edge " +
+      "to another card to say which comes first."
+    : `No cards in ${data.source} yet. Card some units first.`;
 }
 
 async function load({ recentre: centre = true } = {}) {
@@ -824,6 +829,12 @@ bindKeys({
   z: undo,
   Delete: () => disconnect(selected),
   Backspace: () => disconnect(selected),
+  /* The one shared key this view can honour. `f` and `?` toggle the filter
+     rail and the guide, and this view has neither; `g` opens the source
+     picker, whose button is in the header here like everywhere else, and
+     leaving it unbound made the same button answer to the mouse on three
+     views and to the keyboard on two. */
+  g: openGallery,
 });
 
 load();

@@ -611,14 +611,40 @@ def test_the_page_carries_every_element_the_canvas_reaches_for(config: Config) -
         assert f'id="{element}"' in body, f"graph.js reaches for #{element}"
 
 
-def test_the_review_view_offers_the_canvas_only_where_there_is_one(
+def test_the_review_view_offers_the_canvas_wherever_it_could_be_used(
     config: Config,
 ) -> None:
-    """A source where nothing needs anything never shows the link, so nothing
-    points at an empty picture."""
+    """Offered from any card of a source with more than one, not only from a
+    card that already has a dependency.
+
+    It used to need an existing edge, so that nothing pointed at an empty
+    picture. That was right while the canvas could only be read. An arrow is
+    drawn there now, so a source with no arrows is exactly when you want it --
+    and under the old rule the canvas was unreachable from 90 of this deck's
+    108 cards, and from a new source altogether.
+
+    One card still offers nothing, because one card cannot depend on anything.
+    """
     write(config, "aaa111")
     client = TestClient(create_app(config))
     assert "to-graph" not in client.get("/review?status=all").text
 
-    write(config, "bbb222", requires=["aaa111"])
-    assert "to-graph" in client.get("/review?status=all").text
+    write(config, "bbb222")
+    body = client.get("/review?status=all").text
+    assert "to-graph" in body, "two cards and no edges is the case that changed"
+    assert "draw the dependencies" in body, "nothing to see yet, so do not promise it"
+
+    model.load(write(config, "ccc333").path).save()  # type: ignore[union-attr]
+    card = model.load(write(config, "ddd444").path)  # type: ignore[arg-type]
+    card.frontmatter["requires"] = ["ccc333"]
+    card.save()
+    assert "see the whole graph" in client.get("/review?status=all").text
+
+
+def test_there_is_a_way_off_the_canvas(config: Config) -> None:
+    """The app puts navigation in the filter rail, and the graph view has no
+    rail: measured on the real deck, the page carried no link to anywhere at
+    all. With an empty canvas that is a dead end, since the only other way out
+    is clicking a box."""
+    body = two(config).get("/graph?source=demo").text
+    assert "/review?source=demo" in body
