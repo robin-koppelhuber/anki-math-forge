@@ -34,7 +34,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from .. import check, latex, model
-from ..config import Config
+from ..config import DEFAULT_MEANINGS, Config
 from ..ledger import Ledger, Unit, open_ledgers
 from ..model import Card, StaleFileError
 from ..sync import in_study_order, source_positions
@@ -143,6 +143,7 @@ def create_app(config: Config) -> FastAPI:
         source: str = "",
         state: str = "new",
         section: str = "",
+        chapter: str = "",
         transcribed: bool = False,
         readable: bool = False,  # the old name for the same filter; kept for links
         suggested: bool = False,
@@ -174,6 +175,17 @@ def create_app(config: Config) -> FastAPI:
         # population, minus the section filter itself.
         unsectioned = ledger.select(state=state or "all", section=None)
         units = ledger.select(state=state or "all", section=section or None)
+        # A chapter is a *range* of sections, not one of them, so it cannot go
+        # through `select`: it is derived from the name rather than stored.
+        # Folding a chapter open was the only thing its heading did, which is
+        # not filtering by it -- and on a book with eight sections per chapter
+        # "everything in chapter 2" was eight separate clicks and no way to see
+        # them together.
+        if chapter:
+            units = [u for u in units if _chapter_of(u.locator.section) == chapter]
+            unsectioned = [
+                u for u in unsectioned if _chapter_of(u.locator.section) == chapter
+            ]
         if suggested:
             unsectioned = [u for u in unsectioned if u.suggestion is not None]
         if annotated:
@@ -209,6 +221,7 @@ def create_app(config: Config) -> FastAPI:
             "source": name,
             "state": state,
             "section": section,
+            "chapter": chapter,
             "annotated": annotated,
             "suggested": suggested,
             "transcribed": transcribed,
@@ -282,6 +295,7 @@ def create_app(config: Config) -> FastAPI:
         source: str = "",
         annotated: str = "",
         section: str = "",
+        chapter: str = "",
         counts_scope: str = "",
     ) -> Any:
         name = resolve_source(config, source)
@@ -308,6 +322,10 @@ def create_app(config: Config) -> FastAPI:
         cards = in_source
         if section:
             cards = [c for c in cards if c.section_name == section]
+        if chapter:
+            # Same as the units view: a chapter is a range of sections, derived
+            # from the name rather than stored, so it filters here.
+            cards = [c for c in cards if _chapter_of(c.section_name) == chapter]
         if annotated:
             cards = [c for c in cards if has_annotation(c.annotations(), annotated)]
         # Everything the other filters leave, ignoring the section: what each
@@ -355,6 +373,7 @@ def create_app(config: Config) -> FastAPI:
             "source": name,
             "status": status,
             "section": section,
+            "chapter": chapter,
             "annotated": annotated,
             "counts_scope": counts_scope,
         }
@@ -1769,6 +1788,29 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
                 "units from",
                 ", ".join(sorted(scheme.units_from)),
                 origin if spec.units_from else inherited,
+            )
+        # The whole colour scheme, **here** rather than in the rail. The rail
+        # is 240px and shows only the marks that become units, because a
+        # meaning is an arbitrary sentence and a source may declare forty of
+        # them. This panel is a full-width dialog and is where you come to ask
+        # what something resolves to, so the complete mapping belongs in it --
+        # including the entries nothing in this source is marked with, which
+        # the rail cannot show at all.
+        for key in sorted({*scheme.meanings, *DEFAULT_MEANINGS}):
+            kind, _, colour = key.partition("/")
+            meaning = scheme.means(kind, colour)
+            if not meaning:
+                continue
+            declared = key in scheme.meanings
+            add(
+                where,
+                f"means [{key}]",
+                meaning + (" · becomes a unit" if scheme.makes_a_unit(kind, colour) else ""),
+                origin
+                if declared and key in (spec.meanings or {})
+                else "forge.toml"
+                if declared
+                else "Zotero's own reading of the annotation kind",
             )
     return rows
 

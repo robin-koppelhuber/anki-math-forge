@@ -28,6 +28,7 @@
        view and back. Only the shared filters travel across that jump: a
        section means the same thing on both sides, a `state` does not. #}
     {% set shared = {'source': src, 'section': f.get('section', ''),
+                     'chapter': f.get('chapter', ''),
                      'annotated': f.get('annotated', ''),
                      'counts_scope': f.get('counts_scope', '')} %}
     <details class="filter-group" open>
@@ -187,9 +188,9 @@
     {% if section_tree %}
     <details class="filter-group" open>
       <summary>sections</summary>
-      {% if section %}
-      <p class="filter-clear"><a href="{{ filter_url(here, f, section=none) }}"
-           title="stop filtering by section; decisions are not affected">&larr; all sections</a></p>
+      {% if section or f.get('chapter') %}
+      <p class="filter-clear"><a href="{{ filter_url(here, f, section=none, chapter=none) }}"
+           title="stop filtering by section or chapter; decisions are not affected">&larr; all sections</a></p>
       {% endif %}
       {# One line, the states in pipeline order, so the bars below read
          without a lookup. Only the lane this view edits: a units page has no
@@ -214,14 +215,23 @@
          `<details>` labelled "PDF". #}
       {% for group in section_tree %}
       {% if group.chapter %}
-      <details class="filter-chapter" {{ 'open' if section and section_chapter(section) == group.chapter }}>
-        <summary>{{ group.chapter }}<span class="filter-tally">{{ group.matching }}/{{ group.total }}</span></summary>
+      {# The heading folds; the number beside it *filters*. They were the same
+         click, so the only thing a chapter could do was open -- and on a book
+         with eight sections in a chapter, "everything in chapter 2" was eight
+         separate views and no way to see them together. #}
+      {% set chapter_on = f.get('chapter') == group.chapter %}
+      <details class="filter-chapter"
+               {{ 'open' if chapter_on or (section and section_chapter(section) == group.chapter) }}>
+        <summary>{{ group.chapter }}<a class="chapter-pick {{ 'on' if chapter_on }}"
+             title="{{ 'showing only chapter ' ~ group.chapter ~ ' — click to clear' if chapter_on else 'show every section in chapter ' ~ group.chapter }}"
+             href="{{ filter_url(here, f, chapter=(none if chapter_on else group.chapter), section=none) }}"
+             >{{ group.matching }}/{{ group.total }}</a></summary>
       {% endif %}
         <ul class="filter-list sections">
           {% for row in group.sections %}
           <li><a class="{{ 'on' if section == row.name }}{{ ' out' if not row.name }}"
                  title="{{ row.label }} — {{ row.matching }} of {{ row.total }} match the current filters&#10;{% for state, n in row.states.items() %}{{ n }} {{ state }}&#10;{% endfor %}"
-                 href="{{ filter_url(here, f, section=(none if section == row.name else row.name)) }}">
+                 href="{{ filter_url(here, f, section=(none if section == row.name else row.name), chapter=none) }}">
             <span class="sec-name">{% if section == row.name %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}{{ '§' if row.name[:1].isdigit() }}{{ row.label }}</span>
             <span class="sec-bar" aria-hidden="true">
               {%- for part in row.bar -%}

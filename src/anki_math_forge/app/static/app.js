@@ -884,6 +884,30 @@ async function repaintCounts(pipeline) {
   }
 }
 
+/* A control inside a heading acts; it does not also fold the heading.
+
+   `<summary>` toggles its `<details>` on any click inside it, so the `add`
+   button on a notes section opened the prompt *and* collapsed the section it
+   was adding to, and the chapter tally -- which is a filter link -- would have
+   navigated away while folding on the way out. Anything genuinely interactive
+   in there keeps its own behaviour and suppresses the toggle; a click on the
+   heading text still folds, which is what makes the heading a heading. */
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("summary")) return;
+  const link = event.target.closest("a[href]");
+  if (link) {
+    // Folding and following are both the *default action* of this one click,
+    // so `preventDefault` cancels both. Suppress it and navigate by hand --
+    // except on a modified click, where the browser is opening a tab and the
+    // fold behind it does not matter.
+    if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+    event.preventDefault();
+    window.location.href = link.href;
+    return;
+  }
+  if (event.target.closest("button")) event.preventDefault();
+});
+
 /* Copy a suggested command. Nothing is launched from here on purpose: you
    paste it where you can watch it, which is the whole difference between a
    command you ran and one that ran itself. */

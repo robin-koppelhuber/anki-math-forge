@@ -550,3 +550,34 @@ def test_the_rail_speaks_about_the_work_not_to_the_reader() -> None:
     states of the work."""
     for banned in ("needs you", "you decide", "yours to decide", "your judgement"):
         assert banned not in FILTERS, f"{banned!r} is still in the rail"
+
+
+def test_a_control_in_a_heading_acts_without_folding_it() -> None:
+    """`<summary>` toggles its `<details>` on any click inside it, so the `add`
+    button on a notes section opened the prompt *and* collapsed the section it
+    was adding to, and the chapter tally -- a filter link -- would navigate
+    away while folding on the way out.
+
+    A link needs both halves separated by hand: folding and following are the
+    same click's default action, so `preventDefault` alone would cancel the
+    navigation too."""
+    block = JS[JS.index("A control inside a heading acts") :][:1200]
+    assert 'closest("a[href]")' in block
+    assert "window.location.href" in block, "suppress the fold, follow by hand"
+    assert "event.metaKey" in block, "and leave a modified click to the browser"
+
+
+def test_the_neighbour_chips_do_not_shout() -> None:
+    """Green is the app's "you decided this" colour and it is already doing
+    that job on the rail's grid, where a selection changes which units you
+    meet. These chips change nothing on disk and nothing about the queue --
+    they are a reading aid for the list beside them -- and six green rectangles
+    beside a crop full of colours was the loudest thing on the panel for the
+    least important reason.
+
+    Equal padding all round, because a chip is a swatch *and* a count and the
+    padding has to sit outside both or the box reads as lopsided."""
+    on = rule(".mf-chip.on")
+    assert "var(--line)" in on and "--accent" not in on
+    padding = re.search(r"padding:\s*([^;]+);", rule(".mf-chip, .mf-all")).group(1)
+    assert len(padding.split()) == 1, f"padding {padding!r} is not equal on all sides"

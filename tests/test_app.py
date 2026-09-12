@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from anki_math_forge import extract, model
-from anki_math_forge.app import create_app
+from anki_math_forge.app import _chapter_of, create_app
 from anki_math_forge.config import Config
 from anki_math_forge.ledger import Ledger
 
@@ -1903,3 +1903,39 @@ def test_the_dependency_list_survives_a_stale_server(config: Config, card_path: 
 
     fresh = template.render(deps=[{"uid": "5658ad", "known": True, "href": "/review#5658ad"}])
     assert 'data-goto="5658ad"' in fresh and "/review#5658ad" in fresh
+
+
+def test_a_chapter_can_be_filtered_by_not_only_folded(
+    pdf_client: TestClient, pdf_units: Config
+) -> None:
+    """Its heading was a fold and nothing else, so the only thing a chapter
+    could do was open. On a book with eight sections in a chapter, "everything
+    in chapter 2" was eight separate views and no way to see them together.
+
+    A chapter is a *range* of sections derived from the name, so it cannot go
+    through `Ledger.select` -- it filters in the view, on both sides."""
+    def shown(query: str) -> int:
+        return pdf_client.get(f"/units?state=all{query}").text.count('class="unit item"')
+
+    whole = shown("")
+    assert whole, "the fixture has units to filter"
+    # Every unit is in the chapter of its own section, so the chapters
+    # partition the deck: that is the property, whatever this fixture's
+    # sections happen to be.
+    chapters = {
+        _chapter_of(u.locator.section)
+        for u in Ledger.load(pdf_units.units_path("book"))
+    }
+    assert sum(shown(f"&chapter={c}") for c in chapters) == whole
+    assert shown("&chapter=nosuchchapter") == 0, "and it really filters"
+
+
+def test_picking_a_section_clears_the_chapter(pdf_client: TestClient) -> None:
+    """They are the same question at two resolutions. Intersecting them can
+    only ever narrow to what the section already was, and leaving a stale
+    chapter behind makes the next section click land on an empty deck."""
+    body = pdf_client.get("/units?state=all&chapter=2").text
+    rail = body[body.index("<summary>sections</summary>") : body.index("</aside>")]
+    links = re.findall(r'href="(/units\?[^"]*section=2\.4[^"]*)"', rail)
+    assert links, "the section rows are still there while a chapter is active"
+    assert all("chapter=" not in href for href in links)

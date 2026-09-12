@@ -391,16 +391,6 @@ function offerToExpand(root = document) {
 
 offerToExpand();
 
-/* Folding a note section must not also mean writing a note. The heading sits
-   in a `<summary>`, so a click anywhere in it toggles -- including on the
-   `add` button, which would open the prompt and collapse the section it was
-   adding to. */
-document.addEventListener("click", (event) => {
-  if (event.target.closest("summary") && event.target.closest("[data-annotate]")) {
-    event.preventDefault();
-  }
-});
-
 /* Three ways to look at the same geometry, cycled with `p`.
 
    crop     -- the box and a margin. Is this the right region?
@@ -613,9 +603,3 @@ bindKeys({
   ArrowDown: () => deck.nextPending(),
   ArrowUp: () => deck.prev(),
 });
-
-
-
-
-
-

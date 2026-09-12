@@ -607,6 +607,25 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 .filter-chapter > summary:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); }
 
 .filter-tally { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+/* The tally beside a chapter heading is a filter, not a caption: it shows
+   every section in that chapter at once. The heading itself still folds, so
+   the two things a chapter can do are one click apart rather than the same
+   click doing only one of them. */
+.chapter-pick {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0 0.25rem;
+}
+.chapter-pick:hover { border-color: var(--line); color: var(--ink); }
+.chapter-pick.on {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
 
 .filter-list { list-style: none; margin: 0.1rem 0 0.4rem; padding: 0 0 0 0.5rem; }
 .filter-list a {
@@ -1921,33 +1940,42 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   color: var(--muted);
   margin-right: 0.2rem;
 }
+/* Equal padding all round, and the count inside the box rather than crowding
+   its right edge: a chip is a swatch and a number, so the padding has to sit
+   outside *both* or the box reads as lopsided.
+
+   The selected outline is light grey, not the accent. Green is the app's
+   "you decided this" colour and it is already doing that job on the rail's
+   grid, where a selection changes which units you meet. These chips change
+   nothing on disk and nothing about the queue -- they are a reading aid for
+   the list beside them -- and six green rectangles beside a crop full of
+   colours was the loudest thing on the panel for the least important reason.
+*/
 .mf-chip, .mf-all {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: 0.22rem;
   font: inherit;
   font-size: 10px;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   color: var(--muted);
   background: none;
   border: 1px solid transparent;
   border-radius: 3px;
-  padding: 0.05rem 0.25rem;
+  padding: 0.22rem;
   cursor: pointer;
 }
 .mf-chip:hover, .mf-all:hover { border-color: var(--line); color: var(--ink); }
-.mf-chip .swatch { margin: 0; }
-/* Off, not gone -- and the same rule as the rail's grid: **saturation and
-   border, never the hue**. `grayscale(1)` made every hidden colour the same
-   grey square, so turning one back on meant guessing which of five identical
-   boxes was purple. The colour is the only thing identifying the control. */
-.mf-chip:not(.on) {
-  border-color: color-mix(in srgb, var(--line) 55%, transparent);
-  color: color-mix(in srgb, var(--muted) 70%, transparent);
-}
-.mf-chip:not(.on) .swatch { filter: saturate(0.45); opacity: 0.7; }
+.mf-chip .swatch { margin: 0; flex: none; }
+/* Off, not gone -- and the same rule as the rail's grid: **saturation, never
+   the hue**. `grayscale(1)` made every hidden colour the same grey square, so
+   turning one back on meant guessing which of five identical boxes was
+   purple. The colour is the only thing identifying the control. */
+.mf-chip:not(.on) { color: color-mix(in srgb, var(--muted) 70%, transparent); }
+.mf-chip:not(.on) .swatch { filter: saturate(0.4); opacity: 0.65; }
 .mf-chip:hover .swatch { filter: none; opacity: 1; }
-.mf-chip.on { border-color: var(--accent); color: var(--ink); }
+.mf-chip.on { border-color: var(--line); color: var(--ink); }
 .mf-chip.on .swatch { filter: none; opacity: 1; }
 .mf-all { text-transform: uppercase; letter-spacing: 0.04em; }
 /* A group with every row filtered out. Kept visible and dimmed, because
