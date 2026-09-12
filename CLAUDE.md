@@ -108,9 +108,10 @@ read from, not the human output.
 ## Frozen
 
 `src/anki_math_forge/extract/pdf.py` is frozen
-([ROADMAP](docs/ROADMAP.md) §13). It works and it is verified, but it is a
-heuristic specialised to one book, so it is one selectable backend rather than
-the default.
+([ROADMAP](docs/ROADMAP.md) §9). It works, it is verified, and it is the only
+PDF segmenter there is. It is frozen because every heuristic in it is
+specialised to one book, so extending it means teaching that book's habits to
+the next one.
 
 Do not extend it and do not fix its heuristics. When a shared type changes
 under it, give it a shim rather than editing it. `extract/render.py` (crops) is

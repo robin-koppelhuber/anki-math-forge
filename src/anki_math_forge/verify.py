@@ -153,6 +153,11 @@ def verify_card(card: Card, *, trials: int = TRIALS, seed: int = 0) -> VerifyRes
 
         if "lhs" not in env or "rhs" not in env:
             return VerifyResult(card.uid, ERROR, "snippet must set both `lhs` and `rhs`")
+        # Real only, and that is a real limit rather than an oversight: an
+        # identity over the complex numbers cannot be expressed here at all,
+        # because the cast drops the imaginary part rather than refusing it.
+        # Nothing in the deck needs one yet. When something does, this is the
+        # line, and `grad()` above casts the same way.
         lhs = np.asarray(env["lhs"], dtype=float)
         rhs = np.asarray(env["rhs"], dtype=float)
         if lhs.shape != rhs.shape:

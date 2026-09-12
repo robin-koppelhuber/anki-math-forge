@@ -1,4 +1,4 @@
-"""Segment a PDF into units by heuristic. **Frozen -- see ROADMAP.md §13.**
+"""Segment a PDF into units by heuristic. **Frozen -- see ROADMAP.md §9.**
 
 This works, and it is verified: 571/571 numbered equations on The Matrix
 Cookbook, 98.8% of them in a crop holding exactly one equation. It is also a

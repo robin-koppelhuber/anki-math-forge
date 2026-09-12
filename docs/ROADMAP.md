@@ -12,7 +12,7 @@ Those sections are gone from this file. Git history has them.
 Two things about the shape of what remains. **The plan is now one item**, the
 dependency canvas, because the rest of the old plan was built or overtaken.
 And **the largest unbuilt section, the model page extractor, has been demoted
-to an idea**: §6 says why, and it is worth reading before anyone picks it up
+to an idea**: §5 says why, and it is worth reading before anyone picks it up
 out of habit.
 
 ---
@@ -89,43 +89,17 @@ next rather than to the audit: **a line ending in a trailing binary operator
 cannot be the end of an equation.** Every continuation line in §6.2 and
 §7.7–7.9 ends in `×` or `+`.
 
-## 3. `verify` cannot express a complex-valued identity
-
-`verify` casts to real (`np.asarray(..., dtype=float)`), so an identity over
-ℂ cannot be written at all. DESIGN.md §4.1 is where that first bites.
-
-This is the whole of what §14 used to be. The rest of that section counted how
-many cards opt in, which is **card-writing work and not tool work**: 46 of 108
-today, and the number moves when someone writes a `## verify` block, not when
-anyone changes the Python. Tracking it here made a backlog of card edits look
-like a feature that was missing.
-
-The one adjacent code gap: `grad()` walks the entries of a matrix and does not
-cover `d(scalar)/dx`. Two cards needed it and a three-line central difference
-in the snippet was cheaper than a second mode on the helper. Revisit if a third
-card needs it.
-
-**Measure coverage against `identity` cards only.** An `intuition` card has
-nothing to check numerically, so counting it in the denominator makes coverage
-look worse every time the deck gets better.
-
-## 4. Small and named
+## 3. Small and named
 
 - **The `§` prefix on every section label.** Cosmetic, except that it reaches a
   card's `Source` field in Anki.
-- **`locator.equation` is read directly in five places** instead of through
-  `ref`. Latent: the day something emits a `kind`/`label` pair with a number in
-  it, the contiguity oracle silently disarms.
 - **`front_char_cap` is not per-source.** 160 characters suits a formula
   reference and is tight for a statement from a paper.
 - **Nothing writes an `intuition` card yet.** The card-writing skill is about
   identities throughout. Teaching it the second kind is guidance, not code, and
   it belongs with the first prose source that has marks worth explaining.
-- **The "hand over the whole book" reasoning in `extract/__init__.py`** was
-  written about a 26k-token reference and now also applies to a 700-page
-  textbook.
 
-## 5. Publishing, what is left
+## 4. Publishing, what is left
 
 Most of this shipped. What has not:
 
@@ -152,13 +126,13 @@ cannot.
 
 # Ideas, not scheduled
 
-## 6. The model page extractor, and why it stopped being the plan
+## 5. The model page extractor, and why it stopped being the plan
 
 This was item 2 of three in the old plan, described as "the risky half" that
 everything else was buying time for. **The argument for it has been overtaken
 by what got built.**
 
-The case was: `extract/pdf.py` is a heuristic specialised to one book (§13
+The case was: `extract/pdf.py` is a heuristic specialised to one book (§9
 measures exactly how specialised), so a second source needs a general extractor
 that reads page images and reports `(kind, label, page, bbox)` per statement.
 
@@ -201,7 +175,7 @@ If it is built, the design still holds and is worth keeping:
 **Trigger:** a source you want to card that is neither the Cookbook nor
 marked up in Zotero.
 
-## 7. Figures, and everything that is not a text block
+## 6. Figures, and everything that is not a text block
 
 `page_blocks()` skips every block whose `type != 0`, so embedded rasters are
 invisible, and vector drawings (`page.get_drawings()`) are never consulted.
@@ -224,7 +198,7 @@ A cheap piece worth doing on its own if the fallback segmenter is ever touched:
 use fraction rules from the vector layer as a math signal in `score_line`,
 which would make it far less dependent on Computer Modern font names.
 
-## 8. The cross-check between two extractions
+## 7. The cross-check between two extractions
 
 Designed, not built. The principle that makes it legitimate: an LLM is not
 mechanical, but **agreement between two independent extractors is**, and the
@@ -243,7 +217,7 @@ but it is one extractor, so it reconciles nothing.
   transcription trades a detectable failure (a gap in the numbering) for an
   undetectable one (confident wrong LaTeX).
 
-**This needs §6 to exist.** A second extractor is the whole idea, and §13's
+**This needs §5 to exist.** A second extractor is the whole idea, and §9's
 frozen heuristic plus a model is the cheapest pair. Until then there is one
 extractor and nothing to reconcile.
 
@@ -259,9 +233,9 @@ meant to be outside every box, so a literal coverage check would scream on
 every page. What survives is "is every *named statement* inside a unit", which
 is weaker and closer to contiguity. It is still the only thing that could say
 whether a new extractor is better or merely differently wrong, so it belongs
-with §6 rather than before it.
+with §5 rather than before it.
 
-## 9. A "daily proof" challenge
+## 8. A "daily proof" challenge
 
 One theorem a day, presented as something to reconstruct rather than recall.
 
@@ -367,14 +341,16 @@ whole appendix as prose and skip it, or segment it by proof block rather than
 by rendered line. Either way, do not author cards from §12.1 as currently
 extracted.
 
-## 13. `extract/pdf.py` is frozen, not deleted
+## 9. `extract/pdf.py` is frozen, not deleted
 
-A frozen alternate backend, selectable per source. The general extractor (§6)
-should not be the only thing that can read a PDF, and the seam is one function
-pinned by contract tests, so a second implementation behind it costs almost
-nothing to keep.
+It is the only PDF segmenter there is, and it is frozen anyway. Those two
+facts sit together because the reason to freeze it is not that something
+replaced it: it is that every heuristic in it is specialised to one book and
+documented as such, so extending it means teaching one book's habits to the
+next one. The seam is a single function pinned by contract tests, which is what
+keeps a second implementation cheap whenever there is a reason to write one.
 
-Why it is not the default: the ablation.
+How specialised, measured by ablation:
 
 | | equations found |
 |---|---|
@@ -451,43 +427,18 @@ same point across for an hour's work.
 
 **Docling** (and marker, MinerU). Measured on this book: 19.7 s/page against
 0.18, five regions where we find twenty on the packed page, and no LaTeX
-without a second model. Its real advantage is generality, and §6 gets that more
+without a second model. Its real advantage is generality, and §5 gets that more
 cheaply. It would earn its place on a **scanned** PDF with no text layer, which
-is also §7.
-
-**Refreshing transcriptions on re-extract.** `upsert` used to treat
-`tex_auto`/`transcription` as extraction output, so a single `forge extract`
-silently wiped every transcription in the ledger. They are work product now,
-like triage state: filled when empty, never overwritten. Two regression tests
-hold the line, and the Zotero sync follows the same rule.
-
-**Local math OCR** (pix2text). Transcription is `/transcribe`, a Claude Code
-skill reading crops, which keeps torch, CUDA, Intel XPU builds and a 4 GB
-dependency tree out of the project entirely.
-
-**Committing crops as PNGs.** 751 files, 7 MB, opaque diffs, stale after every
-re-extract. The ledger stores `locator.bbox` and crops render from the document
-on demand, about 150 ms over HTTP. A re-segmentation is now a diff you can
-read.
+is also §6.
 
 **Auto-generating units from free prose.** A prose unit must be triggered by a
 Zotero annotation. This removed a prose segmenter and the triage bottleneck
 several thousand paragraph-level candidates would have created, and it is what
-demoted §6.
-
-**Importing a Zotero mark straight to `queued`.** Marking says "this mattered
-while I was reading"; triage says "this is worth a card, on its own". Landing
-an import in `queued` answered the second question on the reader's behalf and
-removed the only gate before the card queue. Every unit arrives `new`,
-whichever door it came in by.
+demoted §5.
 
 **A placeholder `conventions.md`.** An empty one saying "nothing recorded yet"
 is indistinguishable from a real one to everything that reads it, and would
 silence the warning it should raise.
-
-**A repo-wide `[conventions]` default.** A convention is a fact about one book.
-Defaulting `layout` in `forge.toml` is how a statistics paper came to be told
-which matrix-derivative convention it writes. `[cards] layout` raises at load.
 
 **An htmx or SPA rewrite.** FastAPI plus Jinja2 is already the simple
 framework, and an auto-updating counts strip is about twenty lines of fetch and
