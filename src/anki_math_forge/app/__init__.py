@@ -19,6 +19,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -240,7 +241,7 @@ def create_app(config: Config) -> FastAPI:
                 "mark_matrix": mark_matrix(
                     ledger.select(state=state or "all", section=section or None), config, name
                 ),
-                "scheme": scheme_rows(everything, config, name),
+                "scheme": scheme_legend(scheme_rows(everything, config, name)),
                 "source_facts": source_facts(config, name, from_marks=from_marks),
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
@@ -366,7 +367,7 @@ def create_app(config: Config) -> FastAPI:
                 "section": section,
                 "filters": filters,
                 "commands": commands_for("review", filters, pipeline, from_marks=from_marks),
-                "scheme": scheme_rows(units_here, config, name),
+                "scheme": scheme_legend(scheme_rows(units_here, config, name)),
                 "source_facts": source_facts(config, name, from_marks=from_marks),
                 "section_tree": section_rows(
                     in_source,
@@ -414,9 +415,10 @@ def create_app(config: Config) -> FastAPI:
         name = resolve_source(config, source)
         whole = pipeline_counts(config, name)
         if counts_scope != "filtered":
-            return {"pipeline": whole, "fsm": whole}
+            return {"pipeline": whole, "fsm": whole, "stale": code_is_newer_than_this_process()}
         return {
             "pipeline": whole,
+            "stale": code_is_newer_than_this_process(),
             "fsm": scoped_counts(
                 config,
                 name,
@@ -740,6 +742,40 @@ def create_app(config: Config) -> FastAPI:
 
 # -- payloads --------------------------------------------------------------
 
+
+
+# When this process started. Compared against the Python on disk, because the
+# two halves of this app reload on completely different schedules and the
+# mismatch is silent.
+_STARTED_AT = time.time()
+
+
+def code_is_newer_than_this_process() -> bool:
+    """Has the Python changed since `forge serve` started?
+
+    Jinja re-reads a template on every request and Python is imported once, so
+    editing both and not restarting leaves a server rendering **new templates
+    against old code**. Every new template guarded by `{% if thing is defined %}`
+    then renders nothing, and every new endpoint 404s -- so a feature that
+    exists and works reads, on screen, as a feature that was never built.
+
+    That failure mode cost three bug reports in one afternoon, all of them
+    "this does not exist", and none of them visible from inside the app. Hence
+    the check: not a guess about what is wrong, just the one fact that settles
+    it -- a file on disk is newer than the interpreter holding it.
+
+    Cheap enough to run on the counts poll: ~30 files, stat only, and it stops
+    entirely once it has said yes.
+    """
+    package = Path(__file__).resolve().parent.parent
+    try:
+        return any(
+            path.stat().st_mtime > _STARTED_AT for path in package.rglob("*.py")
+        )
+    except OSError:
+        # A file vanishing mid-walk is an editor writing atomically, not an
+        # answer. Say no rather than crying stale on every save.
+        return False
 
 
 def filter_url(path: str, filters: dict[str, Any], **changes: Any) -> str:
@@ -1270,6 +1306,60 @@ def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str
     return rows
 
 
+def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The scheme grouped by what it *means*, for the information rail.
+
+    `scheme_rows` is the facts -- one entry per line of the config. This is how
+    they are read, and the two differ because the interesting structure is not
+    the keys, it is the meanings.
+
+    Zotero gives eight colours and six annotation kinds, so a source can reach
+    forty-eight combinations; the rail is 240px wide and the old legend spent
+    two lines on each one. But nobody has forty-eight *meanings*. `kind` beats
+    `colour` in the config's own lookup, so one `note = "..."` line already
+    covers every colour of sticky note -- and a legend that lists those
+    separately is repeating one sentence eight times and calling it detail.
+
+    Grouping by meaning collapses exactly that, and it collapses nothing real:
+    two keys that genuinely mean different things stay two rows. Where they do
+    land together, the swatches sit side by side on one line and the sentence
+    is written once. Seeing two colours share a meaning is also worth knowing
+    -- it is usually a scheme you have half-changed.
+
+    `makes_a_unit` and `declared` are ORed across the group deliberately. A
+    meaning that *any* of its marks turns into units is one you meet in the
+    queue, which is what the tag is telling you; and a group with one declared
+    key is not an undecided one, it is a decided one you have used twice.
+    """
+    groups: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        group = groups.setdefault(
+            str(row["meaning"]),
+            {
+                "meaning": row["meaning"],
+                # Not `keys`: Jinja resolves `row.keys` on a dict to the bound
+                # `dict.keys` method before it looks at the item, so the
+                # template iterated a builtin and 500ed.
+                "entries": [],
+                "count": 0,
+                "makes_a_unit": False,
+                "declared": False,
+            },
+        )
+        group["entries"].append(row)
+        group["count"] += int(row["count"])
+        group["makes_a_unit"] = group["makes_a_unit"] or bool(row["makes_a_unit"])
+        group["declared"] = group["declared"] or bool(row["declared"])
+    for group in groups.values():
+        group["entries"].sort(key=lambda r: (-int(r["count"]), str(r["key"])))
+    # What makes units first -- those are the rows you meet in the queue --
+    # then by how much of the document carries them.
+    return sorted(
+        groups.values(),
+        key=lambda g: (not g["makes_a_unit"], not g["declared"], -int(g["count"])),
+    )
+
+
 def source_origin(config: Config, source: str) -> str:
     """Where this source's material comes from: `zotero`, `pdf`, `tex`, or ``.
 
@@ -1667,6 +1757,7 @@ def _unit_payload(
             for index, note in enumerate(unit.notes)
         ],
         "id": unit.id,
+        "gist": unit.gist,
         "state": unit.state,
         "reason": unit.reason,
         "image": image,

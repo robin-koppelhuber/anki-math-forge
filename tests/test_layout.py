@@ -348,6 +348,68 @@ def test_a_marked_unit_is_not_asked_for_a_transcription() -> None:
     assert "marked while reading" in units
 
 
+def test_the_control_stays_on_the_picture_in_every_view() -> None:
+    """It did not: the document view set `.crop` to `position: static`, which
+    also stops it being a containing block, so the absolutely-positioned
+    crop/page/doc control escaped to the nearest positioned ancestor and left
+    the viewport. You could reach the document view and then had no way back.
+
+    And `.crop` must not carry a `position: relative` of its own -- an
+    identical selector later in the file wins over the `sticky` above, which
+    quietly un-stuck the crop that triage reads the marks against."""
+    assert "position: relative" in rule(".unit.whole-document .crop")
+    assert "position: static" not in rule(".unit.whole-document .crop")
+    # Anchored at the line start, so the nested and media-query forms do not
+    # count. There must be exactly one top-level `.crop` rule: a second one
+    # wins on order at equal specificity, however far away it was written.
+    bare = re.findall(r"(?m)^\.crop\s*\{([^}]*)\}", CSS)
+    assert len(bare) == 1, "a second `.crop` rule silently overrides the first"
+    assert "position: sticky" in bare[0]
+
+
+def test_the_app_says_when_its_own_code_is_stale() -> None:
+    """Jinja re-reads a template every request and Python is imported once, so
+    editing both and not restarting leaves new markup on old code: every new
+    panel renders empty and every new endpoint 404s. Three features were
+    reported as never built on one afternoon for exactly this reason, and
+    nothing in the app could say so."""
+    assert "code_is_newer_than_this_process" in (APP / "__init__.py").read_text(
+        encoding="utf-8"
+    )
+    assert "showStale" in JS and "stale-code" in JS
+    # No reload button: reloading fixes nothing here, and one that looked like
+    # it might would send you round the same loop.
+    start = JS.index("function showStale")
+    stale = JS[start : JS.index("function showReload", start)]
+    assert "location.reload" not in stale
+    assert "Restart" in stale
+
+
+def test_the_legend_groups_by_meaning_rather_than_by_key() -> None:
+    """Eight colours times six kinds is forty-eight combinations in a 240px
+    rail -- but nobody has forty-eight meanings, and `kind` beats `colour` in
+    the config's own lookup, so one `note = "..."` already covers every colour
+    of sticky note. Listing those separately prints one sentence eight times
+    and calls it detail."""
+    assert "scheme_legend" in (APP / "__init__.py").read_text(encoding="utf-8")
+    assert "scheme-swatches" in GUIDE, "every mark for a meaning on one line"
+    assert "scheme-undecided" in GUIDE, "the backlog folds away"
+    # Undecided rows are a backlog, not a legend: open by default they pushed
+    # the scheme you actually use off the bottom of the rail.
+    assert "rejectattr('declared')" in GUIDE
+
+
+def test_the_gist_is_labelled_as_a_reading(zotero_config: Config) -> None:
+    """A machine's guess presented as the answer is the one way this feature
+    could do harm. The label is load-bearing, not decoration."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    block = units[units.index('class="gist"') - 200 : units.index('class="gist"') + 500]
+    assert "reads as" in block, "not 'is about' -- it is somebody's reading"
+    assert "/gist" in block, "and it says who read it"
+    assert "decides nothing" in block, "and that nothing downstream acts on it"
+    assert "cursor: help" in rule(".gist-what")
+
+
 def test_a_grading_is_something_you_can_click() -> None:
     """Both decide the order Anki introduces new cards in, and the only way to
     set either used to be opening the file -- which is why so many cards carry

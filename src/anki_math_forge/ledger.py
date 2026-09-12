@@ -181,6 +181,19 @@ class Unit:
     tex_source: str | None = None
     transcription: str = "none"  # ok | failed | none
     context: str = ""
+    # One line saying what a card from this unit would be about: "Lemma 2",
+    # "why the bound needs independence", "interpretation of the mixture
+    # marginal". Written by `/gist`, which reads the crop and nothing much
+    # else.
+    #
+    # **It is a reading, not an instruction.** Nothing downstream consumes it:
+    # `/extract-cards` works from the crop, the page and the `@claude` brief,
+    # exactly as before. Keeping it out of that path is the whole safety
+    # property -- a machine's guess written into the brief would come back as
+    # the human's instruction one pass later, and there would be no way to tell
+    # the two apart. Its only job is to let you see, at triage, what was
+    # understood, while changing it still costs one keystroke.
+    gist: str = ""
     state: str = "new"
     reason: str = ""  # why it was skipped
     uids: list[str] = field(default_factory=list)  # cards produced from it
@@ -248,6 +261,8 @@ class Unit:
         for tristate in ("context_pages", "web"):
             if data.get(tristate) is None:
                 data.pop(tristate, None)
+        if not data.get("gist"):
+            data.pop("gist", None)
         return data
 
     @classmethod

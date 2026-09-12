@@ -432,24 +432,61 @@
        something to click; this is the legend, and it includes what you
        declared but have not used and -- more usefully -- what you have used
        and not declared. #}
+    {# Grouped by what a mark *means*, not by which line of the config says so.
+       Zotero gives eight colours and six kinds, so a source can reach
+       forty-eight combinations and the rail is 240px wide -- but nobody has
+       forty-eight meanings. `kind` beats `colour` in the config's own lookup,
+       so one `note = "..."` already covers every colour of sticky note, and
+       listing those separately is one sentence printed eight times.
+
+       The ones you have not decided about fold away on their own. They are
+       real -- an unmapped mark reaches a card writer as a coloured box with no
+       caption -- but they are a backlog, not a legend, and open by default
+       they pushed the scheme you actually use off the bottom. #}
     {% if scheme is defined and scheme %}
+    {% set decided = scheme | selectattr('declared') | list %}
+    {% set undecided = scheme | rejectattr('declared') | list %}
     <section class="rail-card scheme">
       <h3>what the marks mean</h3>
       <ul class="scheme-list">
-        {% for row in scheme %}
+        {% for row in decided %}
         <li class="{{ 'unused' if not row.count }}">
-          <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
+          <span class="scheme-swatches">
+            {%- for k in row.entries %}<span class="swatch c-{{ k.colour or k.kind }}"
+              title="{{ k.key }} — {{ k.count }}" aria-hidden="true"></span>{% endfor -%}
+          </span>
           <span class="scheme-text">
-            <b>{{ row.key }}</b>
-            {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
             <span class="scheme-meaning">{{ row.meaning }}</span>
-            {% if not row.declared %}<span class="scheme-default">not declared — this is what the
-              annotation kind is, not what it was used to mean here</span>{% endif %}
+            {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
+            <i class="scheme-keys">{{ row.entries | map(attribute='key') | join(' · ') }}</i>
           </span>
           <b class="scheme-count">{{ row.count }}</b>
         </li>
         {% endfor %}
       </ul>
+      {% if undecided %}
+      <details class="scheme-undecided">
+        <summary>{{ undecided | length }} you have not decided about<b>{{ undecided | sum(attribute='count') }}</b></summary>
+        <p class="scheme-default">These read as what Zotero's annotation kind
+          <em>is</em>, which is not what you used it to mean. Until one is
+          declared it reaches a card writer as a coloured box with no caption.</p>
+        <ul class="scheme-list">
+          {% for row in undecided %}
+          <li class="{{ 'unused' if not row.count }}">
+            <span class="scheme-swatches">
+              {%- for k in row.entries %}<span class="swatch c-{{ k.colour or k.kind }}"
+                title="{{ k.key }} — {{ k.count }}" aria-hidden="true"></span>{% endfor -%}
+            </span>
+            <span class="scheme-text">
+              <span class="scheme-meaning">{{ row.meaning }}</span>
+              <i class="scheme-keys">{{ row.entries | map(attribute='key') | join(' · ') }}</i>
+            </span>
+            <b class="scheme-count">{{ row.count }}</b>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
       <p class="rail-more">declared in <code>[zotero.meanings]</code>, or per source in
         <code>source.toml</code></p>
     </section>

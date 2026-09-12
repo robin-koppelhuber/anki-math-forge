@@ -908,10 +908,34 @@ const COUNT_POLL_MS = 4000;
     }
     paintCounts(payload.pipeline);
     paintFsm(params.get("counts_scope") === "filtered" ? payload.fsm : payload.pipeline);
+    if (payload.stale) showStale();
 
     const signature = JSON.stringify(payload.pipeline);
     if (baseline === null) baseline = signature;
     else if (signature !== baseline) showReload();
+  }
+
+  /* The Python on disk is newer than the process serving this page.
+
+     Templates are re-read per request and Python is imported once, so editing
+     both and not restarting leaves new markup running against old code. Every
+     new template block guarded by `{% if thing is defined %}` renders nothing
+     and every new endpoint 404s -- so a feature that exists and works reads,
+     on screen, as a feature that was never built.
+
+     Louder than the reload hint beside it, and it does not offer a button:
+     reloading fixes nothing here, and a button that looked like it might
+     would send you round the same loop. Only a restart moves this. */
+  function showStale() {
+    if (document.getElementById("stale-code")) return;
+    const bar = document.createElement("div");
+    bar.id = "stale-code";
+    bar.className = "stale-code";
+    bar.innerHTML =
+      "<b>this server is older than the code</b> — templates reload per request, " +
+      "Python does not, so new panels render empty and new buttons return 404. " +
+      "Restart <code>forge serve</code>.";
+    document.body.appendChild(bar);
   }
 
   function showReload() {

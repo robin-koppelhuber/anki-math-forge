@@ -187,6 +187,22 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--gist",
+        default=None,
+        metavar="TEXT",
+        help=(
+            "one line saying what a card from --id would be about, e.g. "
+            "'Lemma 2' or 'why the bound needs independence'. A reading, not "
+            "an instruction: nothing downstream consumes it, so it can be "
+            "wrong without costing anything but a second look"
+        ),
+    )
+    p.add_argument(
+        "--ungisted",
+        action="store_true",
+        help="only units with no gist yet -- what a `/gist` pass has left to do",
+    )
+    p.add_argument(
         "--web",
         choices=("yes", "no", "inherit"),
         default=None,
@@ -235,6 +251,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--untranscribed",
         action="store_true",
         help="only units that still need reading (transcription: none or failed)",
+    )
+    p.add_argument(
+        "--ungisted",
+        action="store_true",
+        help="only units with no gist yet -- what a `/gist` pass has left to render",
     )
     p.add_argument("--limit", type=int, default=0)
     p.add_argument(
@@ -706,6 +727,7 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
         or args.dismiss
         or args.context_pages is not None
         or args.web is not None
+        or args.gist is not None
     ):
         return _mutate_unit(args, ledgers, config)
 
@@ -719,6 +741,8 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
             if args.flagged and unit.id not in flagged.get(name, set()):
                 continue
             if args.suggested and unit.suggestion is None:
+                continue
+            if args.ungisted and unit.gist:
                 continue
             row = unit.to_json()
             row["source"] = name
@@ -739,6 +763,10 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
         tex = row.get("tex_source") or row.get("tex_auto") or ""
         flag = "" if row.get("transcription") == "ok" else f"  [{row.get('transcription')}]"
         print(f"{row['state']:8} {row['id']:34} {locator:22}{flag}")
+        # The gist above the transcription: it is the line that says what this
+        # would become, which is what you are scanning a list of 750 for.
+        if row.get("gist"):
+            print(f"         {row['gist'][:110]}")
         if tex:
             print(f"         {tex[:110]}")
     counts = {name: led.counts() for name, led in ledgers.items()}
@@ -789,6 +817,17 @@ def _mutate_unit(
                     f"{args.id}: card writers get {asked} page(s) either side"
                     + ("" if target.context_pages is not None else " (inherited)")
                 )
+            if args.gist is not None:
+                target = led.get(args.id)
+                if target is None:
+                    print(f"no unit {args.id!r}", file=sys.stderr)
+                    return FAILED
+                # One line. A gist that runs to a paragraph is a card being
+                # written at the wrong stage, and it would not fit the one
+                # place it is shown.
+                target.gist = " ".join(args.gist.split()).strip()
+                led.save()
+                print(f"{args.id}: {target.gist or '(cleared)'}")
             if args.web is not None:
                 target = led.get(args.id)
                 if target is None:
@@ -858,7 +897,9 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
         units = [
             u
             for u in led.select(state=args.state, section=args.section)
-            if u.has_crop and (not args.untranscribed or u.transcription in ("none", "failed"))
+            if u.has_crop
+            and (not args.untranscribed or u.transcription in ("none", "failed"))
+            and (not args.ungisted or not u.gist)
         ]
         if args.limit:
             units = units[: args.limit]
@@ -910,6 +951,16 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
                         "equation": unit.locator.equation,
                         "page": unit.locator.page,
                         "context": unit.context,
+                        # What the reader wrote on this exact mark, and nothing
+                        # else. `/gist` needs it -- on a prose source the
+                        # subject of a unit is the sentence you highlighted, so
+                        # asking a model to infer it from the picture alone
+                        # would be asking it to re-OCR text that is already
+                        # here. Deliberately not the neighbours: a gist is
+                        # supposed to be cheap.
+                        "marked": unit.marks[0].text if unit.marks else "",
+                        "comment": unit.marks[0].comment if unit.marks else "",
+                        "gist": unit.gist,
                     }
                 )
         finally:

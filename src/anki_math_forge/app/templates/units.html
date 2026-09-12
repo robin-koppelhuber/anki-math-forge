@@ -9,6 +9,19 @@
   <article class="unit item" data-id="{{ unit.id }}" data-state="{{ unit.state }}"
            data-context-pages="{{ unit.context_pages }}"
            data-web="{{ 1 if unit.web else 0 }}" data-web-own="{{ 1 if unit.web_own else 0 }}" hidden>
+    {# What a card from this unit would be about, as a model read it off the
+       crop. **A reading, not a fact and not an instruction**: nothing
+       downstream consumes it, and the label says so, because a machine's guess
+       presented as the answer is the one way this feature could do harm.
+
+       It is here, above everything, because it is the cheapest possible answer
+       to "what am I actually going to get" -- and disagreeing with it at this
+       stage costs one keystroke, where disagreeing at the card stage costs a
+       rewrite. That asymmetry is the whole argument for the pass. #}
+    {% if unit.gist %}
+    <p class="gist"><i class="gist-what" title="written by `/gist`, which read the crop and little else. It decides nothing: /extract-cards still works from the crop, the page and your @claude brief.">reads as</i>
+      <span class="gist-text">{{ unit.gist }}</span></p>
+    {% endif %}
     <div class="unit-head">
       <span class="locator">{{ unit.locator or unit.id }}</span>
       <span class="badge state-{{ unit.state }}">{{ unit.state }}</span>

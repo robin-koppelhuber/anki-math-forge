@@ -61,6 +61,16 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
    than "yes, and it is about X" is a brief (`@claude`), not a decision to
    postpone: `Q` queues and records one in the same keystroke.
 
+   **`gist`** is the other half of that second question, answered in advance.
+   `/gist` reads each crop and writes one line saying what a card from it would
+   be about -- "Lemma 2", "why the bound needs independence". It is a *reading*
+   and nothing downstream consumes it: `/extract-cards` still works from the
+   crop, the page and the brief. Keeping it out of that path is the safety
+   property -- a machine's guess written where the next pass reads instructions
+   would be indistinguishable from yours one pass later. Its whole value is
+   that disagreeing with it here costs one keystroke, where the same
+   misunderstanding found after a card exists costs a rewrite.
+
    The **card stage** is where content is settled. `/extract-cards` and
    `/augment` pull whatever context the unit was granted — the page it was
    printed on, the pages either side, the source's conventions, web lookups
@@ -229,6 +239,8 @@ uv run forge units --id <id> --web yes|no|inherit   # grant or refuse them
 uv run forge source-text <src>  # the book text, for card-writing context
 uv run forge check              # lint (always; blocks sync)
 uv run forge units --state queued --json
+uv run forge units --ungisted   # no one-line subject yet; `/gist` fills them
+uv run forge units --id <id> --gist 'Lemma 2'
 uv run forge new --unit <id> --front '$...$' --back '$...$'
 uv run forge todo               # open @claude annotations
 uv run forge serve              # units triage + card review

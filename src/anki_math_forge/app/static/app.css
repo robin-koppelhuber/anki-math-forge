@@ -1282,6 +1282,23 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   color: var(--muted); margin: 0 0 0.3rem;
 }
 .rail-card .warn { color: var(--warn); }
+
+/* The running server is older than the code on disk. Across the top of
+   everything, because it explains a whole page's worth of symptoms at once --
+   panels that render empty, buttons that 404 -- and until it is read every one
+   of those looks like a separate bug. */
+.stale-code {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 60;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  font-size: 12px;
+  color: #1a1205;
+  background: var(--warn);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.3);
+}
+.stale-code code { background: rgba(0, 0, 0, 0.12); padding: 0 0.25rem; border-radius: 3px; }
 /* What this stage decides, said once and at the top: the two questions triage
    answers, and the fact that depth is the *other* stage's job. Everything
    below it only makes sense in that light, so it reads before the machine
@@ -1305,18 +1322,59 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .rail-more a { color: var(--accent); text-decoration: none; }
 .rail-more a:hover { text-decoration: underline; }
 
+/* One row per meaning, not per line of config. Eight colours times six kinds
+   is forty-eight combinations in a 240px rail -- but nobody has forty-eight
+   meanings, and `kind` beats `colour` in the lookup, so one `note = "..."`
+   already covers every colour of sticky note. Grouping puts their swatches on
+   one line and writes the sentence once. */
 .scheme-list { list-style: none; margin: 0; padding: 0; font-size: 11.5px; }
-.scheme-list li { display: flex; gap: 0.1rem; align-items: baseline; padding: 0.2rem 0; }
+.scheme-list li { display: flex; gap: 0.3rem; align-items: baseline; padding: 0.25rem 0; }
 .scheme-list li.unused { opacity: 0.45; }
+/* Every mark that resolves to this meaning, side by side. Wraps rather than
+   squeezing the sentence: the swatches are the index, the sentence is the
+   thing being looked up. */
+.scheme-swatches {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: 4.2rem;
+  align-self: flex-start;
+  margin-top: 0.15rem;
+}
+.scheme-swatches .swatch { margin: 0; }
 .scheme-text { flex: 1; min-width: 0; }
-.scheme-text > b { font-weight: 600; }
 .scheme-unit {
   font-style: normal; font-size: 9px; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--accent); border: 1px solid var(--accent);
   border-radius: 3px; padding: 0 0.25rem; margin-left: 0.3rem;
 }
-.scheme-meaning { display: block; color: var(--muted); line-height: 1.35; }
+.scheme-meaning { color: var(--ink); line-height: 1.35; }
+/* Which config lines produced this row -- small, because it is what you edit
+   and not what you read. */
+.scheme-keys {
+  display: block;
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin-top: 0.05rem;
+}
 .scheme-count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* The backlog, folded. These are real -- an unmapped mark reaches a card
+   writer as a coloured box with no caption -- but open by default they pushed
+   the scheme you actually use off the bottom of the rail. */
+.scheme-undecided { margin-top: 0.5rem; }
+.scheme-undecided > summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--warn);
+  padding: 0.15rem 0;
+}
+.scheme-undecided > summary b { font-weight: 500; font-variant-numeric: tabular-nums; }
 
 /* -- the marks on a unit ------------------------------------------------
    The crop shows where they are; this is what they say. Deciding whether a
@@ -1559,10 +1617,16 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 /* -- the three views of the document ------------------------------------
    crop, whole page, and the whole thing scrolling. The last is images the
    browser stacks -- the cheap half of a viewer, and all that reading needs. */
-.crop { position: relative; }
 /* Three named buttons in the corner, not one cycling label. Small, because it
    sits on top of the thing it is about; named, because reaching the third
-   state by pressing a button twice and watching is not a control. */
+   state by pressing a button twice and watching is not a control.
+
+   `.crop` is already `position: sticky` above, which is a positioned element
+   and so is a containing block for this. It does not need -- and must not get
+   -- a `position: relative` of its own: an identical selector later in the
+   file wins, and that quietly un-stuck the crop, which the rule up there
+   exists for. Scrolling the evidence off the top to read the context is the
+   one thing that makes triage harder. */
 .crop-view {
   position: absolute;
   top: 0.35rem;
@@ -1627,8 +1691,15 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   font-variant-numeric: tabular-nums;
 }
 /* Scrolling a document wants the height; the crop is sticky and would pin it
-   to a strip of the window. */
-.unit.whole-document .crop { position: static; }
+   to a strip of the window.
+
+   `relative`, not `static`. `static` also stops being a containing block, so
+   the crop/page/doc control -- which is absolutely positioned inside it --
+   escaped to the nearest positioned ancestor and left the viewport: you could
+   reach the document view and then had no way back to the crop. The control
+   has to stay anchored to the picture in every one of the three views, since
+   that is the only place it is offered. */
+.unit.whole-document .crop { position: relative; }
 
 /* `carded` and `draft` are one moment, not two steps: `/extract-cards` writes
    the card file and marks the unit in the same call, and there is no state
@@ -1659,6 +1730,34 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   opacity: 0.8;
 }
 .fsm.mini .step.twin { fill: var(--ink); opacity: 0.75; text-anchor: start; }
+
+/* What a card from this unit would be about, as a model read it off the crop.
+   Above the locator and set larger than anything else on the unit, because it
+   is the answer to the question the stage is asking -- and because a one-line
+   subject is the only thing that makes a list of 750 units scannable.
+
+   The label is not decoration. Without it this reads as a fact about the unit
+   rather than as somebody's reading of it, and the difference matters exactly
+   when the reading is wrong. */
+.gist {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0 0 0.35rem;
+}
+.gist-what {
+  flex: none;
+  font-style: normal;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 3px;
+  padding: 0 0.3rem;
+  cursor: help;
+}
+.gist-text { font-size: 1.05em; color: var(--ink); line-height: 1.3; }
 
 /* The context chip: every size on screen, the one in force written out. A row
    of bare numbers is five things to decode; this reads as a sentence with the
