@@ -21,21 +21,20 @@ picks it up out of habit.
 
 ## 1. The dependency canvas: what it does not do yet
 
-Built, at `/graph`, per source. `src/anki_math_forge/graph.py` is the graph and
-its layout with no app in it, `app/static/graph.js` draws it, and
-`sources/<name>/graph.json` holds whatever you dragged. The design notes it was
+Built, at `/graph`, per source, and `[app] graph = false` turns it off.
+`src/anki_math_forge/graph.py` is the graph and its layout with no app in it,
+`app/static/graph.js` draws it, and `sources/<name>/graph.json` holds whatever
+you dragged. Arrows are drawn by dragging between the dots on two boxes, which
+writes `requires` into the card that needs the other. The design notes it was
 built from are gone: what survived them is in comments at the seams they
 describe, and the rest is here.
 
-What v1 stops short of, and the trigger for each.
+What it stops short of, and the trigger for each.
 
-- **Drawing an edge in the browser.** A position is a view preference and costs
-  a drag if it is wrong. An edge is card content: making one writes `requires`
-  into frontmatter, which `check` validates for cycles, self-reference and
-  dangling uids. So it needs three things this does not have: the cycle check
-  *before* the write rather than after, the `mtime` guard, and an undo, because
-  a mis-dragged arrow is as easy to make as a mis-pressed key. `Edge.kind` is
-  the only affordance v1 owes it.
+- **A second edge kind.** `requires` is the only one, and `Edge.kind` is
+  already carried through the payload and the canvas for the next one. Nothing
+  proposes a second yet; two cards from one unit and two cards in one section
+  have both been considered and neither is a dependency.
 - **Concept nodes.** The open question from the old plan, still open. A node is
   a card, and "the adjugate" is one idea carried by three cards, so a concept
   graph would be smaller and more honest about the material. It is a second
@@ -49,10 +48,10 @@ What v1 stops short of, and the trigger for each.
   microseconds at 108 and fine at 700. Revisit past a few thousand.
 
 What it taught about the deck, which is the answer to the density objection
-this item used to carry: 18 of the Cookbook's 108 cards touch an edge, and
-**one of the 18 has a caption**. A box reading `no caption yet` is the view
-being honest rather than inventing a name from the filename slug, and it is
-also the list of cards `/augment` should be run over next.
+this item used to carry: 18 of the Cookbook's 108 cards touch an edge. All 108
+now carry a caption, which is what makes a picker of the other 90 usable: a
+list of six-hex uids is not something anyone chooses from, and the canvas is
+where you go to connect a card that nothing yet points at.
 
 ## 2. Two audit checks that would have caught dropped content
 

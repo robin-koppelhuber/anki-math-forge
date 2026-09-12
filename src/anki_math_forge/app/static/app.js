@@ -218,9 +218,9 @@ function bindKeys(handlers) {
   document.addEventListener("keydown", (event) => {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (document.getElementById("prompt").open) return;
-    // A modal over the deck owns the keyboard: `s` in the gallery's search box
-    // would otherwise skip whatever unit was behind it.
-    if (galleryIsOpen()) return;
+    // A modal over the deck owns the keyboard: `s` in a search box would
+    // otherwise skip whatever unit was behind it.
+    if (aModalIsOpen()) return;
     const tag = document.activeElement && document.activeElement.tagName;
     if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
     const handler = handlers[event.key];
@@ -894,11 +894,14 @@ async function openSettings() {
 
 /* Any modal over the deck owns the keyboard: `s` typed into the gallery's
    search box would otherwise skip whatever unit was behind it. */
-function galleryIsOpen() {
-  return ["gallery", "settings"].some((id) => {
-    const dialog = document.getElementById(id);
-    return Boolean(dialog && dialog.open);
-  });
+/* Any open dialog owns the keyboard, not a named list of two of them.
+
+   The list was `gallery` and `settings`, which is the rule stated as its
+   instances: every dialog added since would have had to remember to join it,
+   and the symptom is silent -- `s` typed into a search box also skips whatever
+   was behind it. */
+function aModalIsOpen() {
+  return Array.from(document.querySelectorAll("dialog")).some((d) => d.open);
 }
 
 /* The mini diagram counts either the whole source or what the filters leave.

@@ -2326,3 +2326,40 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   border-bottom: 1px dotted var(--line);
 }
 .to-graph:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* The card picker: which card to put on the canvas. Narrower than the source
+   gallery, because a row is one line of text rather than a tile with counts. */
+.gallery.adder { max-width: 44rem; }
+
+.add-list {
+  overflow-y: auto;
+  padding: 0.4rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.add-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.add-row:hover { border-color: var(--accent); background: var(--panel); }
+.add-name { flex: 1; }
+/* The gap, shown as a gap. A caption built from the filename slug would be a
+   transliteration of the LaTeX, which is what a caption exists to spare you. */
+.add-name.unnamed { color: var(--muted); font-style: italic; }
+.add-where {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}

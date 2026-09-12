@@ -175,11 +175,16 @@ The crop link matters: when a card looks off, the fastest resolution is comparin
 
 The `requires` of one source, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all.
 
-- `drag` a box to arrange it, `drag` the background to pan, `click` a box to open the card
-- `a` every card, including the ones no arrow touches · `x` puts one box back · `0` recentres
+- `drag a dot` on the left or right of a box to connect two cards, `drag` a box to arrange it, `drag` the background to pan
+- `click` a box opens the card, `click` an arrow selects it, `del` removes it
+- `n` puts a card with no dependencies on the canvas · `x` takes one off · `z` undo · `a` every card · `0` recentres
 - the arrangement is written to `sources/<name>/graph.json`, committed and diffable
 
-Arrows are read-only. A position is a view preference; an edge is card content, and making one means writing `requires` into frontmatter, where `check` validates it. The default picture is the part of the deck that has edges, and the count it left out is on screen beside the toggle.
+An arrow writes `requires` into the card that needs the other, which is a write to a card file and is checked like one: refused before the write for a self-reference, an unknown uid, or a cycle, with the loop named. `requires` sits outside `content_hash` under both the current rule and the legacy one, so linking two approved cards demotes neither.
+
+The default picture is the part of the deck that has edges, and the count it left out is on screen beside the toggle. A card with no dependency either way is drawn once it has a position, which is what `n` writes: being on the canvas is a position in `graph.json`, not a change to the card.
+
+`[app] graph = false` turns the whole view off. `requires` still decides the order Anki introduces cards in.
 
 ### Annotations
 

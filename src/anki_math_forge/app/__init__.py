@@ -385,7 +385,9 @@ def create_app(config: Config) -> FastAPI:
         # links, and the moment you want the whole graph is while looking at a
         # card that has dependencies. A source where nothing needs anything
         # never offers it, so nothing points at an empty picture.
-        linked = any(p["required_by"] or p["requires"] for p in places.values())
+        linked = config.graph and any(
+            p["required_by"] or p["requires"] for p in places.values()
+        )
 
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         filters = {
@@ -438,6 +440,16 @@ def create_app(config: Config) -> FastAPI:
             },
         )
 
+    def graph_enabled() -> None:
+        """`[app] graph = false` takes the canvas off.
+
+        One guard on every door into it rather than a flag each route reads its
+        own way, because a view that is off in the navigation and on at its URL
+        is off in the only sense that does not matter.
+        """
+        if not config.graph:
+            raise HTTPException(404, "the dependency canvas is off: `[app] graph` in forge.toml")
+
     @app.get("/graph", response_class=HTMLResponse)
     def graph_view(request: Request, source: str = "") -> Any:
         """The dependency canvas, one source at a time (ROADMAP.md §1).
@@ -451,6 +463,7 @@ def create_app(config: Config) -> FastAPI:
         `/api/graph/{source}`, which is also what the `every card` toggle
         re-fetches, so there is one code path that decides what is drawn.
         """
+        graph_enabled()
         name = resolve_source(config, source)
         return templates.TemplateResponse(
             request,
@@ -464,6 +477,7 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/api/graph/{source}")
     def graph_api(source: str, all: str = "") -> Any:
+        graph_enabled()
         return source_graph(config, resolve_source(config, source), everything=bool(all))
 
     @app.post("/api/graph/{source}/positions")
@@ -472,10 +486,10 @@ def create_app(config: Config) -> FastAPI:
 
         Positions are a view preference: wrong ones cost a drag, which is why
         this writes without a confirmation while nothing else in the app does.
-        An *edge* is card content and is not writable from here at all --
-        making one means putting `requires` into frontmatter, which `check`
-        validates for cycles, self-reference and dangling uids.
+        An edge goes through `/api/cards/{uid}/requires` instead, which is a
+        write to a card file and is checked like one.
         """
+        graph_enabled()
         name = resolve_source(config, source)
         raw = body.get("positions") or {}
         # `null` is "put this one back": the entry goes away and the node
@@ -689,6 +703,58 @@ def create_app(config: Config) -> FastAPI:
         if value and value not in allowed:
             raise HTTPException(400, f"{value!r} is not one of {', '.join(allowed)}")
         return _mutate_card(config, uid, body, lambda card: card.set_grade(key, value))
+
+    @app.post("/api/cards/{uid}/requires")
+    def set_requires(uid: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Add or remove one dependency, from the canvas.
+
+        `uid` is the card whose file changes: the one that *needs* something.
+        The other end is named in `add` or `remove`. Drawing the arrow from
+        either end of the canvas lands here the same way, because the port you
+        grabbed decides which card is the dependent before anything is sent.
+
+        `requires` is outside `content_hash` under both the current rule and
+        the legacy one, so linking two approved cards demotes neither. That is
+        what makes this safe to do by dragging: the order cards are introduced
+        in is a judgement about the deck, not a change to any card's content,
+        and it was previously authorable only by opening the file.
+
+        Refused *before* the write, rather than reported after by `check`:
+        a card that names itself, one that is not in this repo, and one that
+        would close a cycle. A file written into a state the lint refuses is a
+        worse answer than a refusal at the moment of the drag.
+        """
+        graph_enabled()
+        add = str(body.get("add", "") or "").strip()
+        drop = str(body.get("remove", "") or "").strip()
+        if bool(add) == bool(drop):
+            raise HTTPException(400, "name exactly one of `add` or `remove`")
+        if add:
+            if add == uid:
+                raise HTTPException(400, "a card cannot need itself")
+            known = {c.uid for c in _cards(config)}
+            if add not in known:
+                raise HTTPException(400, f"{add} is not a card in this repo")
+            edges = graph_mod.card_graph(_cards(config)).edges
+            # Adding `requires: [add]` to `uid` draws `add -> uid`, so it
+            # closes a loop exactly when `uid` already leads to `add`.
+            loop = graph_mod.route(edges, uid, add)
+            if loop:
+                raise HTTPException(
+                    400,
+                    "that would make a cycle: " + " needs ".join(reversed([*loop, uid])),
+                )
+
+        def act(card: Card) -> None:
+            needs = [n for n in card.requires if n != drop]
+            if add and add not in needs:
+                needs.append(add)
+            if needs:
+                card.frontmatter["requires"] = needs
+            else:
+                card.frontmatter.pop("requires", None)
+
+        return _mutate_card(config, uid, body, act)
 
     @app.post("/api/cards/{uid}/web")
     def set_card_web(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -1824,9 +1890,14 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
         href=href,
         here=source,
     )
-    shown = whole if everything else whole.connected()
     order = [c.uid for c in in_study_order(here, source_positions(config))]
     path = graph_mod.positions_path(config.sources_dir, source)
+    positions = graph_mod.load_positions(path)
+    # A card with no edges is on the canvas because somebody put it somewhere.
+    # That is what "add this one so I can connect it" writes, and it is the
+    # only statement of intent there is.
+    shown = whole if everything else whole.connected(positions)
+    drawn = {n.id for n in shown.nodes}
     return {
         "source": source,
         **shown.as_dict(),
@@ -1835,14 +1906,26 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
         # able to put a node back, and a merged map cannot say which of the two
         # a coordinate came from.
         "layout": {k: list(v) for k, v in graph_mod.layered(shown, order).items()},
-        "positions": {k: list(v) for k, v in graph_mod.load_positions(path).items()},
+        "positions": {k: list(v) for k, v in positions.items()},
         "mtime": _mtime(path),
+        # Per card, for the stale guard on an edge write. An edge is a write to
+        # a card file and gets the same precondition every other card write in
+        # this app has: an editor open beside the browser is normal, and silent
+        # clobbering is worse than a retry.
+        "mtimes": {
+            c.uid: str(c.mtime_ns or 0) for c in here + foreign if c.uid in drawn
+        },
         "everything": everything,
         "shown": len(shown.nodes),
         # Said out loud on screen. A filtered view that does not report what it
         # left out reads as the whole picture.
         "hidden": len(whole.nodes) - len(shown.nodes),
         "total": len(whole.nodes),
+        # What you could put on the canvas: every card in the source that is
+        # not drawn. Sent with the picture rather than fetched when the picker
+        # opens, because it is the same walk over the same cards and the list
+        # has to agree with what is on screen.
+        "absent": [n.as_dict() for n in whole.nodes if n.id not in drawn],
     }
 
 
@@ -1900,6 +1983,12 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     )
     add("repo", "context_pages", config.context_pages, "forge.toml")
     add("repo", "web", "allowed" if config.web else "off", "forge.toml")
+    add(
+        "app",
+        "graph",
+        "the dependency canvas is on" if config.graph else "off",
+        "forge.toml",
+    )
     add("anki", "deck", config.deck, "forge.toml")
     add("anki", "note type", config.note_type, "forge.toml")
     add("anki", "tag prefix", config.tag_prefix, "forge.toml")

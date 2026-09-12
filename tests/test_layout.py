@@ -144,10 +144,18 @@ def test_switching_source_drops_the_filters_that_belonged_to_the_old_one() -> No
 
 
 def test_a_modal_over_the_deck_owns_the_keyboard() -> None:
-    """`s` typed into the gallery's search box would otherwise skip whatever
-    unit was behind it."""
+    """`s` typed into a search box would otherwise skip whatever unit was
+    behind it.
+
+    **Any** open dialog, rather than a list of the ones that existed when this
+    was written. The list was `gallery` and `settings`, which is the rule
+    stated as its instances: the next dialog has to remember to join it, and
+    the symptom of forgetting is silent.
+    """
     block = JS[JS.index("function bindKeys") : JS.index("function bindKeys") + 600]
-    assert "galleryIsOpen()" in block
+    match = re.search(r"function aModalIsOpen[\s\S]*?\n}", JS)
+    assert "aModalIsOpen()" in block
+    assert match and 'querySelectorAll("dialog")' in match.group(0)
 
 
 def test_both_panels_are_on_every_view(pdf_source: Config) -> None:

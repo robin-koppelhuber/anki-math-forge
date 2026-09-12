@@ -102,6 +102,12 @@ port = 8000
 # `npm install katex` has been run, falling back to a CDN. Set a URL or path
 # to override.
 katex_base = ""
+# The dependency canvas at `/graph`: the `requires` of one source, drawn, and
+# arrows you make by dragging between two boxes. Set it to false and the route
+# stops answering and the review view stops linking to it. `requires` still
+# decides the order Anki introduces cards in either way; this is about whether
+# the app shows you a picture of it.
+graph = true
 
 # Reading a marked-up PDF out of Zotero. Needs Zotero running with its local
 # API enabled (Settings > Advanced), the way `sync` needs Anki running with

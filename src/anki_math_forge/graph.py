@@ -79,7 +79,7 @@ class Graph:
     nodes: list[Node] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
 
-    def connected(self) -> Graph:
+    def connected(self, keep: Iterable[str] = ()) -> Graph:
         """The same graph with the nodes no edge touches left out.
 
         What makes the view worth opening while the edges are few. Nine edges
@@ -88,11 +88,19 @@ class Graph:
         anything. On a source where most cards are linked this drops nothing,
         which is the right way round.
 
+        `keep` is how a card with no edges gets onto the canvas anyway, and it
+        is the ids that have a position in `graph.json`. Somebody put that node
+        somewhere, which is the only statement of intent available, and it says
+        *keep showing me this*. Adding a card to the canvas is then giving it a
+        position and removing it is forgetting one, both of which the file and
+        the API already do. The alternative was a second list of pinned ids,
+        which is a new piece of state saying the same thing.
+
         The caller states the count it hid. A filtered view that does not say
         it is filtered reads as the whole picture.
         """
-        touched = {e.src for e in self.edges} | {e.dst for e in self.edges}
-        return Graph([n for n in self.nodes if n.id in touched], list(self.edges))
+        shown = {e.src for e in self.edges} | {e.dst for e in self.edges} | set(keep)
+        return Graph([n for n in self.nodes if n.id in shown], list(self.edges))
 
     def as_dict(self) -> dict[str, list[dict[str, str]]]:
         return {
@@ -145,6 +153,36 @@ def card_graph(
         if need in known and need != card.uid
     ]
     return Graph(nodes, edges)
+
+
+def route(edges: Iterable[Edge], start: str, goal: str) -> list[str]:
+    """A path from `start` to `goal` following edges forwards, or an empty list.
+
+    What the cycle guard is made of. Adding `requires: [p]` to card `d` draws
+    the edge `p -> d`, and that closes a loop exactly when `d` already leads to
+    `p`. Asking beforehand is the whole point: `check` reports a cycle after
+    the fact, and a card file written into a state the lint refuses is a worse
+    answer than a refusal at the moment of the drag.
+
+    The path comes back rather than a boolean so the refusal can name the loop.
+    Being told "that would make a cycle" without being told which one leaves
+    you to find it by hand in a graph you were drawing because you could not
+    see it.
+    """
+    ahead: dict[str, list[str]] = {}
+    for edge in edges:
+        ahead.setdefault(edge.src, []).append(edge.dst)
+    trails = [[start]]
+    seen = {start}
+    while trails:
+        trail = trails.pop(0)
+        for nxt in ahead.get(trail[-1], []):
+            if nxt == goal:
+                return [*trail, nxt]
+            if nxt not in seen:
+                seen.add(nxt)
+                trails.append([*trail, nxt])
+    return []
 
 
 def layered(graph: Graph, order: Sequence[str] = ()) -> dict[str, tuple[float, float]]:

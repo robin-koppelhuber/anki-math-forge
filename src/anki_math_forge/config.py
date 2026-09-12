@@ -229,6 +229,14 @@ class Config:
     host: str
     port: int
     katex_base: str
+    # The dependency canvas, `/graph`. On, because a deck with no `requires`
+    # anywhere never offers the link to it and so never costs anything to have
+    # enabled. Off is for somebody who has decided their cards are a flat pile
+    # and does not want a third view pointing at a picture of that: the route
+    # stops answering, the review view stops linking, and `requires` still
+    # decides the study order exactly as before. It changes what the app shows
+    # and nothing about what any file means.
+    graph: bool = True
     # Whether whoever writes a card may look things up on the web. Off, and
     # the default is the whole point: a card is supposed to say what *this
     # source* says, and the web is where a plausible statement of the general
@@ -507,6 +515,7 @@ def load(root: Path | None = None) -> Config:
         host=app.get("host", "127.0.0.1"),
         port=int(app.get("port", 8000)),
         katex_base=app.get("katex_base", ""),
+        graph=bool(app.get("graph", True)),
         sources=sources,
         zotero=_zotero(raw.get("zotero", {})),
     )

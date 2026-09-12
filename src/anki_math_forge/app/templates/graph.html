@@ -8,6 +8,8 @@
 {% block filters %}
 <button type="button" class="chip" id="graph-all"
         title="draw every card, including the ones nothing needs and that need nothing (a)">every card</button>
+<button type="button" class="chip" id="graph-add"
+        title="put a card with no dependencies on the canvas, so you can connect it (n)">add a card</button>
 <button type="button" class="chip" id="graph-reset"
         title="every box back to its computed place. For one box, point at it and press x.">reset arrangement</button>
 <span class="graph-counts" id="graph-counts"></span>
@@ -21,19 +23,42 @@
   <canvas id="graph-canvas"></canvas>
   <p class="graph-note" id="graph-note" hidden></p>
 </div>
+
+{# Which card to put on the canvas. Listed by caption: a card with no
+   dependency either way is not drawn, and picking one out of ninety rows of
+   six-hex uids is not something anyone would do. #}
+<dialog class="gallery adder" id="add-card" aria-label="add a card to the canvas">
+  <header class="gallery-head">
+    <div class="gallery-title">
+      <h2>add a card</h2>
+      <p class="gallery-totals" id="add-count"></p>
+    </div>
+    <input type="search" class="gallery-search" id="add-search"
+           placeholder="caption, uid or section" autocomplete="off" spellcheck="false">
+    <button type="button" class="gallery-close" id="add-close"
+            title="close (esc)">&times;</button>
+  </header>
+  <div class="add-list" id="add-list"></div>
+  <p class="gallery-empty" id="add-empty" hidden></p>
+  <p class="rail-more settings-foot">
+    A card lands in the middle of the view and stays on the canvas until you
+    point at it and press <b>x</b>. Being here is a position in
+    <code>graph.json</code>, not a change to the card.
+  </p>
+</dialog>
 {% endblock %}
 
 {% block keys %}
-<span><b>drag</b> a box to arrange · <b>drag</b> the background to pan</span>
-<span><b>click</b> a box opens the card</span>
-<span><b>a</b> every card</span>
-<span><b>x</b> puts the box under the pointer back</span>
-<span><b>0</b> recentre</span>
-{# Read-only edges, said out loud, because a canvas you can drag reads as a
-   canvas you can draw on. An arrow is card content: making one writes
-   `requires` into frontmatter, which `check` validates for cycles,
-   self-reference and dangling uids. #}
-<span class="muted">arrows are read-only: <code>requires</code> in the card file</span>
+<span><b>drag a dot</b> to connect two cards</span>
+<span><b>drag</b> a box to arrange · the background to pan</span>
+<span><b>click</b> a box opens the card · an arrow selects it</span>
+<span><b>del</b> removes the selected arrow</span>
+<span><b>n</b> add a card · <b>x</b> takes one off</span>
+<span><b>z</b> undo · <b>a</b> every card · <b>0</b> recentre</span>
+{# An arrow is a `requires` line in a card file, written by dragging. Saying so
+   is the difference between a canvas that edits a picture and one that edits
+   the deck. #}
+<span class="muted">an arrow writes <code>requires</code> into the card that needs the other</span>
 {% endblock %}
 
 {% block scripts %}<script defer src="/static/graph.js"></script>{% endblock %}
