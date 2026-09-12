@@ -26,7 +26,7 @@ from . import extract as extract_mod
 from . import latex, model, todo, verify
 from . import ledger as ledger_mod
 from .anki import AnkiConnect, AnkiError
-from .config import SOURCE_FILE, Config, ConfigError, load
+from .config import SOURCE_TOML, Config, ConfigError, load
 
 OK, FAILED, MISUSE = 0, 1, 2
 
@@ -413,7 +413,7 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
             )
             reports.append((source, item, report))
             if not args.dry_run and report.units:
-                stub = config.sources_dir / source / SOURCE_FILE
+                stub = config.sources_dir / source / SOURCE_TOML
                 fresh = zotero_units.write_source_stub(stub, item)
                 ledger = ledger_mod.Ledger.load(config.units_path(source))
                 added, refreshed = ledger.upsert(report.units)

@@ -100,10 +100,13 @@ would make this contract wrong the moment a second source arrives, and a card
 writer told to read it as authoritative would be applying conventions that do
 not hold for the page in front of them.
 
-So they live with the source, in **`sources/<name>/source.md`**: TOML between
-`+++` fences, then prose. One file, two halves.
+So they live with the source, in **`sources/<name>/`**: `source.toml` for the
+keys the tool acts on, `conventions.md` for the prose a card writer has to
+read. Two files, because they are two things -- a config and a document -- and
+the fenced single file they replaced was neither: no editor checks the TOML
+above the fence *and* renders the Markdown below it.
 
-- **Above the fence** is what a key can express, and it is what the tool acts
+- **`source.toml`** is what a key can express, and it is what the tool acts
   on: `title`, `citation`, `pdf`/`tex`, `zotero`, `documents`, `deck`,
   `layout`, `order`, `tags`, `crop_context`/`crop_width`, `context_pages`, and
   a source's own reading of its Zotero marks. A `layout` outside
@@ -116,17 +119,20 @@ So they live with the source, in **`sources/<name>/source.md`**: TOML between
   nothing writes one for you, because a label the tool made up means whatever
   the tool guessed and you would be filtering by it without having decided
   what it says.
-- **Below it** is what a key cannot: the ambient mathematical
+- **`conventions.md`** is what a key cannot express: the ambient mathematical
   setting, what is assumed constant, how a contested convention was settled.
-  `forge context <unit>` prints it, so whoever writes or reviews a card
-  sees the right one without knowing it exists. If a source has no such file,
-  `context` says so — an absent convention is a card writer guessing.
+  `forge context <unit>` prints it, so whoever writes or reviews a card sees
+  the right one without knowing it exists. **There is no file until you write
+  one** — nothing generates a placeholder, because a placeholder saying
+  "nothing recorded yet" is indistinguishable from a real one to everything
+  that reads it, and would silence the very warning it should raise. If a
+  source has none, `context` says so: an absent convention is a card writer
+  guessing.
 
-TOML rather than YAML, because every key up there overrides one in
-`forge.toml` and a block copied between the two has to work unchanged.
-It is also the stricter language: in YAML a tag or colour written `no`, `on` or
-`y` is silently a boolean. One file rather than two, because a convention kept
-away from the keys it qualifies is the one nobody opens. A folder with no
+TOML rather than YAML, because every key in `source.toml` overrides one in
+`forge.toml` and a block copied between the two has to work unchanged. It is
+also the stricter language: in YAML a tag or colour written `no`, `on` or `y`
+is silently a boolean. A folder with neither `source.toml` nor the older
 `source.md` is not a source: discovery does not guess.
 
 `forge.toml` keeps what is genuinely repo-wide — `[cards] language`, the

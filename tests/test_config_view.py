@@ -33,7 +33,7 @@ def test_it_says_which_value_won(repo: Path) -> None:
     rows = rows_for(config_mod.load(repo), "source: book")
 
     assert rows["deck"]["value"] == "Shelf"
-    assert rows["deck"]["from"] == "sources/book/source.md"
+    assert rows["deck"]["from"] == "sources/book/source.toml"
 
 
 def test_it_says_when_a_value_was_inherited(repo: Path) -> None:

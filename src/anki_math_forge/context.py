@@ -49,7 +49,7 @@ class UnitContext:
             "\n## the setting this source is read in\n"
             + (
                 self.conventions
-                or "(none recorded -- write the prose half of sources/<name>/source.md,"
+                or "(none recorded -- write sources/<name>/conventions.md,"
                 " or whoever writes a card here is guessing at what is ambient)"
             )
         )
@@ -172,20 +172,23 @@ def source_conventions(config: Config, source: str) -> str:
     in the project's own contract would make that contract wrong the moment
     the deck grows.
 
-    It is the prose half of `sources/<name>/source.md`, below the frontmatter
-    the tool reads. One file, because a convention that lives away from the
-    keys it qualifies is the one nobody opens. `conventions.md` is still read
-    where a repo has not moved it.
+    It is `sources/<name>/conventions.md`: a plain Markdown document beside
+    `source.toml`, which holds the keys. They were one file for a while, TOML
+    fenced above prose, on the argument that a convention kept away from the
+    keys it qualifies is the one nobody opens. What that produced was a file
+    that is neither -- no editor checks the TOML above the fence *and* renders
+    the Markdown below it. The prose half of a `source.md` is still read where
+    a repo has not been migrated.
     """
-    from .config import SOURCE_FILE, split_source_file
+    from .config import CONVENTIONS_FILE, SOURCE_FILE, split_source_file
 
     folder = config.sources_dir / source
-    path = folder / SOURCE_FILE
+    path = folder / CONVENTIONS_FILE
     if path.exists():
-        body = split_source_file(path)[1]
+        body = path.read_text(encoding="utf-8")
     else:
-        path = folder / "conventions.md"
+        path = folder / SOURCE_FILE
         if not path.exists():
             return ""
-        body = path.read_text(encoding="utf-8")
+        body = split_source_file(path)[1]
     return re.sub(r"^#.*$", "", body, count=1, flags=re.M).strip()

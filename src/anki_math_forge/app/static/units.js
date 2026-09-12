@@ -131,8 +131,25 @@ async function cycleContext() {
   board.dataset.mtime = result.mtime;
   item.dataset.contextPages = String(next);
   const badge = item.querySelector("[data-context-badge]");
-  if (badge) badge.textContent = contextLabel(next);
+  if (badge) {
+    // Now the unit's own number rather than the source's, so say so: the
+    // badge's whole job is to distinguish what you set from what you
+    // inherited, and leaving the old word there would make it lie.
+    badge.classList.add("own");
+    const value = badge.querySelector("[data-context-value]");
+    if (value) value.textContent = shortContext(next);
+    const whose = badge.querySelector("i");
+    if (whose) whose.textContent = "this unit";
+  }
   toast(`card writers get ${contextLabel(next)}`);
+}
+
+/* Two spellings of the same number. The badge is three characters wide and the
+   toast is a sentence; what they must not do is disagree, so they come from
+   one place. `shortContext` matches `context_label` in the Python, which is
+   what the page was first rendered with. */
+function shortContext(pages) {
+  return pages >= 100 ? "all" : `${pages}p`;
 }
 
 function contextLabel(pages) {
@@ -141,32 +158,103 @@ function contextLabel(pages) {
   return `${pages} page${pages === 1 ? "" : "s"} either side`;
 }
 
-/* The whole page, with the unit's own box drawn on it.
+/* Three ways to look at the same geometry, cycled with `p`.
 
-   The two ways segmentation fails are only visible against the surroundings:
-   an equation split across units shows its missing lines outside the box, and
-   two merged into one show two numbers inside it. A wide margin usually
-   suffices; when it does not, this is the rest of the page. No pdf.js needed
-   -- the renderer already clips to the page, so asking for more than a page
-   gives exactly a page. */
+   crop     -- the box and a margin. Is this the right region?
+   page     -- the whole page it sits on. The two ways segmentation fails are
+               only visible against the surroundings: an equation split across
+               units shows its missing lines outside the box, and two merged
+               into one show two numbers inside it.
+   document -- every page, scrolling. Sometimes the question is not about the
+               region at all but about what the passage is *saying*, and the
+               answer is three paragraphs up, or on the page before.
+
+   Still no pdf.js. The document view is images the browser stacks and scrolls,
+   which is the cheap half of a viewer and all that reading needs; pdf.js earns
+   its place when you want to drag a box in the browser to make a unit. */
 const WHOLE_PAGE = 9999;
+const PDF_VIEWS = ["crop", "page", "document"];
+const PDF_VIEW_SAID = {
+  crop: "the crop",
+  page: "the whole page, box drawn on it",
+  document: "the whole document — scroll it",
+};
 
-function togglePage() {
+function cyclePdfView() {
   const item = currentOf(deck);
   if (!item) return;
+  const now = item.dataset.pdfView || "crop";
+  showPdfView(item, PDF_VIEWS[(PDF_VIEWS.indexOf(now) + 1) % PDF_VIEWS.length]);
+}
+
+async function showPdfView(item, view) {
+  const figure = item.querySelector(".crop");
   const img = item.querySelector("[data-crop]");
-  if (!img) return;
-  const whole = item.dataset.wholePage === "1";
+  if (!figure || !img) return;
   if (!item.dataset.cropSrc) item.dataset.cropSrc = img.getAttribute("src");
+  item.dataset.pdfView = view;
+  item.classList.toggle("whole-page", view === "page");
+  item.classList.toggle("whole-document", view === "document");
+  const label = item.querySelector("[data-pdf-view-label]");
+  if (label) label.textContent = view;
+  toast(PDF_VIEW_SAID[view]);
+
+  if (view === "document") {
+    img.hidden = true;
+    await buildDocument(item, figure);
+    return;
+  }
+  img.hidden = false;
+  const box = figure.querySelector(".doc-scroll");
+  if (box) box.hidden = true;
   img.setAttribute(
     "src",
-    whole
-      ? item.dataset.cropSrc
-      : item.dataset.cropSrc.split("?")[0] + `?context=${WHOLE_PAGE}&outline=1`,
+    view === "page"
+      ? item.dataset.cropSrc.split("?")[0] + `?context=${WHOLE_PAGE}&outline=1`
+      : item.dataset.cropSrc,
   );
-  item.dataset.wholePage = whole ? "0" : "1";
-  item.classList.toggle("whole-page", !whole);
-  toast(whole ? "back to the crop" : "the whole page, box drawn on it");
+}
+
+/* Built once per unit, on first use. The page count needs the PDF opened, so
+   asking for it up front would pay that cost for every row in a 750-unit list
+   to answer a question nobody asked. */
+async function buildDocument(item, figure) {
+  const existing = figure.querySelector(".doc-scroll");
+  if (existing) {
+    existing.hidden = false;
+    return;
+  }
+  const id = item.dataset.id;
+  const at = (path) => `${path}/${encodeURIComponent(source)}/${encodeURIComponent(id)}`;
+  let info;
+  try {
+    info = await (await fetch(at("/api/document"))).json();
+  } catch {
+    toast("could not read the document", "bad");
+    return;
+  }
+  if (!info || !info.pages) {
+    toast(info && info.detail ? info.detail : "no document to scroll", "bad");
+    return;
+  }
+  const box = el("div", "doc-scroll");
+  for (let n = 1; n <= info.pages; n += 1) {
+    const wrap = el("div", "doc-page" + (n === info.page ? " here" : ""));
+    const page = document.createElement("img");
+    // The page you land on, and its neighbours, are wanted immediately; the
+    // other fifty-five are wanted only if you scroll to them.
+    page.loading = Math.abs(n - info.page) <= 1 ? "eager" : "lazy";
+    page.alt = `page ${n}`;
+    page.src = `${at("/page")}.png?n=${n}`;
+    wrap.appendChild(page);
+    wrap.appendChild(el("span", "doc-page-no", `p${n}`));
+    box.appendChild(wrap);
+  }
+  figure.appendChild(box);
+  // Land on the unit's own page rather than at the front of the paper. Only
+  // the container scrolls: `scrollIntoView` would move the whole page too.
+  const here = box.querySelector(".doc-page.here");
+  if (here) box.scrollTop = here.offsetTop;
 }
 
 /* Jumping to a neighbouring mark that is a unit in its own right. It is
@@ -191,7 +279,20 @@ function followHash() {
 window.addEventListener("hashchange", followHash);
 followHash();
 
+/* The context badge is a button. `c` does the same thing, and a number you
+   are deciding about should be reachable with the pointer you are already
+   using to read with. */
 document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-pdf-view]")) {
+    event.preventDefault();
+    cyclePdfView();
+    return;
+  }
+  if (event.target.closest("[data-context-badge]")) {
+    event.preventDefault();
+    cycleContext();
+    return;
+  }
   const link = event.target.closest("[data-goto]");
   if (!link || event.metaKey || event.ctrlKey || event.shiftKey) return;
   if (deck.items.some((item) => item.dataset.id === link.dataset.goto)) {
@@ -203,7 +304,7 @@ document.addEventListener("click", (event) => {
 bindKeys({
   "?": cycleGuide,
   c: cycleContext,
-  p: togglePage,
+  p: cyclePdfView,
   f: toggleFilters,
   g: openGallery,
   z: undo,

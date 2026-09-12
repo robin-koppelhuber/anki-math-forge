@@ -453,6 +453,16 @@ preamble.
   whether a marked claim is worth a card on its own is mostly a question about
   its neighbours, and reading them meant opening the PDF. A neighbour that is a
   unit in its own right is flagged and links to it
+- **built:** three views of the same geometry, cycled with `p` or the control
+  in the corner of the picture: the crop, the whole page, and **every page,
+  scrolling**. A crop answers "is this the right region"; sometimes the
+  question is what the passage is actually *saying*, and that is three
+  paragraphs up or on the page before. Still no pdf.js -- images the browser
+  stacks and scrolls is the cheap half of a viewer and all that reading needs;
+  pdf.js earns its place when you want to drag a box in the browser to make a
+  unit. The page count opens the PDF, so it is fetched when the view is first
+  opened rather than for every row of a 750-unit list, and the view lands on
+  the unit's own page
 - **left:** `+` and `-` in the triage view, to widen without a reload
 - **built:** a whole-page toggle (`p`), rendering the page with the unit's own
   box drawn on it
@@ -524,6 +534,26 @@ have.
 
 ## 8. Triage and review at scale (partly built)
 
+- **Built: `source.toml` beside `conventions.md`.** They were one file, TOML
+  fenced above prose, on the argument that a convention kept away from the keys
+  it qualifies is the one nobody opens. What that produced was a file that is
+  neither: no editor checks the TOML above the fence *and* renders the Markdown
+  below it, so both halves lost the tooling they would have had apart. The
+  fenced form is still read, and a folder with both lets the new file win.
+  **No placeholder `conventions.md`** -- an empty one saying "nothing recorded
+  yet" is indistinguishable from a real one to everything that reads it, and
+  would silence the warning it should raise.
+- **Built: a floor under the colour scheme.** `DEFAULT_MEANINGS` gives each of
+  Zotero's five annotation kinds a reading, because that set is closed and the
+  same in every library -- the tool can state it, and a *colour* is a scheme
+  you invented and it cannot. So a mark always reads as something and a fresh
+  repo is not a wall of squares with no captions. What you declare, repo-wide
+  or per source, sits on top; the views carry the provenance, because a default
+  says what the annotation *is* and a declaration says what you meant by it,
+  and showing the first as the second hides a decision not taken. The scheme in
+  force is what the filter offers, and the state diagram names the marks that
+  make units instead of claiming `extract` did it. All of it is Zotero's: a
+  segmented book has no marks, no scheme and none of this on screen.
 - **Built: which of an item's PDFs to read** (`documents`, by title or key).
   A Zotero item routinely carries the paper twice -- a preprint and a version
   with the appendix -- and importing both doubled every mark against page

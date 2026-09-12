@@ -120,22 +120,31 @@ def test_the_project_contract_declares_no_source_conventions() -> None:
     section = text[text.index("## Conventions") : text.index("## Commands")]
     for claim in ("denominator layout", "entries are real", "conjugate transpose"):
         assert claim not in section.lower().replace("**", ""), (
-            f"CLAUDE.md still declares {claim!r}; that belongs in "
-            "sources/<name>/source.md"
+            f"CLAUDE.md still declares {claim!r}; that belongs with the source"
         )
-    assert "sources/<name>/source.md" in section, "it must say where they do live"
+    assert "conventions.md" in section, "it must say where they do live"
 
 
-def test_the_loaded_source_declares_its_own() -> None:
-    """And the mechanism is only real if the current source actually uses it."""
+def test_every_source_that_has_produced_cards_declares_its_conventions() -> None:
+    """The mechanism is only real if the sources actually use it.
+
+    Gated on **cards**, not units: a source with fifteen untriaged units has
+    not written anything yet, and demanding a conventions file before you have
+    read the paper is how you end up with a placeholder that says nothing and
+    silences `forge context` for ever. An absent file is the honest state
+    until there is something to record.
+    """
+    carded = {
+        path.parent.name for path in (ROOT / "cards").glob("*/*.md")
+    }
     for source in (ROOT / "sources").iterdir():
-        if not source.is_dir() or not (source / "units.jsonl").exists():
+        if not source.is_dir() or source.name not in carded:
             continue
-        # Either name: `source.md` is where they live now, and `conventions.md`
-        # is still read for a repo that has not moved.
-        assert (source / "source.md").exists() or (source / "conventions.md").exists(), (
-            f"{source.name} has units but declares no conventions; every card "
-            "written from it is guessing at what is ambient"
+        # `conventions.md` is where they live; the prose half of an unmigrated
+        # `source.md` is still read.
+        assert (source / "conventions.md").exists() or (source / "source.md").exists(), (
+            f"{source.name} has cards but declares no conventions; every one of "
+            "them was written guessing at what is ambient"
         )
 
 

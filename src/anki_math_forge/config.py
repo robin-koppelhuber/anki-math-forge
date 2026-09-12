@@ -80,6 +80,28 @@ class SourceConfig:
         return self.name
 
 
+# What Zotero's annotation kinds are, before you say what you use them for.
+#
+# These are the closed set Zotero defines, so they are the same in every
+# library and the tool can state them; a *colour* is a scheme you invented and
+# it cannot. So this is the floor: a mark always reads as something, and a
+# fresh repo is not a wall of squares with no captions. Anything you declare --
+# repo-wide in `[zotero.meanings]`, or per source in `source.toml` -- sits on
+# top, and the views say which of the two a meaning came from, because "you
+# have not decided about this colour yet" is worth seeing.
+#
+# Deliberately descriptive rather than interpretive: what the mark *is*, not
+# what it is for. What it is for is the part only you know.
+DEFAULT_MEANINGS: Mapping[str, str] = {
+    "highlight": "a passage you marked",
+    "underline": "a passage you underlined",
+    "note": "something you wrote in the margin",
+    "image": "a region you boxed -- a figure, a table, a diagram",
+    "ink": "something you drew on the page",
+    "text": "a comment you typed onto the page",
+}
+
+
 @dataclass(frozen=True)
 class ZoteroConfig:
     """Reading a marked-up PDF out of Zotero.
@@ -104,7 +126,11 @@ class ZoteroConfig:
         return kind in self.units_from or colour in self.units_from
 
     def means(self, kind: str, colour: str) -> str:
-        """The most specific meaning recorded, or empty when there is none.
+        """The most specific meaning in force, defaults included."""
+        return self.reading(kind, colour)[0]
+
+    def reading(self, kind: str, colour: str) -> tuple[str, str]:
+        """`(meaning, where it came from)` -- `declared` or `default`.
 
         `kind/colour`, then `kind`, then `colour`. Kind first because it is a
         small closed set that Zotero defines, while colour is the dimension you
@@ -112,11 +138,18 @@ class ZoteroConfig:
         it whatever yellow means for highlights. The consequence to know is
         that a bare `highlight` entry shadows every colour, so leave it unset
         if you want colours to decide within highlights.
+
+        Below everything you declared sits `DEFAULT_MEANINGS`, so a mark always
+        reads as *something*. The provenance comes back with it because the two
+        are not the same claim: a default says what Zotero's annotation kind
+        is, and a declaration says what you meant by it. Only the views that
+        show a scheme care; `means` throws it away.
         """
         for probe in (f"{kind}/{colour}", kind, colour):
             if self.meanings.get(probe):
-                return self.meanings[probe]
-        return ""
+                return self.meanings[probe], "declared"
+        fallback = DEFAULT_MEANINGS.get(kind, "")
+        return (fallback, "default") if fallback else ("", "")
 
 
 @dataclass(frozen=True)
@@ -385,24 +418,25 @@ def load(root: Path | None = None) -> Config:
     )
 
 
-SOURCE_FILE = "source.md"
+SOURCE_TOML = "source.toml"
+SOURCE_FILE = "source.md"  # the older form: the same TOML, between `+++` fences
+CONVENTIONS_FILE = "conventions.md"
 FENCE = "+++"
 
 
 def split_source_file(path: Path) -> tuple[dict[str, Any], str]:
-    """A source file: TOML between `+++` fences, then prose.
+    """The older source file: TOML between `+++` fences, then prose.
 
-    **TOML, not YAML**, because everything above the fence overrides a key in
-    `forge.toml` and the two should be the same language: a block you copy
-    from one to the other has to work unchanged. TOML is also the stricter of
-    the two, which matters for exactly this data. In YAML a colour or tag
-    written `no`, `on` or `y` is silently a boolean.
+    Kept because a repo should not have to migrate all at once, and because
+    reading it is four lines. New sources are `source.toml` next to a plain
+    `conventions.md`.
 
-    Frontmatter rather than a separate `source.toml`, because a source is two
-    things at once: the keys this tool acts on, and the conventions a card
-    writer has to read. Splitting them by kind only meant the prose half was
-    the half nobody opened. It is `+++` rather than `---` so the fence says
-    which language is inside it.
+    The frontmatter form put both halves in one file on the argument that a
+    convention kept away from the keys it qualifies is the one nobody opens.
+    What it actually produced was a file that is neither: no editor gives you
+    TOML checking above the fence *and* Markdown below it, so both halves lost
+    the tooling they would have had apart. The keys are a config file and the
+    conventions are a document, and they are better off being those things.
     """
     lines = path.read_text(encoding="utf-8").lstrip("﻿").splitlines()
     if not lines or lines[0].strip() != FENCE:
@@ -418,16 +452,35 @@ def split_source_file(path: Path) -> tuple[dict[str, Any], str]:
     return loaded, "\n".join(lines[end + 1 :])
 
 
-def discover_sources(sources_dir: Path) -> dict[str, dict[str, Any]]:
-    """Every `sources/<name>/source.md`.
+def read_source_toml(path: Path) -> dict[str, Any]:
+    """`sources/<name>/source.toml`: plain TOML, no fences.
 
-    A folder with no such file is not a source. Discovery is not a guess.
+    TOML rather than YAML because every key here overrides one in
+    `forge.toml`, and a block copied between the two has to work unchanged. It
+    is also the stricter language, which matters for exactly this data: in YAML
+    a colour or tag written `no`, `on` or `y` is silently a boolean.
+    """
+    try:
+        with path.open("rb") as fh:
+            return tomllib.load(fh)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{path} is not valid TOML: {exc}") from exc
+
+
+def discover_sources(sources_dir: Path) -> dict[str, dict[str, Any]]:
+    """Every `sources/<name>/source.toml`, and the older `source.md` beside it.
+
+    A folder with neither is not a source. Discovery is not a guess.
     """
     found: dict[str, dict[str, Any]] = {}
     if not sources_dir.is_dir():
         return found
     for path in sorted(sources_dir.glob(f"*/{SOURCE_FILE}")):
         found[path.parent.name] = split_source_file(path)[0]
+    # Second, and therefore winning where a folder still has both: the file
+    # you are being migrated *to* is the one that should decide.
+    for path in sorted(sources_dir.glob(f"*/{SOURCE_TOML}")):
+        found[path.parent.name] = read_source_toml(path)
     return found
 
 

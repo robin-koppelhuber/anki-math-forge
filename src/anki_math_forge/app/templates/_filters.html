@@ -166,8 +166,8 @@
           <span class="mp-kind" title="{{ group.count }} units">{{ group.kind }}</span>
           <span class="mp-colours">
             {% for row in group.colours %}
-            <a class="mp-chip {{ 'on' if mark == row.key }}"
-               title="{{ row.meaning }} — {{ row.count }} unit{{ '' if row.count == 1 else 's' }}{{ ' (click to clear)' if mark == row.key }}"
+            <a class="mp-chip {{ 'on' if mark == row.key }}{{ '' if row.declared else ' undeclared' }}"
+               title="{{ row.colour or row.kind }} — {{ row.meaning }}{{ '' if row.declared else ' (not declared here)' }} — {{ row.count }} unit{{ '' if row.count == 1 else 's' }}{{ ' · click to clear' if mark == row.key }}"
                href="{{ filter_url(here, f, mark=(none if mark == row.key else row.key)) }}">
               <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
               <b>{{ row.count }}</b>

@@ -289,6 +289,40 @@ class CropRenderer:
         for edge in edges:
             pixmap.set_rect(self._fitz.IRect(*edge), OUTLINE_COLOUR)
 
+    @property
+    def page_count(self) -> int:
+        return int(self._doc.page_count)
+
+    def page(
+        self,
+        number: int,
+        *,
+        regions: Sequence[Region] = (),
+        outline: Sequence[float] | None = None,
+    ) -> bytes:
+        """A whole page, marks painted on, optionally with a box drawn on it.
+
+        For reading the document rather than judging a crop. A crop answers
+        "is this the right region"; sometimes the question is "what is this
+        passage actually about", and that is three paragraphs up the page --
+        or the page before. This is the cheap half of a PDF viewer: images the
+        browser can stack and scroll, no pdf.js, nothing interactive.
+        """
+        if not 1 <= number <= self._doc.page_count:
+            raise ValueError(f"page {number} is outside the document")
+        target = self._doc.load_page(number - 1)
+        drawn = self._draw_regions(target, regions)
+        try:
+            pixmap = target.get_pixmap(matrix=self._matrix)
+        finally:
+            for annot in reversed(drawn):
+                target.delete_annot(annot)
+        if outline is not None:
+            margin = (-OUTLINE_MARGIN, -OUTLINE_MARGIN, OUTLINE_MARGIN, OUTLINE_MARGIN)
+            box = (self._fitz.Rect(*outline) + margin) & target.rect
+            self._draw_outline(pixmap, box, target.rect)
+        return bytes(pixmap.tobytes("png"))
+
     def close(self) -> None:
         self._doc.close()
 
@@ -297,6 +331,29 @@ class CropRenderer:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+DOCUMENT_ZOOM = 2.0
+"""Pages in the scrolling view are read, not inspected. At the crop's zoom a
+single page is ~1785px and 150KB, and the view stacks dozens of them."""
+
+
+def render_page(
+    pdf_path: Path,
+    number: int,
+    *,
+    regions: Sequence[Region] = (),
+    outline: Sequence[float] | None = None,
+    zoom: float = DOCUMENT_ZOOM,
+) -> bytes:
+    """One page, for the app's scrolling document view."""
+    with CropRenderer(pdf_path, zoom=zoom) as renderer:
+        return renderer.page(number, regions=regions, outline=outline)
+
+
+def page_count(pdf_path: Path) -> int:
+    with CropRenderer(pdf_path) as renderer:
+        return renderer.page_count
 
 
 def render_crop(

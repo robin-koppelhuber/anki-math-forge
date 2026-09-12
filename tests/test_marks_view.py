@@ -195,7 +195,7 @@ def test_the_legend_counts_each_mark_once(config: Config) -> None:
     those reports the same highlight five times."""
     units = [a_unit(), a_unit()]
     counts = {row["key"]: row["count"] for row in scheme_rows(units, config, "paper")}
-    assert counts.get("green") == 1
+    assert counts.get("highlight/green") == 1, "nothing declared, so keyed in full"
 
 
 def test_the_legend_shows_what_is_declared_but_unused(zotero_config: Config) -> None:
@@ -220,8 +220,8 @@ def test_the_legend_shows_what_is_used_but_undeclared(zotero_config: Config) -> 
     unit = a_unit()
     unit.marks = [Mark(key="ZZZ", kind="highlight", colour="orange", page=1)]
     rows = {row["key"]: row for row in scheme_rows([unit], zotero_config, "paper")}
-    assert rows["orange"]["count"] == 1
-    assert not rows["orange"]["meaning"]
+    assert rows["highlight/orange"]["count"] == 1
+    assert not rows["highlight/orange"]["declared"]
 
 
 def test_the_legend_says_which_marks_become_units(zotero_config: Config) -> None:
@@ -260,3 +260,83 @@ def test_the_source_facts_say_when_nothing_is_declared(zotero_config: Config) ->
     assert facts["origin"] == "zotero"
     assert facts["crop_width"] == "box", "nothing said, and nothing asked about marks"
     assert facts["deck"] == zotero_config.deck, "inherited, and shown as the resolved value"
+
+
+# -- the scheme has a floor -------------------------------------------------
+
+
+def test_a_zotero_kind_always_reads_as_something(config: Config) -> None:
+    """`DEFAULT_MEANINGS` is the closed set Zotero defines, so the tool can
+    state it; a *colour* is a scheme you invented and it cannot. Without the
+    floor a fresh repo is a wall of coloured squares with no captions."""
+    scheme = config.zotero_for("nothing-declared-here")
+    assert scheme.means("note", "yellow")
+    assert scheme.reading("note", "yellow")[1] == "default"
+
+
+def test_the_tool_invents_no_kind_it_does_not_know(config: Config) -> None:
+    assert config.zotero_for("x").means("doodle", "chartreuse") == ""
+
+
+def test_what_you_declare_sits_on_top(zotero_config: Config) -> None:
+    scheme = zotero_config.zotero_for("paper")
+    assert scheme.means("highlight", "green") == "a claim or result worth a card"
+    assert scheme.reading("highlight", "green")[1] == "declared"
+
+
+def test_the_legend_says_which_are_yours(zotero_config: Config) -> None:
+    """A default says what the annotation *is*; a declaration says what you
+    meant by it. Showing the first as the second hides a decision not taken."""
+    unit = a_unit()
+    unit.marks = [
+        Mark(key="A", kind="highlight", colour="green", page=1),
+        Mark(key="B", kind="underline", colour="orange", page=1),
+    ]
+    rows = {row["key"]: row for row in scheme_rows([unit], zotero_config, "paper")}
+    assert rows["green"]["declared"]
+    assert not rows["underline/orange"]["declared"], "its own row, at full specificity"
+    assert rows["underline/orange"]["meaning"], "and it still reads as something"
+
+
+def test_the_marks_scheme_is_zotero_only(config: Config) -> None:
+    """A segmented book has no marks and no scheme, and a rail describing
+    machinery that is not running is worse than an empty one."""
+    assert source_facts(config, "demo")["units_from"] == []
+
+
+# -- reading the document rather than judging a crop ------------------------
+
+
+def a_ledger(config: Config, source: str = "paper") -> None:
+    Ledger(config.units_path(source), [a_unit(source)]).save()
+
+
+def test_the_document_view_says_how_long_it_is_and_where_you_are(
+    zotero_config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Asked for only when the scrolling view is first opened, because it opens
+    the PDF: a units page carrying this for every row would pay that cost 750
+    times to answer a question nobody asked."""
+    from anki_math_forge.extract import render as render_mod
+
+    a_ledger(zotero_config)
+    monkeypatch.setattr(render_mod, "page_count", lambda path: 58)
+    monkeypatch.setattr(
+        type(zotero_config), "document_for", lambda self, s, d="": Path(__file__)
+    )
+    payload = TestClient(create_app(zotero_config)).get("/api/document/paper/paper:AAA").json()
+    assert payload == {"pages": 58, "page": 1}
+
+
+def test_a_page_out_of_the_document_is_refused(zotero_config: Config) -> None:
+    """Rather than a broken image, which reads as the PDF being missing."""
+    a_ledger(zotero_config)
+    client = TestClient(create_app(zotero_config))
+    assert client.get("/page/paper/paper:AAA.png?n=999").status_code in (404, 409)
+
+
+def test_the_page_number_is_a_query_not_a_path_segment(zotero_config: Config) -> None:
+    """`{unit_id:path}` is greedy and would swallow a trailing segment, and a
+    unit id already contains the colons that make it look like a path."""
+    paths = {getattr(route, "path", "") for route in create_app(zotero_config).routes}
+    assert "/page/{source}/{unit_id:path}.png" in paths

@@ -85,7 +85,12 @@ data_dir = "~/Zotero"
 # to the claim it belongs to. A source may override this in its own file.
 units_from = ["green", "note", "image"]
 # What you meant by each colour or kind, the way `[anki.flags]` maps a flag
-# number. An unmapped one is reported rather than guessed at. Zotero's palette
+# number. Under whatever you put here sits a built-in reading of Zotero's five
+# annotation *kinds* -- that set is closed and the same in every library, so
+# the tool can state it; a colour is a scheme you invented and it cannot. So a
+# mark always reads as something, and the views say which of the two it was:
+# "not declared here" is a decision outstanding, not a gap. A source overrides
+# all of it in its own `source.toml`, under `[meanings]`. Zotero's palette
 # is yellow, red, green, blue, purple, magenta, orange, grey; the kinds are
 # highlight, underline, note, image, ink. `kind/colour` beats `kind` beats
 # `colour`, so a bare `highlight` entry would shadow every colour: leave it
@@ -101,7 +106,7 @@ orange = "a definition or named algorithm"
 grey = "minor, in passing"
 yellow = "a citation to follow up"
 
-# Sources describe themselves, in `sources/<name>/source.md`: the keys this
-# tool acts on as frontmatter, the conventions a card writer needs as prose
-# below them. A `[sources.<name>]` block here still works and is read first,
-# but a repo with fifty papers in it wants one file each.
+# Sources describe themselves, in `sources/<name>/`: `source.toml` for the keys
+# this tool acts on, `conventions.md` for the prose a card writer needs. A
+# `[sources.<name>]` block here still works and is read first, but a repo with
+# fifty papers in it wants a folder each.

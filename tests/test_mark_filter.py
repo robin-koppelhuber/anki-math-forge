@@ -71,18 +71,31 @@ def test_colours_are_grouped_under_their_kind(repo: Path) -> None:
     ], "commonest colour first within the kind"
 
 
-def test_only_what_you_have_declared_is_offered(repo: Path) -> None:
-    """An undeclared colour is not a category yet -- it is one you have not
-    decided about, and offering it as a filter presents a decision you have not
-    taken as one you have. The guide's legend is where it surfaces instead."""
+def test_a_chip_says_whether_you_decided_it_or_the_tool_did(repo: Path) -> None:
+    """`DEFAULT_MEANINGS` is the floor -- a Zotero kind always reads as
+    something, so a fresh repo is not a wall of squares with no captions. But a
+    default says what the annotation *is* and a declaration says what you meant
+    by it, and presenting the first as the second would hide a decision you
+    have not taken."""
     units = [a_unit("a", ("highlight", "green")), a_unit("b", ("highlight", "orange"))]
-    groups = mark_picker(units, declared(repo), "demo")
-    assert [c["colour"] for c in groups[0]["colours"]] == ["green"]
+    chips = {c["colour"]: c for c in mark_picker(units, declared(repo), "demo")[0]["colours"]}
+    assert chips["green"]["declared"]
+    assert not chips["orange"]["declared"]
+    assert chips["orange"]["meaning"], "still filterable, and still says something"
 
 
-def test_a_kind_with_nothing_declared_does_not_appear(repo: Path) -> None:
+def test_a_kind_the_tool_knows_is_always_filterable(repo: Path) -> None:
+    """Which kinds you can filter by is decided by the scheme in force, and the
+    built-in defaults are part of it."""
     units = [a_unit("a", ("underline", "orange"))]
-    assert mark_picker(units, declared(repo), "demo") == []
+    groups = mark_picker(units, declared(repo), "demo")
+    assert [g["kind"] for g in groups] == ["underline"]
+    assert not groups[0]["colours"][0]["declared"]
+
+
+def test_a_kind_the_tool_does_not_know_is_not_invented(repo: Path) -> None:
+    """The floor is Zotero's closed set of annotation kinds, not a guess."""
+    assert mark_picker([a_unit("a", ("doodle", "orange"))], declared(repo), "demo") == []
 
 
 def test_each_chip_carries_what_you_said_it_means(repo: Path) -> None:

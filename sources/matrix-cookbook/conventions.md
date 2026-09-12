@@ -1,19 +1,3 @@
-+++
-title = "The Matrix Cookbook"
-citation = "Matrix Cookbook"
-pdf = "sources/matrix-cookbook/matrixcookbook.pdf"
-tex = ""
-deck = "Mathe::Matrix-Calculus"
-order = "printed"
-tags = []
-
-# The book differentiates in denominator layout. A machine key rather than only
-# prose below, because `verify` has to act on it: its numerical gradient
-# computes one layout, the two agree on every square matrix, and a mismatch
-# would pass review and first bite on a rectangular one.
-layout = "denominator"
-+++
-
 # The Matrix Cookbook
 
 ## The setting

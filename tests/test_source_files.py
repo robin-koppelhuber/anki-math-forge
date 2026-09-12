@@ -1,9 +1,11 @@
 """A source describes itself, in its own folder.
 
-`sources/<name>/source.md`: TOML between `+++` fences for the keys the tool
-acts on, prose below for the conventions a card writer needs. TOML because
-every key up there overrides one in `forge.toml`, and a block you copy
-between the two files has to work unchanged.
+This suite covers the **older** fenced form, `sources/<name>/source.md`: TOML
+between `+++` fences for the keys, prose below for the conventions. It is still
+read, because a repo should not have to migrate all at once -- and everything
+asserted here about inheritance, precedence and refusal is the same machinery
+`source.toml` uses, so it is worth keeping exercised through both doors.
+`test_source_toml.py` covers the current form.
 """
 
 from __future__ import annotations
@@ -142,7 +144,7 @@ def test_a_source_may_read_its_colours_differently(repo: Path) -> None:
     mine = config.zotero_for("book")
     assert mine.units_from == frozenset({"magenta"})
     assert mine.means("highlight", "magenta") == "a result"
-    assert mine.means("highlight", "green") == "", "replaced, not merged"
+    assert mine.reading("highlight", "green")[1] == "default", "replaced, not merged"
     assert config.zotero.units_from == frozenset({"green"}), "the repo default is untouched"
 
 

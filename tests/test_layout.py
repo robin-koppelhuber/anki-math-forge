@@ -214,3 +214,48 @@ def test_a_dialog_keeps_the_browser_s_hidden_rule() -> None:
         if "display:" in body:
             assert "[open]" in selector, f"{selector} hides nothing when closed"
     assert seen, "the dialog rules moved; this test is watching nothing"
+
+
+# -- the settings panel and the three views ---------------------------------
+
+
+def test_the_settings_panel_shows_the_general_keys_and_this_source(
+    pdf_source: Config,
+) -> None:
+    """The other fifty sources are a different question -- which book to work
+    on -- and the gallery answers that one. Listing them here buried the two
+    groups you opened the panel for."""
+    client = TestClient(create_app(pdf_source))
+    groups = [g["where"] for g in client.get("/api/config?source=book").json()["groups"]]
+    assert groups[0] == "source: book"
+    assert "repo" in groups and "anki" in groups
+    assert not [g for g in groups if g.startswith("source: ") and g != "source: book"]
+
+
+def test_the_picture_cycles_three_ways_and_says_so() -> None:
+    """A key nobody can see is a feature nobody finds, and "what does this
+    passage actually say" is a question you have while looking at the
+    picture."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    assert "data-pdf-view" in units
+    assert '["crop", "page", "document"]' in view_js
+    assert "p: cyclePdfView," in view_js
+
+
+def test_the_context_badge_is_always_there_and_says_whose_it_is() -> None:
+    """Hiding it until the unit had already overridden the source meant never
+    seeing what you were overriding."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    badge = units[units.index("data-context-badge") - 400 : units.index("data-context-badge") + 400]
+    assert "hidden" not in badge
+    assert "this unit" in badge and "source" in badge
+    assert "data-context-badge" in (APP / "static" / "units.js").read_text(encoding="utf-8")
+
+
+def test_the_unit_s_own_mark_is_set_apart_from_its_neighbours() -> None:
+    """It was a 6% tint and a line of small caps, which at a glance is the same
+    as every other row; the decision in front of you is about this one."""
+    own = rule(".marks-list li.own")
+    assert "border-left" in own and "margin-bottom" in own
+    assert 'class="divider"' in (APP / "templates" / "units.html").read_text(encoding="utf-8")

@@ -316,14 +316,23 @@ def test_an_item_with_no_pdf_is_skipped_with_a_reason() -> None:
 def test_the_import_gives_a_new_source_its_own_file(tmp_path: Path) -> None:
     """Without one the units exist and the source does not: nothing can resolve
     its deck or its conventions."""
-    path = tmp_path / "wegel" / "source.md"
+    path = tmp_path / "wegel" / "source.toml"
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
 
     assert write_source_stub(path, item) is True
     text = path.read_text(encoding="utf-8")
-    assert text.startswith("+++")
     assert f'zotero = "{item.key}"' in text
-    assert "No conventions recorded yet" in text
+    assert "+++" not in text, "plain TOML, not fenced frontmatter"
+
+
+def test_the_import_writes_no_placeholder_conventions(tmp_path: Path) -> None:
+    """An empty file saying "nothing recorded yet" is indistinguishable from a
+    real one to everything that reads it, and `forge context` would stop
+    telling a card writer that nobody has written down what is ambient here."""
+    folder = tmp_path / "wegel"
+    item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
+    write_source_stub(folder / "source.toml", item)
+    assert not (folder / "conventions.md").exists()
 
 
 def test_the_stub_never_overwrites(tmp_path: Path) -> None:

@@ -106,10 +106,17 @@ def create_app(config: Config) -> FastAPI:
         of an alphabetical list and scrolling is not an answer.
         """
         name = resolve_source(config, source)
+        focus = f"source: {name}"
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in effective_config(config):
-            grouped.setdefault(str(row["where"]), []).append(row)
-        focus = f"source: {name}"
+            where = str(row["where"])
+            # The repo-wide settings and *this* source. The other fifty are a
+            # different question -- which book to work on -- and the gallery
+            # answers that one; listing them here buried the two groups you
+            # opened the panel for.
+            if where.startswith("source: ") and where != focus:
+                continue
+            grouped.setdefault(where, []).append(row)
         order = [focus, *(g for g in grouped if g != focus)]
         return {
             "source": name,
@@ -590,6 +597,63 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(409, str(exc)) from exc
         return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
+    def _unit_document(source: str, unit_id: str) -> tuple[Unit, Path]:
+        """The unit and the file its geometry refers to, or an HTTP error."""
+        ledger_path = config.units_path(source)
+        if not ledger_path.exists():
+            raise HTTPException(404, f"no ledger for source {source!r}")
+        unit = Ledger.load(ledger_path).get(unit_id)
+        if unit is None:
+            raise HTTPException(404, f"no unit {unit_id!r}")
+        document = config.document_for(source, unit.locator.document)
+        if document is None or not document.exists():
+            raise HTTPException(
+                409,
+                f"source document for {source!r} is not here "
+                f"({document or 'unset'}); pages are rendered from it on demand",
+            )
+        return unit, document
+
+    @app.get("/api/document/{source}/{unit_id:path}")
+    def document_api(source: str, unit_id: str) -> Any:
+        """How long the document is, and where in it this unit sits.
+
+        Asked for only when the scrolling view is first opened, because it
+        opens the PDF: a units page carrying this for every row would pay that
+        cost 750 times to answer a question nobody asked.
+        """
+        from ..extract import render as render_mod
+
+        unit, document = _unit_document(source, unit_id)
+        try:
+            total = render_mod.page_count(document)
+        except render_mod.PdfUnavailable as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"pages": total, "page": unit.locator.page or 1}
+
+    @app.get("/page/{source}/{unit_id:path}.png")
+    def page_image(source: str, unit_id: str, n: int = 1, marks: bool = True) -> Response:
+        """One whole page of the unit's document, for the scrolling view.
+
+        The page number is a query parameter rather than another path segment:
+        `{unit_id:path}` is greedy and would swallow it, and a unit id already
+        contains the colons that make it look like a path.
+        """
+        from ..extract import render as render_mod
+
+        unit, document = _unit_document(source, unit_id)
+        try:
+            png = render_mod.render_page(
+                document,
+                n,
+                regions=render_mod.regions_for(unit, n) if marks else [],
+                # The red box only on the page the unit is actually on.
+                outline=unit.locator.bbox if n == unit.locator.page else None,
+            )
+        except (render_mod.PdfUnavailable, ValueError) as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
+
     @app.post("/api/cards/{uid}/open")
     def open_in_editor(uid: str) -> Any:
         card = model.find(config.cards_dir, uid)
@@ -861,6 +925,15 @@ def mark_payloads(
     return rows
 
 
+def context_label(pages: int) -> str:
+    """`1p`, `all`. Short enough for a badge, and the same wording the browser
+    puts back after a cycle -- two spellings of the same number is how a badge
+    ends up disagreeing with the file behind it."""
+    if pages >= 100:
+        return "all"
+    return f"{pages}p"
+
+
 def unit_mark(unit: Unit) -> str:
     """`kind/colour` of the mark this unit came from, or empty.
 
@@ -882,14 +955,13 @@ def mark_picker(units: list[Unit], config: Config, source: str) -> list[dict[str
     Grouping by kind makes it a handful of rows of coloured squares, which is
     also how the marks look on the page you made them on.
 
-    **Only combinations you have declared a meaning for.** An undeclared colour
-    is not a category yet -- it is a colour you have not decided about, and
-    offering it as a filter presents a decision you have not taken as one you
-    have. Undeclared marks are not hidden: the guide's legend lists them, which
-    is where the decision belongs.
+    **Only marks the scheme in force gives a meaning to** -- your declarations
+    first, and `DEFAULT_MEANINGS` under them, so a kind Zotero defines is
+    always filterable and a colour you have not decided about is not silently
+    a category of its own. A chip says which of the two it is.
 
     Nothing appears for a source with no marks, so the Cookbook's rail is
-    unchanged.
+    unchanged: all of this is Zotero's, and a segmented book has none of it.
     """
     scheme = config.zotero_for(source)
     tally: dict[str, int] = {}
@@ -901,7 +973,7 @@ def mark_picker(units: list[Unit], config: Config, source: str) -> list[dict[str
     groups: dict[str, dict[str, Any]] = {}
     for key, count in sorted(tally.items()):
         kind, _, colour = key.partition("/")
-        meaning = scheme.means(kind, colour)
+        meaning, where = scheme.reading(kind, colour)
         if not meaning:
             continue
         group = groups.setdefault(kind, {"kind": kind, "colours": [], "count": 0})
@@ -910,6 +982,7 @@ def mark_picker(units: list[Unit], config: Config, source: str) -> list[dict[str
             "kind": kind,
             "colour": colour,
             "meaning": meaning,
+            "declared": where == "declared",
             "count": count,
         })
         group["count"] += count
@@ -930,7 +1003,11 @@ def _scheme_key(scheme: Any, kind: str, colour: str) -> str:
     for probe in (f"{kind}/{colour}", kind, colour):
         if scheme.meanings.get(probe):
             return probe
-    return colour or kind
+    # Nothing declared. Group at full specificity rather than under the colour,
+    # so every combination you have not decided about is its own row: a grey
+    # highlight and a magenta one are two different undecided things, and
+    # collapsing them hides exactly the information you need to decide.
+    return f"{kind}/{colour}" if kind and colour else (kind or colour)
 
 
 def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
@@ -969,11 +1046,18 @@ def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str
             kind, colour = "", left
         else:
             kind, colour = left, ""
+        declared = scheme.meanings.get(probe, "")
         rows.append({
             "key": probe,
             "kind": kind,
             "colour": colour,
-            "meaning": scheme.meanings.get(probe, ""),
+            # What it reads as, and whether that is a decision you took or the
+            # floor under it. They are not the same claim -- a default says
+            # what Zotero's annotation kind *is*, a declaration says what you
+            # meant by it -- and the difference is the whole point of showing
+            # the scheme rather than just a tally.
+            "meaning": declared or scheme.reading(kind, colour)[0],
+            "declared": bool(declared),
             "count": len(seen.get(probe, ())),
             "makes_a_unit": scheme.makes_a_unit(kind, colour),
         })
@@ -1010,13 +1094,19 @@ def source_facts(config: Config, source: str, *, from_marks: bool = False) -> di
     from ..context import source_conventions
 
     spec = config.sources.get(source)
+    origin = source_origin(config, source)
+    scheme = config.zotero_for(source)
     return {
+        # Which marks become units, and *only* for a source that came from
+        # Zotero: a segmented book has no marks and no scheme, and showing it
+        # one would be the rail describing machinery that is not running.
+        "units_from": sorted(scheme.units_from) if origin == "zotero" else [],
         "name": source,
         "configured": spec is not None,
         "title": spec.title if spec else source,
         "citation": spec.citation if spec else "",
         "tags": list(spec.tags) if spec else [],
-        "origin": source_origin(config, source),
+        "origin": origin,
         "zotero_key": spec.zotero_key if spec else "",
         "deck": config.deck_for(source),
         "decks": sorted(spec.decks.items()) if spec else [],
@@ -1154,7 +1244,7 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
 
     for name, spec in config.sources.items():
         where = f"source: {name}"
-        origin = f"sources/{name}/source.md"
+        origin = f"sources/{name}/source.toml"
         inherited = "inherited"
         add(where, "material", source_origin(config, name) or "unset", origin)
         add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
@@ -1375,6 +1465,7 @@ def _unit_payload(
         # How much of the document a card writer will be handed, and whether
         # this unit asked for it or inherited it.
         "context_pages": config.context_pages_for(unit.source, unit.context_pages),
+        "context_label": context_label(config.context_pages_for(unit.source, unit.context_pages)),
         "context_own": unit.context_pages is not None,
     }
 

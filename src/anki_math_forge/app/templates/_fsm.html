@@ -35,7 +35,14 @@
   <text class="lane" x="210" y="368">CARD — a file in cards/</text>
 
   <!-- unit lane -->
-  <g class="source"><text x="60" y="46">extract</text></g>
+  {# What actually makes a unit here. It said `extract` for every source,
+     which is a segmenter reading a PDF -- and for a document you marked up in
+     Zotero nothing segments anything: the marks you declared are the units.
+     A diagram that names the wrong producer is worse than one that names
+     none, because it is read as an answer. #}
+  {% set sf = source_facts | default({}, true) %}
+  <g class="source"><text x="60" y="46">{{ 'forge zotero' if sf.origin == 'zotero' else 'forge extract' }}</text>
+  {%- if sf.units_from %}<text class="sub" x="60" y="60">{{ sf.units_from | join(', ') }} marks</text>{% endif %}</g>
   <path class="edge" d="M115,50 V66" marker-end="url(#ar)"/>
 
   <g class="state"><rect x="90" y="70" width="96" height="38" rx="6"/>

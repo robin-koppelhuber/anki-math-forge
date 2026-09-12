@@ -87,7 +87,7 @@
         <dd>{{ sf.context_pages }} page{{ '' if sf.context_pages == 1 else 's' }}
             either side, per card written</dd>
         <dt>conventions</dt>
-        <dd>{% if sf.conventions %}recorded in <code>source.md</code>
+        <dd>{% if sf.conventions %}recorded in <code>conventions.md</code>
             {%- else %}<span class="warn">none written</span> — whoever writes a
             card from this is guessing at what is ambient{% endif %}</dd>
       </dl>
@@ -115,7 +115,8 @@
           <code>crop_context</code>, and a source may set its own. <b>The box is
           what this unit claims to be.</b> If the box holds two numbered
           equations, or the equation continues outside it, segmentation got it
-          wrong — annotate rather than card it. <b>p</b> shows the whole page.</dd>
+          wrong — annotate rather than card it. <b>p</b> cycles the crop, the
+          whole page, and the whole document scrolling.</dd>
       <dt>the colours on it</dt>
       <dd>what a reader marked, painted back on in the colours they used. The
           mark this unit came from is at <b>full strength</b>; everything
@@ -171,14 +172,21 @@
           through those rather than asking for a number, because the decision
           is "a bit more" or "all of it" and not a measurement. This is the
           moment you can tell — the theorem is here and its hypotheses are two
-          pages back, and no per-source default knows that. The badge appears
-          only once a unit asks for something other than the default.</dd>
-      <dt><b>p</b> whole page</dt>
-      <dd>Swap the crop for the entire page, with the unit's own box drawn on
-          it. The two ways segmentation fails are only visible against the
-          surroundings: a split equation shows its missing lines outside the
-          box, and two merged into one show two numbers inside it. Press again
-          to go back.</dd>
+          pages back, and no per-source default knows that. The badge is always
+          on screen and says whose number it is — <b>source</b> until this unit
+          overrides it — because hiding it until it had already been changed
+          meant never seeing what you were changing. Click it, or press
+          <b>c</b>.</dd>
+      <dt><b>p</b> crop / page / document</dt>
+      <dd>Three ways to look at the same geometry. <b>page</b> is the whole
+          page with the unit's own box drawn on it: the two ways segmentation
+          fails are only visible against the surroundings, since a split
+          equation shows its missing lines outside the box and two merged into
+          one show two numbers inside it. <b>document</b> is every page,
+          scrolling, landing on this one — for when the question is not about
+          the region at all but about what the passage is <em>saying</em>, and
+          the answer is three paragraphs up. The control in the corner of the
+          picture does the same thing.</dd>
       <dt><b>z</b> undo</dt>
       <dd>Undo the last decision, however it was made &mdash; a state change,
           an accepted suggestion, a dismissed one. It restores what was
@@ -327,14 +335,16 @@
           <span class="scheme-text">
             <b>{{ row.key }}</b>
             {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
-            <span class="scheme-meaning">{{ row.meaning or 'nothing declared — it reaches a card writer as a coloured box with no caption' }}</span>
+            <span class="scheme-meaning">{{ row.meaning }}</span>
+            {% if not row.declared %}<span class="scheme-default">not declared here — this is
+              what the annotation kind is, not what you meant by it</span>{% endif %}
           </span>
           <b class="scheme-count">{{ row.count }}</b>
         </li>
         {% endfor %}
       </ul>
       <p class="rail-more">declared in <code>[zotero.meanings]</code>, or per source in
-        <code>source.md</code></p>
+        <code>source.toml</code></p>
     </section>
     {% endif %}
     </div>

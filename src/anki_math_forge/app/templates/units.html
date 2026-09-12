@@ -22,12 +22,17 @@
       {% elif unit.marks %}<span class="badge">marked while reading</span>
       {% else %}<span class="badge bad">not transcribed</span>{% endif %}
       {% if unit.uids %}<span class="badge carded">{{ unit.uids|join(', ') }}</span>{% endif %}
-      {# How much of the document a card writer gets. Shown only when this
-         unit asked for something other than the default, so the common case
-         stays quiet. `c` cycles it. #}
-      <span class="badge context{{ ' own' if unit.context_own }}" data-context-badge
-            title="pages either side handed to whoever writes the card (c)"
-            {{ 'hidden' if not unit.context_own }}>{{ unit.context_pages }}p</span>
+      {# How much of the document a card writer gets. Always on screen, because
+         it is a number you are deciding *about* -- "is one page enough for
+         this one" is the question, and hiding the answer until it has already
+         been overridden means you never see what you are overriding. It says
+         whose setting it is, and it is a button: click or `c`, same cycle. #}
+      <button type="button" class="badge context{{ ' own' if unit.context_own }}"
+              data-context-badge
+              title="{{ 'this unit asks for' if unit.context_own else 'inherited from the source' }}: pages either side handed to whoever writes its card — click, or c, to cycle">
+        <span data-context-value>{{ unit.context_label }}</span>
+        <i>{{ 'this unit' if unit.context_own else 'source' }}</i>
+      </button>
     </div>
 
     {# Document on one side, what was written about it on the other, with the
@@ -44,6 +49,13 @@
     <div class="side-by-side {{ 'one-column' if not aside }}">
       {% if unit.image %}
       <figure class="crop">
+        {# `p` does this too. A key nobody can see is a feature nobody finds,
+           and "what does this passage actually say" is a question you have
+           while looking at the picture, not while reading the footer. #}
+        <button type="button" class="crop-view" data-pdf-view
+                title="crop · whole page · the whole document, scrolling (p)">
+          <span data-pdf-view-label>crop</span>
+        </button>
         <img src="{{ unit.image }}" alt="crop of {{ unit.id }}" loading="lazy" data-crop>
         <figcaption class="crop-missing" hidden>
           source document not available — crops are rendered from it on demand
@@ -79,6 +91,10 @@
         <span class="hint">— in reading order; the first is this unit's own</span></summary>
       <ul>
         {% for m in unit.marks %}
+        {# One line between the mark this unit *is* and everything around it.
+           The gap alone reads as a margin somebody forgot; this says what the
+           rest of the list is for. #}
+        {% if loop.index == 2 %}<li class="divider">on the pages around it</li>{% endif %}
         <li class="{{ 'own' if m.own }}">
           <span class="swatch c-{{ m.colour or m.kind }}" aria-hidden="true"></span>
           <div class="mark-body">
@@ -151,7 +167,7 @@
 <span class="key-group sep"><b>z</b> undo</span>
 <span class="key-group"><b>n</b> annotate</span>
 <span class="key-group"><b>c</b> context size</span>
-<span class="key-group"><b>p</b> whole page</span>
+<span class="key-group"><b>p</b> crop/page/doc</span>
 <span class="key-group"><b>S</b> skip + reason</span>
 <span class="key-group"><b>u</b> back to new</span>
 <span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>

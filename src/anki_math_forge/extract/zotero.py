@@ -176,12 +176,17 @@ def units_for(
 
 
 def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ()) -> bool:
-    """Give a freshly imported source its own file, if it has none.
+    """Give a freshly imported source its `source.toml`, if it has none.
 
     Without one the units exist and the source does not: `config.source()` has
     never heard of it, so nothing can resolve its deck or its conventions. The
     import is the only moment that knows the title and the citation, so it is
     the right moment to write them down.
+
+    **No `conventions.md`.** An empty placeholder saying "nothing recorded yet"
+    is indistinguishable from a real one to everything that reads it, and
+    `forge context` would stop telling a card writer that nobody has written
+    down what is ambient here. An absent file is the honest state.
 
     Never overwrites. Everything in here is a starting point you will edit, and
     a re-import must not undo that.
@@ -193,7 +198,6 @@ def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ())
     # ever having decided what it says.
     quoted = [f'"{t}"' for t in tags]
     lines = [
-        "+++",
         f'title = "{item.title}"',
         f'citation = "{item.citation}"',
         f"tags = [{', '.join(quoted)}]",
@@ -206,13 +210,16 @@ def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ())
         "# all of them; name them when the item carries more than one PDF of",
         "# the same thing, since marks made in one are not marks in the other.",
         "documents = []",
-        "+++",
         "",
-        f"# {item.title}",
+        "# What your marks mean here, when this document is not read the way",
+        "# the rest of the shelf is. Anything you set replaces the repo-wide",
+        "# scheme for this source; leave it out to inherit.",
+        "# [meanings]",
+        '# green = "a claim or result worth a card"',
         "",
-        "(No conventions recorded yet. `forge context` says so, which is",
-        "the point: until something is written here, whoever writes a card from",
-        "this source is guessing at what is ambient.)",
+        "# Conventions -- the ambient setting a card writer has to know -- go",
+        "# in `conventions.md` beside this file. There is none until you write",
+        "# one, and `forge context` says so rather than pretending.",
         "",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -260,7 +267,11 @@ def build(
     annotations = client.annotations({a.key for a in attachments})
     report.annotations = len(annotations)
     for annotation in annotations:
-        if not zotero.means(annotation.kind, annotation.colour_name):
+        # Undeclared, not meaningless. `DEFAULT_MEANINGS` gives every Zotero
+        # kind a reading, so "has no meaning" stopped being a question anyone
+        # can ask; what is worth reporting is the colour you have not decided
+        # about, which is a decision outstanding rather than a gap.
+        if zotero.reading(annotation.kind, annotation.colour_name)[1] != "declared":
             name = f"{annotation.kind}/{annotation.colour_name}"
             report.unmapped[name] = report.unmapped.get(name, 0) + 1
 
