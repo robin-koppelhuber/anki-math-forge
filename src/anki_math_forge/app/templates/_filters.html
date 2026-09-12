@@ -130,15 +130,23 @@
          `draft` cards -- which read `0/16` on every section once nothing was
          in that state any more. The bar carries the rest of the split, which
          one ratio cannot. #}
+      {# A chapter level only where there is one. `group.chapter` is empty when
+         no section in this source starts with a number, or when every chapter
+         holds exactly one section -- a paper, or a book imported as one file
+         per chapter. Folding each of those into a group of one was an extra
+         click on every row and, for a single-attachment paper, one shut
+         `<details>` labelled "PDF". #}
       {% for group in section_tree %}
-      <details class="filter-chapter" {{ 'open' if section and section.split('.')[0] == group.chapter }}>
+      {% if group.chapter %}
+      <details class="filter-chapter" {{ 'open' if section and section_chapter(section) == group.chapter }}>
         <summary>{{ group.chapter }}<span class="filter-tally">{{ group.matching }}/{{ group.total }}</span></summary>
+      {% endif %}
         <ul class="filter-list sections">
           {% for row in group.sections %}
           <li><a class="{{ 'on' if section == row.name }}"
                  title="§{{ row.name }} — {{ row.matching }} of {{ row.total }} match the current filters&#10;{% for state, n in row.states.items() %}{{ n }} {{ state }}&#10;{% endfor %}"
                  href="{{ filter_url(here, f, section=(none if section == row.name else row.name)) }}">
-            <span class="sec-name">{% if section == row.name %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}§{{ row.name }}</span>
+            <span class="sec-name">{% if section == row.name %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}{{ '§' if row.name[:1].isdigit() }}{{ row.name }}</span>
             <span class="sec-bar" aria-hidden="true">
               {%- for part in row.bar -%}
               <i class="seg state-{{ part.state }}" style="width:{{ part.pct }}%"></i>
@@ -147,7 +155,7 @@
             <b>{{ row.matching }}/{{ row.total }}</b></a></li>
           {% endfor %}
         </ul>
-      </details>
+      {% if group.chapter %}</details>{% endif %}
       {% endfor %}
     </details>
     {% endif %}
@@ -164,8 +172,19 @@
        how this document was read. A source with no marks renders nothing, so
        the Cookbook's rail is unchanged. #}
     {% if mark_matrix is defined and mark_matrix %}
+    {# Multi-select. `mark` is a comma-separated set, so a cell toggles itself
+       in or out rather than replacing whatever was chosen before -- "every
+       green thing, whatever I drew it with" was four page loads and could not
+       be held in view at once. #}
+    {% set chosen = mark_selection(mark) %}
     <details class="filter-group marks" open>
-      <summary>marked as</summary>
+      <summary>marked as<span class="filter-tally">{{ chosen | length if mark else 'all' }}</span></summary>
+      <p class="mark-grid-all">
+        <a class="mg-all {{ 'on' if not mark }}" href="{{ filter_url(here, f, mark=none) }}"
+           title="stop filtering by mark">all</a>
+        <a class="mg-all {{ 'on' if mark == 'none' }}" href="{{ filter_url(here, f, mark='none') }}"
+           title="select nothing — one click from `all` again">none</a>
+      </p>
       <table class="mark-grid">
         <thead>
           <tr>
@@ -184,9 +203,10 @@
             {% for cell in row.cells %}
             <td>
               {% if cell.count %}
-              <a class="mg-cell {{ 'on' if mark == cell.key }}{{ '' if cell.declared else ' undeclared' }}"
-                 title="{{ cell.kind }} · {{ cell.colour or 'no colour' }} — {{ cell.meaning }}{{ '' if cell.declared else ' (not declared here: this is what the annotation kind is, not what you used it to mean)' }} — {{ cell.count }} unit{{ '' if cell.count == 1 else 's' }}{{ ' · click to clear' if mark == cell.key }}"
-                 href="{{ filter_url(here, f, mark=(none if mark == cell.key else cell.key)) }}">
+              {% set on = cell.key in chosen %}
+              <a class="mg-cell {{ 'on' if on }}{{ '' if cell.declared else ' undeclared' }}"
+                 title="{{ cell.kind }} · {{ cell.colour or 'no colour' }} — {{ cell.meaning }}{{ '' if cell.declared else ' (not declared here: this is what the annotation kind is, not what you used it to mean)' }} — {{ cell.count }} unit{{ '' if cell.count == 1 else 's' }} · click to {{ 'remove' if on else 'add' }}"
+                 href="{{ filter_url(here, f, mark=mark_toggle(mark, cell.key, mark_matrix)) }}">
                 <span class="swatch c-{{ cell.colour or cell.kind }}" aria-hidden="true"></span>
                 <b>{{ cell.count }}</b>
               </a>
@@ -205,9 +225,7 @@
           {% endfor %}
         </tbody>
       </table>
-      {% if mark %}
-      <p class="filter-clear"><a href="{{ filter_url(here, f, mark=none) }}">&larr; any mark</a></p>
-      {% endif %}
+
     </details>
     {% endif %}
 
@@ -228,6 +246,10 @@
       <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
                   title="copy — {{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
         <span class="run-label">{{ cmd.label }}</span>
+        {# What it does, in one sentence. The label says which pass and how
+           much is waiting; it does not say what the pass *is*, and these are
+           commands you run rarely enough to have forgotten. #}
+        {% if cmd.why %}<span class="run-why">{{ cmd.why }}</span>{% endif %}
         <code>{{ cmd.run }}</code>
       </button></li>
       {% endif %}

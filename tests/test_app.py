@@ -1615,9 +1615,38 @@ def test_picking_a_section_keeps_the_annotation_filter(pdf_source: Config) -> No
 def test_the_section_row_clears_itself(pdf_source: Config) -> None:
     write_card(pdf_source, "aaa111", "demo:2.4:61")
     body = TestClient(create_app(pdf_source)).get("/review?status=draft&section=2.4").text
-    block = re.search(r"<summary>sections</summary>(.*?)</details>\s*</details>", body, re.S)
-    active = re.search(r'<a class="on"[^>]*href="([^"]+)"', block.group(1))
+    # From the sections heading to the end of the rail. Not to a fixed number
+    # of `</details>`: the chapter level only exists where a source has one,
+    # and this fixture's sections are each alone in theirs -- which is the
+    # flat shape a paper gets.
+    block = body[body.index("<summary>sections</summary>") : body.index("</aside>")]
+    active = re.search(r'<a class="on"[^>]*href="([^"]+)"', block)
     assert active and "section=2.4" not in active.group(1).replace("&amp;", "&")
+
+
+def test_a_chapter_level_appears_only_where_there_is_one(config: Config) -> None:
+    """`2.4` -> chapter `2` is the Cookbook's numbering, and splitting on `.`
+    gave a paper imported from Zotero -- whose sections are attachment titles
+    like `1 - introduction`, or simply `PDF` -- one chapter per section, each
+    folded into a `<details>` of one. That is an extra click on every row and,
+    for a single-attachment paper, one shut fold labelled `PDF`."""
+    from anki_math_forge.app import section_rows
+
+    def tree(*names: str) -> list[dict[str, Any]]:
+        return section_rows(
+            list(names), set(names), lambda s: s, lambda s: "new", lambda s: s, ("new",)
+        )
+
+    cookbook = tree("2.1", "2.4", "3.1")
+    assert [g["chapter"] for g in cookbook] == ["2", "3"], "a real chapter groups"
+
+    paper = tree("1 - introduction", "2- tail_bounds")
+    assert [g["chapter"] for g in paper] == [""], "one section each: no level"
+    assert len(paper[0]["sections"]) == 2
+
+    one_file = tree("PDF")
+    assert [g["chapter"] for g in one_file] == [""]
+    assert [r["name"] for r in one_file[0]["sections"]] == ["PDF"]
 
 
 # -- what the compact diagram counts --------------------------------------

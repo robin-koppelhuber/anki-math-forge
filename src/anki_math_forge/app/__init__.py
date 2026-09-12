@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -88,6 +89,12 @@ def create_app(config: Config) -> FastAPI:
         katex_base = CDN_KATEX
     templates.env.globals["katex_base"] = katex_base
     templates.env.globals["filter_url"] = filter_url
+    # So the rail can open the chapter holding the active section without
+    # re-implementing the rule in Jinja -- which is how it came to split on
+    # `.`, a Cookbook convention, in a template shown for every source.
+    templates.env.globals["section_chapter"] = _chapter_of
+    templates.env.globals["mark_selection"] = mark_selection
+    templates.env.globals["mark_toggle"] = mark_toggle
 
     # -- views ------------------------------------------------------------
 
@@ -155,7 +162,7 @@ def create_app(config: Config) -> FastAPI:
                     "config": config,
                     "source": resolve_source(config, source),
                     "sources": source_names(config),
-                    "pipeline": pipeline_counts(config),
+                    "pipeline": pipeline_counts(config, resolve_source(config, source)),
                 },
             )
         name = resolve_source(config, source)
@@ -173,14 +180,19 @@ def create_app(config: Config) -> FastAPI:
             unsectioned = [u for u in unsectioned if has_annotation(u.notes, annotated)]
         if transcribed or readable:
             unsectioned = [u for u in unsectioned if u.transcription == "ok"]
-        if mark:
-            unsectioned = [u for u in unsectioned if unit_mark(u) == mark]
+        # `mark` is a *set*, comma-separated in the URL. One value at a time
+        # made the grid a radio button with forty positions: "every green
+        # thing, whatever I drew it with" took four page loads and could not be
+        # held in view at once, which is most of what the grid is for.
+        wanted = marks_wanted(mark)
+        if wanted is not None:
+            unsectioned = [u for u in unsectioned if unit_mark(u) in wanted]
         if suggested:
             units = [u for u in units if u.suggestion is not None]
         if annotated:
             units = [u for u in units if has_annotation(u.notes, annotated)]
-        if mark:
-            units = [u for u in units if unit_mark(u) == mark]
+        if wanted is not None:
+            units = [u for u in units if unit_mark(u) in wanted]
         transcribed = transcribed or readable
         if transcribed:
             # Triage is much faster when you can read the maths rather than
@@ -289,7 +301,7 @@ def create_app(config: Config) -> FastAPI:
                     "config": config,
                     "source": name,
                     "sources": source_names(config),
-                    "pipeline": pipeline_counts(config),
+                    "pipeline": pipeline_counts(config, name),
                 },
             )
         in_source = [c for c in cards if card_in_source(c, name)]
@@ -891,14 +903,50 @@ def section_rows(
                 if n
             ],
         }
-        chapter = (name or "?").split(".", 1)[0]
         group = chapters.setdefault(
-            chapter, {"chapter": chapter, "sections": [], "total": 0, "matching": 0}
+            _chapter_of(name),
+            {"chapter": _chapter_of(name), "sections": [], "total": 0, "matching": 0},
         )
         group["sections"].append(row)
         group["total"] += row["total"]
         group["matching"] += row["matching"]
-    return list(chapters.values())
+
+    # A chapter level that every section is alone in is not a level, it is an
+    # extra click on every row. The Cookbook has `2.1 … 2.8` under chapter 2
+    # and wants the fold; a paper has one section per chapter file, or one
+    # section full stop, and folding each of those into a group of one is how
+    # the rail came to show a single shut `<details>` labelled "PDF".
+    groups = list(chapters.values())
+    if all(len(g["sections"]) <= 1 for g in groups):
+        flat = [row for g in groups for row in g["sections"]]
+        if not flat:
+            return []
+        return [{
+            "chapter": "",
+            "sections": flat,
+            "total": sum(r["total"] for r in flat),
+            "matching": sum(r["matching"] for r in flat),
+        }]
+    return groups
+
+
+# A leading number followed by a separator is the chapter, whatever the source
+# spells the rest of the name. `2.4` -> `2` is the Cookbook's form; a paper
+# imported from Zotero names its attachments `1 - introduction`, and splitting
+# those on `.` gave every section a chapter of its own. A name with no leading
+# number -- an attachment simply called `PDF` -- has no chapter, and saying so
+# is better than inventing one.
+#
+# Hyphen first in the class so it is a literal and not a range, and the two
+# long dashes as escapes rather than characters -- they are what a title
+# generator actually emits, and written literally they read as a typo.
+_DASHES = "-\u2013\u2014"
+_CHAPTER = re.compile(rf"^\s*(\d+)\s*(?:[{_DASHES}.:]|\s|$)")
+
+
+def _chapter_of(name: str) -> str:
+    found = _CHAPTER.match(name or "")
+    return found.group(1) if found else ""
 
 
 def _section_key(name: str) -> tuple[Any, ...]:
@@ -1075,7 +1123,6 @@ def grouped_marks(rows: list[dict[str, Any]]) -> dict[str, Any]:
     two-word terms can be shut away while the claims stay open.
     """
     groups: dict[str, dict[str, Any]] = {}
-    colours: dict[str, int] = {}
     own = None
     for row in rows:
         if row["own"]:
@@ -1083,26 +1130,27 @@ def grouped_marks(rows: list[dict[str, Any]]) -> dict[str, Any]:
             continue
         kind = str(row["kind"]) or "highlight"
         group = groups.setdefault(
-            kind, {"kind": kind, "label": KIND_GROUPS.get(kind, kind), "marks": []}
+            kind,
+            {"kind": kind, "label": KIND_GROUPS.get(kind, kind), "marks": [], "tally": {}},
         )
         group["marks"].append(row)
-        # What the swatch filter offers. Keyed the way the row is drawn --
-        # colour, or the kind when a mark has no colour -- so the two cannot
-        # disagree about what a chip turns off.
-        key = str(row["colour"]) or kind
-        colours[key] = colours.get(key, 0) + 1
+        # What the swatch filter offers, **per group**. One row of colours for
+        # the whole list could not say "the green highlights but not the green
+        # notes", which is the distinction the groups exist to draw -- and it
+        # offered colours that were not in the group you were looking at.
+        #
+        # Keyed `kind/colour` -- or the kind alone where a mark has none -- so
+        # a chip and the row it hides cannot disagree about what it is.
+        key = f"{kind}/{row['colour']}" if row["colour"] else kind
+        group["tally"][key] = group["tally"].get(key, 0) + 1
     ordered = sorted(groups.values(), key=lambda g: -len(g["marks"]))
     for group in ordered:
         group["count"] = len(group["marks"])
-    return {
-        "own": own,
-        "groups": ordered,
-        "count": len(rows),
-        "colours": [
-            {"colour": c, "count": n}
-            for c, n in sorted(colours.items(), key=lambda kv: (-kv[1], kv[0]))
-        ],
-    }
+        group["colours"] = [
+            {"key": key, "colour": key.partition("/")[2] or key, "count": n}
+            for key, n in sorted(group.pop("tally").items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
+    return {"own": own, "groups": ordered, "count": len(rows)}
 
 
 def mark_payloads(
@@ -1177,6 +1225,63 @@ def context_steps(current: int) -> list[dict[str, Any]]:
         }
         for step in CONTEXT_STEPS
     ]
+
+
+# What an empty `mark` means, and what `mark=none` means, are different
+# questions: nothing selected is "show everything" only because that is the
+# resting state of a filter, while an explicit refusal has to be expressible or
+# `none` would be a button that silently did nothing.
+NO_MARKS = "none"
+
+
+def marks_wanted(mark: str) -> set[str] | None:
+    """The selected cells, or `None` for "not filtering".
+
+    Three states rather than two. `""` is the filter at rest; a list is what to
+    keep; and `none` is an explicit empty selection, which shows nothing --
+    the symmetric counterpart of `all`, and one click from getting everything
+    back. Without it the `none` button would be the only control on the rail
+    that did nothing when pressed.
+    """
+    if not mark:
+        return None
+    if mark == NO_MARKS:
+        return set()
+    return {piece for piece in mark.split(",") if piece}
+
+
+def mark_selection(mark: str) -> set[str]:
+    """Which cells are drawn as chosen. An unfiltered grid shows none of them
+    chosen rather than all: "no filter" and "every cell ticked" look the same
+    in the deck and are different things to click next."""
+    return marks_wanted(mark) or set()
+
+
+def mark_toggle(mark: str, key: str, matrix: dict[str, Any]) -> str | None:
+    """The `mark` value a cell's link should carry.
+
+    Adding the first cell to an unfiltered grid selects *only* that one --
+    starting from "everything" and removing one would need forty clicks to
+    express the common case. Removing the last one goes back to no filter
+    rather than to `none`, because an accidental empty deck at the end of a
+    click-click-click is worse than the alternative, and `none` is still there
+    as a button when you actually mean it.
+    """
+    chosen = mark_selection(mark)
+    if key in chosen:
+        chosen = chosen - {key}
+    elif not mark or mark == NO_MARKS:
+        chosen = {key}
+    else:
+        chosen = chosen | {key}
+    if not chosen:
+        return None
+    # Every cell selected is the same deck as no filter, and the shorter URL
+    # is the one that survives being pasted somewhere.
+    live = {c["key"] for row in matrix.get("rows", ()) for c in row["cells"] if c["count"]}
+    if chosen >= live:
+        return None
+    return ",".join(sorted(chosen))
 
 
 def unit_mark(unit: Unit) -> str:
@@ -1418,6 +1523,13 @@ def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         group["declared"] = group["declared"] or bool(row["declared"])
     for group in groups.values():
         group["entries"].sort(key=lambda r: (-int(r["count"]), str(r["key"])))
+        # The short name to lead the row with. You come to this legend holding
+        # a colour -- "what does purple mean" -- so the colour is the lookup
+        # key and belongs first and narrow; `highlight/green` is the thing you
+        # would edit in the config, and it goes in the tooltip.
+        group["label"] = " · ".join(
+            str(e["colour"] or e["kind"]) for e in group["entries"]
+        )
     # What makes units first -- those are the rows you meet in the queue --
     # then by how much of the document carries them.
     return sorted(
@@ -1726,22 +1838,32 @@ def commands_for(
         elif counts.get("new"):
             out.append({
                 "label": f"read the crops — {counts['new']} still untranscribed",
+                "why": "so triage shows the maths written out instead of a"
+                " picture to squint at. A hint only: the crop stays the"
+                " authority.",
                 "run": f"/transcribe{src}{scope}",
                 "kind": "claude",
             })
             out.append({
                 "label": "propose which of them to skip",
+                "why": "fragments, headings, notation-table rows. It only"
+                " proposes — every suggestion waits for you, and nothing may"
+                " propose skipping a numbered equation.",
                 "run": f"/classify{src}{scope}",
                 "kind": "claude",
             })
         if counts.get("queued"):
             out.append({
                 "label": f"write stubs for {counts['queued']} queued",
+                "why": "reads the page each unit came from and your @claude"
+                " brief, and writes a draft. Approving is still yours.",
                 "run": f"/extract-cards{src}{sec}",
                 "kind": "claude",
             })
         out.append({
             "label": "this list, as JSON",
+            "why": "the same units this filter is showing, for a script or a"
+            " subagent. Read from this rather than from the printed output.",
             "run": (
                 f"uv run forge units{src}"
                 f" --state {filters.get('state') or 'all'}{sec} --json"
@@ -1752,23 +1874,33 @@ def commands_for(
         if counts.get("draft"):
             out.append({
                 "label": f"fill in {counts['draft']} thin drafts",
+                "why": "adds conditions, a proof where it earns its place, the"
+                " gradings. Run it before approving, not after: augmenting an"
+                " approved card sends it back to draft.",
                 "run": f"/augment{src}",
                 "kind": "claude",
             })
         if counts.get("annotated_claude_card"):
             out.append({
                 "label": f"{counts['annotated_claude_card']} open requests",
+                "why": "works the @claude notes and deletes each line it has"
+                " acted on. Every one of them is holding a card out of sync"
+                " until it goes.",
                 "run": "/triage claude",
                 "kind": "claude",
             })
         if counts.get("approved"):
             out.append({
                 "label": "check the maths numerically",
+                "why": "runs the `## verify` snippets — opt-in, and it caught"
+                " three errors in the source. Never reaches Anki.",
                 "run": f"uv run forge verify{src}",
                 "kind": "shell",
             })
         out.append({
             "label": "what would reach Anki",
+            "why": "a rehearsal: approved cards only, nothing written, and it"
+            " names every card it would skip and why.",
             "run": "uv run forge sync --dry-run",
             "kind": "shell",
         })
@@ -2136,7 +2268,10 @@ def _mutate_card(config: Config, uid: str, body: dict[str, Any], action: Any) ->
     return {
         "card": _card_payload(model.load(card.path), findings, config),
         "before": before,
-        "pipeline": pipeline_counts(config),
+        # Scoped to the view, not to the card: the review page may legitimately
+        # be showing every source, and the rail beside it has to agree with
+        # what it is showing rather than with what was just clicked.
+        "pipeline": pipeline_counts(config, _scope(body)),
     }
 
 
@@ -2168,9 +2303,26 @@ def _mutate_ledger(
         "unit": _unit_payload(unit, config),
         "mtime": _mtime(path),
         "before": before,
-        # So the filter rail can follow the decision without a page load.
-        "pipeline": pipeline_counts(config),
+        # So the filter rail can follow the decision without a page load --
+        # scoped to whatever the view is showing. Unscoped, every action
+        # replaced one source's counts with the whole repo's: a card graded on
+        # a fifteen-unit paper made the rail jump to 127 carded and 108
+        # approved, which is a number about a different book.
+        "pipeline": pipeline_counts(config, _scope(body, source)),
     }
+
+
+def _scope(body: dict[str, Any], fallback: str = "") -> str:
+    """Which source the counts in a write's response are about.
+
+    The browser sends it, because the *view* owns the question: a units page
+    is always scoped to one source, a review page may be scoped to one or to
+    all of them, and the server cannot tell which from the object being
+    written. `fallback` is for the ledger routes, where the source is already
+    in the path and an older client that sends nothing still gets it right.
+    """
+    scope = str(body.get("scope", "") or "")
+    return scope or fallback
 
 
 def _expected_mtime(body: dict[str, Any]) -> int | None:

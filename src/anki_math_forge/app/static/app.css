@@ -240,7 +240,18 @@ main {
   padding-left: 0.8rem;
 }
 .reason { color: var(--warn); font-size: 14px; }
-.unit-id { color: var(--muted); font-size: 11px; font-family: ui-monospace, monospace; margin-top: 1.4rem; }
+/* The id is what you paste into a command, so it stays selectable -- but in
+   the head, not on a line of its own under everything. It was the second half
+   of a footer that took the vertical room the marks list needed to say
+   nothing. The source prefix is in the tooltip; on a page scoped to one
+   source, repeating it on every unit is noise. */
+.unit-id {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-family: ui-monospace, monospace;
+  user-select: all;
+  cursor: text;
+}
 
 /* -- review -------------------------------------------------------------- */
 
@@ -633,11 +644,16 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 /* Absence of a suggestion is a result, not a gap in the UI -- said quietly,
    because it is the common case (571 of 751 units are numbered equations,
    which nothing is permitted to propose a skip for). */
-.no-suggestion {
-  margin: 0.6rem 0 0;
-  font-size: 12px;
+/* A badge in the head now rather than three lines of footer. Silence here is
+   a result and not a gap -- nothing is *permitted* to propose a skip for a
+   numbered equation, which is 571 of 751 units -- so it stays visible. It just
+   stops being the largest thing on a unit nobody has proposed anything about;
+   the full reason is in the tooltip. */
+.badge.quiet {
+  border-style: dashed;
   color: var(--muted);
-  font-style: italic;
+  opacity: 0.7;
+  cursor: help;
 }
 
 /* The sync gate: an open annotation stops a card leaving, whatever its
@@ -1102,6 +1118,18 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 }
 .filter-list.runs button.run:hover { border-color: var(--accent); }
 .filter-list.runs .run-label { font-size: 11px; opacity: 0.7; }
+/* What the pass actually does, in one sentence. The label says which one and
+   how much is waiting; it does not say what the pass *is*, and these are
+   commands you run rarely enough to have forgotten between times. */
+.filter-list.runs .run-why {
+  display: block;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--muted);
+  margin: 0.15rem 0 0.3rem;
+  white-space: normal;
+  text-align: left;
+}
 .filter-list.runs code { font-size: 11px; word-break: break-all; }
 .filter-list.runs .claude code { color: var(--accent); }
 .filter-list.runs button.copied { border-color: var(--accent); }
@@ -1322,45 +1350,54 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .rail-more a { color: var(--accent); text-decoration: none; }
 .rail-more a:hover { text-decoration: underline; }
 
-/* One row per meaning, not per line of config. Eight colours times six kinds
-   is forty-eight combinations in a 240px rail -- but nobody has forty-eight
-   meanings, and `kind` beats `colour` in the lookup, so one `note = "..."`
-   already covers every colour of sticky note. Grouping puts their swatches on
-   one line and writes the sentence once. */
-.scheme-list { list-style: none; margin: 0; padding: 0; font-size: 11.5px; }
-.scheme-list li { display: flex; gap: 0.3rem; align-items: baseline; padding: 0.25rem 0; }
+/* One row per meaning, aligned in three columns: what the mark looks like and
+   what it is called, what it means, and how many there are.
+
+   Two things were wrong before. The meaning led and the colour name sat on a
+   second line -- but you arrive at this legend *holding a colour* ("what does
+   purple mean"), so the colour is the lookup key and has to come first. And
+   nothing lined up: a `unit` badge wrapped onto its own line on some rows and
+   not others, so nine rows read as a heap rather than a table.
+
+   Grouped by meaning, because eight colours times six kinds is forty-eight
+   combinations in a 240px rail and nobody has forty-eight meanings: `kind`
+   beats `colour` in the config's own lookup, so one `note = "..."` already
+   covers every colour of sticky note. Marks that share a meaning share a row.
+*/
+.scheme-list { list-style: none; margin: 0; padding: 0; font-size: 11px; }
+.scheme-list li {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 0.1rem 0.4rem;
+  padding: 0.22rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+.scheme-list li:first-child { border-top: 0; }
 .scheme-list li.unused { opacity: 0.45; }
-/* Every mark that resolves to this meaning, side by side. Wraps rather than
-   squeezing the sentence: the swatches are the index, the sentence is the
-   thing being looked up. */
-.scheme-swatches {
-  flex: none;
+/* The lookup column: swatches then the name, never wrapping. */
+.sl-mark {
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  max-width: 4.2rem;
-  align-self: flex-start;
-  margin-top: 0.15rem;
+  align-items: center;
+  gap: 0.15rem;
+  max-width: 6.5rem;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.scheme-swatches .swatch { margin: 0; }
-.scheme-text { flex: 1; min-width: 0; }
-.scheme-unit {
-  font-style: normal; font-size: 9px; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--accent); border: 1px solid var(--accent);
-  border-radius: 3px; padding: 0 0.25rem; margin-left: 0.3rem;
+.sl-mark .swatch { margin: 0; flex: none; }
+.sl-label {
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.scheme-meaning { color: var(--ink); line-height: 1.35; }
-/* Which config lines produced this row -- small, because it is what you edit
-   and not what you read. */
-.scheme-keys {
-  display: block;
-  font-style: normal;
-  font-size: 9.5px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-  margin-top: 0.05rem;
-}
-.scheme-count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Marks that become units of their own -- the rows you meet in the queue.
+   A rule down the left rather than a badge: a badge is a word long enough to
+   wrap, and it wrapped on exactly the rows where it mattered. */
+.scheme-list li.makes-units { border-left: 2px solid var(--accent); padding-left: 0.3rem; }
+.scheme-list li.makes-units .sl-label { color: var(--accent); }
+.sl-meaning { color: var(--muted); line-height: 1.3; }
+.sl-count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
 /* The backlog, folded. These are real -- an unmapped mark reaches a card
    writer as a coloured box with no caption -- but open by default they pushed
    the scheme you actually use off the bottom of the rail. */
@@ -1482,6 +1519,22 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   margin: 0.25rem 0 0.4rem 0.2rem;
   font-size: 11px;
 }
+/* The whole grid at once. `all` clears the filter; `none` is an explicit empty
+   selection -- the symmetric counterpart, and one click from everything back.
+   Without it `none` would be the only control on the rail that did nothing. */
+.mark-grid-all { display: flex; gap: 0.25rem; margin: 0.3rem 0 0 0.2rem; }
+.mg-all {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+}
+.mg-all:hover { border-color: var(--line); color: var(--ink); }
+.mg-all.on { border-color: var(--accent); color: var(--ink); }
 .mark-grid th {
   font-weight: 400;
   color: var(--muted);

@@ -143,3 +143,21 @@ def test_every_command_says_where_it_is_pasted() -> None:
                 assert not command["run"], "a note is not copyable"
                 continue
             assert command["run"].startswith("/") == (command["kind"] == "claude")
+
+
+def test_every_command_says_what_it_does() -> None:
+    """The label says which pass and how much is waiting -- `fill in 4 thin
+    drafts` -- and never what the pass *is*. These are commands you run rarely
+    enough to have forgotten between times, and the panel is the only place
+    they are described anywhere near where you press them."""
+    for view, counts in (
+        ("units", {"new": 16, "queued": 4}),
+        ("review", {"draft": 4, "approved": 9, "annotated_claude_card": 2}),
+    ):
+        for cmd in commands_for(view, {"source": "book"}, counts):
+            if cmd["kind"] == "note":
+                continue
+            why = cmd.get("why", "")
+            assert why, f"{cmd['run']} has no explainer"
+            assert len(why.split()) >= 8, f"{cmd['run']}: {why!r} is not a sentence"
+            assert why != cmd["label"], "an explainer that repeats the label explains nothing"

@@ -36,6 +36,12 @@
       {% elif unit.marks %}<span class="badge">marked while reading</span>
       {% else %}<span class="badge bad">not transcribed</span>{% endif %}
       {% if unit.uids %}<span class="badge carded">{{ unit.uids|join(', ') }}</span>{% endif %}
+      {% if unit.state == 'new' and not unit.suggestion %}
+      <span class="badge quiet" title="{% if unit.equation %}the book numbered this one, so nothing was allowed to propose skipping it{% else %}nothing had an opinion about this one{% endif %} — a decision is required either way">no suggestion</span>
+      {% endif %}
+      {# The id is what you paste into a command. Small and selectable rather
+         than a line of its own under everything. #}
+      <code class="unit-id" title="{{ unit.id }}">{{ unit.id.split(':')[1:] | join(':') or unit.id }}</code>
       {# How much of the document a card writer gets. Every size on screen with
          the one in force written out, because a row of bare numbers is five
          things to decode and this way the chip reads as a sentence with the
@@ -222,34 +228,36 @@
 
         {# Two filters over the same list, and they are two different
            questions. The groups answer "what kind of thing" -- they collapse.
-           The swatches answer "which of my colours", which cuts across every
-           group at once, so it cannot be a per-group control.
+           The swatches answer "which of my colours", **within a kind**: one
+           row for the whole list could not say "the green highlights but not
+           the green notes", which is the distinction the groups exist to
+           draw, and it offered colours that were not in the group you were
+           looking at.
 
            Deliberately not the left rail's filter: that one decides which
            *units* you meet, and this one decides how much of the page around
            the unit in front of you is worth reading. Tying them would mean
            narrowing the queue to green claims also hid every purple term
            beside them -- which is exactly the context the decision needs. #}
-        {% if unit.marks.colours | length > 1 %}
-        <p class="marks-filter" data-mark-filter>
-          <span class="mf-what">show</span>
-          {% for c in unit.marks.colours %}
-          <button type="button" class="mf-chip on" data-mark-colour="{{ c.colour }}"
-                  title="{{ c.colour }} — {{ c.count }} nearby">
-            <span class="swatch c-{{ c.colour }}" aria-hidden="true"></span><b>{{ c.count }}</b>
-          </button>
-          {% endfor %}
-          <button type="button" class="mf-all" data-mark-colour="*">all</button>
-          <button type="button" class="mf-all" data-mark-colour="">none</button>
-        </p>
-        {% endif %}
-
         {% for group in unit.marks.groups %}
         <details class="mark-group" {{ 'open' if loop.index <= 2 }}>
           <summary>{{ group.label }}<b>{{ group.count }}</b><i class="mg-shown" hidden></i></summary>
+          {% if group.colours | length > 1 %}
+          <p class="marks-filter" data-mark-filter>
+            <span class="mf-what">show</span>
+            {% for c in group.colours %}
+            <button type="button" class="mf-chip on" data-mark-colour="{{ c.key }}"
+                    title="{{ c.colour }} {{ group.kind }} — {{ c.count }} nearby">
+              <span class="swatch c-{{ c.colour }}" aria-hidden="true"></span><b>{{ c.count }}</b>
+            </button>
+            {% endfor %}
+            <button type="button" class="mf-all" data-mark-colour="*">all</button>
+            <button type="button" class="mf-all" data-mark-colour="">none</button>
+          </p>
+          {% endif %}
           <ul>
             {% for m in group.marks %}
-            <li data-colour="{{ m.colour or m.kind }}">
+            <li data-colour="{{ (m.kind ~ '/' ~ m.colour) if m.colour else m.kind }}">
               <span class="swatch c-{{ m.colour or m.kind }}" aria-hidden="true"></span>
               <div class="mark-body">
                 {% if m.text %}<blockquote class="clamp">{{ m.text }}</blockquote>{% endif %}
@@ -274,24 +282,22 @@
       {% endif %}
     </div>{# .side-by-side #}
 
+    {# Only a *real* suggestion gets space down here, because only a real one
+       is actionable. "No suggestion" used to be three lines of footer under
+       every untriaged unit -- with the unit id under that -- which is a
+       paragraph saying nothing happened, taking the room the marks list
+       needed. It is a badge in the head now: still visible, because silence
+       here is a result rather than a gap, but no longer the largest thing on
+       a unit nobody has proposed anything about. #}
     {% if unit.suggestion %}
     <p class="suggestion">
       <b>suggested: {{ unit.suggestion.state }}</b> &mdash; {{ unit.suggestion.detail or unit.suggestion.reason }}
       <span class="by">proposed by {{ unit.suggestion.by }}; nothing has been applied</span>
       <span class="how"><b>a</b> accept &middot; <b>d</b> dismiss &middot; or decide directly</span>
     </p>
-    {% elif unit.state == 'new' %}
-    {# Silence here used to look like a missing feature. It is a result: for a
-       numbered equation nothing is *allowed* to propose a skip. #}
-    <p class="no-suggestion">
-      no suggestion &mdash;
-      {% if unit.equation %}the book numbered this one, so nothing proposed skipping it{% else %}nothing had an opinion about this one{% endif %}.
-      A decision is required.
-    </p>
     {% endif %}
     {% if unit.context %}<p class="context">{{ unit.context }}</p>{% endif %}
     {% if unit.reason %}<p class="reason">skipped: {{ unit.reason }}</p>{% endif %}
-    <p class="unit-id">{{ unit.id }}</p>
   </article>
   {% endfor %}
 </div>

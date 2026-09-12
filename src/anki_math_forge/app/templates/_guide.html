@@ -450,17 +450,14 @@
       <h3>what the marks mean</h3>
       <ul class="scheme-list">
         {% for row in decided %}
-        <li class="{{ 'unused' if not row.count }}">
-          <span class="scheme-swatches">
-            {%- for k in row.entries %}<span class="swatch c-{{ k.colour or k.kind }}"
-              title="{{ k.key }} — {{ k.count }}" aria-hidden="true"></span>{% endfor -%}
+        <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}"
+            title="{{ row.entries | map(attribute='key') | join(' · ') }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}">
+          <span class="sl-mark">
+            {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
+            <b class="sl-label">{{ row.label }}</b>
           </span>
-          <span class="scheme-text">
-            <span class="scheme-meaning">{{ row.meaning }}</span>
-            {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
-            <i class="scheme-keys">{{ row.entries | map(attribute='key') | join(' · ') }}</i>
-          </span>
-          <b class="scheme-count">{{ row.count }}</b>
+          <span class="sl-meaning">{{ row.meaning }}</span>
+          <b class="sl-count">{{ row.count }}</b>
         </li>
         {% endfor %}
       </ul>
@@ -472,17 +469,15 @@
           declared it reaches a card writer as a coloured box with no caption.</p>
         <ul class="scheme-list">
           {% for row in undecided %}
-          <li class="{{ 'unused' if not row.count }}">
-            <span class="scheme-swatches">
-              {%- for k in row.entries %}<span class="swatch c-{{ k.colour or k.kind }}"
-                title="{{ k.key }} — {{ k.count }}" aria-hidden="true"></span>{% endfor -%}
-            </span>
-            <span class="scheme-text">
-              <span class="scheme-meaning">{{ row.meaning }}</span>
-              <i class="scheme-keys">{{ row.entries | map(attribute='key') | join(' · ') }}</i>
-            </span>
-            <b class="scheme-count">{{ row.count }}</b>
-          </li>
+        <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}"
+            title="{{ row.entries | map(attribute='key') | join(' · ') }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}">
+          <span class="sl-mark">
+            {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
+            <b class="sl-label">{{ row.label }}</b>
+          </span>
+          <span class="sl-meaning">{{ row.meaning }}</span>
+          <b class="sl-count">{{ row.count }}</b>
+        </li>
           {% endfor %}
         </ul>
       </details>

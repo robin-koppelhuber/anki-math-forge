@@ -63,11 +63,22 @@ function ask(label, value = "") {
   });
 }
 
+/* Which source this view is showing. Sent with every write, because every
+   write hands back the counts for the rail and those have to be about what is
+   on screen -- unscoped, grading one card on a fifteen-unit paper made the
+   rail jump to the whole repo's 127 carded and 108 approved. Resolved on the
+   server and stamped onto the deck, so it is the real name and not whatever
+   the query string omitted. */
+function viewScope() {
+  const deck = document.getElementById("deck");
+  return (deck && deck.dataset.source) || "";
+}
+
 async function post(url, body) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body || {}),
+    body: JSON.stringify({ scope: viewScope(), ...(body || {}) }),
   });
   let payload = {};
   try {

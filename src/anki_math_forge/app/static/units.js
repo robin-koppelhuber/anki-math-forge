@@ -314,26 +314,27 @@ function rememberColours(hidden) {
 
 function paintMarkFilter(root = document) {
   const hidden = hiddenColours();
-  root.querySelectorAll(".marks-list").forEach((list) => {
-    list.querySelectorAll("[data-mark-colour]").forEach((chip) => {
-      const colour = chip.dataset.markColour;
-      if (colour && colour !== "*") chip.classList.toggle("on", !hidden.has(colour));
+  // Per group, because the filter is per group: one row of colours for the
+  // whole list could not say "the green highlights but not the green notes",
+  // and it offered colours that were not in the group you were looking at.
+  root.querySelectorAll(".mark-group").forEach((group) => {
+    group.querySelectorAll("[data-mark-colour]").forEach((chip) => {
+      const key = chip.dataset.markColour;
+      if (key && key !== "*") chip.classList.toggle("on", !hidden.has(key));
     });
-    list.querySelectorAll("li[data-colour]").forEach((row) => {
+    const rows = Array.from(group.querySelectorAll("li[data-colour]"));
+    rows.forEach((row) => {
       row.hidden = hidden.has(row.dataset.colour);
     });
     // A group whose rows are all filtered out still has to say so: an empty
     // `<details>` reads as "nothing of this kind here", which is a different
     // and false claim.
-    list.querySelectorAll(".mark-group").forEach((group) => {
-      const rows = Array.from(group.querySelectorAll("li[data-colour]"));
-      const shown = rows.filter((row) => !row.hidden).length;
-      group.classList.toggle("all-filtered", rows.length > 0 && shown === 0);
-      const note = group.querySelector(".mg-shown");
-      if (!note) return;
-      note.hidden = shown === rows.length;
-      note.textContent = shown ? `${shown} shown` : "all filtered out";
-    });
+    const shown = rows.filter((row) => !row.hidden).length;
+    group.classList.toggle("all-filtered", rows.length > 0 && shown === 0);
+    const note = group.querySelector(".mg-shown");
+    if (!note) return;
+    note.hidden = shown === rows.length;
+    note.textContent = shown ? `${shown} shown` : "all filtered out";
   });
 }
 
@@ -341,13 +342,16 @@ document.addEventListener("click", (event) => {
   const chip = event.target.closest("[data-mark-colour]");
   if (!chip) return;
   event.preventDefault();
-  const list = chip.closest(".marks-list");
-  const every = Array.from(list.querySelectorAll("[data-mark-colour]"))
+  // `all` and `none` act on **this** group, which is the group the button is
+  // in. Reaching across to the others would make two adjacent controls that
+  // look identical do different amounts of work.
+  const group = chip.closest(".mark-group");
+  const every = Array.from(group.querySelectorAll("[data-mark-colour]"))
     .map((node) => node.dataset.markColour)
     .filter((colour) => colour && colour !== "*");
   const hidden = hiddenColours();
-  if (chip.dataset.markColour === "*") every.forEach((colour) => hidden.delete(colour));
-  else if (chip.dataset.markColour === "") every.forEach((colour) => hidden.add(colour));
+  if (chip.dataset.markColour === "*") every.forEach((key) => hidden.delete(key));
+  else if (chip.dataset.markColour === "") every.forEach((key) => hidden.add(key));
   else if (hidden.has(chip.dataset.markColour)) hidden.delete(chip.dataset.markColour);
   else hidden.add(chip.dataset.markColour);
   rememberColours(hidden);

@@ -115,7 +115,7 @@ def test_the_meaning_of_a_mark_is_on_the_information_side() -> None:
     it belongs on the right -- and the same sentence in both places is one of
     them not being read."""
     assert "what the marks mean" in GUIDE
-    assert "scheme-meaning" in GUIDE
+    assert "sl-meaning" in GUIDE
     assert "scheme-meaning" not in FILTERS
 
 
@@ -392,7 +392,10 @@ def test_the_legend_groups_by_meaning_rather_than_by_key() -> None:
     of sticky note. Listing those separately prints one sentence eight times
     and calls it detail."""
     assert "scheme_legend" in (APP / "__init__.py").read_text(encoding="utf-8")
-    assert "scheme-swatches" in GUIDE, "every mark for a meaning on one line"
+    assert "sl-mark" in GUIDE, "every mark for a meaning on one line"
+    # The colour leads: you arrive holding one, so it is the lookup key. The
+    # meaning used to lead, with the colour name on a second line.
+    assert GUIDE.index("sl-label") < GUIDE.index("sl-meaning")
     assert "scheme-undecided" in GUIDE, "the backlog folds away"
     # Undecided rows are a backlog, not a legend: open by default they pushed
     # the scheme you actually use off the bottom of the rail.
