@@ -18,3 +18,13 @@ node_modules/
 
 # local secrets for MCP servers; .env.example is the template
 .env
+
+# Cached text layers of the source documents themselves, written by `extract`
+# and `zotero` and regenerated on demand. Somebody else's book; not ours to
+# redistribute. `sources/matrix-cookbook/.gitignore` said this for one source
+# and the Zotero path never inherited it.
+sources/*/text.md
+sources/*/text-*.md
+
+# Scratch dumps from `--json` runs.
+*.tmp.json

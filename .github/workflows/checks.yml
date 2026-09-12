@@ -31,3 +31,8 @@ jobs:
       - run: uv run ruff check .
       - run: uv run mypy
       - run: uv run pytest -q
+
+      # The deck itself, not just the code. `check` reads card files and the
+      # ledger, both committed, and never opens the source document -- which
+      # is gitignored and not ours to redistribute.
+      - run: uv run forge check

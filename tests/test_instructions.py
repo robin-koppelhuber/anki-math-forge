@@ -108,21 +108,28 @@ def test_the_skill_says_its_examples_are_examples() -> None:
     assert not [b for b in raw if b < 32 and b not in (10, 13)], "control bytes in the skill"
 
 
-def test_the_project_contract_declares_no_source_conventions() -> None:
-    """CLAUDE.md must not hold values that belong to one source.
+# The repo-wide contract, in both halves: the short form a session loads, and
+# the long form behind it. Splitting them is what would let a claim slip
+# through -- the guard used to read one file, and the reasoning it was guarding
+# now lives in the other.
+CONTRACT = (ROOT / "CLAUDE.md", ROOT / "docs" / "CONTRACT.md")
+
+
+@pytest.mark.parametrize("path", CONTRACT, ids=lambda p: p.name)
+def test_the_project_contract_declares_no_source_conventions(path: Path) -> None:
+    """The contract must not hold values that belong to one source.
 
     It said "denominator layout", "entries are real", "in a derivative every
     other symbol is constant" -- all true of one book, none true of the tool.
     A second source would have made the contract silently wrong, and card
     writers were told to read it as authoritative.
     """
-    text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    section = text[text.index("## Conventions") : text.index("## Commands")]
+    text = path.read_text(encoding="utf-8").lower().replace("**", "")
     for claim in ("denominator layout", "entries are real", "conjugate transpose"):
-        assert claim not in section.lower().replace("**", ""), (
-            f"CLAUDE.md still declares {claim!r}; that belongs with the source"
+        assert claim not in text, (
+            f"{path.name} still declares {claim!r}; that belongs with the source"
         )
-    assert "conventions.md" in section, "it must say where they do live"
+    assert "conventions.md" in text, "it must say where they do live"
 
 
 def test_every_source_that_has_produced_cards_declares_its_conventions() -> None:

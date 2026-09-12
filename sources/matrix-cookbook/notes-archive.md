@@ -5,7 +5,8 @@ recorded one standing fact -- that this source states conditions rarely and
 the cards supply them -- which now lives once in `conventions.md`. The rest
 were changelog entries; the card files are their own changelog.
 
-Kept because `cards/` is untracked, so the delete had no other undo.
+Kept because `cards/` was untracked when these were removed, so the delete
+had no other undo. It is tracked now, so nothing new needs archiving here.
 
 140 notes from 85 cards.
 

@@ -1,6 +1,6 @@
 # Roadmap
 
-The milestones in [proposal.md](proposal.md) §13 (M0–M6) are built. This is
+The milestones in [DESIGN.md](DESIGN.md) §13 (M0–M6) are built. This is
 what is left, and what we chose not to build and why.
 
 Four parts. **The plan** is decided and in order. **Defects** are measured on
