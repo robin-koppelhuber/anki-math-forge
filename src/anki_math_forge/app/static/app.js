@@ -147,6 +147,9 @@ class Deck {
     // have touched anything.
     if (item && this.painted) item.scrollIntoView({ block: "start" });
     this.painted = true;
+    // Anything that has to measure the item it is looking at. Hidden items
+    // have no box, so this cannot be done once for the whole deck.
+    if (item) document.dispatchEvent(new CustomEvent("deck:shown", { detail: item }));
   }
 
   next() {
@@ -431,6 +434,20 @@ function railBound(name, which) {
   return typeof bound === "function" ? bound() : bound;
 }
 
+/* `null` means "forget it", which is not the same as storing a zero: the
+   stylesheet's own default has to come back. */
+function forget(key, value) {
+  if (value === null) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* a private window resets for this page load and no longer */
+    }
+    return;
+  }
+  remember(key, value);
+}
+
 function remember(key, value) {
   try {
     localStorage.setItem(key, String(value));
@@ -439,6 +456,9 @@ function remember(key, value) {
   }
 }
 
+/* `fallback` is returned for "nothing stored", and callers may pass `null` to
+   tell the two apart -- a vertical split with no stored value must stay unset
+   rather than take a number. */
 function recall(key, fallback) {
   try {
     const saved = parseFloat(localStorage.getItem(key));
@@ -461,7 +481,14 @@ function recall(key, fallback) {
    and lengths would need the gutter subtracted from one of them. */
 function applyVerticalSplit(name, px) {
   const split = SPLITS[name];
-  const clamped = Math.min(900, Math.max(60, px));
+  if (px === null) {
+    // Back to the stylesheet's `max-content`: the pane is the height of what
+    // is in it, which is the right answer until you have an opinion.
+    document.documentElement.style.removeProperty(split.left);
+    split.fraction = null;
+    return 0;
+  }
+  const clamped = Math.min(2000, Math.max(40, px));
   document.documentElement.style.setProperty(split.left, `${clamped}px`);
   split.fraction = clamped;
   return clamped;
@@ -486,9 +513,19 @@ function applyRail(name, px) {
 }
 
 (function enableDragging() {
-  Object.keys(SPLITS).forEach((name) =>
-    applySplit(name, recall(SPLITS[name].key, SPLITS[name].fallback)),
-  );
+  Object.keys(SPLITS).forEach((name) => {
+    const split = SPLITS[name];
+    /* A vertical split stays *unset* until you have actually moved it, so the
+       stylesheet's `max-content` decides and the pane is the height of its
+       own content. Writing a guessed default would park the divider wherever
+       the guess landed -- which on a unit with no notes is a band of nothing
+       above the marks, and on one with a long brief is a scrollbar you did not
+       ask for. Columns have no such state: two of them always divide the full
+       width, so a fraction is always meaningful. */
+    const stored = recall(split.key, null);
+    if (split.axis === "y" && stored === null) return;
+    applySplit(name, stored === null ? split.fallback : stored);
+  });
   Object.keys(RAILS).forEach((name) =>
     applyRail(name, recall(RAILS[name].key, RAILS[name].fallback)),
   );
@@ -555,10 +592,13 @@ function applyRail(name, px) {
     const splitter = event.target.closest("[data-splitter]");
     if (splitter) {
       const split = SPLITS[splitter.dataset.splitter];
-      if (split) {
-        applySplit(splitter.dataset.splitter, split.fallback);
-        remember(split.key, split.fallback);
-      }
+      if (!split) return;
+      // A vertical split resets to *no opinion* -- the pane goes back to the
+      // height of its own content -- rather than to some remembered number,
+      // because "however tall this is" is the state it starts in.
+      const back = split.axis === "y" ? null : split.fallback;
+      applySplit(splitter.dataset.splitter, back);
+      forget(split.key, back);
     }
   });
 })();

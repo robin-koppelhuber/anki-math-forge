@@ -391,6 +391,30 @@ function offerToExpand(root = document) {
 
 offerToExpand();
 
+/* How much room the two panes actually have: from where the column starts to
+   the top of the footer.
+
+   The stylesheet can only guess at this -- `100vh` minus the two bars minus a
+   number for the unit's head -- and the head is not a fixed height: a unit
+   with a gist has an extra line, and the chips wrap on a narrow window. Guessed
+   low the marks list stops short and leaves a band of nothing that reads as a
+   footer; guessed high it runs underneath the real one. Measured, it is right
+   on every unit.
+
+   Set per item because only the visible one has a box to measure. */
+function fitColumn(item) {
+  const column = item && item.querySelector(".beside");
+  if (!column) return;
+  const footer = document.querySelector("footer");
+  const floor = footer ? footer.getBoundingClientRect().top : window.innerHeight;
+  const top = column.getBoundingClientRect().top;
+  column.style.setProperty("--beside-max", `${Math.max(200, Math.round(floor - top - 8))}px`);
+}
+
+document.addEventListener("deck:shown", (event) => fitColumn(event.detail));
+window.addEventListener("resize", () => fitColumn(currentOf(deck)));
+fitColumn(currentOf(deck));
+
 /* Three ways to look at the same geometry, cycled with `p`.
 
    crop     -- the box and a margin. Is this the right region?

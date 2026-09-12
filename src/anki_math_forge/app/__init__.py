@@ -326,11 +326,11 @@ def create_app(config: Config) -> FastAPI:
         in_source = [c for c in cards if card_in_source(c, name)]
         cards = in_source
         if section:
-            cards = [c for c in cards if c.section_name == section]
+            cards = [c for c in cards if card_section(c, config) == section]
         if chapter:
             # Same as the units view: a chapter is a range of sections, derived
             # from the name rather than stored, so it filters here.
-            cards = [c for c in cards if _chapter_of(c.section_name) == chapter]
+            cards = [c for c in cards if _chapter_of(card_section(c, config)) == chapter]
         if annotated:
             cards = [c for c in cards if has_annotation(c.annotations(), annotated)]
         # Everything the other filters leave, ignoring the section: what each
@@ -409,7 +409,7 @@ def create_app(config: Config) -> FastAPI:
                 "section_tree": section_rows(
                     in_source,
                     {c.uid for c in unsectioned},
-                    lambda c: c.section_name,
+                    lambda c: card_section(c, config),
                     lambda c: c.effective_status,
                     lambda c: c.uid,
                     CARD_STATES,
@@ -1104,7 +1104,7 @@ def scoped_counts(config: Config, source: str, filters: dict[str, Any]) -> dict[
         return not annotated or has_annotation(unit.notes, annotated)
 
     def keep_card(card: Card) -> bool:
-        if section and card.section_name != section:
+        if section and card_section(card, config) != section:
             return False
         if status and status != "all" and card.effective_status != status:
             return False
@@ -1662,6 +1662,28 @@ def source_gallery(config: Config) -> dict[str, Any]:
         # button that matches nothing.
         "origins": sorted({str(r["origin"]) for r in rows if r["origin"]}),
     }
+
+
+def card_section(card: Card, config: Config) -> str:
+    """Which section of its source a card comes from.
+
+    **Looked up, not parsed.** `Card.section_name` reads the middle segment of
+    a unit id, which is a section only for the shape a numbered book produces
+    (`matrix-cookbook:2.3:66`). A unit imported from a marked-up PDF is
+    `<source>:<annotation key>` and has no section in its name at all, so the
+    review rail offered no sections for a paper while the units view offered
+    seven -- the same source, filtered two different ways.
+
+    The section is on the unit's locator, which is where extraction put it, so
+    the answer is a ledger lookup. It falls back to the parsed form for a card
+    whose unit has been re-extracted away, which is the only case where the id
+    knows something the ledger does not.
+    """
+    if not card.unit:
+        return card.section_name
+    ledger = _ledgers(config).get(card.source_name)
+    unit = ledger.get(card.unit) if ledger else None
+    return unit.locator.section if unit else card.section_name
 
 
 def card_in_source(card: Card, source: str) -> bool:

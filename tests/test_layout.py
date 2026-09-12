@@ -617,3 +617,67 @@ def test_the_neighbour_chips_do_not_shout() -> None:
     assert "var(--line)" in on and "--accent" not in on
     padding = re.search(r"padding:\s*([^;]+);", rule(".mf-chip, .mf-all")).group(1)
     assert len(padding.split()) == 1, f"padding {padding!r} is not equal on all sides"
+
+
+def test_a_section_name_cannot_push_the_rail_open() -> None:
+    """A section used to be a number -- `§2.4` -- and is now whatever the
+    document called it. "Characterization of models with optimal trade-offs: A
+    variational inequality" is a real one, and a 240px rail has no answer to it
+    but an ellipsis and a tooltip."""
+    name = rule(".sec-name")
+    assert "text-overflow: ellipsis" in name
+    assert "max-width" in name
+    assert "flex: 0 1 auto" in name, "it has to be allowed to shrink"
+
+
+def test_the_column_is_measured_rather_than_guessed() -> None:
+    """The stylesheet can only guess at how much room is left -- `100vh` minus
+    the bars minus a number for the unit's head -- and the head is not a fixed
+    height: a unit with a gist has an extra line and the chips wrap when narrow.
+    Guessed low the marks list stops short and leaves a band that reads as a
+    footer; guessed high it runs under the real one."""
+    units_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    assert "--beside-max" in rule(".beside"), "measured, with the calc as a fallback"
+    assert "function fitColumn" in units_js
+    assert "deck:shown" in units_js and "deck:shown" in JS, "both ends of the hook"
+    assert 'window.addEventListener("resize"' in units_js
+
+
+def test_a_vertical_split_has_no_opinion_until_you_give_it_one() -> None:
+    """Untouched, a pane is the height of its own content: writing a guessed
+    default parks the divider wherever the guess landed, which on a unit with
+    no notes is a band of nothing above the marks. Dragged, it goes where you
+    put it in **both** directions -- refusing to move is what reads as a broken
+    handle, and an empty pane you deliberately made room in is a choice."""
+    assert "var(--split-beside, max-content)" in rule(".beside-panes")
+    block = JS[JS.index("function applyVerticalSplit") :][:700]
+    assert "removeProperty" in block, "and it can be given up again"
+    bootstrap = JS[JS.index("Object.keys(SPLITS).forEach") :][:800]
+    assert 'split.axis === "y" && stored === null' in bootstrap
+
+
+def test_no_property_is_declared_twice_for_one_selector() -> None:
+    """A second declaration wins on order at equal specificity, however far
+    away it was written -- so the first reads as live and is not. It has
+    silently un-stuck the crop, un-clamped a meaning and un-capped a column in
+    three separate rounds, and every time the rule that *looked* right was the
+    one being overridden.
+
+    Two rules for one selector are fine and normal when they add different
+    properties; it is the same property twice that is always a mistake, and
+    always a silent one.
+
+    Top level only: a media query or a state class re-declaring a property is
+    exactly what those are for.
+    """
+    top = re.sub(r"@media[^{]*\{(?:[^{}]|\{[^{}]*\})*\}", "", CSS, flags=re.S)
+    blocks = re.findall(r"(?m)^([.#a-zA-Z][^\n{]*?)\s*\{([^{}]*)\}", top)
+    seen: dict[tuple[str, str], int] = {}
+    for selector, body in blocks:
+        for declaration in body.split(";"):
+            if ":" not in declaration:
+                continue
+            key = (selector.strip(), declaration.split(":")[0].strip())
+            seen[key] = seen.get(key, 0) + 1
+    twice = sorted(f"{sel} {{ {prop} }}" for (sel, prop), n in seen.items() if n > 1)
+    assert not twice, f"declared twice, so only the last one is live: {twice}"

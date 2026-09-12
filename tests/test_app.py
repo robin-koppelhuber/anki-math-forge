@@ -1951,3 +1951,32 @@ def test_picking_a_section_clears_the_chapter(pdf_client: TestClient) -> None:
     links = re.findall(r'href="(/units\?[^"]*section=2\.4[^"]*)"', rail)
     assert links, "the section rows are still there while a chapter is active"
     assert all("chapter=" not in href for href in links)
+
+
+def test_a_card_gets_its_section_from_the_ledger_not_from_its_id(
+    zotero_config: Config,
+) -> None:
+    """`Card.section_name` reads the middle segment of a unit id, which is a
+    section only for the shape a numbered book produces. A unit imported from a
+    marked-up PDF is `<source>:<annotation key>` and has no section in its name
+    at all -- so the review rail offered no sections for a paper while the
+    units view offered seven, the same source filtered two different ways.
+
+    The section is on the unit's locator, where extraction put it."""
+    from anki_math_forge.app import card_section
+    from anki_math_forge.ledger import Locator, Unit
+
+    path = zotero_config.units_path("paper")
+    Ledger(path, [Unit(id="paper:AAA", locator=Locator(section="A uniform bound"))]).save()
+    card = model.Card(frontmatter={"uid": "aa11bb", "unit": "paper:AAA"}, sections=[])
+
+    assert card.section_name == "", "the id knows nothing"
+    assert card_section(card, zotero_config) == "A uniform bound"
+
+
+def test_a_card_whose_unit_is_gone_falls_back_to_its_id(config: Config) -> None:
+    """The one case where the name knows something the ledger does not."""
+    from anki_math_forge.app import card_section
+
+    card = model.Card(frontmatter={"uid": "aa11bb", "unit": "demo:2.4:61"}, sections=[])
+    assert card_section(card, config) == "2.4"

@@ -595,14 +595,13 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   cursor: pointer;
   padding: 0.3rem 0.4rem;
   border-radius: 5px;
-  color: var(--muted);
+  color: var(--ink);
   letter-spacing: 0.02em;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 .filter-group > summary { text-transform: uppercase; font-size: 11px; margin-top: 0.5rem; }
-.filter-chapter > summary { color: var(--ink); }
 .filter-group > summary:hover,
 .filter-chapter > summary:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); }
 
@@ -692,14 +691,14 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
    anything you act on. */
 .notes h3,
 .notes > summary {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  cursor: pointer;
+  font-size: 12px;
+  text-transform: none;
+  letter-spacing: 0;
   color: var(--muted);
   margin: 0.9rem 0 0.3rem;
   font-weight: 600;
 }
-.notes > summary { cursor: pointer; text-transform: none; letter-spacing: 0; font-size: 12px; }
 .notes > summary .hint { font-weight: 400; opacity: 0.75; }
 .notes ul { margin: 0.2rem 0 0; padding-left: 1.1rem; font-size: 13px; line-height: 1.5; }
 .notes li { margin-bottom: 0.25rem; }
@@ -832,7 +831,9 @@ body.guide-off .guide { transform: translateX(100%); }
 /* the compact diagram */
 .fsm.mini { margin: 0; }
 .fsm.mini svg { width: 100%; height: auto; }
-.fsm.mini .lane { font-size: 9px; letter-spacing: 0.1em; fill: var(--muted); }
+/* 8.5px, not 9: the lane label carries the mark names on a Zotero source, so
+   it has to be allowed to run longer than the word "UNITS". */
+.fsm.mini .lane { font-size: 8.5px; letter-spacing: 0.1em; fill: var(--muted); }
 .fsm.mini .name { font-size: 11px; fill: var(--ink); text-anchor: start; }
 .fsm.mini .count {
   font-size: 17px;
@@ -1015,7 +1016,19 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
    it would show. The bar is there because one ratio cannot say where a
    section stands when there are four states it could be spread across. */
 .filter-list.sections a { align-items: center; gap: 0.4rem; }
-.sec-name { flex: 0 0 auto; }
+/* A section used to be a number -- `§2.4` -- and now it is whatever the
+   document called it: "Characterization of models with optimal trade-offs: A
+   variational inequality" is a real one. Capped and ellipsised, with the whole
+   of it in the row's tooltip; the bar and the tally beside it keep their room,
+   because those are what you compare rows by. */
+.sec-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sec-bar {
   flex: 1 1 auto;
   display: flex;
@@ -1661,10 +1674,9 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 /* -- the guide's two panes ----------------------------------------------- */
 .guide-panes {
   display: grid;
-  /* `fit-content` of a length: caps the pane where you dragged it to, and
-     lets it shrink to its content when there is less, rather than sitting
-     above a band of nothing. */
-  grid-template-rows: fit-content(var(--split-guide, 320px)) 14px minmax(0, 1fr);
+  /* Same: the diagram's own height until you drag, then exactly what you
+     dragged to. */
+  grid-template-rows: var(--split-guide, max-content) 14px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -1700,16 +1712,26 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 
 /* Beside the crop: the transcription, the marks, or both. A page-wide crop of
    small type next to what was written about it is the whole triage decision. */
-.beside { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+.beside {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+  /* A cap, not a height: the column shrinks when there is little in it rather
+     than ending in a band of nothing. `--beside-max` is measured by units.js
+     from where this column actually starts -- the unit's head is not a fixed
+     size, so the stylesheet can only guess -- and the `calc` is what it looks
+     like for the instant before that runs, or with no script at all. */
+  max-height: var(
+    --beside-max,
+    calc(100vh - var(--header-h, 2.6rem) - var(--footer-h, 2.6rem) - 7rem)
+  );
+}
 .beside .marks-list { margin: 0; }
 .beside .marks-list ul { max-height: none; }
 
 /* What produces units here, under the entry node of the full diagram. */
 .fsm .source .sub { font-size: 10px; fill: var(--muted); font-style: normal; }
-/* The lane label carries the mark names on a Zotero source, so it needs to be
-   allowed to be longer than the word "UNITS". */
-.fsm.mini .lane { font-size: 8.5px; }
-
 /* A meaning nobody declared: the floor under your scheme, said quietly. */
 .scheme-default { display: block; font-size: 10px; color: var(--warn); opacity: 0.85; line-height: 1.3; }
 
@@ -2073,21 +2095,25 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
    second was always below the fold. */
 .beside-panes {
   display: grid;
-  /* `fit-content` of a **length**, which is the only form that does both jobs.
-     A percentage needs a definite parent height, and a definite parent height
-     is what left a band of nothing under a short column. A length works
-     against a `max-height` parent, caps the pane where you dragged it to, and
-     lets it shrink to its content when there is less than that -- which is
-     every unit with nothing annotated. */
-  grid-template-rows: fit-content(var(--split-beside, 220px)) 14px minmax(0, 1fr);
+  /* `max-content` until you say otherwise, then exactly what you said.
+     Untouched, the notes pane is the height of its notes -- on a unit with
+     none that is two lines, and `fit-content` of some guessed length would
+     have parked the divider wherever the guess landed. Dragged, it is a
+     definite length and goes where you put it in **both** directions: an
+     empty pane you have deliberately made room in is a choice, and refusing
+     to move is what reads as a broken handle. */
+  grid-template-rows: var(--split-beside, max-content) 14px minmax(0, 1fr);
   min-height: 0;
 }
 .beside-pane { overflow-y: auto; min-height: 0; }
-/* A cap, not a height. The two panes still divide a box -- the split is a
-   length now, so it does not need a definite one to resolve against -- and
-   the column shrinks when the marks are short instead of ending in a band of
-   nothing that reads as a footer. */
-.beside { max-height: clamp(26rem, 74vh, 60rem); }
+/* A cap, not a height: the column shrinks when the marks are short instead of
+   ending in a band of nothing.
+
+   The cap is **what is actually left on the screen** rather than a fraction of
+   it. At `74vh` a long marks list stopped three-quarters of the way down and
+   left a quarter of the window empty under it -- which reads as a footer,
+   because that is where a footer goes. The subtraction is the two fixed bars
+   plus the unit's own head, which is the only other thing in the column. */
 
 /* Marks, grouped by kind and collapsible. The meaning of a colour is *not*
    repeated per row: with thirty marks that is thirty copies of one sentence,
