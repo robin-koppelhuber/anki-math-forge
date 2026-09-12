@@ -22,17 +22,21 @@
       {% elif unit.marks %}<span class="badge">marked while reading</span>
       {% else %}<span class="badge bad">not transcribed</span>{% endif %}
       {% if unit.uids %}<span class="badge carded">{{ unit.uids|join(', ') }}</span>{% endif %}
-      {# How much of the document a card writer gets. Always on screen, because
-         it is a number you are deciding *about* -- "is one page enough for
-         this one" is the question, and hiding the answer until it has already
-         been overridden means you never see what you are overriding. It says
-         whose setting it is, and it is a button: click or `c`, same cycle. #}
-      <button type="button" class="badge context{{ ' own' if unit.context_own }}"
-              data-context-badge
-              title="{{ 'this unit asks for' if unit.context_own else 'inherited from the source' }}: pages either side handed to whoever writes its card — click, or c, to cycle">
-        <span data-context-value>{{ unit.context_label }}</span>
-        <i>{{ 'this unit' if unit.context_own else 'source' }}</i>
-      </button>
+      {# How much of the document a card writer gets. Every size on screen with
+         the one in force written out, because a row of bare numbers is five
+         things to decode and this way the chip reads as a sentence with the
+         answer in it. Always visible: it is a number you are deciding *about*,
+         and hiding it until it had been overridden meant never seeing what you
+         were overriding. Click any size, or `c` to walk them. #}
+      <span class="badge context-chip{{ ' own' if unit.context_own }}" data-context-chip
+            title="pages either side of this unit's own page, handed to whoever writes its card. 3 means seven pages in all. Inherited from the source until you change it here.">
+        <i class="chip-what">context</i>
+        {% for step in unit.context_steps %}
+        <button type="button" class="ctx-step{{ ' on' if step.on }}"
+                data-context-step="{{ step.pages }}">{{ step.label }}</button>
+        {% endfor %}
+        <i class="chip-whose">{{ 'this unit' if unit.context_own else 'source' }}</i>
+      </span>
     </div>
 
     {# Document on one side, what was written about it on the other, with the
@@ -80,40 +84,120 @@
       </div>
       {% endif %}
 
-    {# What the reader actually wrote. The crop shows *where* the marks are;
-       this is what they say -- the sentence each one covers and the note left
-       beside it. Deciding whether a marked claim is worth a card on its own
-       is mostly a question about its neighbours, and until now the only way
-       to read them was to open the PDF. #}
-    {% if unit.marks %}
-    <details class="marks-list" open>
-      <summary>{{ unit.marks | length }} mark{{ '' if unit.marks|length == 1 else 's' }} here and nearby
-        <span class="hint">— in reading order; the first is this unit's own</span></summary>
-      <ul>
-        {% for m in unit.marks %}
-        {# One line between the mark this unit *is* and everything around it.
-           The gap alone reads as a margin somebody forgot; this says what the
-           rest of the list is for. #}
-        {% if loop.index == 2 %}<li class="divider">on the pages around it</li>{% endif %}
-        <li class="{{ 'own' if m.own }}">
+      {# Two panes and a draggable split between them. What the reader wrote on
+         the page, and what has been written *about* this unit since, are
+         different questions asked at different moments, and stacking them in
+         one scroll meant the second was always below the fold. #}
+      <div class="beside-panes">
+      <div class="beside-pane top">
+
+      {# What the reader actually wrote. The crop shows *where* the marks are;
+         this is what they say. The meaning of each colour is **not** repeated
+         per row -- with thirty marks that is thirty copies of the same
+         sentence, and the legend on the other rail is where a scheme belongs.
+         The colour is the label; the group heading says the kind. #}
+      {% if unit.marks.own or unit.marks.groups %}
+      <div class="marks-list">
+        {% if unit.marks.own %}
+        {% set m = unit.marks.own %}
+        <div class="mark own">
           <span class="swatch c-{{ m.colour or m.kind }}" aria-hidden="true"></span>
           <div class="mark-body">
             <p class="mark-meta">
-              {% if m.own %}<b class="this-one">this one</b>{% endif %}
+              <b class="this-one">this one</b>
               <span class="mark-what">{{ m.colour or m.kind }}{% if m.colour and m.kind != 'highlight' %} {{ m.kind }}{% endif %}</span>
-              {% if m.meaning %}<span class="mark-meaning">{{ m.meaning }}</span>{% endif %}
               {% if m.page %}<span class="mark-page">p{{ m.page }}</span>{% endif %}
-              {% if m.unit and not m.own %}<a class="mark-goto" href="#{{ m.unit }}"
-                 data-goto="{{ m.unit }}" title="this one is a unit of its own — you will meet it again">its own unit</a>{% endif %}
             </p>
             {% if m.text %}<blockquote>{{ m.text }}</blockquote>{% endif %}
             {% if m.comment %}<p class="mark-comment">{{ m.comment }}</p>{% endif %}
           </div>
-        </li>
+        </div>
+        {% endif %}
+
+        {% for group in unit.marks.groups %}
+        <details class="mark-group" {{ 'open' if loop.index <= 2 }}>
+          <summary>{{ group.label }}<b>{{ group.count }}</b></summary>
+          <ul>
+            {% for m in group.marks %}
+            <li>
+              <span class="swatch c-{{ m.colour or m.kind }}" aria-hidden="true"></span>
+              <div class="mark-body">
+                {% if m.text %}<blockquote>{{ m.text }}</blockquote>{% endif %}
+                {% if m.comment %}<p class="mark-comment">{{ m.comment }}</p>{% endif %}
+                <p class="mark-meta">
+                  {% if m.page %}<span class="mark-page">p{{ m.page }}</span>{% endif %}
+                  {% if m.unit %}<a class="mark-goto" href="#{{ m.unit }}"
+                     data-goto="{{ m.unit }}" title="a unit of its own — you will meet it again">its own unit</a>{% endif %}
+                </p>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
+        </details>
         {% endfor %}
-      </ul>
-    </details>
-    {% endif %}
+      </div>
+      {% endif %}
+
+      </div>
+      <div class="splitter y" data-splitter="beside"
+           title="drag to resize — double-click to reset"></div>
+      <div class="beside-pane bottom">
+
+      {# The annotations, in one fixed place on every unit. `@claude` first and
+         never collapsed: it is **the** channel to whoever writes the card, and
+         it used to be a shut `<details>` labelled "not for this decision",
+         which is a poor way to present the one thing you can say to the next
+         pass. #}
+      {% set for_claude = unit.annotations | selectattr('audience', 'ne', 'me') | list %}
+      {% set for_me = unit.annotations | selectattr('audience', 'eq', 'me') | list %}
+      <section class="notes-pane">
+        <h3>the brief for whoever writes the card
+          <span class="at">@claude</span>
+          <button type="button" class="note-add" data-annotate="claude">add</button></h3>
+        {% if for_claude %}
+        <ul class="note-list">
+          {% for note in for_claude %}
+          <li data-note-index="{{ note.index }}">
+            <span class="note-text">{{ note.text }}</span>
+            <button type="button" class="note-drop" data-answer="" title="delete this note">&times;</button>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted note-empty">Nothing yet. Anything here is read by
+          <code>/extract-cards</code> before it writes — "two cards, one per
+          convention", "the transcription is wrong, read the crop", "merge with
+          the one above". It is the only instruction that pass gets.</p>
+        {% endif %}
+
+        <h3>yours to decide <span class="at me">@me</span>
+          <button type="button" class="note-add" data-annotate="me">add</button></h3>
+        {% if for_me %}
+        <ul class="note-list mine">
+          {% for note in for_me %}
+          <li data-note-index="{{ note.index }}">
+            <span class="note-text">{{ note.text }}</span>
+            {# Answering keeps the question. Deleting the line throws away both
+               halves, and the question is most of what made the decision worth
+               recording. #}
+            <span class="note-answers">
+              <button type="button" data-answer="yes">yes</button>
+              <button type="button" data-answer="no">no</button>
+              <button type="button" data-answer="?" title="answer in your own words">…</button>
+              <button type="button" class="note-drop" data-answer="" title="delete without recording an answer">&times;</button>
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="muted note-empty">Nothing parked. <code>@me</code> is for a
+          decision you cannot take yet — answering one leaves the question and
+          the answer behind, so the reasoning survives.</p>
+        {% endif %}
+      </section>
+
+      </div>
+      </div>
       </div>{# .beside #}
       {% endif %}
     </div>{# .side-by-side #}
@@ -135,22 +219,6 @@
     {% endif %}
     {% if unit.context %}<p class="context">{{ unit.context }}</p>{% endif %}
     {% if unit.reason %}<p class="reason">skipped: {{ unit.reason }}</p>{% endif %}
-    {% if unit.notes_mine %}
-    <div class="notes for-me">
-      <h3>for you to decide</h3>
-      <ul>{% for note in unit.notes_mine %}<li>{{ note }}</li>{% endfor %}</ul>
-    </div>
-    {% endif %}
-    {% if unit.notes_claude %}
-    {# Collapsed: these are mostly provenance for whoever writes the card
-       ("line 3 of 6, follows p67y189"), which is not what you need while
-       deciding queue-or-skip. #}
-    <details class="notes for-claude">
-      <summary>{{ unit.notes_claude | length }} note{{ '' if unit.notes_claude|length == 1 else 's' }} for Claude
-        <span class="hint">— context for card-writing, not for this decision</span></summary>
-      <ul>{% for note in unit.notes_claude %}<li>{{ note }}</li>{% endfor %}</ul>
-    </details>
-    {% endif %}
     <p class="unit-id">{{ unit.id }}</p>
   </article>
   {% endfor %}
@@ -165,7 +233,7 @@
 <span class="key-group"><b>s</b> skip</span>
 <span class="key-group"><b>a</b>/<b>d</b> accept/dismiss</span>
 <span class="key-group sep"><b>z</b> undo</span>
-<span class="key-group"><b>n</b> annotate</span>
+<span class="key-group"><b>n</b>/<b>N</b> note for claude/me</span>
 <span class="key-group"><b>c</b> context size</span>
 <span class="key-group"><b>p</b> crop/page/doc</span>
 <span class="key-group"><b>S</b> skip + reason</span>

@@ -97,17 +97,70 @@ async function decideOnSuggestion(verb) {
   }
 }
 
-async function annotate() {
+async function annotate(audience = "claude") {
   const item = currentOf(deck);
   if (!item) return;
-  const text = await ask("annotation for " + item.dataset.id, "@claude ");
+  const prefix = audience === "me" ? "@me " : "@claude ";
+  const text = await ask(
+    audience === "me"
+      ? "a decision to park for yourself"
+      : "the brief for whoever writes the card",
+    prefix,
+  );
   if (!text) return;
   const result = await post(
     `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/annotate`,
     { text, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
+  repaintNotes(item, result.unit);
   toast("annotated");
+}
+
+/* Answering keeps the question. Deleting the line throws away both halves, and
+   the question is most of what made the decision worth recording -- `same as
+   2.4?` resolved with `no` is worth reading in six weeks; a blank is not.
+
+   `yes` and `no` are prefills for the same flow rather than a separate one:
+   the useful primitive is "answer and settle", and two buttons that only ever
+   delete would be two ways to lose the reasoning. */
+async function answerNote(item, index, reply) {
+  const result = await post(
+    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/answer`,
+    { index, answer: reply, mtime: board.dataset.mtime },
+  );
+  board.dataset.mtime = result.mtime;
+  repaintNotes(item, result.unit);
+  toast(reply ? `answered: ${reply}` : "note deleted");
+}
+
+/* Repainted from the file rather than from the DOM: the indices shift when a
+   line is removed, and a stale one answers the wrong question. */
+function repaintNotes(item, unit) {
+  const pane = item.querySelector(".notes-pane");
+  if (!pane || !unit.annotations) return;
+  ["claude", "me"].forEach((audience) => {
+    const list = pane.querySelector(audience === "me" ? ".note-list.mine" : ".note-list");
+    if (!list) return;
+    const keep = unit.annotations.filter((n) =>
+      audience === "me" ? n.audience === "me" : n.audience !== "me",
+    );
+    Array.from(list.children).forEach((row, at) => {
+      const note = keep[at];
+      if (!note) {
+        row.remove();
+        return;
+      }
+      row.dataset.noteIndex = String(note.index);
+      const text = row.querySelector(".note-text");
+      if (text) text.textContent = note.text;
+    });
+  });
+  if (unit.annotations.length !== item.querySelectorAll("[data-note-index]").length) {
+    // A note was added, or the split no longer matches. The file is the truth
+    // and rebuilding one panel by hand is how the two drift, so reload.
+    setTimeout(() => location.reload(), 400);
+  }
 }
 
 /* How much of the document a card writer gets for this unit.
@@ -116,46 +169,47 @@ async function annotate() {
    hypotheses are two pages back, and no per-source default knows that. `c`
    cycles a few sizes rather than asking for a number, because the decision is
    "a bit more" or "all of it", not a measurement. */
-const CONTEXT_STEPS = [0, 1, 3, 10, 999];
-
-async function cycleContext() {
+function cycleContext() {
   const item = currentOf(deck);
   if (!item) return;
-  const now = Number(item.dataset.contextPages || 1);
-  const next =
-    CONTEXT_STEPS.find((n) => n > now) ?? CONTEXT_STEPS[0];
-  const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/context`,
-    { pages: next, mtime: board.dataset.mtime },
-  );
-  board.dataset.mtime = result.mtime;
-  item.dataset.contextPages = String(next);
-  const badge = item.querySelector("[data-context-badge]");
-  if (badge) {
-    // Now the unit's own number rather than the source's, so say so: the
-    // badge's whole job is to distinguish what you set from what you
-    // inherited, and leaving the old word there would make it lie.
-    badge.classList.add("own");
-    const value = badge.querySelector("[data-context-value]");
-    if (value) value.textContent = shortContext(next);
-    const whose = badge.querySelector("i");
-    if (whose) whose.textContent = "this unit";
-  }
-  toast(`card writers get ${contextLabel(next)}`);
+  const steps = Array.from(item.querySelectorAll("[data-context-step]"));
+  const at = steps.findIndex((b) => b.classList.contains("on"));
+  const next = steps[(at + 1) % steps.length];
+  if (next) setContext(item, Number(next.dataset.contextStep));
 }
 
-/* Two spellings of the same number. The badge is three characters wide and the
-   toast is a sentence; what they must not do is disagree, so they come from
-   one place. `shortContext` matches `context_label` in the Python, which is
-   what the page was first rendered with. */
-function shortContext(pages) {
-  return pages >= 100 ? "all" : `${pages}p`;
+async function setContext(item, pages) {
+  const result = await post(
+    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/context`,
+    { pages, mtime: board.dataset.mtime },
+  );
+  board.dataset.mtime = result.mtime;
+  item.dataset.contextPages = String(pages);
+  paintContext(item, result.unit);
+  toast(`card writers get ${contextLabel(pages)}`);
+}
+
+/* Repaint from what the server sent back rather than from what was clicked.
+   The chip's whole job is to say which size is in force and whose setting it
+   is, and the only place that knows both is the file it just wrote. */
+function paintContext(item, unit) {
+  const chip = item.querySelector("[data-context-chip]");
+  if (!chip || !unit.context_steps) return;
+  chip.classList.toggle("own", Boolean(unit.context_own));
+  const whose = chip.querySelector(".chip-whose");
+  if (whose) whose.textContent = unit.context_own ? "this unit" : "source";
+  unit.context_steps.forEach((step) => {
+    const button = chip.querySelector(`[data-context-step="${step.pages}"]`);
+    if (!button) return;
+    button.textContent = step.label;
+    button.classList.toggle("on", Boolean(step.on));
+  });
 }
 
 function contextLabel(pages) {
   if (pages === 0) return "this page only";
   if (pages >= 100) return "the whole document";
-  return `${pages} page${pages === 1 ? "" : "s"} either side`;
+  return `${pages} page${pages === 1 ? "" : "s"} either side — ${2 * pages + 1} in all`;
 }
 
 /* Three ways to look at the same geometry, cycled with `p`.
@@ -288,9 +342,33 @@ document.addEventListener("click", (event) => {
     cyclePdfView();
     return;
   }
-  if (event.target.closest("[data-context-badge]")) {
+  const add = event.target.closest("[data-annotate]");
+  if (add) {
     event.preventDefault();
-    cycleContext();
+    annotate(add.dataset.annotate);
+    return;
+  }
+  const answer = event.target.closest("[data-answer]");
+  if (answer) {
+    event.preventDefault();
+    const row = answer.closest("[data-note-index]");
+    const item = answer.closest(".item");
+    if (!row || !item) return;
+    const index = Number(row.dataset.noteIndex);
+    if (answer.dataset.answer === "?") {
+      ask("your answer", "").then((text) => {
+        if (text) answerNote(item, index, text);
+      });
+      return;
+    }
+    answerNote(item, index, answer.dataset.answer);
+    return;
+  }
+  const step = event.target.closest("[data-context-step]");
+  if (step) {
+    event.preventDefault();
+    const item = step.closest(".item");
+    if (item) setContext(item, Number(step.dataset.contextStep));
     return;
   }
   const link = event.target.closest("[data-goto]");
@@ -321,7 +399,8 @@ bindKeys({
   u: () => setState("new"),
   a: () => decideOnSuggestion("accept"),
   d: () => decideOnSuggestion("dismiss"),
-  n: annotate,
+  n: () => annotate("claude"),
+  N: () => annotate("me"),
   j: () => deck.nextPending(),
   k: () => deck.prev(),
   ArrowDown: () => deck.nextPending(),

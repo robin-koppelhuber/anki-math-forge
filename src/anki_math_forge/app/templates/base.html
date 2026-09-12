@@ -100,6 +100,29 @@
   <div class="gallery-chips" id="gallery-chips"></div>
   <div class="gallery-grid" id="gallery-grid"></div>
   <p class="gallery-empty" id="gallery-empty" hidden>nothing matches that.</p>
+  {# Where a new source comes from. The gallery is where you go when the one
+     you want is not on the list, so it is where the answer to "add one"
+     belongs -- and the answer is a command, because importing reads Zotero,
+     writes files and caches a text layer, and none of that should happen
+     because a button was near the pointer. #}
+  <footer class="gallery-add">
+    <h3>add a source</h3>
+    <p class="muted">Tag the item <code>anki</code> in Zotero, mark it up, then
+      run one of these with Zotero open. Each writes
+      <code>sources/&lt;name&gt;/source.toml</code>, caches the document's text
+      layer next to it, and turns the marks you declared into units.</p>
+    <ul class="filter-list runs">
+      <li><button type="button" class="run shell" data-copy="uv run forge zotero --list">
+        <span class="run-label">what is there, and what is already a source</span>
+        <code>uv run forge zotero --list</code></button></li>
+      <li><button type="button" class="run shell" data-copy="uv run forge zotero --tag anki">
+        <span class="run-label">import everything tagged</span>
+        <code>uv run forge zotero --tag anki</code></button></li>
+      <li><button type="button" class="run shell" data-copy="uv run forge zotero &#34;&#34;">
+        <span class="run-label">one item, by cite key</span>
+        <code>uv run forge zotero &lt;citekey&gt;</code></button></li>
+    </ul>
+  </footer>
 </dialog>
 
 {# The effective configuration, over the view you were on. It answers a

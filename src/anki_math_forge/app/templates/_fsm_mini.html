@@ -43,21 +43,22 @@
   <path class="edge" d="M60,130 V154" marker-end="url(#mar)"/>
   <text class="step" x="66" y="146">/extract-cards</text>
 
-  <g class="state"><rect x="6" y="156" width="108" height="40" rx="6"/>
+  <g class="state twin"><rect x="6" y="156" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="173">carded</text>
     <text class="count" x="104" y="187" data-fsm-count="carded">{{ fsm_counts.carded }}</text></g>
 
   <line class="lane-rule" x1="0" y1="214" x2="220" y2="214"/>
   <text class="lane" x="6" y="232">CARDS</text>
 
-  {# Not a step. `/extract-cards` writes the draft and marks the unit carded
-     in the same call, so this crossing is one event seen from the other side.
-     It was the only unlabelled arrow in a diagram where every other one names
-     a command or a key, which made it read as a step nobody had named. #}
-  <path class="edge dash" d="M60,196 V240" marker-end="url(#mar)"/>
-  <text class="step" x="66" y="228">same step</text>
+  {# Not a step. `/extract-cards` writes the draft and marks the unit carded in
+     the same call, so this crossing is one event seen from the other side --
+     there is no moment where one has happened and the other has not. Both
+     boxes carry the same outline for that reason, and the "arrow" between them
+     is the only one in the diagram that is not a transition. #}
+  <path class="edge twin" d="M60,196 V240" marker-end="url(#mar)"/>
+  <text class="step twin" x="66" y="228">same moment</text>
 
-  <g class="state"><rect x="6" y="242" width="108" height="40" rx="6"/>
+  <g class="state twin"><rect x="6" y="242" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="259">draft</text>
     <text class="count" x="104" y="273" data-fsm-count="draft">{{ fsm_counts.draft }}</text></g>
 

@@ -243,19 +243,78 @@ def test_the_picture_cycles_three_ways_and_says_so() -> None:
     assert "p: cyclePdfView," in view_js
 
 
-def test_the_context_badge_is_always_there_and_says_whose_it_is() -> None:
+def test_the_context_chip_shows_every_size_and_whose_it_is() -> None:
     """Hiding it until the unit had already overridden the source meant never
-    seeing what you were overriding."""
+    seeing what you were overriding. A row of bare numbers is five things to
+    decode, so the one in force is written out and the rest are abbreviated."""
     units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
-    badge = units[units.index("data-context-badge") - 400 : units.index("data-context-badge") + 400]
-    assert "hidden" not in badge
-    assert "this unit" in badge and "source" in badge
-    assert "data-context-badge" in (APP / "static" / "units.js").read_text(encoding="utf-8")
+    chip = units[units.index("data-context-chip") - 600 : units.index("data-context-chip") + 600]
+    assert "hidden" not in chip
+    assert "this unit" in chip and "source" in chip
+    assert "data-context-step" in chip, "every size is its own button"
+
+
+def test_the_chip_says_what_a_page_count_actually_means() -> None:
+    """`3` is three pages *either side* -- seven in all. Saying "3 pages" and
+    handing over seven makes a card writer think they have the whole story."""
+    from anki_math_forge.app import context_label
+
+    assert context_label(3, chosen=True) == "3 pages either side"
+    assert context_label(3) == "3"
+    assert "either side" in (APP / "templates" / "units.html").read_text(encoding="utf-8")
 
 
 def test_the_unit_s_own_mark_is_set_apart_from_its_neighbours() -> None:
     """It was a 6% tint and a line of small caps, which at a glance is the same
     as every other row; the decision in front of you is about this one."""
-    own = rule(".marks-list li.own")
+    own = rule(".mark.own")
     assert "border-left" in own and "margin-bottom" in own
-    assert 'class="divider"' in (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    assert 'class="mark own"' in units, "outside the grouping entirely"
+    assert "mark-group" in units, "and the rest gather by kind"
+
+
+# -- the annotation panel ---------------------------------------------------
+
+
+def test_the_brief_for_the_card_writer_is_not_collapsed() -> None:
+    """It used to be a shut `<details>` labelled "not for this decision",
+    which is a poor way to present the one instruction `/extract-cards` gets."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    pane = units[units.index("notes-pane") :]
+    assert "the brief for whoever writes the card" in pane
+    assert "<details" not in pane, "the brief is open, and so is what you parked"
+
+
+def test_the_two_audiences_have_one_fixed_place() -> None:
+    """They were scattered down the main column under everything else; the
+    panel is the same place on every unit, and it splits from the marks."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    assert 'data-splitter="beside"' in units
+    assert '"beside"' in JS or "beside:" in JS, "and the split is remembered"
+    assert units.index("marks-list") < units.index("notes-pane"), "marks above, notes below"
+
+
+def test_answering_is_offered_only_for_what_you_parked() -> None:
+    """`yes`/`no` on the brief would be answering on the card writer's behalf.
+    The brief gets a delete and nothing else."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    at = units.index("note-list mine")
+    mine = units[at : units.index("note-empty", at)]
+    claude = units[units.index('note-list"') : at]
+    assert 'data-answer="yes"' in mine and 'data-answer="no"' in mine
+    assert 'data-answer="yes"' not in claude
+
+
+def test_a_dialog_closes_when_you_click_away() -> None:
+    """A modal that only closes on its own close button makes you hunt for
+    the one pixel that dismisses it, which is the opposite of what a panel
+    over your work should ask."""
+    assert "getBoundingClientRect" in JS
+    assert "dialog.close()" in JS
+
+
+def test_adding_a_source_is_answered_where_you_would_ask() -> None:
+    """The gallery is where you go when the one you want is not on the list."""
+    assert "gallery-add" in BASE
+    assert "forge zotero --list" in BASE

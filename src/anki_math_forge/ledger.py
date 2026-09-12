@@ -268,6 +268,16 @@ class Unit:
         )
 
 
+def _note_body(note: str) -> str:
+    """An annotation without its `@claude` / `@me` prefix.
+
+    Stripping only what is actually there, rather than a fixed width, so a
+    hand-edited note that does not carry the exact prefix survives intact.
+    """
+    audience = annotation_audience(note)
+    return note.strip() if not audience else note.strip()[len(audience) + 1 :].strip()
+
+
 class Ledger:
     """A units.jsonl file. Insertion order is document order; keep it."""
 
@@ -508,6 +518,28 @@ class Ledger:
         cleared = before - len(unit.notes)
         self.save()
         return cleared
+
+    def answer(self, unit_id: str, index: int, reply: str = "") -> Unit:
+        """Settle one annotation, keeping what you settled it with.
+
+        A `@me` note is a question you parked for yourself, and the way out was
+        to delete the line -- which throws away both the question and the
+        answer. So a reply is recorded in its place, unaddressed: it is a
+        record, not new work, and an `@claude` line would queue it as work.
+
+        An empty reply deletes the line outright, which is right when the note
+        was a reminder rather than a question.
+        """
+        unit = self.get(unit_id)
+        if unit is None:
+            raise KeyError(f"no unit {unit_id!r} in {self.path}")
+        if not 0 <= index < len(unit.notes):
+            raise ValueError(f"{unit_id} has no annotation {index}")
+        asked = _note_body(unit.notes.pop(index))
+        reply = " ".join(reply.split())
+        if reply:
+            unit.notes.append(f"{asked} — {reply}")
+        return unit
 
     def annotate(self, unit_id: str, text: str) -> Unit:
         """Record an instruction for the next pass over this unit.

@@ -1559,3 +1559,205 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 /* Scrolling a document wants the height; the crop is sticky and would pin it
    to a strip of the window. */
 .unit.whole-document .crop { position: static; }
+
+/* `carded` and `draft` are one moment, not two steps: `/extract-cards` writes
+   the card file and marks the unit in the same call, and there is no state
+   where one has happened and the other has not. Both boxes carry the same
+   outline, and the line between them is the only one in either diagram that is
+   not a transition -- so it is drawn as a tie rather than as an arrow of the
+   usual kind. */
+.fsm .state.twin rect {
+  stroke: var(--ink);
+  stroke-width: 2;
+  fill: color-mix(in srgb, var(--ink) 7%, var(--bg));
+}
+.fsm .edge.twin {
+  stroke: var(--ink);
+  color: var(--ink);
+  stroke-width: 1.5;
+  stroke-dasharray: 2 4;
+  opacity: 0.65;
+  fill: none;
+}
+.fsm .lbl.twin {
+  font-family: inherit;
+  font-size: 10.5px;
+  fill: var(--ink);
+  /* Anchored at the start, not centred: it sits beside the line it explains,
+     and a centred label at that x ran straight through it. */
+  text-anchor: start;
+  opacity: 0.8;
+}
+.fsm.mini .step.twin { fill: var(--ink); opacity: 0.75; text-anchor: start; }
+
+/* The context chip: every size on screen, the one in force written out. A row
+   of bare numbers is five things to decode; this reads as a sentence with the
+   answer in it -- `context 1 · 3 pages either side · 10 · all`. */
+.badge.context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.1rem 0.35rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.badge.context-chip .chip-what,
+.badge.context-chip .chip-whose {
+  font-style: normal;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.55;
+}
+.badge.context-chip .chip-what { margin-right: 0.15rem; }
+.badge.context-chip .chip-whose { margin-left: 0.3rem; }
+.badge.context-chip.own { border-color: var(--accent); }
+.badge.context-chip.own .chip-whose { color: var(--accent); opacity: 1; }
+.ctx-step {
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  padding: 0 0.25rem;
+  cursor: pointer;
+}
+.ctx-step:hover { color: var(--ink); background: var(--hover, rgba(127, 127, 127, 0.15)); }
+.ctx-step.on {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  font-weight: 600;
+}
+
+/* -- the triage column's two panes --------------------------------------
+   What the reader wrote on the page, and what has been written about the unit
+   since. Different questions asked at different moments; in one scroll the
+   second was always below the fold. */
+.beside-panes {
+  display: grid;
+  grid-template-rows: var(--split-beside, 1fr) 14px var(--split-beside-bottom, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+.beside-pane { overflow-y: auto; min-height: 0; }
+/* An explicit height, not a cap: two panes dividing a box need a box to
+   divide, and with `max-height` the split resolved against whatever the
+   content happened to be -- so dragging it moved the boundary between two
+   things that had already sized themselves. */
+.beside { height: clamp(26rem, 74vh, 60rem); }
+
+/* Marks, grouped by kind and collapsible. The meaning of a colour is *not*
+   repeated per row: with thirty marks that is thirty copies of one sentence,
+   and a scheme belongs in the legend on the other rail. */
+.mark-group { margin-top: 0.5rem; }
+.mark-group > summary {
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.35rem;
+  border-radius: 5px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.mark-group > summary:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); color: var(--ink); }
+.mark-group > summary b { font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.7; }
+.mark-group ul { list-style: none; margin: 0.2rem 0 0; padding: 0; }
+.mark-group li { display: flex; gap: 0.1rem; padding: 0.3rem 0 0.3rem 0.3rem; }
+.mark-group li + li { border-top: 1px solid var(--line); }
+.mark-group .swatch { margin-top: 0.45rem; }
+.mark-group blockquote { margin: 0; padding-left: 0.5rem; border-left: 2px solid var(--line); font-size: 13px; line-height: 1.45; }
+
+.mark.own {
+  display: flex;
+  gap: 0.1rem;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: 5px;
+  padding: 0.55rem 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.mark.own .swatch { margin-top: 0.35rem; }
+.mark.own blockquote { border-left-color: var(--accent); }
+
+/* -- the annotations, in one place on every unit ------------------------ */
+.notes-pane h3 {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0.9rem 0 0.35rem;
+}
+.notes-pane h3:first-child { margin-top: 0.2rem; }
+.notes-pane .at {
+  font-family: ui-monospace, monospace;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent);
+}
+.notes-pane .at.me { color: var(--warn); }
+.note-add {
+  margin-left: auto;
+  font: inherit;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 0.35rem;
+  cursor: pointer;
+}
+.note-add:hover { color: var(--ink); border-color: var(--accent); }
+.note-empty { font-size: 12px; line-height: 1.45; margin: 0; }
+.note-list { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.note-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.3rem 0.35rem;
+  border-radius: 5px;
+}
+.note-list li + li { border-top: 1px solid var(--line); }
+.note-list .note-text { flex: 1; min-width: 0; line-height: 1.45; }
+.note-list.mine li { background: color-mix(in srgb, var(--warn) 9%, transparent); }
+.note-answers { display: flex; gap: 0.2rem; flex: none; }
+.note-answers button, .note-drop {
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 0.35rem;
+  cursor: pointer;
+}
+.note-answers button:hover { color: var(--ink); border-color: var(--accent); }
+.note-drop { border-color: transparent; }
+.note-drop:hover { color: var(--bad); border-color: var(--bad); }
+
+/* Where a new source comes from. The gallery is where you go when the one you
+   want is not on the list, so it is where "add one" belongs. */
+.gallery-add {
+  border-top: 1px solid var(--line);
+  padding: 0.9rem 1.1rem 1.2rem;
+  margin-top: auto;
+}
+.gallery-add h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin: 0 0 0.35rem;
+}
+.gallery-add .muted { font-size: 12px; line-height: 1.5; margin: 0 0 0.6rem; max-width: 52rem; }
+.gallery-add .filter-list.runs { max-width: 34rem; padding: 0; }

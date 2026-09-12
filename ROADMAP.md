@@ -419,6 +419,12 @@ preamble.
 - **built:** `context --pages N`, defaulting to one page either side rather
   than zero, and a per-document text layer so a source with fifteen chapter
   PDFs has one per chapter instead of an ambiguous `## page 7`
+- **built:** every size on the chip, the one in force written out and the rest
+  abbreviated -- `context 0 · 1 page either side · 3 · 10 · all` -- each one
+  clickable, `c` walking them. A row of bare numbers is five things to decode.
+  It also settles a real ambiguity: **the number is pages *either side***, so
+  `3` hands over seven, and the chip, the tooltip and the guide all say so now
+  rather than leaving it to be inferred
 - **built:** how much context is a setting at three levels, most specific
   first: the **unit**, its **source**, the repo. The unit level is the one that
   earns its keep, because triage is where you can see that a theorem's
@@ -453,6 +459,10 @@ preamble.
   whether a marked claim is worth a card on its own is mostly a question about
   its neighbours, and reading them meant opening the PDF. A neighbour that is a
   unit in its own right is flagged and links to it
+- **built:** the marks grouped by kind, collapsible, with the colour's meaning
+  shown *once* on the other rail rather than on every row. Thirty marks meant
+  thirty copies of one sentence; the swatch is the label, the group heading is
+  the kind, and the legend is where a scheme belongs
 - **built:** three views of the same geometry, cycled with `p` or the control
   in the corner of the picture: the crop, the whole page, and **every page,
   scrolling**. A crop answers "is this the right region"; sometimes the
@@ -543,6 +553,18 @@ have.
   **No placeholder `conventions.md`** -- an empty one saying "nothing recorded
   yet" is indistinguishable from a real one to everything that reads it, and
   would silence the warning it should raise.
+- **Built: `carded` and `draft` drawn as one moment.** They are not two steps:
+  `/extract-cards` writes the card file and marks the unit in the same call,
+  and there is no state where one has happened and the other has not. The
+  diagram ran them as a long arrow from the top-right of one lane to the
+  bottom-left of the other, which reads as a journey. It is a *split*, so the
+  two boxes now sit one above the other, carry the same outline, and are tied
+  by the only line in either diagram that is not a transition.
+- **Built: the two assistive passes drawn alike.** `/transcribe` fills in what
+  a unit says and `/augment` fills in what a card is missing; both are boxes
+  hanging off the state they act on, in the same relative position one lane
+  apart, because neither moves anything. `/augment` was not in the diagram at
+  all, which made the card lane look like two keystrokes and a sync.
 - **Built: a floor under the colour scheme.** `DEFAULT_MEANINGS` gives each of
   Zotero's five annotation kinds a reading, because that set is closed and the
   same in every library -- the tool can state it, and a *colour* is a scheme
@@ -582,6 +604,21 @@ have.
   resolve to -- and a navigation away and back is a poor way to look something
   up. One renderer, over `/api/config`; the page it replaced is gone rather
   than kept as a second way to draw the same table.
+- **Built: the annotation panel, in one fixed place.** `@claude` and `@me`
+  were scattered down the main column under everything else, and the `@claude`
+  half was a *shut* `<details>` labelled "not for this decision" -- which is a
+  poor way to present the one instruction `/extract-cards` ever receives. It is
+  the brief now: first, open, with an `add` beside it and, when empty, a
+  sentence saying what belongs there. The two sit in the lower pane of the
+  triage column, above them the marks, the split draggable.
+- **Built: answering an `@me` keeps the question.** The way out of a parked
+  decision was to delete the line, which throws away both halves -- and the
+  question is most of what made it worth recording. `yes`, `no` and free text
+  all write the answer back *with* the question (`same as 2.4? - no`), and
+  unaddressed, so it is a record rather than new work. `x` still deletes
+  outright, which is right when the note was a reminder. **Yes/no alone would
+  have been two ways to lose the reasoning**; the useful primitive is
+  answer-and-settle, and the buttons are prefills for it.
 - **Built: one job per rail.** The left one **acts** -- filters, and the
   commands that run on what they leave. The right one **tells you what you are
   looking at** and changes nothing. That is the whole layout rule, and it

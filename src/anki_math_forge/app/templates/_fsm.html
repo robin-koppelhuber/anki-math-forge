@@ -1,8 +1,15 @@
 {# The complete state machine, derived from the code rather than from memory.
 
-   Four things it is easy to get wrong here, all of them checked against the
+   Five things it is easy to get wrong here, all of them checked against the
    source:
 
+   * `carded` and `draft` are **one moment**, not two steps. `/extract-cards`
+     writes the card file and marks the unit carded in the same breath; there
+     is no state where one has happened and the other has not. The diagram used
+     to run them as a long arrow from the top-right of one lane to the
+     bottom-left of the other, which reads as a journey. It is a *split*: from
+     here on there are two objects, and the rest of the machine is about the
+     second one.
    * `Ledger.set_state` permits any unit state to any other and the triage view
      binds q/s/u unconditionally, so `u` is not "undo a skip" -- it returns
      *any* unit to new, a carded one included.
@@ -17,11 +24,16 @@
      wherever it sits -- which is why the only arrow it gets is the one to the
      sync gate. Arrows to individual boxes would claim something untrue.
 
+   The two assistive passes are drawn the same way as each other, each under
+   the state it acts on: `/transcribe` fills in what a unit says, `/augment`
+   fills in what a card is missing. Neither moves anything, which is why both
+   are boxes hanging off a state rather than arrows between states.
+
    Geometry is checked by tests/test_fsm.py: no overlapping boxes, no edge
    through a box, no overlapping labels. Hand-authored SVG does not stay
    correct on its own. #}
 <figure class="fsm">
-<svg viewBox="0 0 960 600" role="img" aria-labelledby="fsm-title">
+<svg viewBox="0 0 960 640" role="img" aria-labelledby="fsm-title">
   <title id="fsm-title">The life of a unit and the card it becomes</title>
   <defs>
     <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7"
@@ -32,7 +44,7 @@
 
   <text class="lane" x="8" y="20">UNIT — a located region of the source</text>
   <line class="lane-rule" x1="0" y1="330" x2="960" y2="330"/>
-  <text class="lane" x="210" y="368">CARD — a file in cards/</text>
+  <text class="lane" x="8" y="354">CARD — a file in cards/</text>
 
   <!-- unit lane -->
   {# What actually makes a unit here. It said `extract` for every source,
@@ -43,7 +55,7 @@
   {% set sf = source_facts | default({}, true) %}
   <g class="source"><text x="60" y="46">{{ 'forge zotero' if sf.origin == 'zotero' else 'forge extract' }}</text>
   {%- if sf.units_from %}<text class="sub" x="60" y="60">{{ sf.units_from | join(', ') }} marks</text>{% endif %}</g>
-  <path class="edge" d="M115,50 V66" marker-end="url(#ar)"/>
+  <path class="edge" d="M115,64 V66" marker-end="url(#ar)"/>
 
   <g class="state"><rect x="90" y="70" width="96" height="38" rx="6"/>
     <text x="138" y="94">new</text></g>
@@ -55,7 +67,7 @@
   <path class="edge" d="M360,89 H468" marker-end="url(#ar)"/>
   <text class="lbl" x="414" y="80">/extract-cards</text>
 
-  <g class="state"><rect x="472" y="70" width="96" height="38" rx="6"/>
+  <g class="state twin"><rect x="472" y="70" width="96" height="38" rx="6"/>
     <text x="520" y="94">carded</text></g>
   <path class="edge you" d="M568,88 H696" marker-end="url(#ar)"/>
   <text class="lbl you" x="632" y="79">s</text>
@@ -66,7 +78,7 @@
   <path class="edge you back" d="M748,70 V30 H160 V68" marker-end="url(#ar)"/>
   <text class="lbl you" x="452" y="24">u — returns any unit to new, a carded one included</text>
 
-  <!-- what a unit gains, stacked under it -->
+  <!-- what a unit gains: a reading of what it says, and a proposed decision -->
   <g class="prop">
     <rect x="90" y="150" width="300" height="52" rx="6"/>
     <text x="102" y="170">transcription — /transcribe</text>
@@ -80,57 +92,67 @@
     <text class="sub" x="102" y="262">proposed, never applied · a accept · d dismiss</text>
   </g>
   <path class="edge dash" d="M240,202 V220" marker-end="url(#ar)"/>
-  <text class="lbl" x="320" y="216">classify reads it</text>
 
   <path class="edge dash" d="M90,250 H40 V95 H86" marker-end="url(#ar)"/>
   <text class="lbl" x="240" y="300">a applies whatever state it proposed — usually skipped, not only skipped</text>
 
-  <!-- the bridge -->
-  <path class="edge" d="M520,108 V340 H25 V399 H86" marker-end="url(#ar)"/>
-  <text class="lbl" x="330" y="334">writes a card file</text>
+  <!-- the split: one moment, two objects from here on -->
+  <path class="edge twin" d="M520,108 V370" marker-end="url(#ar)"/>
+  <text class="lbl twin" x="534" y="196">the same moment:</text>
+  <text class="lbl twin" x="534" y="212">the unit is carded</text>
+  <text class="lbl twin" x="534" y="228">and the card exists</text>
 
   <!-- card lane -->
-  <g class="state"><rect x="90" y="380" width="96" height="38" rx="6"/>
-    <text x="138" y="404">draft</text></g>
+  <g class="state twin"><rect x="472" y="372" width="96" height="38" rx="6"/>
+    <text x="520" y="396">draft</text></g>
 
-  <path class="edge cycle" d="M108,380 V358 H168 V378" marker-end="url(#ar)"/>
-  <text class="lbl cycle" x="138" y="352">any edit — still a draft</text>
+  <path class="edge you" d="M568,391 H656" marker-end="url(#ar)"/>
+  <text class="lbl you" x="612" y="382">a</text>
 
-  <path class="edge you" d="M186,399 H260" marker-end="url(#ar)"/>
-  <text class="lbl you" x="223" y="390">a</text>
+  <g class="state ok"><rect x="660" y="372" width="96" height="38" rx="6"/>
+    <text x="708" y="396">approved</text></g>
+  <path class="edge" d="M756,391 H818" marker-end="url(#ar)"/>
+  <text class="lbl" x="786" y="366">sync</text>
+  <g class="source"><text x="824" y="396">Anki</text></g>
+  <path class="gate" d="M788,383 V399"/>
 
-  <g class="state ok"><rect x="264" y="380" width="96" height="38" rx="6"/>
-    <text x="312" y="404">approved</text></g>
-  <path class="edge" d="M360,399 H688" marker-end="url(#ar)"/>
-  <text class="lbl" x="420" y="390">sync</text>
-  <g class="source"><text x="692" y="404">Anki</text></g>
-  <path class="gate" d="M560,391 V407"/>
+  <path class="edge cycle" d="M708,410 V440 H580 V412" marker-end="url(#ar)"/>
+  <text class="lbl cycle" x="644" y="456">u, or any edit — back to draft</text>
 
-  <path class="edge cycle" d="M312,418 V446 H172 V420" marker-end="url(#ar)"/>
-  <text class="lbl cycle" x="242" y="464">u, or any edit — back to draft</text>
+  <!-- what a card gains: drawn like the unit's, under the state it acts on -->
+  <g class="prop">
+    <rect x="240" y="452" width="300" height="52" rx="6"/>
+    <text x="252" y="472">the optional sections — /augment</text>
+    <text class="sub" x="252" y="492">conditions, proof, prose · still a draft after</text>
+  </g>
+  <path class="edge dash" d="M500,410 V450" marker-end="url(#ar)"/>
 
-  <path class="edge you" d="M110,418 V498" marker-end="url(#ar)"/>
-  <text class="lbl you" x="96" y="452">r</text>
-  <g class="state out"><rect x="62" y="500" width="96" height="36" rx="6"/>
-    <text x="110" y="523">rejected</text></g>
+  <path class="edge you" d="M472,400 H138 V450" marker-end="url(#ar)"/>
+  <text class="lbl you" x="300" y="394">r</text>
+  <g class="state out"><rect x="90" y="452" width="96" height="36" rx="6"/>
+    <text x="138" y="475">rejected</text></g>
 
   <!-- annotations: everywhere, so pointed nowhere in particular -->
   <g class="overlay warn">
-    <rect x="380" y="470" width="560" height="112" rx="6"/>
-    <text x="392" y="492">@claude / @me annotation — n</text>
-    <text class="sub" x="392" y="512">on any unit or any card, at any state, from either side</text>
-    <text class="sub" x="392" y="532">@claude is work for the model · @me is yours to decide</text>
-    <text class="sub" x="392" y="552">/triage resolves it — and resolving is an edit, so an</text>
-    <text class="sub" x="392" y="572">approved card drops back to draft</text>
+    <rect x="580" y="480" width="360" height="130" rx="6"/>
+    <text x="592" y="502">@claude / @me annotation — n</text>
+    <text class="sub" x="592" y="522">on any unit or any card, at any state</text>
+    <text class="sub" x="592" y="542">@claude is the brief for whoever writes</text>
+    <text class="sub" x="592" y="562">the card · @me is yours to decide</text>
+    <text class="sub" x="592" y="582">/triage resolves it — and resolving is an</text>
+    <text class="sub" x="592" y="602">edit, so an approved card drops to draft</text>
   </g>
-  <path class="edge dash warn" d="M560,468 V409" marker-end="url(#ar)"/>
-  <text class="lbl warn" x="572" y="440">blocks sync, wherever it sits</text>
+  <path class="edge dash warn" d="M788,478 V402" marker-end="url(#ar)"/>
+  <text class="lbl warn" x="796" y="440">blocks sync, wherever it sits</text>
 </svg>
 <figcaption>
   Two objects, two gates. Everything in <b class="you-key">accent</b> is a
   decision only you make; everything else is mechanical or a command.
-  <b>Transcription</b> is a property a unit gains, not a state. A
-  <b>suggestion</b> proposes a state and never applies it. An
+  <b>carded and draft are one moment</b> — the card file is written and the
+  unit is marked in the same breath, and from there on there are two things to
+  keep track of. <b>Transcription</b> and <b>augmentation</b> are the two
+  assistive passes: each hangs off the state it acts on, and neither moves
+  anything. A <b>suggestion</b> proposes a state and never applies it. An
   <b>annotation</b> attaches anywhere — which is why it has no arrow to any
   one box — and <b>stops sync</b> until it is resolved.
 </figcaption>

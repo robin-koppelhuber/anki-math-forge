@@ -400,9 +400,10 @@ def test_absent_suggestion_is_explained_not_silent(config: Config, units: Ledger
 def test_notes_are_titled_and_split_by_audience(config: Config, units: Ledger) -> None:
     """Untitled `@claude ...` lines under a crop read as stray text.
 
-    They are addressed instructions, so the view says who each is for -- and
-    Claude's are collapsed, because during triage they are provenance for
-    card-writing rather than anything the human acts on.
+    They are addressed instructions, so the view says who each is for. The
+    `@claude` half used to be a shut `<details>` labelled "not for this
+    decision", which is a poor way to present the one thing you can say to
+    whoever writes the card -- it is the brief, and it is open.
     """
     led = Ledger.load(config.units_path("demo"))
     first = led.units[0].id
@@ -411,12 +412,40 @@ def test_notes_are_titled_and_split_by_audience(config: Config, units: Ledger) -
     led.save()
 
     page = TestClient(create_app(config)).get("/units?state=all").text
-    assert "for you to decide" in page
-    assert "note for Claude" in page or "notes for Claude" in page
-    assert "decide whether this is worth carding" in page
-    # Scope to the deck: the guide's diagram legitimately names `@claude`.
     deck = page.split('id="deck"')[1].split('id="empty-filter"')[0]
-    assert "@claude" not in deck, "the prefix is redundant once the block is titled"
+    assert "the brief for whoever writes the card" in deck
+    assert "yours to decide" in deck
+    assert "decide whether this is worth carding" in deck
+    assert "line 3 of 6" in deck
+    assert "<details" not in deck.split("notes-pane")[1], "the brief is not collapsed"
+
+
+def test_an_answered_note_keeps_the_question(config: Config, units: Ledger) -> None:
+    """Deleting the line throws away both halves, and the question is most of
+    what made the decision worth recording. Unaddressed, so it is a record
+    rather than new work."""
+    led = Ledger.load(config.units_path("demo"))
+    first = led.units[0].id
+    led.annotate(first, "@me same as 2.4?")
+    led.save()
+
+    client = TestClient(create_app(config))
+    client.post(f"/api/units/demo/{first}/answer", json={"index": 0, "answer": "no"})
+
+    notes = Ledger.load(config.units_path("demo")).get(first).notes
+    assert notes == ["same as 2.4? — no"]
+
+
+def test_an_empty_answer_just_deletes(config: Config, units: Ledger) -> None:
+    """Right when the note was a reminder rather than a question."""
+    led = Ledger.load(config.units_path("demo"))
+    first = led.units[0].id
+    led.annotate(first, "@me look at this again")
+    led.save()
+
+    client = TestClient(create_app(config))
+    client.post(f"/api/units/demo/{first}/answer", json={"index": 0, "answer": ""})
+    assert Ledger.load(config.units_path("demo")).get(first).notes == []
 
 
 def test_note_prefix_stripping_survives_a_hand_edited_note() -> None:

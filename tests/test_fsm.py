@@ -39,6 +39,10 @@ FONTS = {
     "blocked": (9.5, "start"),
     "state out": (13.0, "middle"),
     "state ok": (13.0, "middle"),
+    # `carded` and `draft`: one moment seen from either side of the lane rule.
+    "state twin": (13.0, "middle"),
+    "lbl twin": (10.5, "start"),
+    "step twin": (9.0, "start"),
     "prop": (11.0, "start"),
     "overlay": (11.0, "start"),
     "overlay warn": (11.0, "start"),

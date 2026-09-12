@@ -60,6 +60,7 @@ extract  ->  units  ->  triage  ->  cards  ->  review  ->  sync
 
 ```
 uv run forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
+uv run forge zotero --list             # what Zotero has, and what is already here
 uv run forge zotero --tag anki         # or: what you marked up in Zotero -> units
 /transcribe --source <name>                 # crops -> tex_auto, via subagents
 /classify --source <name>                   # propose which units aren't worth carding

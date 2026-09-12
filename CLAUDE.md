@@ -155,11 +155,13 @@ What is true of the *tool* stays here:
 
 ```
 uv run forge extract [source]   # source -> units; never reads the maths
+uv run forge zotero --list      # what Zotero has, and what is already a source
 uv run forge zotero --tag anki  # what you marked up in Zotero -> units
 uv run forge classify           # *propose* skips; applies nothing
 uv run forge audit              # is the index trustworthy? 1..N, no gaps
 uv run forge crops --section 2.4 --untranscribed --out DIR --json
-uv run forge context <unit-id>  # the page it was printed on (--pages N for more)
+uv run forge context <unit-id>  # the page it was printed on (--pages N for more,
+                                #   counted *either side*: 3 hands over seven)
 uv run forge source-text <src>  # the book text, for card-writing context
 uv run forge check              # lint (always; blocks sync)
 uv run forge units --state queued --json

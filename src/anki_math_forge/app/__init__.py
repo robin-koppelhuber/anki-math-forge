@@ -468,6 +468,24 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(400, "empty annotation")
         return _mutate_ledger(config, source, body, lambda led: led.annotate(unit_id, text))
 
+    @app.post("/api/units/{source}/{unit_id:path}/answer")
+    def answer_unit_note(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Settle one annotation, keeping what settled it.
+
+        Deleting the line throws away the question along with the answer, and
+        the question is half of what made the decision worth recording. A
+        `@me` note asking "same as 2.4?" resolved with "no" leaves
+        `same as 2.4? — no` behind, unaddressed, so it is a record rather than
+        new work.
+        """
+        index = int(body.get("index", -1))
+        reply = str(body.get("answer", "")).strip()
+
+        def act(led: Ledger) -> Unit:
+            return led.answer(unit_id, index, reply)
+
+        return _mutate_ledger(config, source, body, act, unit_id)
+
     @app.post("/api/units/{source}/{unit_id:path}/context")
     def set_unit_context(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         """How much of the document a card writer gets for this unit.
@@ -890,6 +908,47 @@ def has_annotation(notes: list[str], audience: str) -> bool:
     return any(model.annotation_audience(n) == audience for n in notes)
 
 
+# What to call a group of marks of one kind. Plural and plain, because the
+# heading is a container label -- "what you highlighted" -- and not a reading
+# of any one mark; that is the legend's job, on the other rail.
+KIND_GROUPS = {
+    "highlight": "highlighted",
+    "underline": "underlined",
+    "note": "notes in the margin",
+    "image": "boxed regions",
+    "ink": "drawn on the page",
+    "text": "typed on the page",
+}
+
+
+def grouped_marks(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """The unit's own mark, and the rest gathered by kind.
+
+    Its own comes out of the grouping entirely: it is not one of several
+    highlights to be read through, it is the thing the decision is about.
+
+    The rest group because thirty rows of mixed kinds is a list you scroll
+    rather than read, and the kinds answer different questions -- what the
+    paper says, versus what you thought about it. Each group collapses, so the
+    two-word terms can be shut away while the claims stay open.
+    """
+    groups: dict[str, dict[str, Any]] = {}
+    own = None
+    for row in rows:
+        if row["own"]:
+            own = row
+            continue
+        kind = str(row["kind"]) or "highlight"
+        group = groups.setdefault(
+            kind, {"kind": kind, "label": KIND_GROUPS.get(kind, kind), "marks": []}
+        )
+        group["marks"].append(row)
+    ordered = sorted(groups.values(), key=lambda g: -len(g["marks"]))
+    for group in ordered:
+        group["count"] = len(group["marks"])
+    return {"own": own, "groups": ordered, "count": len(rows)}
+
+
 def mark_payloads(
     unit: Unit, config: Config, known: set[str] | None = None
 ) -> list[dict[str, Any]]:
@@ -925,13 +984,43 @@ def mark_payloads(
     return rows
 
 
-def context_label(pages: int) -> str:
-    """`1p`, `all`. Short enough for a badge, and the same wording the browser
-    puts back after a cycle -- two spellings of the same number is how a badge
-    ends up disagreeing with the file behind it."""
+# The sizes the chip offers. Coarse on purpose: the decision is "a bit more" or
+# "all of it", not a measurement. `999` means the whole document.
+CONTEXT_STEPS = (0, 1, 3, 10, 999)
+
+
+def context_label(pages: int, *, chosen: bool = False) -> str:
+    """One step of the context chip.
+
+    The chosen one is written out and the rest are bare numbers, so the chip
+    reads as a sentence with the answer in it -- `context: 1 · 3 pages either
+    side · 10 · all` -- rather than as five numbers you have to decode.
+
+    **"3 pages" means three pages either side**, seven in total: `context.py`
+    takes `range(page - n, page + n + 1)`. Saying "3 pages" and handing over
+    seven is the kind of quiet mismatch that makes a card writer think they
+    have the whole story when they have more of it than they expected, so the
+    chosen label spells it out and the tooltip repeats it.
+    """
     if pages >= 100:
-        return "all"
-    return f"{pages}p"
+        return "the whole document" if chosen else "all"
+    if pages == 0:
+        return "this page only" if chosen else "0"
+    if not chosen:
+        return str(pages)
+    return f"{pages} page{'' if pages == 1 else 's'} either side"
+
+
+def context_steps(current: int) -> list[dict[str, Any]]:
+    """Every size, with the one in force written out and marked."""
+    return [
+        {
+            "pages": step,
+            "label": context_label(step, chosen=step == current),
+            "on": step == current,
+        }
+        for step in CONTEXT_STEPS
+    ]
 
 
 def unit_mark(unit: Unit) -> str:
@@ -1437,7 +1526,17 @@ def _unit_payload(
         # What the reader marked here and on the pages around it: the text
         # each one covers and whatever they wrote about it. The crop shows
         # where the marks are; this is what they say.
-        "marks": mark_payloads(unit, config, known),
+        "marks": grouped_marks(mark_payloads(unit, config, known)),
+        # Every annotation with the index that identifies it, so one can be
+        # answered without the browser guessing which line it was.
+        "annotations": [
+            {
+                "index": index,
+                "audience": model.annotation_audience(note) or "claude",
+                "text": _note_text(note),
+            }
+            for index, note in enumerate(unit.notes)
+        ],
         "id": unit.id,
         "state": unit.state,
         "reason": unit.reason,
@@ -1453,19 +1552,13 @@ def _unit_payload(
         "equation": unit.locator.equation,
         "uids": unit.uids,
         "notes": unit.notes,
-        # Split by audience. During triage most annotations are provenance
-        # left for whoever writes the card -- "line 3 of 6, follows p67y189".
-        # Useful there, noise here, so they collapse; anything addressed to
-        # the human does not.
-        "notes_mine": [_note_text(n) for n in unit.notes if model.annotation_audience(n) == "me"],
-        "notes_claude": [
-            _note_text(n) for n in unit.notes if model.annotation_audience(n) != "me"
-        ],
         "suggestion": vars(unit.suggestion) if unit.suggestion else None,
         # How much of the document a card writer will be handed, and whether
         # this unit asked for it or inherited it.
         "context_pages": config.context_pages_for(unit.source, unit.context_pages),
-        "context_label": context_label(config.context_pages_for(unit.source, unit.context_pages)),
+        "context_steps": context_steps(
+            config.context_pages_for(unit.source, unit.context_pages)
+        ),
         "context_own": unit.context_pages is not None,
     }
 

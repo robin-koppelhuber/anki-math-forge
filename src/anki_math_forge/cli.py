@@ -103,6 +103,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="say what would be imported and write nothing",
     )
+    p.add_argument(
+        "--list",
+        action="store_true",
+        dest="list_items",
+        help=(
+            "what is in Zotero and what is already a source here. Reads "
+            "nothing else and writes nothing: it is the answer to 'which of "
+            "these have I not imported yet'"
+        ),
+    )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_zotero)
 
@@ -381,6 +391,8 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
     from .extract import zotero as zotero_units
 
     client = zotero_api.Zotero()
+    if args.list_items:
+        return _list_zotero(client, config, args)
     try:
         if args.tag:
             items = client.tagged(args.tag)
@@ -466,6 +478,51 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
             )
         )
     return OK if all(r.ok for _, _, r in reports) else FAILED
+
+
+def _list_zotero(client: Any, config: Config, args: argparse.Namespace) -> int:
+    """What Zotero has, and which of it this repo already reads.
+
+    Registering a source is a command rather than a button, because it reads
+    Zotero, writes files and caches a text layer. But "which of my papers have
+    I not imported yet" is a question you have *before* running it, and the
+    only way to answer it was to run the import and read what it said.
+    """
+    from . import zotero as zotero_api
+
+    try:
+        items = client.tagged(args.tag) if args.tag else client.tagged("anki")
+    except zotero_api.ZoteroError as exc:
+        print(str(exc), file=sys.stderr)
+        return FAILED
+
+    known = {name: spec.zotero_key for name, spec in config.sources.items()}
+    by_key = {key: name for name, key in known.items() if key}
+    rows = [
+        {
+            "item": item.key,
+            "citation": item.citation,
+            "title": item.title,
+            "source": by_key.get(item.key, ""),
+        }
+        for item in items
+    ]
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return OK
+    if not rows:
+        print(f"no Zotero items tagged {args.tag or 'anki'!r}", file=sys.stderr)
+        return MISUSE
+    for row in rows:
+        mark = "*" if row["source"] else " "
+        where = row["source"] or "not imported"
+        print(f" {mark} {row['citation']:<28} {where}")
+    fresh = [r for r in rows if not r["source"]]
+    if fresh:
+        tag = args.tag or "anki"
+        print()
+        print(f"{len(fresh)} not imported yet: `uv run forge zotero --tag {tag}`")
+    return OK
 
 
 def _text_cacher(config: Config, source: str) -> Any:

@@ -372,6 +372,17 @@ const SPLITS = {
     fallback: 0.55,
     axis: "y",
   },
+  /* And the triage column's, between what the reader wrote on the page and
+     what has been written about the unit since. Different questions, asked at
+     different moments; stacked in one scroll the second was always below the
+     fold. */
+  beside: {
+    key: "anki-forge.split.beside",
+    left: "--split-beside",
+    right: "--split-beside-bottom",
+    fallback: 0.6,
+    axis: "y",
+  },
 };
 
 /* The right rail has two widths, because it has two jobs. At `counts` it is a
@@ -728,6 +739,28 @@ async function openGallery() {
     paintGallery();
   });
 })();
+
+/* Clicking away closes. A modal that only closes on its own × makes you hunt
+   for the one pixel that dismisses it, which is the opposite of what a panel
+   over your work should ask.
+
+   The test is the click landing outside the dialog's *box*: a `<dialog>` fills
+   the viewport as far as the event target is concerned -- the backdrop is part
+   of it -- so `event.target === dialog` alone would also fire for a click on a
+   padding edge inside it. */
+document.addEventListener("click", (event) => {
+  const dialog = event.target.closest("dialog");
+  if (!dialog || !dialog.open) return;
+  const box = dialog.getBoundingClientRect();
+  const outside =
+    event.clientX < box.left ||
+    event.clientX > box.right ||
+    event.clientY < box.top ||
+    event.clientY > box.bottom;
+  // A keyboard-driven activation reports (0, 0); it is not a click on the
+  // backdrop and closing on it would dismiss the panel as it opened.
+  if (outside && (event.clientX || event.clientY)) dialog.close();
+});
 
 /* The effective configuration, over whatever you were doing. It answers a
    question you have *mid-decision* -- which layout did this card resolve to --
