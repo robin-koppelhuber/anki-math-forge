@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}graph · {{ source | default('', true) }} · forge{% endblock %}
+
+{# The toolbar goes in the header rather than over the canvas. Everything here
+   is about what is drawn, the header is where the source picker already lives,
+   and a floating panel would cover the part of the picture it describes. #}
+{% block filters %}
+<button type="button" class="chip" id="graph-all"
+        title="draw every card, including the ones nothing needs and that need nothing (a)">every card</button>
+<button type="button" class="chip" id="graph-reset"
+        title="every box back to its computed place. For one box, point at it and press x.">reset arrangement</button>
+<span class="graph-counts" id="graph-counts"></span>
+{% endblock %}
+
+{% block main %}
+{# Fixed between the two bars, so the canvas is the window and the page never
+   scrolls: panning is the scroll here, and two ways to move the same picture
+   fight each other. #}
+<div class="graph-stage" id="graph-stage" data-source="{{ source }}">
+  <canvas id="graph-canvas"></canvas>
+  <p class="graph-note" id="graph-note" hidden></p>
+</div>
+{% endblock %}
+
+{% block keys %}
+<span><b>drag</b> a box to arrange · <b>drag</b> the background to pan</span>
+<span><b>click</b> a box opens the card</span>
+<span><b>a</b> every card</span>
+<span><b>x</b> puts the box under the pointer back</span>
+<span><b>0</b> recentre</span>
+{# Read-only edges, said out loud, because a canvas you can drag reads as a
+   canvas you can draw on. An arrow is card content: making one writes
+   `requires` into frontmatter, which `check` validates for cycles,
+   self-reference and dangling uids. #}
+<span class="muted">arrows are read-only: <code>requires</code> in the card file</span>
+{% endblock %}
+
+{% block scripts %}<script defer src="/static/graph.js"></script>{% endblock %}

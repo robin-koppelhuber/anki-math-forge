@@ -9,67 +9,50 @@ everything the 2026-09-11 planning round scheduled: Zotero as a source, the
 whole-page view, the triage and review surface, the rename, and publishing.
 Those sections are gone from this file. Git history has them.
 
-Two things about the shape of what remains. **The plan is now one item**, the
-dependency canvas, because the rest of the old plan was built or overtaken.
-And **the largest unbuilt section, the model page extractor, has been demoted
-to an idea**: §5 says why, and it is worth reading before anyone picks it up
-out of habit.
+Two things about the shape of what remains. **The dependency canvas is
+built**, so §1 is now what it deliberately stopped short of rather than a plan
+to build it. And **the largest unbuilt section, the model page extractor, has
+been demoted to an idea**: §5 says why, and it is worth reading before anyone
+picks it up out of habit.
 
 ---
 
 # What is left
 
-## 1. The dependency canvas, per source
+## 1. The dependency canvas: what it does not do yet
 
-The substantial one, and the only thing here that is a feature rather than a
-repair. **[graph-canvas.md](graph-canvas.md) is the design to build from**:
-the seam, the layout, the file on disk, and what v1 deliberately stops short
-of.
+Built, at `/graph`, per source. `src/anki_math_forge/graph.py` is the graph and
+its layout with no app in it, `app/static/graph.js` draws it, and
+`sources/<name>/graph.json` holds whatever you dragged. The design notes it was
+built from are gone: what survived them is in comments at the seams they
+describe, and the rest is here.
 
-`requires` decides the order new cards are introduced in, and the review view
-shows it one card at a time: what this card needs, what needs it, where it
-lands in the study order. That answers the question you ask most, which is
-always about the card in front of you.
+What v1 stops short of, and the trigger for each.
 
-It does not answer the shape of the whole thing. Which cards are foundations
-that many others rest on? Is there a cluster nothing points at? Did a chapter's
-worth of dependencies never get recorded?
+- **Drawing an edge in the browser.** A position is a view preference and costs
+  a drag if it is wrong. An edge is card content: making one writes `requires`
+  into frontmatter, which `check` validates for cycles, self-reference and
+  dangling uids. So it needs three things this does not have: the cycle check
+  *before* the write rather than after, the `mtime` guard, and an undo, because
+  a mis-dragged arrow is as easy to make as a mis-pressed key. `Edge.kind` is
+  the only affordance v1 owes it.
+- **Concept nodes.** The open question from the old plan, still open. A node is
+  a card, and "the adjugate" is one idea carried by three cards, so a concept
+  graph would be smaller and more honest about the material. It is a second
+  builder function beside `card_graph` and a `?graph=concepts` on the route;
+  the layout, the position file and the canvas are untouched, which is what
+  that seam is for. Worth building when one idea is carried by enough cards
+  that the card graph reads as duplication.
+- **Zoom.** Pan is enough and the browser zooms. Revisit when a real source
+  does not fit.
+- **Quadtree hit-testing.** Linear over every node on `pointermove` is
+  microseconds at 108 and fine at 700. Revisit past a few thousand.
 
-**Per source**, which is the scoping that makes the density objection go away.
-Nine edges across 108 cards is a near-empty picture. Nine edges across the
-thirty cards of one paper is a readable one, and it is the only scope where the
-graph means anything: `requires` says "introduce that first", and cards from
-two different books are not competing for a position in the same reading. The
-rest of the app is already scoped this way, so the view inherits the source
-selector.
-
-**A canvas rather than SVG**, because the answer to "read it or edit it" is
-edit it. Dragging is the point: the layout a dependency graph wants is the one
-the person who knows the material would draw, and neither dot-layout nor a
-force simulation knows which two results belong side by side.
-
-That means node positions are stored. They are a fact about one source's graph,
-so they belong in that source's folder rather than in `localStorage`, where
-they would be invisible to everyone else and lost on a new machine.
-`sources/<name>/graph.json`, `{uid: [x, y]}`, written by the app and diffable
-like everything else. That satisfies invariant 2 without putting layout into
-card frontmatter, where it would be hashed.
-
-**The data is already computed.** `app.review_view` builds the forward edges
-from `Card.requires` and the reverse edges by inversion, and
-`sync.effective_keys` already walks the graph for priority inheritance. A view
-renders work that exists.
-
-**Still gated on the edges existing.** A canvas of thirty cards and no arrows
-is a worse answer than the per-card lines. The trigger: a meaningful fraction
-of one source's cards carrying a `requires`, or a chain running more than three
-deep. Today the Cookbook has nine edges across 108 cards and no paper has more
-than one.
-
-One question left open, and it is worth deciding before drawing anything.
-**What is a node, a card or a concept?** "The adjugate" is one idea carried by
-three cards, and a concept graph would be smaller and more honest about the
-material. A card graph is what the data already is.
+What it taught about the deck, which is the answer to the density objection
+this item used to carry: 18 of the Cookbook's 108 cards touch an edge, and
+**one of the 18 has a caption**. A box reading `no caption yet` is the view
+being honest rather than inventing a name from the filename slug, and it is
+also the list of cards `/augment` should be run over next.
 
 ## 2. Two audit checks that would have caught dropped content
 

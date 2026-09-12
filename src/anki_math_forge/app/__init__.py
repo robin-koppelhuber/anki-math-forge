@@ -34,6 +34,7 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
 from .. import check, latex, model
+from .. import graph as graph_mod
 from ..config import DEFAULT_MEANINGS, Config
 from ..ledger import Ledger, Unit, open_ledgers
 from ..model import Card, StaleFileError
@@ -380,6 +381,11 @@ def create_app(config: Config) -> FastAPI:
                     places[need]["required_by"].append(link(c.uid))
         for uid, place in places.items():
             place["requires"] = [link(n) for n in by_uid_card[uid].requires]
+        # The way into the canvas, and the only one: the header carries no view
+        # links, and the moment you want the whole graph is while looking at a
+        # card that has dependencies. A source where nothing needs anything
+        # never offers it, so nothing points at an empty picture.
+        linked = any(p["required_by"] or p["requires"] for p in places.values())
 
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         filters = {
@@ -423,6 +429,7 @@ def create_app(config: Config) -> FastAPI:
                     CARD_STATES,
                 ),
                 "counts_scope": counts_scope,
+                "graph_href": filter_url("/graph", {}, source=name) if linked else "",
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
                     if counts_scope == "filtered"
@@ -430,6 +437,72 @@ def create_app(config: Config) -> FastAPI:
                 ),
             },
         )
+
+    @app.get("/graph", response_class=HTMLResponse)
+    def graph_view(request: Request, source: str = "") -> Any:
+        """The dependency canvas, one source at a time (ROADMAP.md §1).
+
+        A view of its own rather than a panel, because it wants the whole
+        window and its own keys. No filter rail: the rail filters a deck of
+        one-at-a-time items and there is no deck here, and the source picker
+        in the header is the only scoping the canvas has any use for.
+
+        The page carries no data. Everything is fetched from
+        `/api/graph/{source}`, which is also what the `every card` toggle
+        re-fetches, so there is one code path that decides what is drawn.
+        """
+        name = resolve_source(config, source)
+        return templates.TemplateResponse(
+            request,
+            "graph.html",
+            {
+                "config": config,
+                "source": name,
+                "sources": source_names(config),
+            },
+        )
+
+    @app.get("/api/graph/{source}")
+    def graph_api(source: str, all: str = "") -> Any:
+        return source_graph(config, resolve_source(config, source), everything=bool(all))
+
+    @app.post("/api/graph/{source}/positions")
+    def graph_positions_api(source: str, body: dict[str, Any] = Body(default={})) -> Any:
+        """Where the boxes have been dragged to.
+
+        Positions are a view preference: wrong ones cost a drag, which is why
+        this writes without a confirmation while nothing else in the app does.
+        An *edge* is card content and is not writable from here at all --
+        making one means putting `requires` into frontmatter, which `check`
+        validates for cycles, self-reference and dangling uids.
+        """
+        name = resolve_source(config, source)
+        raw = body.get("positions") or {}
+        # `null` is "put this one back": the entry goes away and the node
+        # returns to wherever the layout puts it.
+        moved: dict[str, tuple[float, float] | None] = {
+            str(node_id): (None if pair is None else (float(pair[0]), float(pair[1])))
+            for node_id, pair in raw.items()
+            if pair is None or (isinstance(pair, (list, tuple)) and len(pair) == 2)
+        }
+        path = graph_mod.positions_path(config.sources_dir, name)
+        # Not `_expected_mtime`, which reads "0" as no precondition. That is
+        # right for a card, which always exists by the time anything writes to
+        # it. Here "0" is what the browser was told when the source had no
+        # arrangement yet, and a file that has appeared since belongs to a
+        # reader whose picture of it is empty.
+        raw = str(body.get("mtime", "")).strip()
+        try:
+            positions = graph_mod.move(
+                path, moved, expect_mtime_ns=int(raw) if raw.isdigit() else None
+            )
+        except StaleFileError as exc:
+            return JSONResponse({"error": str(exc), "stale": True}, status_code=409)
+        return {
+            "positions": {k: list(v) for k, v in positions.items()},
+            "mtime": _mtime(path),
+            "path": str(path.relative_to(config.root)),
+        }
 
     @app.get("/api/sources")
     def sources_api() -> Any:
@@ -1715,6 +1788,62 @@ def card_gist(card: Card, config: Config) -> str:
     ledger = _ledgers(config).get(card.source_name)
     unit = ledger.get(card.unit) if ledger else None
     return unit.gist if unit else ""
+
+
+def source_graph(config: Config, source: str, *, everything: bool = False) -> dict[str, Any]:
+    """Everything the canvas draws for one source, laid out and positioned.
+
+    Scoped to a source because that is the only scope where the graph means
+    anything: `requires` says "introduce that first", and cards from two books
+    are not competing for a place in the same reading.
+
+    A `requires` may still cross sources, and both ends are drawn. Keeping only
+    this source's cards would show a card whose foundation is elsewhere as a
+    foundation itself, which is the one thing the picture is read for.
+
+    The layout is computed over what is actually shown, so the connected view
+    is not the full arrangement with holes in it.
+    """
+    everywhere = _cards(config)
+    here = [c for c in everywhere if card_in_source(c, source)]
+    mine = {c.uid for c in here}
+    wanted = {n for c in here for n in c.requires} | mine
+    foreign = [
+        c
+        for c in everywhere
+        if c.uid not in mine and (c.uid in wanted or mine & set(c.requires))
+    ]
+
+    def href(card: Card) -> str:
+        where = card.source_name or source
+        return filter_url("/review", {}, source=where, status="all") + f"#{card.uid}"
+
+    whole = graph_mod.card_graph(
+        here + foreign,
+        label=lambda card: card_gist(card, config),
+        href=href,
+        here=source,
+    )
+    shown = whole if everything else whole.connected()
+    order = [c.uid for c in in_study_order(here, source_positions(config))]
+    path = graph_mod.positions_path(config.sources_dir, source)
+    return {
+        "source": source,
+        **shown.as_dict(),
+        # Where each node sits before anyone has dragged it, and what has been
+        # dragged. Two maps rather than one merged one: the canvas has to be
+        # able to put a node back, and a merged map cannot say which of the two
+        # a coordinate came from.
+        "layout": {k: list(v) for k, v in graph_mod.layered(shown, order).items()},
+        "positions": {k: list(v) for k, v in graph_mod.load_positions(path).items()},
+        "mtime": _mtime(path),
+        "everything": everything,
+        "shown": len(shown.nodes),
+        # Said out loud on screen. A filtered view that does not report what it
+        # left out reads as the whole picture.
+        "hidden": len(whole.nodes) - len(shown.nodes),
+        "total": len(whole.nodes),
+    }
 
 
 def card_in_source(card: Card, source: str) -> bool:

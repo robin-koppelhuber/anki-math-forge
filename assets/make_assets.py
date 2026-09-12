@@ -16,6 +16,7 @@ display:
     zotero.png   a unit from a marked-up paper: the highlights painted back
                  onto the page, and what each one says beside it
     review.png   an approved card, with the notes that decided it
+    graph.png    the dependency canvas: what each card rests on, arranged
     states.png   the state machine, units above and cards below
 
 Two ways of taking a picture, because the subjects differ. The **state
@@ -246,7 +247,7 @@ class Serving:
 # is, and `carded` sits above it only because it at least shows a finished one.
 TRIAGE_STATES = ("queued", "new", "carded", "skipped")
 
-SHOTS = ("triage", "zotero", "review", "states")
+SHOTS = ("triage", "zotero", "review", "graph", "states")
 
 
 def urls() -> dict[str, str]:
@@ -296,6 +297,14 @@ def urls() -> dict[str, str]:
         out["review"] = "/review?" + urllib.parse.urlencode(
             {"source": segmented, "status": "approved" if approved else "all"}
         )
+        # The canvas draws `requires`, so a source with none is a blank window
+        # with a line of explanation in the middle of it. That is the correct
+        # thing for the app to show and the wrong thing to put in a README.
+        if any(
+            "requires:" in c.read_text(encoding="utf-8")
+            for c in (config.cards_dir / segmented).glob("*.md")
+        ):
+            out["graph"] = "/graph?" + urllib.parse.urlencode({"source": segmented})
     # The marked-up shot is opt-in, and that is the whole point of it. This
     # screenshot is a legible page of whatever you were reading, so taking it
     # of the first Zotero source to hand republishes a page of somebody's book
@@ -328,6 +337,7 @@ def main() -> int:
     why = {
         "zotero": "no marked-up source is tagged `demo` — skipped, so the README "
         "does not end up carrying a page of somebody's book",
+        "graph": "no card in that source has a `requires` yet — skipped",
     }
     for name in sorted((wanted - {"states"}) - set(live)):
         print(f"  {name}: {why.get(name, 'no source for it yet — skipped')}")

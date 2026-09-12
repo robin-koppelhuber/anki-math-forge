@@ -2279,3 +2279,50 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
    900px -- a state machine rendered at poster size, with the legend it shares
    the rail with pushed off the bottom. */
 .at-a-glance .fsm svg { min-width: 0; max-width: 300px; }
+
+/* -- the dependency canvas ----------------------------------------------- */
+
+/* Fixed between the two bars, so the canvas is the window. The page itself
+   never scrolls: panning is the scroll here, and two ways to move the same
+   picture fight each other. `--header-h` and `--footer-h` are measured in
+   app.js, because the header wraps to two rows on a narrow window. */
+.graph-stage {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--header-h, 44px);
+  bottom: var(--footer-h, 38px);
+  overflow: hidden;
+  background: var(--bg);
+}
+.graph-stage canvas { display: block; cursor: grab; touch-action: none; }
+.graph-stage canvas:active { cursor: grabbing; }
+
+/* What is drawn and what is not. Beside the toggle that changes it, so the
+   number and the control that moves it read as one thing. */
+.graph-counts {
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.graph-note {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 34rem;
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* The way into the canvas, under the lines it is the whole-source version of. */
+.to-graph {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--line);
+}
+.to-graph:hover { color: var(--accent); border-bottom-color: var(--accent); }

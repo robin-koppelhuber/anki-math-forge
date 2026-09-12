@@ -150,7 +150,7 @@ The matrix analogue of $(\log x)' = 1/x$.
 
 ## 6. The companion app
 
-`forge serve` — FastAPI, KaTeX, local only. Two views over the same files.
+`forge serve` — FastAPI, KaTeX, local only. Three views over the same files.
 
 ### Units view (`/units`)
 
@@ -171,9 +171,19 @@ Card approval. Rendered exactly as it will appear in Anki — front, back, condi
 
 The crop link matters: when a card looks off, the fastest resolution is comparing it against the original page image.
 
+### Graph view (`/graph`)
+
+The `requires` of one source, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all.
+
+- `drag` a box to arrange it, `drag` the background to pan, `click` a box to open the card
+- `a` every card, including the ones no arrow touches · `x` puts one box back · `0` recentres
+- the arrangement is written to `sources/<name>/graph.json`, committed and diffable
+
+Arrows are read-only. A position is a view preference; an edge is card content, and making one means writing `requires` into frontmatter, where `check` validates it. The default picture is the part of the deck that has edges, and the count it left out is on screen beside the toggle.
+
 ### Annotations
 
-Available from both views via `n`, and **equally available by editing a file directly** — the app is one entry point, not the entry point. An annotation written in the browser lands in the card's `## notes` section, byte-identical to one you'd type by hand.
+Available from both triage and review via `n`, and **equally available by editing a file directly** — the app is one entry point, not the entry point. An annotation written in the browser lands in the card's `## notes` section, byte-identical to one you'd type by hand.
 
 ### State handling
 

@@ -91,6 +91,14 @@
         <p class="dep needed" title="this card is pulled forward to sit ahead of them">
           needed by {% for dep in card.required_by %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="{{ dep.gist ~ ' · ' if dep.gist }}go to {{ uid }}"><code>{{ uid }}</code>{% if dep.gist %}<span class="dep-gist">{{ dep.gist }}</span>{% endif %}</a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
         {% endif %}
+        {# Two lines above answer "what does this one card rest on". The shape
+           of the whole thing -- which results everything sits on, whether a
+           chapter recorded any dependencies at all -- is not a question about
+           one card. Offered only where the source has an edge somewhere. #}
+        {% if graph_href is defined and graph_href and (card.requires or card.required_by) %}
+        <p class="dep"><a class="to-graph" href="{{ graph_href }}"
+           title="every card in this source that needs another one, on one canvas">see the whole graph &rarr;</a></p>
+        {% endif %}
       </div>
 
       {# An approval that is not holding. It is not withdrawn -- the file still
