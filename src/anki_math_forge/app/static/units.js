@@ -356,6 +356,47 @@ document.addEventListener("click", (event) => {
 
 paintMarkFilter();
 
+/* Long marks fold to a few lines, with a way out.
+
+   A highlight can run to a paragraph, and with the notes panel above them now,
+   four of those push the brief off the screen -- which is the panel this
+   column was rearranged to put first. Clamping in CSS and adding the button
+   from here means it appears **only where the text actually overflows**: a
+   fixed character count would put "more" after a sentence that was already
+   complete, and truncate one that was not. */
+const CLAMP_SLACK = 2; // px; sub-pixel line heights round the wrong way
+
+function offerToExpand(root = document) {
+  root.querySelectorAll(".clamp").forEach((node) => {
+    if (node.dataset.clamped) return;
+    node.dataset.clamped = "1";
+    if (node.scrollHeight <= node.clientHeight + CLAMP_SLACK) {
+      // It fits. Drop the clamp rather than leave a class that would start
+      // truncating if the column were ever dragged narrower.
+      node.classList.remove("clamp");
+      return;
+    }
+    const more = el("button", "clamp-more", "more");
+    more.type = "button";
+    more.addEventListener("click", () => {
+      more.textContent = node.classList.toggle("clamp") ? "more" : "less";
+    });
+    node.after(more);
+  });
+}
+
+offerToExpand();
+
+/* Folding a note section must not also mean writing a note. The heading sits
+   in a `<summary>`, so a click anywhere in it toggles -- including on the
+   `add` button, which would open the prompt and collapse the section it was
+   adding to. */
+document.addEventListener("click", (event) => {
+  if (event.target.closest("summary") && event.target.closest("[data-annotate]")) {
+    event.preventDefault();
+  }
+});
+
 /* Three ways to look at the same geometry, cycled with `p`.
 
    crop     -- the box and a margin. Is this the right region?
@@ -568,3 +609,4 @@ bindKeys({
   ArrowDown: () => deck.nextPending(),
   ArrowUp: () => deck.prev(),
 });
+

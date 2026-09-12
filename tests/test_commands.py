@@ -87,9 +87,18 @@ def test_a_marked_up_source_is_offered_neither_crop_pass() -> None:
 
 
 def test_a_marked_up_source_says_why_rather_than_going_quiet() -> None:
-    """An empty panel reads as a broken feature."""
+    """An empty panel reads as a broken feature.
+
+    And what it says has to be true. It said "a mark carries its own text",
+    which is false for the two cases you would actually want transcribed: a
+    boxed region carries no text at all, and a highlight over a display
+    equation carries the PDF's mangled text layer.
+    """
     said = commands_for("units", {"source": "wegel"}, {"new": 16}, from_marks=True)
-    assert any(c["kind"] == "note" and "transcribe" in c["label"] for c in said)
+    notes = [c["label"] for c in said if c["kind"] == "note"]
+    assert any("transcription" in label for label in notes)
+    assert not any("carries its own text" in label for label in notes)
+    assert any("--tex-auto" in label for label in notes), "and says the way out"
 
 
 def test_the_review_view_offers_review_things() -> None:

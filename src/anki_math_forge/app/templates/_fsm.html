@@ -24,10 +24,12 @@
      wherever it sits -- which is why the only arrow it gets is the one to the
      sync gate. Arrows to individual boxes would claim something untrue.
 
-   The two assistive passes are drawn the same way as each other, each under
-   the state it acts on: `/transcribe` fills in what a unit says, `/augment`
-   fills in what a card is missing. Neither moves anything, which is why both
-   are boxes hanging off a state rather than arrows between states.
+   The assistive passes are drawn the same way as each other, each under the
+   state it acts on: `/transcribe` fills in what a unit says, `/gist` what a
+   card from it would be about, `/augment` what a card is missing. None of
+   them moves anything, which is why all three are boxes hanging off a state
+   rather than arrows between states. `/gist` especially: nothing downstream
+   even reads it, so an arrow out of it would claim something untrue.
 
    Geometry is checked by tests/test_fsm.py: no overlapping boxes, no edge
    through a box, no overlapping labels. Hand-authored SVG does not stay
@@ -78,23 +80,31 @@
   <path class="edge you back" d="M748,70 V30 H160 V68" marker-end="url(#ar)"/>
   <text class="lbl you" x="452" y="24">u — returns any unit to new, a carded one included</text>
 
-  <!-- what a unit gains: a reading of what it says, and a proposed decision -->
+  <!-- what a unit gains: a reading of what it says, one of what it is about,
+       and a proposed decision. None of the three moves it. -->
   <g class="prop">
-    <rect x="90" y="150" width="300" height="52" rx="6"/>
-    <text x="102" y="170">transcription — /transcribe</text>
-    <text class="sub" x="102" y="190">none → ok · the crop, read into tex_auto</text>
+    <rect x="90" y="128" width="300" height="46" rx="6"/>
+    <text x="102" y="146">transcription — /transcribe</text>
+    <text class="sub" x="102" y="164">none → ok · the crop, read into tex_auto</text>
   </g>
-  <path class="edge dash" d="M138,108 V148" marker-end="url(#ar)"/>
+  <path class="edge dash" d="M138,108 V126" marker-end="url(#ar)"/>
+
+  <g class="prop">
+    <rect x="90" y="182" width="300" height="46" rx="6"/>
+    <text x="102" y="200">gist — /gist</text>
+    <text class="sub" x="102" y="218">one line: what a card here would be about</text>
+  </g>
+  <path class="edge dash" d="M138,174 V180" marker-end="url(#ar)"/>
 
   <g class="overlay">
-    <rect x="90" y="222" width="300" height="56" rx="6"/>
-    <text x="102" y="242">suggestion — /classify</text>
-    <text class="sub" x="102" y="262">proposed, never applied · a accept · d dismiss</text>
+    <rect x="90" y="236" width="300" height="48" rx="6"/>
+    <text x="102" y="254">suggestion — /classify</text>
+    <text class="sub" x="102" y="272">proposed, never applied · a accept · d dismiss</text>
   </g>
-  <path class="edge dash" d="M240,202 V220" marker-end="url(#ar)"/>
+  <path class="edge dash" d="M240,228 V234" marker-end="url(#ar)"/>
 
-  <path class="edge dash" d="M90,250 H40 V95 H86" marker-end="url(#ar)"/>
-  <text class="lbl" x="240" y="300">a applies whatever state it proposed — usually skipped, not only skipped</text>
+  <path class="edge dash" d="M90,260 H40 V95 H86" marker-end="url(#ar)"/>
+  <text class="lbl" x="240" y="304">a applies whatever state it proposed — usually skipped, not only skipped</text>
 
   <!-- the split: one moment, two objects from here on -->
   <path class="edge twin" d="M520,108 V370" marker-end="url(#ar)"/>
@@ -150,9 +160,9 @@
   decision only you make; everything else is mechanical or a command.
   <b>carded and draft are one moment</b> — the card file is written and the
   unit is marked in the same breath, and from there on there are two things to
-  keep track of. <b>Transcription</b> and <b>augmentation</b> are the two
-  assistive passes: each hangs off the state it acts on, and neither moves
-  anything. A <b>suggestion</b> proposes a state and never applies it. An
+  keep track of. <b>Transcription</b>, the <b>gist</b> and <b>augmentation</b>
+  are the assistive passes: each hangs off the state it acts on, and none of
+  them moves anything. A <b>suggestion</b> proposes a state and never applies it. An
   <b>annotation</b> attaches anywhere — which is why it has no arrow to any
   one box — and <b>stops sync</b> until it is resolved.
 </figcaption>

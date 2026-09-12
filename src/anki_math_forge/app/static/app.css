@@ -1516,29 +1516,31 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* Three states, carried by **saturation and border**, never by removing the
+   colour. Draining the colour out of an unselected cell made five of them
+   indistinguishable, and finding your way back to the purple one is the whole
+   reason the grid is laid out this way. So the hue always survives; what
+   changes is how strongly it is stated and how bright its edge is. */
+.mg-cell { border-color: color-mix(in srgb, var(--line) 60%, transparent); }
+.mg-cell .swatch { margin-right: 0; filter: saturate(0.55); opacity: 0.75; }
 .mg-cell:hover { border-color: var(--line); color: var(--ink); }
+.mg-cell:hover .swatch { filter: none; opacity: 1; }
 .mg-cell.on {
   border-color: var(--accent);
   color: var(--ink);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
+.mg-cell.on .swatch { filter: none; opacity: 1; }
 .mg-cell b { font-weight: 500; font-size: 10px; }
-.mg-cell .swatch { margin-right: 0; }
 /* A combination you have not decided about. Still clickable -- it reads as
    something -- but not dressed as a category you chose. */
-.mg-cell.undeclared .swatch { opacity: 0.55; border-style: dashed; }
-/* A combination nothing in this source uses. Greyed and inert: a filter that
-   can only ever return nothing is a dead control, and drawing it as live is
-   how you learn that by clicking it. */
-.mg-cell.empty {
-  background: repeating-linear-gradient(
-    -45deg, transparent, transparent 3px,
-    color-mix(in srgb, var(--muted) 22%, transparent) 3px,
-    color-mix(in srgb, var(--muted) 22%, transparent) 4px
-  );
-  opacity: 0.45;
-  cursor: default;
-}
+.mg-cell.undeclared .swatch { border-style: dashed; }
+/* A combination nothing in this source uses. Inert, because a filter that can
+   only ever return nothing is a dead control -- but still its own colour, so
+   the grid stays readable as a map of the scheme rather than as a wall of
+   grey. Dotted border and no count is what says "nothing here". */
+.mg-cell.empty { cursor: default; border-style: dotted; }
+.mg-cell.empty .swatch { filter: saturate(0.2); opacity: 0.3; }
 
 /* -- the guide's two panes ----------------------------------------------- */
 .guide-panes {
@@ -1847,11 +1849,18 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 }
 .mf-chip:hover, .mf-all:hover { border-color: var(--line); color: var(--ink); }
 .mf-chip .swatch { margin: 0; }
-/* Off, not gone: a colour you have hidden is still the thing you click to
-   bring back, so it has to stay legible while clearly not counting. */
-.mf-chip:not(.on) { opacity: 0.4; }
-.mf-chip:not(.on) .swatch { filter: grayscale(1); }
-.mf-chip.on { border-color: var(--line); color: var(--ink); }
+/* Off, not gone -- and the same rule as the rail's grid: **saturation and
+   border, never the hue**. `grayscale(1)` made every hidden colour the same
+   grey square, so turning one back on meant guessing which of five identical
+   boxes was purple. The colour is the only thing identifying the control. */
+.mf-chip:not(.on) {
+  border-color: color-mix(in srgb, var(--line) 55%, transparent);
+  color: color-mix(in srgb, var(--muted) 70%, transparent);
+}
+.mf-chip:not(.on) .swatch { filter: saturate(0.45); opacity: 0.7; }
+.mf-chip:hover .swatch { filter: none; opacity: 1; }
+.mf-chip.on { border-color: var(--accent); color: var(--ink); }
+.mf-chip.on .swatch { filter: none; opacity: 1; }
 .mf-all { text-transform: uppercase; letter-spacing: 0.04em; }
 /* A group with every row filtered out. Kept visible and dimmed, because
    removing it would say "nothing of this kind here" -- a different claim. */
@@ -1862,6 +1871,53 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   color: var(--muted);
   margin-left: 0.35rem;
 }
+
+/* A mark that runs to a paragraph folds to four lines. With the notes panel
+   above them, four unfolded highlights push the brief off the screen -- and
+   the brief is what this column was rearranged to put first. The `more`
+   button is added by units.js and only where the text really overflows. */
+.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.clamp-more {
+  font: inherit;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: none;
+  border: 0;
+  padding: 0.1rem 0;
+  cursor: pointer;
+}
+.clamp-more:hover { color: var(--accent); }
+
+/* Each notes section folds. Either can run long on a unit you have been round
+   a few times, and neither should push the other off the screen. */
+.note-section > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.note-section > summary::-webkit-details-marker { display: none; }
+/* The heading is inside the summary, so it has to stop being a block or the
+   disclosure row wraps under itself. */
+.note-section > summary h3 { display: flex; margin: 0; }
+.note-section > summary::before {
+  content: "▾";
+  float: left;
+  margin-right: 0.35rem;
+  font-size: 9px;
+  line-height: 1.9;
+  color: var(--muted);
+}
+.note-section:not([open]) > summary::before { content: "▸"; }
+/* Shut, the heading is the whole section, so it needs the space a list would
+   otherwise have given it. */
+.note-section:not([open]) { margin-bottom: 0.5rem; }
 
 /* -- the triage column's two panes --------------------------------------
    What the reader wrote on the page, and what has been written about the unit

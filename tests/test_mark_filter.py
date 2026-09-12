@@ -62,7 +62,8 @@ def test_a_colourless_kind_is_matched_on_the_kind_alone() -> None:
 
 
 def test_kinds_are_rows_and_colours_are_columns(repo: Path) -> None:
-    """The compact shape, and the one that lets a colour be read across kinds."""
+    """The shape that lets a colour be read across kinds, and a kind across
+    colours."""
     units = [
         a_unit("a", ("highlight", "green")),
         a_unit("b", ("highlight", "green")),
@@ -70,10 +71,34 @@ def test_kinds_are_rows_and_colours_are_columns(repo: Path) -> None:
         a_unit("d", ("note", "green")),
     ]
     matrix = mark_matrix(units, declared(repo), "demo")
-    assert [r["kind"] for r in matrix["rows"]] == ["highlight", "note"], "commonest kind first"
-    assert [c["colour"] for c in matrix["colours"]] == ["green", "purple"], "commonest first"
     assert cells(matrix, "highlight")["green"]["count"] == 2
+    assert cells(matrix, "highlight")["purple"]["count"] == 1
     assert cells(matrix, "note")["green"]["count"] == 1
+    assert cells(matrix, "note")["purple"]["count"] == 0
+
+
+def test_the_whole_grid_is_drawn_not_only_the_part_in_use(repo: Path) -> None:
+    """Every kind the scheme reads, against every colour Zotero offers, in a
+    fixed order.
+
+    Building the axes from what happened to be marked made the grid change
+    shape between two sources -- and between two filters of *one* source, so
+    the cell you reached for last time had moved. It also hid every
+    combination you have never used, which is half of what a scheme is.
+    """
+    from anki_math_forge.config import DEFAULT_MEANINGS
+    from anki_math_forge.zotero import HEX_BY_NAME
+
+    # One `declared(repo)`: it appends to forge.toml, and twice would put two
+    # `[zotero.meanings]` tables in it.
+    config = declared(repo)
+    one = mark_matrix([a_unit("a", ("highlight", "green"))], config, "demo")
+    other = mark_matrix([a_unit("b", ("note", "purple"))], config, "demo")
+
+    assert [r["kind"] for r in one["rows"]] == list(DEFAULT_MEANINGS)
+    assert [c["colour"] for c in one["colours"]] == list(HEX_BY_NAME)
+    assert [r["kind"] for r in one["rows"]] == [r["kind"] for r in other["rows"]]
+    assert [c["colour"] for c in one["colours"]] == [c["colour"] for c in other["colours"]]
 
 
 def test_every_row_spans_every_column(repo: Path) -> None:
@@ -113,7 +138,7 @@ def test_a_kind_the_tool_knows_is_always_filterable(repo: Path) -> None:
     """Which kinds you can filter by is decided by the scheme in force, and the
     built-in defaults are part of it."""
     matrix = mark_matrix([a_unit("a", ("underline", "orange"))], declared(repo), "demo")
-    assert [r["kind"] for r in matrix["rows"]] == ["underline"]
+    assert cells(matrix, "underline")["orange"]["count"] == 1
     assert not cells(matrix, "underline")["orange"]["declared"]
 
 

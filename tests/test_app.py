@@ -156,6 +156,84 @@ def test_an_unknown_card_is_a_404(client: TestClient, card_path: Path) -> None:
     assert client.post("/api/cards/ffffff/approve", json={}).status_code == 404
 
 
+# -- reading the files once per change, not once per click ------------------
+
+
+def test_the_cached_loader_agrees_with_check_repo(config: Config, card_path: Path) -> None:
+    """`_parse_deck` is `check_repo` with a per-file parse cache in front. The
+    two must not disagree about what the deck contains, and the only guard
+    against this drifting into a second loader is asking them."""
+    from anki_math_forge import check
+    from anki_math_forge.app import _parse_deck
+
+    mine, my_findings = _parse_deck(config)
+    theirs, their_findings = check.check_repo(config)
+
+    assert [c.uid for c in mine] == [c.uid for c in theirs]
+    assert [(f.code, f.level) for f in my_findings] == [
+        (f.code, f.level) for f in their_findings
+    ]
+
+
+def test_a_write_is_seen_without_anyone_invalidating_anything(
+    client: TestClient, config: Config, card_path: Path
+) -> None:
+    """The cache key is the files themselves, which is what keeps this a view
+    over them (invariant 2). A write from anywhere -- this app, an editor, a
+    subagent running `forge new` in another terminal -- moves an mtime and
+    misses. Nothing is invalidated by hand, so nothing can forget to."""
+    assert client.get("/api/counts").json()["pipeline"]["draft"] == 1
+
+    # Not through the app: straight to disk, the way another process would.
+    card = model.load(card_path)
+    card.frontmatter["status"] = "approved"
+    card.frontmatter["content_hash"] = card.content_hash()
+    card.save()
+
+    counts = client.get("/api/counts").json()["pipeline"]
+    assert counts["approved"] == 1 and counts["draft"] == 0
+
+
+def test_a_rendered_page_is_not_re_rendered_to_be_looked_at_twice(
+    pdf_client: TestClient, pdf_units: Config
+) -> None:
+    """These were `Cache-Control: no-store`, which is the strongest thing you
+    can say and says the wrong thing: a crop is derived, not secret. Forbidding
+    the browser to keep it meant every crop/page/doc toggle re-rendered from
+    the PDF -- measured at 103 ms for a full page, for a picture it had just
+    been shown."""
+    unit = next(iter(Ledger.load(pdf_units.units_path("book"))))
+    url = f"/crop/book/{unit.id}.png"
+
+    first = pdf_client.get(url)
+    assert first.status_code == 200
+    assert first.headers["cache-control"] == "no-cache", "store it, but ask first"
+    etag = first.headers["etag"]
+
+    again = pdf_client.get(url, headers={"If-None-Match": etag})
+    assert again.status_code == 304
+    assert not again.content
+
+
+def test_the_tag_moves_when_the_geometry_does(
+    pdf_client: TestClient, pdf_units: Config
+) -> None:
+    """A stale picture must not be reachable. The tag covers the document's
+    mtime and the ledger's, because that is where geometry and marks live."""
+    path = pdf_units.units_path("book")
+    unit = next(iter(Ledger.load(path)))
+    url = f"/crop/book/{unit.id}.png"
+    before = pdf_client.get(url).headers["etag"]
+
+    with Ledger.edit(path) as ledger:
+        target = ledger.get(unit.id)
+        assert target is not None and target.locator.bbox is not None
+        target.locator.bbox = [x + 3 for x in target.locator.bbox]
+
+    assert pdf_client.get(url).headers["etag"] != before
+    assert pdf_client.get(url, headers={"If-None-Match": before}).status_code == 200
+
+
 # -- the two gradings, set from where you learn them ------------------------
 
 
@@ -508,7 +586,11 @@ def test_notes_are_titled_and_split_by_audience(config: Config, units: Ledger) -
     assert "parked for a decision" in deck
     assert "decide whether this is worth carding" in deck
     assert "line 3 of 6" in deck
-    assert "<details" not in deck.split("notes-pane")[1], "the brief is not collapsed"
+    pane = deck.split("notes-pane")[1]
+    # It folds -- either section can run long -- but it must not *start*
+    # folded: shut by default is the half of the old `<details>` that actually
+    # hid the one instruction `/extract-cards` gets.
+    assert pane.count('<details class="note-section" open>') == 2
 
 
 def test_an_answered_note_keeps_the_question(config: Config, units: Ledger) -> None:

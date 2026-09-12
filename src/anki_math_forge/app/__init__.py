@@ -15,6 +15,7 @@ hand -- the app is one entry point, not the entry point.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -272,7 +273,7 @@ def create_app(config: Config) -> FastAPI:
         counts_scope: str = "",
     ) -> Any:
         name = resolve_source(config, source)
-        cards, findings = check.check_repo(config)
+        cards, findings = _checked(config)
         everywhere = cards  # kept: the filters below rebind `cards`
         # The emptiness test is against the repo, before any filter. A filter
         # that matches nothing is a filter that matches nothing; the deck is
@@ -619,6 +620,7 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/crop/{source}/{unit_id:path}.png")
     def crop(
+        request: Request,
         source: str,
         unit_id: str,
         context: float = 0.0,
@@ -642,7 +644,11 @@ def create_app(config: Config) -> FastAPI:
         ledger_path = config.units_path(source)
         if not ledger_path.exists():
             raise HTTPException(404, f"no ledger for source {source!r}")
-        unit = Ledger.load(ledger_path).get(unit_id)
+        # Through the cache: the scrolling document view asks for one of these
+        # per page, and re-reading a 751-line ledger fifty-eight times to
+        # answer "where is this one unit" is the whole cost of opening it.
+        ledger = _ledgers(config).get(source)
+        unit = ledger.get(unit_id) if ledger else None
         if unit is None:
             raise HTTPException(404, f"no unit {unit_id!r}")
         geometry = unit.crop_geometry()
@@ -660,25 +666,64 @@ def create_app(config: Config) -> FastAPI:
                 f"source document for {source!r} is not here "
                 f"({document or 'unset'}); crops are rendered from it on demand",
             )
-        try:
-            png = render_mod.render_crop(
-                document,
-                *geometry,
-                context=context,
-                outline=outline,
-                width=width,
-                regions=regions,
-            )
-        except (render_mod.PdfUnavailable, ValueError) as exc:
-            raise HTTPException(409, str(exc)) from exc
-        return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
+        def png() -> bytes:
+            try:
+                return render_mod.render_crop(
+                    document,
+                    *geometry,
+                    context=context,
+                    outline=outline,
+                    width=width,
+                    regions=regions,
+                )
+            except (render_mod.PdfUnavailable, ValueError) as exc:
+                raise HTTPException(409, str(exc)) from exc
+
+        return _rendered(
+            request, png, document, source, f"crop|{unit_id}|{context}|{outline}|{width}|{marks}"
+        )
+
+    def _rendered(
+        request: Request, png_for: Any, document: Path, source: str, tag: str
+    ) -> Response:
+        """A rendered PNG, with an ETag so looking at it twice costs nothing.
+
+        These were `Cache-Control: no-store`, which is the strongest thing you
+        can say and says the wrong thing. A crop is *derived*, not secret, and
+        forbidding the browser to keep it meant every crop/page/doc toggle
+        re-rendered from the PDF: 103 ms for a full page, every time, for a
+        picture the browser had just been shown.
+
+        `no-cache` keeps the opposite promise -- store it, but ask before
+        reusing it -- and the ETag makes the asking cheap. It is built from
+        everything that can change the image: the document's own mtime, the
+        ledger's (geometry and marks live there), and the request's parameters.
+        Any of them moves and the tag moves, so a stale picture is not
+        reachable; none of them moves and the answer is a 304 in about five
+        milliseconds.
+        """
+        ledger_path = config.units_path(source)
+        stamp = (
+            document.stat().st_mtime_ns,
+            ledger_path.stat().st_mtime_ns if ledger_path.exists() else 0,
+            tag,
+        )
+        etag = '"' + hashlib.sha256(repr(stamp).encode()).hexdigest()[:20] + '"'
+        headers = {"Cache-Control": "no-cache", "ETag": etag}
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers=headers)
+        return Response(png_for(), media_type="image/png", headers=headers)
 
     def _unit_document(source: str, unit_id: str) -> tuple[Unit, Path]:
         """The unit and the file its geometry refers to, or an HTTP error."""
         ledger_path = config.units_path(source)
         if not ledger_path.exists():
             raise HTTPException(404, f"no ledger for source {source!r}")
-        unit = Ledger.load(ledger_path).get(unit_id)
+        # Through the cache: the scrolling document view asks for one of these
+        # per page, and re-reading a 751-line ledger fifty-eight times to
+        # answer "where is this one unit" is the whole cost of opening it.
+        ledger = _ledgers(config).get(source)
+        unit = ledger.get(unit_id) if ledger else None
         if unit is None:
             raise HTTPException(404, f"no unit {unit_id!r}")
         document = config.document_for(source, unit.locator.document)
@@ -708,7 +753,9 @@ def create_app(config: Config) -> FastAPI:
         return {"pages": total, "page": unit.locator.page or 1}
 
     @app.get("/page/{source}/{unit_id:path}.png")
-    def page_image(source: str, unit_id: str, n: int = 1, marks: bool = True) -> Response:
+    def page_image(
+        request: Request, source: str, unit_id: str, n: int = 1, marks: bool = True
+    ) -> Response:
         """One whole page of the unit's document, for the scrolling view.
 
         The page number is a query parameter rather than another path segment:
@@ -718,21 +765,24 @@ def create_app(config: Config) -> FastAPI:
         from ..extract import render as render_mod
 
         unit, document = _unit_document(source, unit_id)
-        try:
-            png = render_mod.render_page(
-                document,
-                n,
-                regions=render_mod.regions_for(unit, n) if marks else [],
-                # The red box only on the page the unit is actually on.
-                outline=unit.locator.bbox if n == unit.locator.page else None,
-            )
-        except (render_mod.PdfUnavailable, ValueError) as exc:
-            raise HTTPException(409, str(exc)) from exc
-        return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+        def png() -> bytes:
+            try:
+                return render_mod.render_page(
+                    document,
+                    n,
+                    regions=render_mod.regions_for(unit, n) if marks else [],
+                    # The red box only on the page the unit is actually on.
+                    outline=unit.locator.bbox if n == unit.locator.page else None,
+                )
+            except (render_mod.PdfUnavailable, ValueError) as exc:
+                raise HTTPException(409, str(exc)) from exc
+
+        return _rendered(request, png, document, source, f"page|{unit_id}|{n}|{marks}")
 
     @app.post("/api/cards/{uid}/open")
     def open_in_editor(uid: str) -> Any:
-        card = model.find(config.cards_dir, uid)
+        card = _find_card(config, uid)
         if card is None or card.path is None:
             raise HTTPException(404, f"no card {uid}")
         return {"opened": launch_editor(card.path)}
@@ -912,7 +962,7 @@ def pipeline_counts(
     counts["annotated_me_card"] = 0
     counts["annotated_claude_card"] = 0
 
-    for name, ledger in open_ledgers(config.sources_dir).items():
+    for name, ledger in _ledgers(config).items():
         if source and name != source:
             continue
         if keep_unit is None:
@@ -930,7 +980,7 @@ def pipeline_counts(
             counts["unannotated_unit"] += has_annotation(unit.notes, "none")
             counts["annotated_me_unit"] += has_annotation(unit.notes, "me")
             counts["annotated_claude_unit"] += has_annotation(unit.notes, "claude")
-    for card in model.load_all(config.cards_dir):
+    for card in _cards(config):
         if not card_in_source(card, source):
             continue
         if keep_card is not None and not keep_card(card):
@@ -1156,6 +1206,13 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     row is a kind, and the empty cells are as informative as the full ones:
     they are the reader's scheme, drawn.
 
+    **The whole grid is drawn, not only the part in use.** Every annotation
+    kind the scheme reads, against every colour Zotero offers. Building the
+    axes from what happened to be marked made the grid change shape between
+    two sources and between two filters of one source, so the cell you reached
+    for last time was somewhere else -- and it hid the combinations you have
+    never used, which is half of what a scheme *is*.
+
     Cells come in three states, and they are three different facts:
 
     * **declared** -- you said what this combination means. Full strength.
@@ -1163,11 +1220,17 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
       is not the same as a decision. Still filterable, drawn dashed, and the
       tooltip says so.
     * **empty** -- nothing in this source is marked that way. Not clickable,
-      because a filter that can only ever return nothing is a dead control.
+      because a filter that can only ever return nothing is a dead control --
+      but still drawn in its own colour, because five identical grey squares
+      are five things you cannot tell apart, and finding your way back to the
+      purple one is the whole reason the grid is laid out this way.
 
     Nothing appears for a source with no marks, so the Cookbook's rail is
     unchanged: all of this is Zotero's, and a segmented book has none of it.
     """
+    from ..config import DEFAULT_MEANINGS
+    from ..zotero import HEX_BY_NAME
+
     scheme = config.zotero_for(source)
     tally: dict[str, int] = {}
     for unit in units:
@@ -1199,15 +1262,18 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     if not cells:
         return {}
 
-    # Commonest first on both axes, so the corner of the grid you look at
-    # first is the part of the scheme you actually use.
-    colours = sorted(colour_total, key=lambda c: (-colour_total[c], c))
+    # Both axes in full, and in a **fixed** order: every kind the scheme reads
+    # and every colour Zotero offers, plus anything marked that is neither.
+    # Sorting by frequency made the grid rearrange itself between two filters
+    # of one source, so the cell you reached for last time had moved.
+    colours = list(HEX_BY_NAME) + sorted(set(colour_total) - set(HEX_BY_NAME))
+    kinds = list(DEFAULT_MEANINGS) + sorted(set(kind_total) - set(DEFAULT_MEANINGS))
     rows = []
-    for kind in sorted(kind_total, key=lambda k: (-kind_total[k], k)):
+    for kind in kinds:
         rows.append({
             "kind": kind,
             "label": KIND_GROUPS.get(kind, kind),
-            "count": kind_total[kind],
+            "count": kind_total.get(kind, 0),
             "cells": [
                 cells.get(
                     (kind, colour),
@@ -1227,7 +1293,7 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
             ],
         })
     return {
-        "colours": [{"colour": c, "count": colour_total[c]} for c in colours],
+        "colours": [{"colour": c, "count": colour_total.get(c, 0)} for c in colours],
         "rows": rows,
     }
 
@@ -1430,13 +1496,13 @@ def source_gallery(config: Config) -> dict[str, Any]:
     -- so this carries the counts for both halves of the pipeline per source,
     the tags to narrow by, and where each one came from.
 
-    Everything is recomputed per request, like every other read here. It walks
-    every ledger and every card, which is why it is asked for on demand rather
-    than rendered into each page.
+    Read through the same mtime-keyed cache as everything else, so the gallery
+    is free to walk every ledger and every card: it is still derived per
+    request, just not re-parsed per request.
     """
     ledgers = _ledgers(config)
     by_source: dict[str, list[Card]] = {}
-    for card in model.load_all(config.cards_dir):
+    for card in _cards(config):
         by_source.setdefault(card.source_name, []).append(card)
 
     rows: list[dict[str, Any]] = []
@@ -1499,7 +1565,7 @@ def source_names(config: Config) -> list[str]:
     an accident of spelling. Ledgers with no `[sources.*]` entry follow.
     """
     names = list(config.sources)
-    names += sorted(set(open_ledgers(config.sources_dir)) - set(names))
+    names += sorted(set(_ledgers(config)) - set(names))
     return names
 
 
@@ -1640,9 +1706,21 @@ def commands_for(
 
     if view == "units":
         if from_marks:
+            # Not "a mark carries its own text", which this said and which is
+            # false for the two cases you would actually want transcribed: a
+            # boxed region carries no text at all, and a highlight over a
+            # display equation carries the PDF's mangled text layer. What is
+            # true is the thing invariant 9 says -- you do not need a
+            # transcription to *triage*. If one unit turns out to want LaTeX
+            # beside it, that is one command on that unit.
             out.append({
                 "kind": "note",
-                "label": "nothing to transcribe here — a mark carries its own text",
+                "label": "no transcription pass here — triage reads the crop and the mark",
+                "run": "",
+            })
+            out.append({
+                "kind": "note",
+                "label": "one unit that wants LaTeX anyway: forge units --id <id> --tex-auto '...'",
                 "run": "",
             })
         elif counts.get("new"):
@@ -1707,8 +1785,157 @@ def resolve_source(config: Config, source: str) -> str:
     return names[0] if names else ""
 
 
+# -- reading the files, once per change rather than once per click ----------
+#
+# Every interaction in this app re-derived the world from disk. A single card
+# click ran `check_repo` *and* `pipeline_counts`, which is 109 markdown files
+# parsed twice and every formula on them put through KaTeX; the counts poll
+# did the same every four seconds, and all of it is CPU-bound Python holding
+# one GIL, so a click arriving mid-poll queued behind it. Measured on this
+# repo: 111 ms to lint, 96 ms to load the cards, 120 ms for the counts.
+#
+# It stays a view over files (invariant 2) because the key is the files
+# themselves. Stat-ing all 109 cards costs **4.4 ms** against 96 ms to parse
+# them, and any write -- from this app, from an editor, from a subagent
+# running `forge new` in another terminal -- moves an mtime and misses the
+# cache. Nothing is invalidated by hand, so nothing can forget to.
+#
+# Size joins mtime in the signature because mtime resolution is a filesystem
+# property and not all of them are fine-grained; two writes inside one tick
+# that also happen to preserve every byte count is not a case worth losing
+# sleep over.
+_CACHE: dict[str, tuple[Any, Any]] = {}
+
+
+def _signature(paths: Any) -> tuple[Any, ...]:
+    """What the files look like from the outside, cheaply."""
+    out = []
+    for path in sorted(paths):
+        try:
+            info = path.stat()
+        except OSError:
+            # Vanished mid-walk: an editor writing atomically. Treat it as a
+            # change rather than crashing, which is what it is.
+            out.append((str(path), -1, -1))
+        else:
+            out.append((str(path), info.st_mtime_ns, info.st_size))
+    return tuple(out)
+
+
+def _cached(key: str, paths: Any, build: Any) -> Any:
+    signature = _signature(paths)
+    hit = _CACHE.get(key)
+    if hit is not None and hit[0] == signature:
+        return hit[1]
+    value = build()
+    _CACHE[key] = (signature, value)
+    return value
+
+
 def _ledgers(config: Config) -> dict[str, Ledger]:
-    return open_ledgers(config.sources_dir)
+    return _cached(
+        f"ledgers:{config.sources_dir}",
+        config.sources_dir.rglob("units.jsonl"),
+        lambda: open_ledgers(config.sources_dir),
+    )
+
+
+# One parsed card per file, kept until that file changes. Editing one card
+# should cost one parse, not 109: `check_repo` re-read the whole deck, and so
+# did `model.find` looking for the uid, so a single grading click parsed every
+# file in the repo twice -- 200 ms of the 246 a click took.
+_PARSED: dict[Path, tuple[tuple[int, int], Card]] = {}
+
+
+def _parse_deck(config: Config) -> tuple[list[Card], list[check.Finding]]:
+    """`check.check_repo`, re-parsing only what moved.
+
+    Deliberately the same shape as `check_repo` -- same walk, same tolerance
+    of an unparseable file, same sort, same `check_deck` -- because the two
+    must not disagree about what the deck contains. `test_app` asserts they
+    agree on this repo, which is the guard against this drifting into a second
+    implementation of the loader.
+
+    The lint itself is not cached and does not need to be: it is 19 ms over
+    the parsed cards, against 97 ms to parse them. And it cannot be cached per
+    file anyway -- duplicate uids and dangling `requires` are facts about the
+    deck, not about one card in it.
+    """
+    cards: list[Card] = []
+    findings: list[check.Finding] = []
+    seen: set[Path] = set()
+    paths = sorted(config.cards_dir.rglob("*.md")) if config.cards_dir.exists() else []
+    for path in paths:
+        try:
+            info = path.stat()
+        except OSError:
+            continue
+        signature = (info.st_mtime_ns, info.st_size)
+        seen.add(path)
+        hit = _PARSED.get(path)
+        if hit is not None and hit[0] == signature:
+            cards.append(hit[1])
+            continue
+        try:
+            card = model.load(path)
+        except model.CardError as exc:
+            findings.append(check.Finding(check.ERROR, "unparseable", str(exc), path=path))
+            _PARSED.pop(path, None)
+            continue
+        _PARSED[path] = (signature, card)
+        cards.append(card)
+    for gone in set(_PARSED) - seen:
+        del _PARSED[gone]
+    cards.sort(key=lambda c: (c.uid, str(c.path)))
+    findings.extend(check.check_deck(cards, config))
+    return cards, findings
+
+
+def _checked(config: Config) -> tuple[list[Card], list[check.Finding]]:
+    """Every card, parsed and linted at most once per edit.
+
+    One entry, not two. `check_repo` already returns the cards it parsed, and
+    a card click used to call it *and* `pipeline_counts` -- reading all 109
+    files twice for one keystroke. Sharing the result makes the lint the only
+    cost, instead of an extra parse on top of it.
+
+    It is also the more forgiving loader: an unparseable file is reported
+    rather than taking the whole view down with it. A card that cannot be
+    parsed cannot be counted either, so the two agree about what matters.
+    """
+    return _cached(
+        f"check:{config.cards_dir}",
+        config.cards_dir.rglob("*.md"),
+        lambda: _parse_deck(config),
+    )
+
+
+def _find_card(config: Config, uid: str) -> Card | None:
+    """The card with this uid, read fresh from disk.
+
+    Two steps on purpose. Finding it is a lookup over the shared parse, which
+    is free; `model.find` walked and parsed the deck until it hit a match, at
+    100 ms a call. Reading it is then one file, because this is what the write
+    path is about to modify and it must be what is on disk right now -- a
+    shared object would be both stale and, once mutated, visible to every
+    other request.
+    """
+    for card in _cards(config):
+        if card.uid == uid and card.path is not None:
+            return model.load(card.path)
+    return None
+
+
+def _cards(config: Config) -> list[Card]:
+    """Every card, from the shared parse.
+
+    **Callers must not mutate what comes back.** It is shared, so a card object
+    changed in place would be read by the next request as though the file had
+    said so -- which would break invariant 2 quietly and in the worst possible
+    direction. Everything that writes goes through `_mutate_card`, which loads
+    its own copy with `model.find`.
+    """
+    return _checked(config)[0]
 
 
 def _mtime(path: Path) -> str:
@@ -1867,7 +2094,7 @@ def _card_web(card: Card, config: Config) -> bool:
     if card.unit:
         path = config.units_path(source)
         if path.exists():
-            found = Ledger.load(path).get(card.unit)
+            found = (_ledgers(config).get(source) or Ledger(path)).get(card.unit)
             unit = found.web if found else None
     return config.web_for(source, unit)
 
@@ -1881,7 +2108,7 @@ def _unit_image(card: Card, config: Config) -> str:
     ledger_path = config.units_path(source)
     if not ledger_path.exists():
         return ""
-    unit = Ledger.load(ledger_path).get(card.unit)
+    unit = (_ledgers(config).get(source) or Ledger(ledger_path)).get(card.unit)
     return crop_url(unit) if unit else ""
 
 
@@ -1889,7 +2116,7 @@ def _unit_image(card: Card, config: Config) -> str:
 
 
 def _mutate_card(config: Config, uid: str, body: dict[str, Any], action: Any) -> Any:
-    card = model.find(config.cards_dir, uid)
+    card = _find_card(config, uid)
     if card is None or card.path is None:
         raise HTTPException(404, f"no card {uid}")
     expected = _expected_mtime(body)
@@ -1905,7 +2132,7 @@ def _mutate_card(config: Config, uid: str, body: dict[str, Any], action: Any) ->
         card.save(expect_mtime_ns=expected)
     except StaleFileError as exc:
         return JSONResponse({"error": str(exc), "stale": True}, status_code=409)
-    _, findings = check.check_repo(config)
+    _, findings = _checked(config)
     return {
         "card": _card_payload(model.load(card.path), findings, config),
         "before": before,

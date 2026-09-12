@@ -376,11 +376,15 @@ const SPLITS = {
      what has been written about the unit since. Different questions, asked at
      different moments; stacked in one scroll the second was always below the
      fold. */
+  /* The triage column's two panes. The notes are on top now -- the mark this
+     unit came from is already on the crop beside it, outlined in red, so the
+     best position was being spent on the one thing you cannot miss -- and the
+     default leans to the marks below, which are the longer read. */
   beside: {
     key: "anki-forge.split.beside",
     left: "--split-beside",
     right: "--split-beside-bottom",
-    fallback: 0.6,
+    fallback: 0.35,
     axis: "y",
   },
 };

@@ -458,22 +458,32 @@ def test_the_unit_s_own_mark_is_set_apart_from_its_neighbours() -> None:
 # -- the annotation panel ---------------------------------------------------
 
 
-def test_the_brief_for_the_card_writer_is_not_collapsed() -> None:
-    """It used to be a shut `<details>` labelled "not for this decision",
-    which is a poor way to present the one instruction `/extract-cards` gets."""
+def test_the_brief_for_the_card_writer_starts_open() -> None:
+    """It may fold -- either section can run long on a unit you have been round
+    a few times -- but it must not *start* folded. It once was a shut
+    `<details>` labelled "not for this decision", which is a poor way to
+    present the one instruction `/extract-cards` gets, and shut by default is
+    the half of that which actually hid it."""
     units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
     pane = units[units.index("notes-pane") :]
     assert "the brief for whoever writes the card" in pane
-    assert "<details" not in pane, "the brief is open, and so is what you parked"
+    folds = re.findall(r'<details class="note-section"([^>]*)>', pane)
+    assert len(folds) == 2, "both sections fold"
+    assert all("open" in attrs for attrs in folds), "and both start open"
 
 
 def test_the_two_audiences_have_one_fixed_place() -> None:
     """They were scattered down the main column under everything else; the
-    panel is the same place on every unit, and it splits from the marks."""
+    panel is the same place on every unit, and it splits from the marks.
+
+    Notes **above** the marks: the mark this unit came from is already on the
+    crop beside them, at full strength with a red outline round it, so the top
+    of this column was being spent on the one thing you cannot miss. What
+    belongs there is where the work is."""
     units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
     assert 'data-splitter="beside"' in units
     assert '"beside"' in JS or "beside:" in JS, "and the split is remembered"
-    assert units.index("marks-list") < units.index("notes-pane"), "marks above, notes below"
+    assert units.index("notes-pane") < units.index("marks-list"), "notes above, marks below"
 
 
 def test_answering_is_offered_only_for_what_you_parked() -> None:

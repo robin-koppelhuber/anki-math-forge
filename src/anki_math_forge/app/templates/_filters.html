@@ -37,7 +37,7 @@
            with app.js, and a computed attribute cannot be grepped for. #}
         <li><a class="{{ 'on' if view == 'units' and state == 'new' }}"
                href="{{ filter_url('/units', shared, state='new') }}">new<b data-count="new">{{ pipeline.new }}</b></a></li>
-        <li class="step you">q — a human decision</li>
+        <li class="step you" title="q queues it; Q queues it and records what the card should be about, which is the other half of what this stage decides">q / Q — a human decision</li>
         <li><a class="{{ 'on' if view == 'units' and state == 'queued' }}"
                href="{{ filter_url('/units', shared, state='queued') }}">queued<b data-count="queued">{{ pipeline.queued }}</b></a></li>
         <li class="step">/extract-cards</li>
@@ -191,9 +191,13 @@
                 <b>{{ cell.count }}</b>
               </a>
               {% else %}
+              {# Still drawn in its own colour. Five identical grey squares are
+                 five things you cannot tell apart, and the dotted edge plus
+                 the missing count already say "nothing here". #}
               <span class="mg-cell empty"
-                    title="nothing in this source is a {{ cell.colour }} {{ cell.kind }}{{ ' — it would read as: ' ~ cell.meaning if cell.meaning }}"
-                    aria-hidden="true"></span>
+                    title="nothing in this source is a {{ cell.colour }} {{ cell.kind }}{{ ' — it would read as: ' ~ cell.meaning if cell.meaning }}">
+                <span class="swatch c-{{ cell.colour or cell.kind }}" aria-hidden="true"></span>
+              </span>
               {% endif %}
             </td>
             {% endfor %}
