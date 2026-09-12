@@ -130,6 +130,11 @@ class SourceConfig:
 #
 # Deliberately descriptive rather than interpretive: what the mark *is*, not
 # what it is for. What it is for is the part only you know.
+#
+# Keyed by kind alone, and that is not an abbreviation of a pair: it says what
+# Zotero's annotation *is*, which is a fact about the kind. What you meant by
+# it is a fact about the kind **and** the colour, and that is what
+# `[zotero.meanings]` takes.
 DEFAULT_MEANINGS: Mapping[str, str] = {
     "highlight": "a passage you marked",
     "underline": "a passage you underlined",
@@ -138,6 +143,13 @@ DEFAULT_MEANINGS: Mapping[str, str] = {
     "ink": "something you drew on the page",
     "text": "a comment you typed onto the page",
 }
+
+
+# Zotero colours every mark it draws, so a declared key is a pair. The
+# exception is a kind with nothing to colour: for one of those the kind *is*
+# the pair, and asking for `ink/red` would be asking for a mark the reader
+# cannot have made.
+COLOURLESS_KINDS = frozenset({"ink"})
 
 
 @dataclass(frozen=True)
@@ -149,10 +161,13 @@ class ZoteroConfig:
     pages around it comes with it. A two-word term is not a card, but it is
     worth reading next to the claim it belongs to.
 
-    `meanings` maps a colour or an annotation kind to what you meant by it,
-    exactly as `[anki.flags]` maps a flag number. An unmapped one is reported
-    rather than guessed at, for the same reason: a guess about what your own
-    colour scheme means would be invisible once it reached a card.
+    `meanings` maps a **kind and colour together** to what you meant by it,
+    the way `[anki.flags]` maps a flag number. Both halves, always: a green
+    highlight and a green underline are two marks a reader made deliberately
+    differently, and a scheme that cannot tell them apart is not the scheme
+    they were using. An unmapped pair is reported rather than guessed at, for
+    the same reason a flag with no entry is: a guess about what your own
+    colours mean would be invisible by the time it reached a card.
     """
 
     data_dir: Path
@@ -170,22 +185,26 @@ class ZoteroConfig:
     def reading(self, kind: str, colour: str) -> tuple[str, str]:
         """`(meaning, where it came from)` -- `declared` or `default`.
 
-        `kind/colour`, then `kind`, then `colour`. Kind first because it is a
-        small closed set that Zotero defines, while colour is the dimension you
-        assign: a yellow sticky note is a note, and reading it as "yellow" gave
-        it whatever yellow means for highlights. The consequence to know is
-        that a bare `highlight` entry shadows every colour, so leave it unset
-        if you want colours to decide within highlights.
+        **The pair decides, and only the pair.** A key is `kind/colour`; a bare
+        `green` or a bare `note` is refused at load.
 
-        Below everything you declared sits `DEFAULT_MEANINGS`, so a mark always
-        reads as *something*. The provenance comes back with it because the two
-        are not the same claim: a default says what Zotero's annotation kind
-        is, and a declaration says what you meant by it. Only the views that
-        show a scheme care; `means` throws it away.
+        It used to fall back `kind/colour` -> `kind` -> `colour`, which is two
+        problems wearing one rule. A bare `highlight` silently shadowed every
+        colour, so declaring what a highlight "generally" is quietly undid the
+        colour scheme underneath it. And a bare `green` claimed that green
+        means the same thing whether you highlighted with it or underlined with
+        it -- which is exactly the distinction a second annotation kind exists
+        to draw, and the reader who made both marks meant them differently.
+
+        Under the pairs sits `DEFAULT_MEANINGS`, keyed by kind alone, and that
+        one *is* a fact about the kind rather than a reading of it: it says
+        what Zotero's annotation is, not what you used it for. The provenance
+        comes back so a view can tell the two apart -- "you have not decided
+        about this combination yet" is worth seeing. `means` throws it away.
         """
-        for probe in (f"{kind}/{colour}", kind, colour):
-            if self.meanings.get(probe):
-                return self.meanings[probe], "declared"
+        pair = f"{kind}/{colour}" if colour else kind
+        if self.meanings.get(pair):
+            return self.meanings[pair], "declared"
         fallback = DEFAULT_MEANINGS.get(kind, "")
         return (fallback, "default") if fallback else ("", "")
 
@@ -464,7 +483,7 @@ def load(root: Path | None = None) -> Config:
             tags=tuple(str(x) for x in spec.get("tags", ())),
             documents=tuple(str(x) for x in spec.get("documents", ())),
             units_from=frozenset(str(x) for x in spec.get("units_from", ())),
-            meanings={str(k): str(v) for k, v in (spec.get("meanings") or {}).items()},
+            meanings=_meanings(spec.get("meanings") or {}, f"[sources.{name}.meanings]"),
         )
 
     return Config(
@@ -559,16 +578,56 @@ def discover_sources(sources_dir: Path) -> dict[str, dict[str, Any]]:
     return found
 
 
+def _meanings(raw: Any, where: str) -> dict[str, str]:
+    """`kind/colour = "..."`, and nothing shorter.
+
+    A bare key is refused rather than read loosely, because both loose forms
+    were wrong in ways you would not notice. `highlight = "..."` shadowed every
+    colour under it, so writing down what a highlight generally is quietly
+    undid the scheme you had built out of colours. `green = "..."` claimed that
+    green means one thing whether you highlighted with it or underlined with
+    it -- which is precisely the distinction a second annotation kind exists to
+    draw, and the reader who made both marks meant them differently.
+
+    A colourless kind is the one exception, and it is not an abbreviation: an
+    `ink` mark has no colour to pair with, so `ink` *is* the pair.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, str] = {}
+    for key, value in raw.items():
+        name = str(key).strip()
+        text = str(value or "").strip()
+        if not text:
+            continue
+        kind, slash, colour = name.partition("/")
+        if not slash and name not in COLOURLESS_KINDS:
+            from .zotero import HEX_BY_NAME
+
+            hint = (
+                f"a colour needs the kind it was drawn with, e.g. highlight/{name}"
+                if name in HEX_BY_NAME
+                else f"a kind needs the colour, e.g. {name}/green"
+            )
+            raise ConfigError(
+                f"{where} {name!r} names only half of a mark; {hint}. "
+                "The pair decides what a mark means: a bare kind used to shadow "
+                "every colour under it, and a bare colour claimed that green "
+                "means the same highlighted as underlined."
+            )
+        if slash and not (kind and colour):
+            raise ConfigError(f"{where} {name!r} is not a kind/colour pair")
+        out[name] = text
+    return out
+
+
 def _zotero(raw: Any) -> ZoteroConfig:
     section = raw if isinstance(raw, dict) else {}
     data_dir = str(section.get("data_dir", "") or "~/Zotero")
-    meanings = section.get("meanings", {})
     return ZoteroConfig(
         data_dir=Path(data_dir).expanduser(),
         units_from=frozenset(str(t) for t in section.get("units_from", ())),
-        meanings=(
-            {str(k): str(v) for k, v in meanings.items()} if isinstance(meanings, dict) else {}
-        ),
+        meanings=_meanings(section.get("meanings", {}), "[zotero.meanings]"),
     )
 
 

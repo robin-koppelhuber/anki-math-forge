@@ -65,7 +65,7 @@ def test_the_folder_wins_over_the_root_file(repo: Path) -> None:
 def test_a_block_copies_between_the_two_files_unchanged(repo: Path) -> None:
     """The whole argument for TOML over YAML frontmatter: the same text means
     the same thing in the root file and in a source's own."""
-    block = 'units_from = ["green"]\n\n[meanings]\ngreen = "a claim"\n'
+    block = 'units_from = ["green"]\n\n[meanings]\n"highlight/green" = "a claim"\n'
     add_toml(repo, "[zotero]\n" + block.replace("[meanings]", "[zotero.meanings]"))
     write_source(repo, "book", 'title = "A Book"\n' + block)
 
@@ -118,7 +118,12 @@ def test_a_layout_typo_is_still_refused_from_a_source_file(repo: Path) -> None:
 
 # -- a source reads its own marks -------------------------------------------
 
-REPO_ZOTERO = '[zotero]\nunits_from = ["green"]\n\n[zotero.meanings]\ngreen = "a claim"\n'
+# `units_from` still takes a bare colour -- which marks become units is a
+# different question from what they mean -- but a *meaning* needs the pair.
+REPO_ZOTERO = (
+    '[zotero]\nunits_from = ["green"]\n\n'
+    '[zotero.meanings]\n"highlight/green" = "a claim"\n'
+)
 
 
 def test_zotero_settings_fall_back_to_the_repo(repo: Path) -> None:
@@ -137,7 +142,8 @@ def test_a_source_may_read_its_colours_differently(repo: Path) -> None:
     write_source(
         repo,
         "book",
-        'title = "A Book"\nunits_from = ["magenta"]\n\n[meanings]\nmagenta = "a result"',
+        'title = "A Book"\nunits_from = ["magenta"]\n\n'
+        '[meanings]\n"highlight/magenta" = "a result"',
     )
 
     config = config_mod.load(repo)
@@ -148,14 +154,49 @@ def test_a_source_may_read_its_colours_differently(repo: Path) -> None:
     assert config.zotero.units_from == frozenset({"green"}), "the repo default is untouched"
 
 
-def test_the_more_specific_meaning_wins() -> None:
+def test_only_the_pair_decides_a_meaning() -> None:
+    """It used to fall back `kind/colour` -> `kind` -> `colour`, which is two
+    problems wearing one rule.
+
+    A bare `highlight` shadowed every colour under it, so writing down what a
+    highlight generally is quietly undid the scheme built out of colours. And a
+    bare `yellow` claimed yellow means one thing however it was drawn -- which
+    is exactly the distinction a second annotation kind exists to draw, and the
+    reader who made both marks meant them differently.
+
+    What is left under the pairs is `DEFAULT_MEANINGS`, keyed by kind, and that
+    one is a fact about the kind rather than a reading of it: it says what
+    Zotero's annotation *is*, not what you used it for.
+    """
     zotero = config_mod.ZoteroConfig(
-        data_dir=Path("/nowhere"),
-        meanings={"note/yellow": "my own thought", "yellow": "a citation", "note": "a note"},
+        data_dir=Path("/nowhere"), meanings={"note/yellow": "my own thought"}
     )
-    assert zotero.means("note", "yellow") == "my own thought", "kind/colour is most specific"
-    assert zotero.means("note", "blue") == "a note", "then the kind"
-    assert zotero.means("highlight", "yellow") == "a citation", "then the colour"
+    assert zotero.reading("note", "yellow") == ("my own thought", "declared")
+    assert zotero.reading("note", "blue") == (
+        "something you wrote in the margin",
+        "default",
+    ), "a declared yellow note says nothing about a blue one"
+    assert zotero.reading("highlight", "yellow") == (
+        "a passage you marked",
+        "default",
+    ), "nor about a yellow highlight"
+
+
+def test_half_a_mark_is_refused_rather_than_read_loosely(repo: Path) -> None:
+    """Reading it loosely would put the old shadowing back, invisibly. The
+    error names the pair to write instead."""
+    add_toml(repo, '[zotero]\n\n[zotero.meanings]\ngreen = "a claim"\n')
+    with pytest.raises(config_mod.ConfigError, match="highlight/green"):
+        config_mod.load(repo)
+
+
+def test_a_kind_with_nothing_to_colour_is_the_pair() -> None:
+    """`ink` has no colour to pair with, so the kind *is* the whole of it.
+    Demanding `ink/red` would be demanding a mark nobody can make."""
+    zotero = config_mod.ZoteroConfig(
+        data_dir=Path("/nowhere"), meanings={"ink": "something I drew"}
+    )
+    assert zotero.means("ink", "") == "something I drew"
 
 
 # -- and the prose half reaches a card writer -------------------------------

@@ -214,11 +214,19 @@
          click on every row and, for a single-attachment paper, one shut
          `<details>` labelled "PDF". #}
       {% for group in section_tree %}
-      {% if group.chapter %}
-      {# The heading folds; the number beside it *filters*. They were the same
-         click, so the only thing a chapter could do was open -- and on a book
-         with eight sections in a chapter, "everything in chapter 2" was eight
-         separate views and no way to see them together. #}
+      {# A chapter is drawn as a level only when it holds more than one
+         section. The heading folds; the number beside it *filters*, which is
+         what a chapter could never do before -- on a book with eight sections
+         in a chapter, "everything in chapter 2" was eight separate views with
+         no way to see them together.
+
+         One section in a chapter needs no fold: the chapter and the section
+         select the same units, so the section row is the control and a
+         `<details>` around it would be an extra click to reach a copy of
+         itself. That is how a book imported as one PDF per chapter reads, and
+         how a single-attachment paper reads with one row. #}
+      {% set folds = group.chapter and group.sections | length > 1 %}
+      {% if folds %}
       {% set chapter_on = f.get('chapter') == group.chapter %}
       <details class="filter-chapter"
                {{ 'open' if chapter_on or (section and section_chapter(section) == group.chapter) }}>
@@ -241,7 +249,7 @@
             <b>{{ row.matching }}/{{ row.total }}</b></a></li>
           {% endfor %}
         </ul>
-      {% if group.chapter %}</details>{% endif %}
+      {% if folds %}</details>{% endif %}
       {% endfor %}
     </details>
     {% endif %}

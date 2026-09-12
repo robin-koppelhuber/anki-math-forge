@@ -380,7 +380,7 @@ const SPLITS = {
     key: "anki-forge.split.guide",
     left: "--split-guide",
     right: "--split-guide-bottom",
-    fallback: 0.55,
+    fallback: 320,
     axis: "y",
   },
   /* And the triage column's, between what the reader wrote on the page and
@@ -395,7 +395,7 @@ const SPLITS = {
     key: "anki-forge.split.beside",
     left: "--split-beside",
     right: "--split-beside-bottom",
-    fallback: 0.35,
+    fallback: 220,
     axis: "y",
   },
 };
@@ -448,25 +448,32 @@ function recall(key, fallback) {
   }
 }
 
+/* A vertical split is a **height**, not a share.
+
+   A share needs a box with a definite height to be a share *of*, and a box
+   with a definite height is what left a band of nothing under a short column:
+   the marks ran out and the pane kept the room anyway. As a length the
+   stylesheet can wrap it in `fit-content` -- capped where you dragged it to,
+   shrinking to its content when there is less -- and the column itself can be
+   a `max-height`, so it ends where its content ends.
+
+   Columns stay fractional: two of those plus a fixed gutter add up exactly,
+   and lengths would need the gutter subtracted from one of them. */
+function applyVerticalSplit(name, px) {
+  const split = SPLITS[name];
+  const clamped = Math.min(900, Math.max(60, px));
+  document.documentElement.style.setProperty(split.left, `${clamped}px`);
+  split.fraction = clamped;
+  return clamped;
+}
+
 function applySplit(name, fraction) {
   const split = SPLITS[name];
   if (!split) return 0;
+  if (split.axis === "y") return applyVerticalSplit(name, fraction);
   const clamped = Math.min(0.85, Math.max(0.15, fraction));
-  /* A vertical pane can be *shorter* than its share -- a unit with nothing
-     annotated has two one-line empty states in it -- and an `fr` track takes
-     its share regardless, leaving a band of nothing under the notes that reads
-     as a footer. As a percentage the stylesheet can wrap it in `fit-content`,
-     which shrinks the row to its content and hands the surplus to the pane
-     below while still capping it where you dragged it to.
-
-     Columns keep `fr`: two of those plus a fixed gutter add up exactly, and
-     percentages would overflow by the width of the handle. */
-  const unit = split.axis === "y" ? "%" : "fr";
-  const scale = split.axis === "y" ? 100 : 1;
-  document.documentElement.style.setProperty(split.left, `${clamped * scale}${unit}`);
-  document.documentElement.style.setProperty(split.right, `${(1 - clamped) * scale}${unit}`);
-  // Remembered as the fraction, not re-read from the CSS: `parseFloat("35%")`
-  // is 35, which on the next load clamps to the maximum and pins the split.
+  document.documentElement.style.setProperty(split.left, `${clamped}fr`);
+  document.documentElement.style.setProperty(split.right, `${1 - clamped}fr`);
   split.fraction = clamped;
   return clamped;
 }
@@ -515,7 +522,8 @@ function applyRail(name, px) {
     // both, because two hand-rolled drag loops is how they end up behaving
     // differently -- and only the axis actually differs.
     if ((SPLITS[drag.name] || {}).axis === "y") {
-      if (box.height) applySplit(drag.name, (event.clientY - box.top) / box.height);
+      // The pointer's offset into the box *is* the height of the top pane.
+      applySplit(drag.name, event.clientY - box.top);
       return;
     }
     if (box.width) applySplit(drag.name, (event.clientX - box.left) / box.width);

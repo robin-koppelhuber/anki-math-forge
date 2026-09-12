@@ -1624,12 +1624,14 @@ def test_the_section_row_clears_itself(pdf_source: Config) -> None:
     assert active and "section=2.4" not in active.group(1).replace("&amp;", "&")
 
 
-def test_a_chapter_level_appears_only_where_there_is_one(config: Config) -> None:
+def test_a_chapter_is_read_off_the_name_whatever_the_source_spells_it(
+    config: Config,
+) -> None:
     """`2.4` -> chapter `2` is the Cookbook's numbering, and splitting on `.`
-    gave a paper imported from Zotero -- whose sections are attachment titles
-    like `1 - introduction`, or simply `PDF` -- one chapter per section, each
-    folded into a `<details>` of one. That is an extra click on every row and,
-    for a single-attachment paper, one shut fold labelled `PDF`."""
+    gave a book imported as one PDF per chapter -- whose sections are
+    attachment titles like `1 - introduction` -- a chapter per section named
+    after the whole section. A leading number and a separator is the chapter,
+    however the rest is spelled; a name with no leading number has none."""
     from anki_math_forge.app import section_rows
 
     def tree(*names: str) -> list[dict[str, Any]]:
@@ -1637,16 +1639,26 @@ def test_a_chapter_level_appears_only_where_there_is_one(config: Config) -> None
             list(names), set(names), lambda s: s, lambda s: "new", lambda s: s, ("new",)
         )
 
-    cookbook = tree("2.1", "2.4", "3.1")
-    assert [g["chapter"] for g in cookbook] == ["2", "3"], "a real chapter groups"
+    assert [g["chapter"] for g in tree("2.1", "2.4", "3.1")] == ["2", "3"]
+    assert [g["chapter"] for g in tree("1 - introduction", "2- tails")] == ["1", "2"]
+    assert [g["chapter"] for g in tree("PDF")] == [""], "an attachment title is not one"
 
-    paper = tree("1 - introduction", "2- tail_bounds")
-    assert [g["chapter"] for g in paper] == [""], "one section each: no level"
-    assert len(paper[0]["sections"]) == 2
 
-    one_file = tree("PDF")
-    assert [g["chapter"] for g in one_file] == [""]
-    assert [r["name"] for r in one_file[0]["sections"]] == ["PDF"]
+def test_a_chapter_of_one_section_is_not_drawn_as_a_level(pdf_client: TestClient) -> None:
+    """Whether a chapter is a *level* is a rendering question, not a data one.
+    It was decided globally and got it wrong in both directions: a book
+    imported as one PDF per chapter lost its chapters entirely, and folding a
+    chapter that holds one section puts a `<details>` around a copy of itself.
+
+    The two select the same units there, so the section row is the control."""
+    body = pdf_client.get("/units?state=all").text
+    rail = body[body.index("<summary>sections</summary>") : body.index("</aside>")]
+    fold = (
+        r"<summary>(\d+)<a class=\"chapter-pick.*?</summary>"
+        r"(.*?)(?=<details class=\"filter-chapter|$)"
+    )
+    for chapter, rows in re.findall(fold, rail, re.S):
+        assert rows.count("sec-name") > 1, f"chapter {chapter} folds around one row"
 
 
 # -- what the compact diagram counts --------------------------------------

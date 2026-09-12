@@ -128,10 +128,12 @@ def zotero_config(repo: Path) -> Config:
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += (
         '\n[zotero]\nunits_from = ["green", "note", "image"]\n'
+        # `kind/colour`, quoted: a bare TOML key cannot hold a slash, and a
+        # bare *meaning* key is refused -- the pair decides what a mark means.
         "[zotero.meanings]\n"
-        'green = "a claim or result worth a card"\n'
-        'purple = "a term to know"\n'
-        'note = "something I thought while reading"\n'
+        '"highlight/green" = "a claim or result worth a card"\n'
+        '"highlight/purple" = "a term to know"\n'
+        '"note/yellow" = "something I thought while reading"\n'
     )
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)

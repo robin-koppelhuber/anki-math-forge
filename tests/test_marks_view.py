@@ -202,7 +202,7 @@ def test_the_legend_shows_what_is_declared_but_unused(zotero_config: Config) -> 
     """It is the scheme, not a tally. A colour you set aside for something and
     have not used yet is part of it."""
     keys = {row["key"] for row in scheme_rows([a_unit()], zotero_config, "paper")}
-    assert "green" in keys, "declared, and nothing green is marked in this unit"
+    assert "highlight/green" in keys, "declared, and nothing green is in this unit"
 
 
 def test_there_is_no_legend_for_a_source_with_no_marks(zotero_config: Config) -> None:
@@ -226,20 +226,24 @@ def test_the_legend_shows_what_is_used_but_undeclared(zotero_config: Config) -> 
 
 def test_the_legend_says_which_marks_become_units(zotero_config: Config) -> None:
     rows = {row["key"]: row for row in scheme_rows([a_unit()], zotero_config, "paper")}
-    assert rows["green"]["makes_a_unit"]
-    assert not rows["purple"]["makes_a_unit"]
+    assert rows["highlight/green"]["makes_a_unit"]
+    assert not rows["highlight/purple"]["makes_a_unit"]
 
 
-def test_the_legend_groups_the_way_the_config_resolves(zotero_config: Config) -> None:
-    """A bare `note` entry collects every colour of sticky note, and seeing
-    that is the point of showing it."""
+def test_a_colour_is_not_shared_across_kinds(zotero_config: Config) -> None:
+    """A yellow note and a yellow highlight are two rows. The pair decides the
+    meaning, so a declared `note/yellow` says nothing about either a blue note
+    or a yellow highlight -- and the legend has to show that rather than
+    collecting them under one caption."""
     unit = a_unit()
     unit.marks = [
         Mark(key="N1", kind="note", colour="yellow", page=1),
         Mark(key="N2", kind="note", colour="red", page=1),
     ]
     rows = {row["key"]: row for row in scheme_rows([unit], zotero_config, "paper")}
-    assert rows["note"]["count"] == 2
+    assert rows["note/yellow"]["count"] == 1 and rows["note/yellow"]["declared"]
+    assert rows["note/red"]["count"] == 1
+    assert not rows["note/red"]["declared"], "declaring one colour declares one colour"
 
 
 # -- where a source came from -----------------------------------------------
@@ -293,8 +297,8 @@ def test_the_legend_says_which_are_yours(zotero_config: Config) -> None:
         Mark(key="B", kind="underline", colour="orange", page=1),
     ]
     rows = {row["key"]: row for row in scheme_rows([unit], zotero_config, "paper")}
-    assert rows["green"]["declared"]
-    assert not rows["underline/orange"]["declared"], "its own row, at full specificity"
+    assert rows["highlight/green"]["declared"]
+    assert not rows["underline/orange"]["declared"], "nothing was said about this pair"
     assert rows["underline/orange"]["meaning"], "and it still reads as something"
 
 

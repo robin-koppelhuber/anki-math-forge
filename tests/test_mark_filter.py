@@ -19,11 +19,15 @@ from anki_math_forge.app import mark_matrix, unit_mark
 from anki_math_forge.config import Config
 from anki_math_forge.ledger import Mark, Unit
 
+# `kind/colour`, quoted: a bare TOML key cannot hold a slash, and a bare
+# *meaning* key is refused at load -- the pair is what decides what a mark
+# means, because a green highlight and a green underline are two marks the
+# reader made deliberately differently.
 MEANINGS = (
     "\n[zotero.meanings]\n"
-    'green = "a claim worth a card"\n'
-    'purple = "a term to know"\n'
-    'note = "something I thought while reading"\n'
+    '"highlight/green" = "a claim worth a card"\n'
+    '"highlight/purple" = "a term to know"\n'
+    '"note/yellow" = "something I thought while reading"\n'
 )
 
 
@@ -115,10 +119,18 @@ def test_every_row_spans_every_column(repo: Path) -> None:
 
 def test_an_unused_cell_still_says_what_it_would_mean(repo: Path) -> None:
     """It is what the hover has to show, and it is also the moment you notice
-    you have never used a combination you thought you had."""
-    units = [a_unit("a", ("highlight", "purple")), a_unit("b", ("note", "green"))]
-    empty = cells(mark_matrix(units, declared(repo), "demo"), "note")["purple"]
-    assert empty["meaning"] == "something I thought while reading", "kind beats colour"
+    you have never used a combination you thought you had.
+
+    What it would mean is **what Zotero's annotation kind is**, not what the
+    colour means elsewhere. `note/yellow` being declared says nothing about a
+    purple one: the pair decides, so an undeclared pair falls to the floor
+    under it rather than borrowing half a meaning from a neighbour."""
+    config = declared(repo)
+    units = [a_unit("a", ("highlight", "purple")), a_unit("b", ("note", "yellow"))]
+    empty = cells(mark_matrix(units, config, "demo"), "note")["purple"]
+    assert empty["meaning"] == "something you wrote in the margin"
+    assert not empty["declared"], "and it says the meaning is the floor, not a decision"
+    assert cells(mark_matrix(units, config, "demo"), "note")["yellow"]["declared"]
 
 
 def test_a_cell_says_whether_you_decided_it_or_the_tool_did(repo: Path) -> None:

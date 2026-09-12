@@ -191,7 +191,7 @@ def test_the_diagram_is_above_the_legend_and_the_split_drags() -> None:
     triaging a marked-up paper, the colours are most of what you need."""
     panes = GUIDE.index('class="guide-panes"')
     assert GUIDE.index("_fsm_mini.html") > panes
-    assert GUIDE.index("_fsm_mini.html") < GUIDE.index('class="rail-card scheme"')
+    assert GUIDE.index("_fsm_mini.html") < GUIDE.index("scheme scheme-whole")
     assert 'data-splitter="guide"' in GUIDE
     assert "grid-template-rows" in rule(".guide-panes")
 
@@ -398,20 +398,32 @@ def test_the_legend_groups_by_meaning_rather_than_by_key() -> None:
     assert GUIDE.index("sl-label") < GUIDE.index("sl-meaning")
 
 
-def test_the_legend_is_bounded_by_what_makes_units() -> None:
+def test_the_whole_legend_folds_as_one() -> None:
     """A meaning is an arbitrary sentence and a source may declare forty of
-    them, so a legend that lists all of them puts half a 240px rail out of the
-    author's hands. What is structurally small in *any* source is the set of
-    marks that become units of their own -- a scheme with twenty of those would
-    make a queue nobody could work -- so those stay open and the rest folds.
+    them, so half a 240px rail can end up spent on something you read twice.
+    Splitting it into three folds by what each row *does* answered that but
+    made the panel three decisions deep for a reference.
 
-    Context colours in particular: during triage you do not look one up at a
-    time, because the mark's own sentence is in the middle panel already."""
-    assert "selectattr('makes_a_unit')" in GUIDE, "the open rows"
-    assert "rejectattr('makes_a_unit')" in GUIDE, "and the folded ones"
-    assert "rejectattr('declared')" in GUIDE, "the backlog folds separately"
+    One fold, open by default -- a legend nobody found is not a legend -- and
+    the rows ordered by what the scheme does, so the marks that become units
+    (the ones you meet in the queue) are the first thing under the heading."""
+    assert "scheme scheme-whole" in GUIDE
+    assert "<summary><h3>what the marks mean</h3>" in GUIDE
+    assert "open>" in GUIDE[GUIDE.index("scheme scheme-whole") : ][:80]
     # And one entry cannot take the rail hostage however long it is written.
     assert "line-clamp" in rule(".sl-meaning")
+
+
+def test_a_legend_row_is_a_kind_and_a_colour() -> None:
+    """A row labelled just `green` claimed a green highlight and a green
+    underline are one thing. They are two marks the reader made deliberately
+    differently, and the pair is what decides the meaning."""
+    from anki_math_forge.config import ZoteroConfig
+
+    scheme = ZoteroConfig(data_dir=Path("/nowhere"), meanings={"note/yellow": "mine"})
+    assert scheme.reading("note", "yellow")[1] == "declared"
+    assert scheme.reading("note", "blue")[1] == "default", "no borrowing across colours"
+    assert scheme.reading("highlight", "yellow")[1] == "default", "nor across kinds"
 
 
 def test_the_gist_is_labelled_as_a_reading(zotero_config: Config) -> None:

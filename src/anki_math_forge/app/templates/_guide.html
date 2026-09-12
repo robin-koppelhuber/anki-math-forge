@@ -432,30 +432,31 @@
        something to click; this is the legend, and it includes what you
        declared but have not used and -- more usefully -- what you have used
        and not declared. #}
-    {# The scheme, bounded by what it *does* rather than by what it says.
+    {# The whole scheme, and the whole thing folds.
 
-       The thing that does not scale about a legend is that a meaning is an
-       arbitrary sentence and a source may declare forty of them -- and then
-       half a 240px rail is prose you read once and never again. What is
-       genuinely small, in any source, is the set of marks that **become units
-       of their own**: that is `units_from`, and a scheme with twenty of those
-       would produce a queue nobody could work. So those are the rows that
-       stay open, and everything else is one click away.
+       Every row is a **kind and colour together**, because that pair is what
+       decides a meaning: a green highlight and a green underline are two marks
+       made deliberately differently, and a row labelled just `green` claimed
+       they were one thing.
 
-       Context colours fold because during triage you do not look them up one
-       at a time -- the mark's own sentence is in the middle panel, already
-       read. The ones you have not declared fold separately: they are a
-       backlog, not a legend, and open by default they pushed the scheme you
-       actually use off the bottom. #}
+       Grouped by meaning, so pairs that mean the same share a row rather than
+       printing one sentence eight times. Ordered by what the scheme *does* --
+       the marks that become units first, since those are the rows you meet in
+       the queue -- and then by how much of the document carries them.
+
+       Folded as a whole rather than trimmed: it is a reference you need on a
+       new source and rarely after, and half a 240px rail is a lot to spend on
+       something read twice. Open by default, because a legend nobody found is
+       not a legend. #}
     {% if scheme is defined and scheme %}
-    {% set makes_units = scheme | selectattr('makes_a_unit') | list %}
-    {% set context = scheme | rejectattr('makes_a_unit') | selectattr('declared') | list %}
     {% set undecided = scheme | rejectattr('declared') | list %}
-    {% macro legend(rows) %}
+    <details class="rail-card scheme scheme-whole" open>
+      <summary><h3>what the marks mean</h3>
+        <b>{{ scheme | length }}</b></summary>
       <ul class="scheme-list">
-        {% for row in rows %}
-        <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}"
-            title="{{ row.entries | map(attribute='key') | join(' · ') }} — {{ row.meaning }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}">
+        {% for row in scheme %}
+        <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}{{ ' undeclared' if not row.declared }}"
+            title="{{ row.entries | map(attribute='key') | join(' · ') }} — {{ row.meaning }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}{{ ' — not declared: this is what Zotero says the annotation kind is, not what you used it to mean' if not row.declared }}">
           <span class="sl-mark">
             {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
             <b class="sl-label">{{ row.label }}</b>
@@ -465,31 +466,15 @@
         </li>
         {% endfor %}
       </ul>
-    {% endmacro %}
-    <section class="rail-card scheme">
-      <h3>what the marks mean</h3>
-      {% if makes_units %}
-      <p class="scheme-note">these become units of their own</p>
-      {{ legend(makes_units) }}
-      {% endif %}
-      {% if context %}
-      <details class="scheme-fold">
-        <summary>{{ context | length }} more, context only<b>{{ context | sum(attribute='count') }}</b></summary>
-        {{ legend(context) }}
-      </details>
-      {% endif %}
       {% if undecided %}
-      <details class="scheme-fold warn">
-        <summary>{{ undecided | length }} you have not decided about<b>{{ undecided | sum(attribute='count') }}</b></summary>
-        <p class="scheme-default">These read as what Zotero's annotation kind
-          <em>is</em>, which is not what you used it to mean. Until one is
-          declared it reaches a card writer as a coloured box with no caption.</p>
-        {{ legend(undecided) }}
-      </details>
+      <p class="scheme-default">{{ undecided | length }} of these you have not
+        declared: they read as what Zotero says the annotation <em>kind</em> is,
+        which is not what you used it to mean. Until one is declared it reaches
+        a card writer as a coloured box with no caption.</p>
       {% endif %}
-      <p class="rail-more">declared in <code>[zotero.meanings]</code>, or per source in
-        <code>source.toml</code></p>
-    </section>
+      <p class="rail-more">declared in <code>[zotero.meanings]</code> as
+        <code>"kind/colour"</code>, or per source in <code>source.toml</code></p>
+    </details>
     {% endif %}
     </div>
     </div>

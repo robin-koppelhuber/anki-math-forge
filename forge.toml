@@ -93,27 +93,36 @@ data_dir = "~/Zotero"
 # nearest one, because a two-word term is not a card but is worth reading next
 # to the claim it belongs to. A source may override this in its own file.
 units_from = ["green", "note", "image"]
-# What you meant by each colour or kind, the way `[anki.flags]` maps a flag
-# number. Under whatever you put here sits a built-in reading of Zotero's five
-# annotation *kinds* -- that set is closed and the same in every library, so
-# the tool can state it; a colour is a scheme you invented and it cannot. So a
-# mark always reads as something, and the views say which of the two it was:
-# "not declared here" is a decision outstanding, not a gap. A source overrides
-# all of it in its own `source.toml`, under `[meanings]`. Zotero's palette
-# is yellow, red, green, blue, purple, magenta, orange, grey; the kinds are
-# highlight, underline, note, image, ink. `kind/colour` beats `kind` beats
-# `colour`, so a bare `highlight` entry would shadow every colour: leave it
-# unset if you want colours to decide within highlights.
+# What you meant by each mark, the way `[anki.flags]` maps a flag number.
+#
+# **A key names both halves: `"kind/colour"`.** Quoted, because a bare TOML key
+# cannot contain a slash. Both halves always, because a green highlight and a
+# green underline are two marks you made deliberately differently, and a scheme
+# that cannot tell them apart is not the scheme you were using. The older loose
+# forms are refused at load rather than read generously: a bare `green` claimed
+# green means one thing however it was drawn, and a bare `highlight` was worse
+# -- it shadowed every colour under it, so writing down what a highlight
+# generally is quietly undid the scheme built out of colours.
+#
+# Under whatever you put here sits a built-in reading of Zotero's annotation
+# *kinds*. That set is closed and the same in every library, so the tool can
+# state it; a colour is a scheme you invented and it cannot. So a mark always
+# reads as something, and the views say which of the two it was: "not declared
+# here" is a decision outstanding, not a gap.
+#
+# Zotero's palette is yellow, red, green, blue, purple, magenta, orange, grey;
+# the kinds are highlight, underline, note, image, ink, text. A source
+# overrides all of it in its own `source.toml`, under `[meanings]`.
 [zotero.meanings]
-green = "a claim or result worth a card"
-note = "something I thought while reading"
-image = "a figure or table worth a card"
-magenta = "an observation from the text"
-purple = "a term to know"
-blue = "a named object or method"
-orange = "a definition or named algorithm"
-grey = "minor, in passing"
-yellow = "a citation to follow up"
+"highlight/green" = "a claim or result worth a card"
+"highlight/purple" = "a term to know"
+"highlight/magenta" = "an observation from the text"
+"highlight/blue" = "a named object or method"
+"highlight/orange" = "a definition or named algorithm"
+"highlight/grey" = "minor, in passing"
+"highlight/yellow" = "a citation to follow up"
+"note/yellow" = "something I thought while reading"
+"image/yellow" = "a figure or table worth a card"
 
 # Sources describe themselves, in `sources/<name>/`: `source.toml` for the keys
 # this tool acts on, `conventions.md` for the prose a card writer needs. A

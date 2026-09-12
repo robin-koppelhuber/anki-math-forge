@@ -1410,7 +1410,10 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   display: flex;
   align-items: center;
   gap: 0.15rem;
-  max-width: 6.5rem;
+  /* Wide enough for the longest real pair -- `highlight/magenta` -- because
+     every row is a pair now and truncating the colour off the end of one
+     defeats the point of naming both halves. */
+  max-width: 8rem;
   white-space: nowrap;
   overflow: hidden;
 }
@@ -1439,29 +1442,39 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   overflow: hidden;
 }
 .sl-count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
-/* A meaning is an arbitrary sentence and a source may declare forty of them,
-   so the *visible* part is bounded by something that cannot grow: the marks
-   that become units of their own. Everything else folds. */
-.scheme-note {
-  margin: 0 0 0.2rem;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-}
-.scheme-fold { margin-top: 0.45rem; }
-.scheme-fold > summary {
+/* The whole legend folds, rather than being trimmed to a part of itself. It
+   is a reference you need on a new source and rarely after, and half a 240px
+   rail is a lot to spend on something read twice -- but a legend nobody found
+   is not a legend, so it starts open. */
+.scheme-whole > summary {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 0.4rem;
   cursor: pointer;
+  list-style: none;
+}
+.scheme-whole > summary::-webkit-details-marker { display: none; }
+.scheme-whole > summary h3 { margin: 0; }
+.scheme-whole > summary::before {
+  content: "▾";
+  order: -1;
+  font-size: 9px;
+  color: var(--muted);
+  margin-right: 0.3rem;
+}
+.scheme-whole:not([open]) > summary::before { content: "▸"; }
+.scheme-whole > summary b {
+  font-weight: 500;
   font-size: 11px;
   color: var(--muted);
-  padding: 0.15rem 0;
-  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  font-variant-numeric: tabular-nums;
 }
-.scheme-fold.warn > summary { color: var(--warn); }
-.scheme-fold > summary b { font-weight: 500; font-variant-numeric: tabular-nums; }
+/* A pair you have not declared. It still reads as *something* -- Zotero says
+   what the annotation kind is -- but that is not a decision you took, and the
+   difference is the whole point of showing a scheme rather than a tally. */
+.scheme-list li.undeclared .sl-label { color: var(--warn); }
+.scheme-list li.undeclared .swatch { border-style: dashed; }
 
 /* -- the marks on a unit ------------------------------------------------
    The crop shows where they are; this is what they say. Deciding whether a
@@ -1648,11 +1661,10 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 /* -- the guide's two panes ----------------------------------------------- */
 .guide-panes {
   display: grid;
-  /* `fit-content`, not a bare track: a pane shorter than its share should
-     hand the surplus to the one below rather than sit above a band of
-     nothing. The split still caps it -- drag it smaller and the content
-     scrolls -- it just never claims room it is not using. */
-  grid-template-rows: fit-content(var(--split-guide, 55%)) 14px minmax(0, 1fr);
+  /* `fit-content` of a length: caps the pane where you dragged it to, and
+     lets it shrink to its content when there is less, rather than sitting
+     above a band of nothing. */
+  grid-template-rows: fit-content(var(--split-guide, 320px)) 14px minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -2041,19 +2053,21 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
    second was always below the fold. */
 .beside-panes {
   display: grid;
-  /* Same: a unit with nothing annotated has two one-line empty states in the
-     top pane, and an `fr` track gave them a third of the column -- a band of
-     nothing between the notes and the marks that read as a footer. */
-  grid-template-rows: fit-content(var(--split-beside, 35%)) 14px minmax(0, 1fr);
+  /* `fit-content` of a **length**, which is the only form that does both jobs.
+     A percentage needs a definite parent height, and a definite parent height
+     is what left a band of nothing under a short column. A length works
+     against a `max-height` parent, caps the pane where you dragged it to, and
+     lets it shrink to its content when there is less than that -- which is
+     every unit with nothing annotated. */
+  grid-template-rows: fit-content(var(--split-beside, 220px)) 14px minmax(0, 1fr);
   min-height: 0;
-  flex: 1;
 }
 .beside-pane { overflow-y: auto; min-height: 0; }
-/* An explicit height, not a cap: two panes dividing a box need a box to
-   divide, and with `max-height` the split resolved against whatever the
-   content happened to be -- so dragging it moved the boundary between two
-   things that had already sized themselves. */
-.beside { height: clamp(26rem, 74vh, 60rem); }
+/* A cap, not a height. The two panes still divide a box -- the split is a
+   length now, so it does not need a definite one to resolve against -- and
+   the column shrinks when the marks are short instead of ending in a band of
+   nothing that reads as a footer. */
+.beside { max-height: clamp(26rem, 74vh, 60rem); }
 
 /* Marks, grouped by kind and collapsible. The meaning of a colour is *not*
    repeated per row: with thirty marks that is thirty copies of one sentence,

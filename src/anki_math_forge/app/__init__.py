@@ -934,23 +934,13 @@ def section_rows(
         group["total"] += row["total"]
         group["matching"] += row["matching"]
 
-    # A chapter level that every section is alone in is not a level, it is an
-    # extra click on every row. The Cookbook has `2.1 … 2.8` under chapter 2
-    # and wants the fold; a paper has one section per chapter file, or one
-    # section full stop, and folding each of those into a group of one is how
-    # the rail came to show a single shut `<details>` labelled "PDF".
-    groups = list(chapters.values())
-    if all(len(g["sections"]) <= 1 for g in groups):
-        flat = [row for g in groups for row in g["sections"]]
-        if not flat:
-            return []
-        return [{
-            "chapter": "",
-            "sections": flat,
-            "total": sum(r["total"] for r in flat),
-            "matching": sum(r["matching"] for r in flat),
-        }]
-    return groups
+    # Groups keep their chapter; whether a chapter is worth *drawing* as a
+    # level is the template's call, and it turns on how many sections are in
+    # it. Deciding that here, globally, was wrong: it flattened a book
+    # imported as one PDF per chapter -- where each chapter genuinely holds
+    # one section and the chapter is the only thing worth filtering by -- and
+    # took the chapter filter away with it.
+    return list(chapters.values())
 
 
 # A leading number followed by a separator is the chapter, whatever the source
@@ -1426,45 +1416,31 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     }
 
 
-def _scheme_key(scheme: Any, kind: str, colour: str) -> str:
-    """Which line of the scheme a mark of this kind and colour falls under.
-
-    The same walk `ZoteroConfig.means` does, so the legend groups marks exactly
-    the way the config resolves them: an entry for `note` really does collect
-    every colour of sticky note, and seeing that is the point of showing it.
-    An undeclared mark falls back to its own colour, which is what you would
-    reach for if you were about to declare it.
-    """
-    for probe in (f"{kind}/{colour}", kind, colour):
-        if scheme.meanings.get(probe):
-            return probe
-    # Nothing declared. Group at full specificity rather than under the colour,
-    # so every combination you have not decided about is its own row: a grey
-    # highlight and a magenta one are two different undecided things, and
-    # collapsing them hides exactly the information you need to decide.
-    return f"{kind}/{colour}" if kind and colour else (kind or colour)
-
-
 def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
     """What this source's marks mean, and which of them make units.
 
-    The legend, not the filter. Every colour and kind declared for this source
-    -- including ones nothing is marked with yet -- plus anything marked that
-    has *not* been declared, which is the row worth seeing: an unmapped mark is
-    one whose meaning exists only in your head, and it will reach a card
-    writer as a coloured box with no caption.
+    The legend, not the filter. **One row per kind-and-colour pair**, because
+    the pair is what decides a meaning: a green highlight and a green underline
+    are two marks the reader made deliberately differently, and a row labelled
+    just `green` claimed they were one thing. It also used to group by whichever
+    config line happened to match, so the same row meant different things in
+    two sources depending on how each had been written down.
+
+    Every pair that occurs here, plus every pair declared for this source --
+    including ones nothing is marked with yet -- because a declaration you have
+    stopped using is worth seeing. And an undeclared pair that *is* used is the
+    row that matters most: its meaning exists only in your head, and it reaches
+    a card writer as a coloured box with no caption.
 
     Counted over marks rather than units, deduplicated by key, because a mark
     appears in the neighbour list of every unit near it and counting those
     would report the same highlight five times.
     """
-    from ..zotero import HEX_BY_NAME
-
     scheme = config.zotero_for(source)
-    seen: dict[str, set[str]] = {}
+    seen: dict[tuple[str, str], set[str]] = {}
     for unit in units:
         for mark in unit.marks:
-            seen.setdefault(_scheme_key(scheme, mark.kind, mark.colour), set()).add(mark.key)
+            seen.setdefault((mark.kind, mark.colour), set()).add(mark.key)
     if not seen:
         # Nothing in this source was marked, so there is no scheme in force
         # here. `[zotero.meanings]` is repo-wide and would otherwise render a
@@ -1472,28 +1448,24 @@ def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str
         # highlighted -- the rail saying something about a different source.
         return []
 
+    declared = {
+        (key.partition("/")[0], key.partition("/")[2]) for key in scheme.meanings
+    }
     rows: list[dict[str, Any]] = []
-    for probe in {*scheme.meanings, *seen}:
-        left, slash, right = probe.partition("/")
-        if slash:
-            kind, colour = left, right
-        elif left in HEX_BY_NAME:
-            kind, colour = "", left
-        else:
-            kind, colour = left, ""
-        declared = scheme.meanings.get(probe, "")
+    for kind, colour in {*seen, *declared}:
+        meaning, where = scheme.reading(kind, colour)
         rows.append({
-            "key": probe,
+            "key": f"{kind}/{colour}" if colour else kind,
             "kind": kind,
             "colour": colour,
             # What it reads as, and whether that is a decision you took or the
             # floor under it. They are not the same claim -- a default says
             # what Zotero's annotation kind *is*, a declaration says what you
-            # meant by it -- and the difference is the whole point of showing
-            # the scheme rather than just a tally.
-            "meaning": declared or scheme.reading(kind, colour)[0],
-            "declared": bool(declared),
-            "count": len(seen.get(probe, ())),
+            # meant by this kind in this colour -- and the difference is the
+            # whole point of showing the scheme rather than just a tally.
+            "meaning": meaning,
+            "declared": where == "declared",
+            "count": len(seen.get((kind, colour), ())),
             "makes_a_unit": scheme.makes_a_unit(kind, colour),
         })
     rows.sort(key=lambda r: (not r["makes_a_unit"], -int(r["count"]), str(r["key"])))
@@ -1503,27 +1475,26 @@ def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str
 def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The scheme grouped by what it *means*, for the information rail.
 
-    `scheme_rows` is the facts -- one entry per line of the config. This is how
-    they are read, and the two differ because the interesting structure is not
-    the keys, it is the meanings.
+    `scheme_rows` is the facts -- one entry per kind-and-colour pair. This is
+    how they are read, and the two differ because the interesting structure is
+    not the pairs, it is the meanings.
 
     Zotero gives eight colours and six annotation kinds, so a source can reach
-    forty-eight combinations; the rail is 240px wide and the old legend spent
-    two lines on each one. But nobody has forty-eight *meanings*. `kind` beats
-    `colour` in the config's own lookup, so one `note = "..."` line already
-    covers every colour of sticky note -- and a legend that lists those
-    separately is repeating one sentence eight times and calling it detail.
+    forty-eight pairs; the rail is 240px wide. But nobody has forty-eight
+    *meanings*: several pairs usually share one -- every colour of sticky note
+    means "something I thought" -- and a legend that lists those separately is
+    printing one sentence eight times and calling it detail.
 
-    Grouping by meaning collapses exactly that, and it collapses nothing real:
-    two keys that genuinely mean different things stay two rows. Where they do
-    land together, the swatches sit side by side on one line and the sentence
-    is written once. Seeing two colours share a meaning is also worth knowing
-    -- it is usually a scheme you have half-changed.
+    Grouping collapses exactly that, and collapses nothing real: two pairs that
+    genuinely mean different things stay two rows. Where they land together the
+    swatches sit side by side and the sentence is written once. Seeing two
+    pairs share a meaning is worth knowing too -- it is usually a scheme you
+    have half-changed.
 
     `makes_a_unit` and `declared` are ORed across the group deliberately. A
     meaning that *any* of its marks turns into units is one you meet in the
     queue, which is what the tag is telling you; and a group with one declared
-    key is not an undecided one, it is a decided one you have used twice.
+    pair is not undecided, it is decided and used twice.
     """
     groups: dict[str, dict[str, Any]] = {}
     for row in rows:
@@ -1531,9 +1502,6 @@ def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             str(row["meaning"]),
             {
                 "meaning": row["meaning"],
-                # Not `keys`: Jinja resolves `row.keys` on a dict to the bound
-                # `dict.keys` method before it looks at the item, so the
-                # template iterated a builtin and 500ed.
                 "entries": [],
                 "count": 0,
                 "makes_a_unit": False,
@@ -1547,14 +1515,12 @@ def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for group in groups.values():
         group["entries"].sort(key=lambda r: (-int(r["count"]), str(r["key"])))
         # The short name to lead the row with. You come to this legend holding
-        # a colour -- "what does purple mean" -- so the colour is the lookup
-        # key and belongs first and narrow; `highlight/green` is the thing you
-        # would edit in the config, and it goes in the tooltip.
-        group["label"] = " · ".join(
-            str(e["colour"] or e["kind"]) for e in group["entries"]
+        # a mark -- "what does a purple highlight mean" -- so the pair is the
+        # lookup key and goes first and narrow; the full text is in the
+        # tooltip when several pairs share one meaning.
+        group["label"] = " · ".join(str(e["key"]) for e in group["entries"][:2]) + (
+            f" +{len(group['entries']) - 2}" if len(group["entries"]) > 2 else ""
         )
-    # What makes units first -- those are the rows you meet in the queue --
-    # then by how much of the document carries them.
     return sorted(
         groups.values(),
         key=lambda g: (not g["makes_a_unit"], not g["declared"], -int(g["count"])),
