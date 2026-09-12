@@ -5,6 +5,7 @@ status: approved
 content_hash: c070f078c8e79536
 source: "Matrix Cookbook §3.1, eq. 154, p. 18"
 unit: "matrix-cookbook:3.1:154"
+gist: the condition number when A is positive definite
 frequency: core
 derivation: short
 requires: [d6e003]

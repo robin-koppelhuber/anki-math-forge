@@ -5,6 +5,7 @@ status: approved
 content_hash: a55b066f4ca23014
 source: "Matrix Cookbook §1, eq. 1, p. 6"
 unit: "matrix-cookbook:1:1, matrix-cookbook:1:2"
+gist: the inverse of a product reverses the order
 frequency: core
 derivation: short
 tags: [inverse, products]

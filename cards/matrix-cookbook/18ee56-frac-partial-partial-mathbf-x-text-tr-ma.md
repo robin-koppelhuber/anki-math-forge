@@ -5,6 +5,7 @@ status: approved
 content_hash: fefbc58cec88dda9
 source: "Matrix Cookbook §2.5, eq. 105, p. 12"
 unit: "matrix-cookbook:2.5:105"
+gist: the derivative of the trace of a Kronecker product
 frequency: rare
 derivation: short
 tags: [derivatives, trace]

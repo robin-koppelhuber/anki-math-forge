@@ -5,6 +5,7 @@ status: approved
 content_hash: 29bbf4fea1e058d9
 source: "Matrix Cookbook §2.5, eq. 121, p. 13"
 unit: "matrix-cookbook:2.5:121"
+gist: the derivative of the trace of a matrix power
 frequency: common
 derivation: short
 tags: [derivatives, trace]

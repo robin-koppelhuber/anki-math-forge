@@ -5,6 +5,7 @@ status: approved
 content_hash: 33fcecdc613a74ba
 source: "Matrix Cookbook §2.5, eq. 108, p. 13"
 unit: "matrix-cookbook:2.5:108"
+gist: the derivative of the trace of X^T B X
 frequency: core
 derivation: short
 tags: [derivatives, trace]

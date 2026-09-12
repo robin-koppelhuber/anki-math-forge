@@ -5,6 +5,7 @@ status: approved
 content_hash: 9cb39b9bf1bc7521
 source: "Matrix Cookbook §2.6, eq. 129, p. 14"
 unit: "matrix-cookbook:2.6:129"
+gist: the gradient of a Euclidean distance
 frequency: core
 derivation: short
 tags: [derivatives, norms, two-norm]

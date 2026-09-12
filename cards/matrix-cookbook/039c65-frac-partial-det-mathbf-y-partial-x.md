@@ -5,6 +5,7 @@ status: approved
 content_hash: cda27407ecf8658c
 source: "Matrix Cookbook §2.1, eq. 46, p. 8"
 unit: "matrix-cookbook:2.1:46"
+gist: the derivative of a determinant by a scalar
 frequency: common
 derivation: short
 tags: [derivatives, determinant]

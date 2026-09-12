@@ -5,6 +5,7 @@ status: approved
 content_hash: ded9ae4ea587cf1f
 source: "Matrix Cookbook §1.1, eq. 12, p. 6"
 unit: "matrix-cookbook:1.1:12"
+gist: the trace as the sum of the eigenvalues
 frequency: core
 derivation: short
 tags: [trace, eigenvalues]

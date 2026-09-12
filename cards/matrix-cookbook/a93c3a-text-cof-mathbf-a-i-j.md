@@ -5,6 +5,7 @@ status: approved
 content_hash: ae83c922c38ae37f
 source: "Matrix Cookbook §3.1, eq. 146, p. 17"
 unit: "matrix-cookbook:3.1:146"
+gist: the cofactor of an entry
 frequency: common
 derivation: definitional
 tags: [cofactor, determinant]

@@ -5,6 +5,7 @@ status: approved
 content_hash: 2801a1d386b21154
 source: "Matrix Cookbook §3.1, eq. 151, p. 17"
 unit: "matrix-cookbook:3.1:151"
+gist: the inverse in terms of the adjugate
 frequency: common
 derivation: short
 requires: [c49127]

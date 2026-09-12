@@ -5,6 +5,7 @@ status: approved
 content_hash: 5a700b07b2def7ba
 source: "Matrix Cookbook §3.1, eq. 149, p. 17"
 unit: "matrix-cookbook:3.1:149"
+gist: the determinant by expansion along the first row
 frequency: common
 derivation: definitional
 tags: [determinant, cofactor]

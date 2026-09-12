@@ -5,6 +5,7 @@ status: approved
 content_hash: 4c14eb23b2cb9bca
 source: "Matrix Cookbook §1.2, eq. 23, p. 6"
 unit: "matrix-cookbook:1.2:23"
+gist: the determinant of a matrix power
 frequency: common
 derivation: short
 tags: [determinant]

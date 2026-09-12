@@ -5,6 +5,7 @@ status: approved
 content_hash: 74f03329a98e380d
 source: "Matrix Cookbook §2.4, eq. 71, p. 10"
 unit: "matrix-cookbook:2.4:71"
+gist: the derivative of a bilinear form with X transposed
 frequency: common
 derivation: short
 tags: [derivatives, linear-forms]

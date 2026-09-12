@@ -5,6 +5,7 @@ status: approved
 content_hash: 325e5d8c64b5c4ee
 source: "Matrix Cookbook §2, eq. 37, p. 8"
 unit: "matrix-cookbook:2:37"
+gist: the product rule for matrix differentials
 frequency: core
 derivation: short
 tags: [derivatives, differential]

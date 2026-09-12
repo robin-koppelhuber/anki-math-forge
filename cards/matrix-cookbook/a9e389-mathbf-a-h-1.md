@@ -5,6 +5,7 @@ status: approved
 content_hash: 8a7f53dca9f17b64
 source: "Matrix Cookbook §1, eq. 7, p. 6"
 unit: "matrix-cookbook:1:7"
+gist: inverse and conjugate transpose commute
 frequency: rare
 derivation: short
 tags: [inverse, transpose, complex]

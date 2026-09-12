@@ -5,6 +5,7 @@ status: approved
 content_hash: 6617be409b639e84
 source: "Matrix Cookbook §2.8, eq. 138, p. 15"
 unit: "matrix-cookbook:2.8:138"
+gist: correcting a gradient for a symmetric matrix
 frequency: common
 derivation: short
 tags: [derivatives, symmetric]

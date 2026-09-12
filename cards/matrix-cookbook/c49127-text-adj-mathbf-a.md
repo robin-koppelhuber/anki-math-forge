@@ -5,6 +5,7 @@ status: approved
 content_hash: 9d93e7f8b97bf863
 source: "Matrix Cookbook §3.1, eq. 148, p. 17"
 unit: "matrix-cookbook:3.1:148"
+gist: the adjugate as the transposed cofactor matrix
 frequency: common
 derivation: definitional
 tags: [cofactor, inverse]

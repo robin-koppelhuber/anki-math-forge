@@ -5,6 +5,7 @@ status: approved
 content_hash: 5c66f408d3570b90
 source: "Matrix Cookbook §2.8, eq. 140, p. 15"
 unit: "matrix-cookbook:2.8:140"
+gist: "the derivative of a determinant, X symmetric"
 frequency: common
 derivation: short
 tags: [derivatives, determinant, symmetric]

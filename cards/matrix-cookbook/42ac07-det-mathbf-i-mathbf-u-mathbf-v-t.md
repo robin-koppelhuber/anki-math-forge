@@ -5,6 +5,7 @@ status: approved
 content_hash: 6c1d4af87c8ec1c9
 source: "Matrix Cookbook §1.2, eq. 24, p. 6"
 unit: "matrix-cookbook:1.2:24"
+gist: the determinant of a rank-one update to the identity
 frequency: core
 derivation: short
 tags: [determinant, rank-one]

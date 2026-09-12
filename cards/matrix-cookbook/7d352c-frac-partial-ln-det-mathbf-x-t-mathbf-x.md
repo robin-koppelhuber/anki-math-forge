@@ -5,6 +5,7 @@ status: approved
 content_hash: c8b4a4f6356d6196
 source: "Matrix Cookbook §2.1, eq. 55, p. 9"
 unit: "matrix-cookbook:2.1:55"
+gist: "the derivative of log det(X^T X), via the pseudoinverse"
 frequency: rare
 derivation: short
 tags: [derivatives, determinant, pseudo-inverse]

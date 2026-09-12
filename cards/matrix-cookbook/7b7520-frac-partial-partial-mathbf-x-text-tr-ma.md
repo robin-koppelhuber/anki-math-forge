@@ -5,6 +5,7 @@ status: approved
 content_hash: c2f421e4fc76b211
 source: "Matrix Cookbook §2.5, eq. 99, p. 12"
 unit: "matrix-cookbook:2.5:99"
+gist: the derivative of the trace
 frequency: core
 derivation: short
 tags: [derivatives, trace]

@@ -5,6 +5,7 @@ status: approved
 content_hash: e66950c463936000
 source: "Matrix Cookbook §2.4, eq. 88, p. 11"
 unit: "matrix-cookbook:2.4:88"
+gist: the weighted least squares gradient in the matrix
 frequency: common
 derivation: short
 tags: [derivatives, least-squares]

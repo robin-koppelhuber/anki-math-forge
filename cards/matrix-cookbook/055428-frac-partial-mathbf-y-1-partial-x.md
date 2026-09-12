@@ -5,6 +5,7 @@ status: approved
 content_hash: 920fe4a16eb75c68
 source: "Matrix Cookbook §2.2, eq. 59, p. 9"
 unit: "matrix-cookbook:2.2:59"
+gist: the derivative of an inverse by a scalar
 frequency: core
 derivation: short
 tags: [derivatives, inverse]

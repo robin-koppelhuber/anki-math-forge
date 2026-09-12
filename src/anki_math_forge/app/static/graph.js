@@ -11,8 +11,10 @@
    and that judgement is the only thing a person adds to this picture. The
    computed layout is a starting point; `graph.json` is the answer. */
 
-const NODE_W = 212;
-const NODE_H = 58;
+/* Wide enough for two lines of a caption at the 60-character cap `check`
+   warns past, so the common case is drawn whole rather than ellipsised. */
+const NODE_W = 240;
+const NODE_H = 60;
 const NODE_R = 8;
 /* A click that wandered a few pixels is still a click. Without the slop,
    opening a card by clicking it depended on holding the mouse perfectly
@@ -146,21 +148,33 @@ function fit(text, width) {
 }
 
 function wrap(text, width, lines) {
+  const words = text.split(/\s+/).filter(Boolean);
   const out = [];
   let line = "";
-  for (const word of text.split(/\s+/)) {
-    const next = line ? `${line} ${word}` : word;
+  for (let i = 0; i < words.length; i++) {
+    const next = line ? `${line} ${words[i]}` : words[i];
     if (ctx.measureText(next).width <= width || !line) {
       line = next;
       continue;
     }
+    if (out.length === lines - 1) {
+      /* The last line the box has room for, and there is more text. What is
+         left goes on it and gets cut with an ellipsis.
+
+         Dropping the remainder instead was worse than it sounds: a caption cut
+         at a word boundary reads as a finished phrase that means something
+         else. `the condition number as a ratio of singular values` came out as
+         `the condition number as a ratio of`, and nothing on screen said a
+         word was missing. */
+      return [...out, fit(`${line} ${words.slice(i).join(" ")}`, width)];
+    }
     out.push(line);
-    line = word;
-    if (out.length === lines - 1) break;
+    line = words[i];
   }
-  if (line && out.length < lines) out.push(line);
-  if (out.length === lines) out[lines - 1] = fit(out[lines - 1], width);
-  return out;
+  if (line) out.push(line);
+  /* A single word wider than the box never overflows, it gets cut. `fit`
+     returns a line that already fits unchanged, so this costs nothing. */
+  return out.map((each) => fit(each, width));
 }
 
 /* The border says the state and the word repeats it, so only the word that is

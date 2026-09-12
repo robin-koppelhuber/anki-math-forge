@@ -5,6 +5,7 @@ status: approved
 content_hash: 3c25f520b24eb847
 source: "Matrix Cookbook §1.3, p. 7"
 unit: "matrix-cookbook:1.3:p7y487"
+gist: an eigenvector of a 2 by 2 matrix
 frequency: common
 derivation: short
 requires: [2d3bf4]

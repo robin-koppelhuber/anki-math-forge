@@ -5,6 +5,7 @@ status: approved
 content_hash: fd44a2454cf5c6d5
 source: "Matrix Cookbook §2.1, eq. 57, p. 9"
 unit: "matrix-cookbook:2.1:57"
+gist: the derivative of the log absolute determinant
 frequency: core
 derivation: short
 tags: [derivatives, determinant]

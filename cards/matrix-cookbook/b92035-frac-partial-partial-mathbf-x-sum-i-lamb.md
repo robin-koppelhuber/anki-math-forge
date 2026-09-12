@@ -5,6 +5,7 @@ status: approved
 content_hash: 42e810c30df9267a
 source: "Matrix Cookbook §2.3, eq. 65, p. 10"
 unit: "matrix-cookbook:2.3:65"
+gist: the derivative of the sum of the eigenvalues
 frequency: common
 derivation: short
 requires: [827eae, 7b7520]

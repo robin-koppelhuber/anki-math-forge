@@ -5,6 +5,7 @@ status: approved
 content_hash: 1e371656dbf3ec4d
 source: "Matrix Cookbook §2.5, eq. 127, p. 14"
 unit: "matrix-cookbook:2.5:p14y256, matrix-cookbook:2.5:127"
+gist: the derivative of a trace of two quadratic blocks
 frequency: rare
 derivation: long
 tags: [derivatives, trace]

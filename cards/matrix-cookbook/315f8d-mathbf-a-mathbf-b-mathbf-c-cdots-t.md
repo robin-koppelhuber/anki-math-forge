@@ -5,6 +5,7 @@ status: approved
 content_hash: 5f4b814da6369ae3
 source: "Matrix Cookbook §1, eq. 5, p. 6"
 unit: "matrix-cookbook:1:5, matrix-cookbook:1:6"
+gist: the transpose of a product reverses the order
 frequency: core
 derivation: short
 tags: [transpose, products]

@@ -5,6 +5,7 @@ status: approved
 content_hash: 94decb578f51328d
 source: "Matrix Cookbook §2.1, eq. 51, p. 9"
 unit: "matrix-cookbook:2.1:51"
+gist: the derivative of det(AXB)
 frequency: rare
 derivation: short
 tags: [derivatives, determinant]

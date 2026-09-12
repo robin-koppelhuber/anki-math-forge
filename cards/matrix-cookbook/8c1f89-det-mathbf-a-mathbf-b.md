@@ -5,6 +5,7 @@ status: approved
 content_hash: d1b96d413c614110
 source: "Matrix Cookbook §1.2, eq. 21, p. 6"
 unit: "matrix-cookbook:1.2:21"
+gist: the determinant of a product
 frequency: core
 derivation: short
 tags: [determinant]

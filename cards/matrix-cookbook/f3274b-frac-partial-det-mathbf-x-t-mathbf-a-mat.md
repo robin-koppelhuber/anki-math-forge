@@ -5,6 +5,7 @@ status: approved
 content_hash: fc8b0c0a075d2b11
 source: "Matrix Cookbook §2.1, eq. 52, p. 9"
 unit: "matrix-cookbook:2.1:52"
+gist: "the derivative of det(X^T A X), X square"
 frequency: rare
 derivation: short
 tags: [derivatives, determinant]

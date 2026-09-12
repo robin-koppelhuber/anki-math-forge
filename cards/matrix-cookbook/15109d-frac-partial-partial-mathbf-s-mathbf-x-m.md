@@ -5,6 +5,7 @@ status: approved
 content_hash: 1a7ee24d0aeff120
 source: "Matrix Cookbook §2.4, eq. 84, p. 11"
 unit: "matrix-cookbook:2.4:84"
+gist: the weighted least squares gradient in the coefficients
 frequency: core
 derivation: short
 tags: [derivatives, least-squares]

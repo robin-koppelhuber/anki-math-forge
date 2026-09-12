@@ -5,6 +5,7 @@ status: approved
 content_hash: 09fbb0d77f284841
 source: "Matrix Cookbook §2.5, eq. 106, p. 13"
 unit: "matrix-cookbook:2.5:106"
+gist: the derivative of the trace of X squared
 frequency: core
 derivation: short
 tags: [derivatives, trace]

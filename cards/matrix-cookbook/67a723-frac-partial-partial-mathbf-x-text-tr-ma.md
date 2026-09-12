@@ -5,6 +5,7 @@ status: approved
 content_hash: 807a2eb441d3ddde
 source: "Matrix Cookbook §2.5, eq. 100, p. 12"
 unit: "matrix-cookbook:2.5:100"
+gist: the derivative of the trace of X times A
 frequency: core
 derivation: short
 tags: [derivatives, trace]

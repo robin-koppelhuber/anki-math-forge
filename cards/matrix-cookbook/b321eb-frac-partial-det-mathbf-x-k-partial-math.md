@@ -5,6 +5,7 @@ status: approved
 content_hash: fe085b4230fdf47b
 source: "Matrix Cookbook §2.1, eq. 58, p. 9"
 unit: "matrix-cookbook:2.1:58"
+gist: the derivative of the determinant of a power
 frequency: rare
 derivation: short
 tags: [derivatives, determinant]

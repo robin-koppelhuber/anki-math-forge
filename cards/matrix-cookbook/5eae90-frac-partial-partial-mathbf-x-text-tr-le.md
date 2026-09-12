@@ -5,6 +5,7 @@ status: approved
 content_hash: f2d79c86aac78ed5
 source: "Matrix Cookbook §2.5, eq. 125, p. 14"
 unit: "matrix-cookbook:2.5:125"
+gist: the derivative of the trace of an inverted X^T C X
 frequency: rare
 derivation: long
 tags: [derivatives, trace]

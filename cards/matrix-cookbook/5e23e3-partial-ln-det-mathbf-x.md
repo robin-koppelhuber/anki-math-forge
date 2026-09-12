@@ -5,6 +5,7 @@ status: approved
 content_hash: 1adbb8120ac03bde
 source: "Matrix Cookbook §2, eq. 43, p. 8"
 unit: "matrix-cookbook:2:43"
+gist: the differential of the log determinant
 frequency: core
 derivation: short
 tags: [derivatives, differential, determinant]

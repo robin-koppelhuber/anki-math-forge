@@ -5,6 +5,7 @@ status: approved
 content_hash: b89dfe371d590bea
 source: "Matrix Cookbook §2.2, eq. 64, p. 10"
 unit: "matrix-cookbook:2.2:64"
+gist: the derivative of the trace of a shifted inverse
 frequency: rare
 derivation: short
 tags: [derivatives, inverse, trace]

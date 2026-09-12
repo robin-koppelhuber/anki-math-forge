@@ -5,6 +5,7 @@ status: approved
 content_hash: ba04b58072dc4382
 source: "Matrix Cookbook §2.2, eq. 61, p. 10"
 unit: "matrix-cookbook:2.2:61"
+gist: the derivative of a bilinear form in the inverse
 frequency: common
 derivation: short
 tags: [derivatives, inverse]

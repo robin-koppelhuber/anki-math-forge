@@ -5,6 +5,7 @@ status: approved
 content_hash: 24cdfb2f01f78e94
 source: "Matrix Cookbook §2.2, eq. 62, p. 10"
 unit: "matrix-cookbook:2.2:62"
+gist: the derivative of the determinant of the inverse
 frequency: rare
 derivation: short
 tags: [derivatives, inverse, determinant]
@@ -31,4 +32,3 @@ X = randn(4, 4)
 lhs = grad(lambda M: float(np.linalg.det(np.linalg.inv(M))), X)
 rhs = -np.linalg.det(np.linalg.inv(X)) * np.linalg.inv(X).T
 ```
-

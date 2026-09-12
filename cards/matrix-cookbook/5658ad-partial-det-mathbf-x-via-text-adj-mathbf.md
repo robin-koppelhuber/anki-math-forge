@@ -5,6 +5,7 @@ status: approved
 content_hash: 632e8b05c0366bc1
 source: "Matrix Cookbook §2, eq. 41, p. 8"
 unit: "matrix-cookbook:2:41"
+gist: "the differential of a determinant, via the adjugate"
 frequency: rare
 derivation: short
 requires: [a93c3a, c49127]

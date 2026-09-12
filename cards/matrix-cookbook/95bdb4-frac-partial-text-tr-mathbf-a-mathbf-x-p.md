@@ -5,6 +5,7 @@ status: approved
 content_hash: f03c27a38cd2ab9c
 source: "Matrix Cookbook §2.8, eq. 139, p. 15"
 unit: "matrix-cookbook:2.8:139"
+gist: "the derivative of a trace, X symmetric"
 frequency: common
 derivation: short
 tags: [derivatives, trace, symmetric]

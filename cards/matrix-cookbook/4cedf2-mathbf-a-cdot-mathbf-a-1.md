@@ -5,6 +5,7 @@ status: approved
 content_hash: 317689a59e26fdf4
 source: "Matrix Cookbook §3.1, eq. 153, p. 18"
 unit: "matrix-cookbook:3.1:153"
+gist: the condition number as a product of norms
 frequency: common
 derivation: definitional
 tags: [condition-number, norms]

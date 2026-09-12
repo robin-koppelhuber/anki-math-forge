@@ -5,6 +5,7 @@ status: approved
 content_hash: c25d8e323a9e7cd8
 source: "Matrix Cookbook §2.4, eq. 87, p. 11"
 unit: "matrix-cookbook:2.4:87"
+gist: the weighted least squares gradient in the data
 frequency: common
 derivation: short
 tags: [derivatives, least-squares]

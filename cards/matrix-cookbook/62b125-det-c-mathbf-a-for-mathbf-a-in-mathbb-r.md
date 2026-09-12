@@ -5,6 +5,7 @@ status: approved
 content_hash: 4a692fd7071d4234
 source: "Matrix Cookbook §1.2, eq. 19, p. 6"
 unit: "matrix-cookbook:1.2:19"
+gist: scaling a matrix scales its determinant by c to the n
 frequency: core
 derivation: short
 tags: [determinant]

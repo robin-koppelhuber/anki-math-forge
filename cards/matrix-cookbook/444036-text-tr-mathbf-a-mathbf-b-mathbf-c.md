@@ -5,6 +5,7 @@ status: approved
 content_hash: b7e4bd86c8f94b61
 source: "Matrix Cookbook §1.1, eq. 16, p. 6"
 unit: "matrix-cookbook:1.1:16"
+gist: cyclic permutation inside a trace
 frequency: core
 derivation: short
 tags: [trace, cyclic]

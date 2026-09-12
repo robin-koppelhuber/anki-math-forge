@@ -5,6 +5,7 @@ status: approved
 content_hash: 412e0509e430081f
 source: "Matrix Cookbook §2.5, p. 12"
 unit: "matrix-cookbook:2.5:p12y482"
+gist: the derivative of the trace of a matrix function
 frequency: common
 derivation: short
 tags: [derivatives, trace]

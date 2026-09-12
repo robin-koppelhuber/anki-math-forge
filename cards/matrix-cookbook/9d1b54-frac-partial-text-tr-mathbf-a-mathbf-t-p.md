@@ -5,6 +5,7 @@ status: approved
 content_hash: a776e2c56a557223
 source: "Matrix Cookbook §2.8, eq. 144, p. 16"
 unit: "matrix-cookbook:2.8:144"
+gist: "the derivative of a trace, T symmetric Toeplitz"
 frequency: rare
 derivation: short
 tags: [derivatives, trace, toeplitz, symmetric]

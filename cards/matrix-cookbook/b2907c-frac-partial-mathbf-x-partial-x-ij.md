@@ -5,6 +5,7 @@ status: approved
 content_hash: bba721aa027631f2
 source: "Matrix Cookbook §2.4, eq. 73, p. 10"
 unit: "matrix-cookbook:2.4:73"
+gist: the derivative of a matrix by one of its entries
 frequency: common
 derivation: definitional
 tags: [derivatives, single-entry-matrix]

@@ -5,6 +5,7 @@ status: approved
 content_hash: fcb95f27d17325ce
 source: "Matrix Cookbook §2.4, eq. 90, p. 11"
 unit: "matrix-cookbook:2.4:90"
+gist: the derivative of a matrix power by one entry
 frequency: common
 derivation: short
 tags: [derivatives, matrix-powers]

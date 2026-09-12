@@ -5,6 +5,7 @@ status: approved
 content_hash: 2b42762a4120e45b
 source: "Matrix Cookbook §2.4, eq. 70, p. 10"
 unit: "matrix-cookbook:2.4:70"
+gist: the derivative of a bilinear form in a matrix
 frequency: core
 derivation: short
 tags: [derivatives, linear-forms]

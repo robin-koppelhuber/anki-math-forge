@@ -5,6 +5,7 @@ status: approved
 content_hash: 1f44ac9768ade020
 source: "Matrix Cookbook §2.3, eq. 66, p. 10"
 unit: "matrix-cookbook:2.3:66"
+gist: the derivative of the product of the eigenvalues
 frequency: common
 derivation: short
 requires: [af5ca1, ae6e48]

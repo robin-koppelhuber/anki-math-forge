@@ -5,6 +5,7 @@ status: approved
 content_hash: 3196088be49399ac
 source: "Matrix Cookbook §1.1, eq. 17, p. 6"
 unit: "matrix-cookbook:1.1:17"
+gist: an inner product as the trace of an outer product
 frequency: common
 derivation: short
 tags: [trace, vectors]

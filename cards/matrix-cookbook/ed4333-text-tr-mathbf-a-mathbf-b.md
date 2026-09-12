@@ -5,6 +5,7 @@ status: approved
 content_hash: 93bd5607c267dc01
 source: "Matrix Cookbook §1.1, eq. 14, p. 6"
 unit: "matrix-cookbook:1.1:14"
+gist: the trace is cyclic in two factors
 frequency: core
 derivation: short
 tags: [trace, cyclic]

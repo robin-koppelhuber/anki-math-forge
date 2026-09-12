@@ -5,6 +5,7 @@ status: approved
 content_hash: 0764e37bb6ca3cbb
 source: "Matrix Cookbook §3.1, eq. 152, p. 18"
 unit: "matrix-cookbook:3.1:152"
+gist: the condition number as a ratio of singular values
 frequency: common
 derivation: definitional
 tags: [condition-number, singular-values]
