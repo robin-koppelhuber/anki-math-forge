@@ -38,7 +38,10 @@
            with app.js, and a computed attribute cannot be grepped for. #}
         <li><a class="{{ 'on' if view == 'units' and state == 'new' }}"
                href="{{ filter_url('/units', shared, state='new') }}">new<b data-count="new">{{ pipeline.new }}</b></a></li>
-        <li class="step you" title="q queues it; Q queues it and records what the card should be about, which is the other half of what this stage decides">q / Q — a human decision</li>
+        {# Just the key. `.step.you` is already the accent colour, so "a human
+           decision" was the styling written out a second time, and the other
+           steps are bare names already. #}
+        <li class="step you" title="q queues it; Q queues it and records what the card should be about, which is the other half of what this stage decides">q / Q</li>
         <li><a class="{{ 'on' if view == 'units' and state == 'queued' }}"
                href="{{ filter_url('/units', shared, state='queued') }}">queued<b data-count="queued">{{ pipeline.queued }}</b></a></li>
         <li class="step">/extract-cards</li>
@@ -54,7 +57,7 @@
       <ul class="filter-list flow">
         <li><a class="{{ 'on' if view == 'review' and status == 'draft' }}"
                href="{{ filter_url('/review', shared, status='draft') }}">draft<b data-count="draft">{{ pipeline.draft }}</b></a></li>
-        <li class="step you">a — a human decision</li>
+        <li class="step you" title="approve the card; sync pushes it to Anki">a</li>
         <li><a class="{{ 'on' if view == 'review' and status == 'approved' }}"
                href="{{ filter_url('/review', shared, status='approved') }}">approved<b data-count="approved">{{ pipeline.approved }}</b></a></li>
         <li class="step">sync → Anki</li>
@@ -75,32 +78,32 @@
         {% if view == 'units' %}
         <li><a class="{{ 'on' if suggested }}"
                href="{{ filter_url(here, f, suggested=(none if suggested else 1)) }}"
-               title="{{ 'showing only these — click to clear' if suggested
+               title="{{ 'click to clear' if suggested
                          else 'units a pass proposed a decision for' }}">
           <span>{% if suggested %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}suggested</span>
           <b data-count="suggested">{{ pipeline.suggested }}</b></a></li>
         <li><a class="{{ 'on' if transcribed }}"
                href="{{ filter_url(here, f, transcribed=(none if transcribed else 1)) }}"
-               title="{{ 'showing only these — click to clear' if transcribed
+               title="{{ 'click to clear' if transcribed
                          else 'units whose maths is readable rather than a picture to squint at' }}">
           <span>{% if transcribed %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}transcribed</span>
           <b>{{ transcribed_count }}</b></a></li>
         {% endif %}
         <li><a class="{{ 'on' if annotated == 'me' }}"
                href="{{ filter_url(here, f, annotated=(none if annotated == 'me' else 'me')) }}"
-               title="{{ 'showing only these — click to clear' if annotated == 'me'
+               title="{{ 'click to clear' if annotated == 'me'
                          else 'decisions parked for a human' }}">
           <span>{% if annotated == 'me' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@me</span>
           <b data-count="annotated_me_{{ kind }}">{{ pipeline['annotated_me_' ~ kind] }}</b></a></li>
         <li><a class="{{ 'on' if annotated == 'none' }}"
                href="{{ filter_url(here, f, annotated=(none if annotated == 'none' else 'none')) }}"
-               title="{{ 'showing only these — click to clear' if annotated == 'none'
+               title="{{ 'click to clear' if annotated == 'none'
                          else 'nothing pending on them: the ones still awaiting a decision' }}">
           <span>{% if annotated == 'none' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}no notes</span>
           <b data-count="unannotated_{{ kind }}">{{ pipeline['unannotated_' ~ kind] }}</b></a></li>
         <li><a class="{{ 'on' if annotated == 'claude' }}"
                href="{{ filter_url(here, f, annotated=(none if annotated == 'claude' else 'claude')) }}"
-               title="{{ 'showing only these — click to clear' if annotated == 'claude'
+               title="{{ 'click to clear' if annotated == 'claude'
                          else 'requests for Claude, open until resolved' }}">
           <span>{% if annotated == 'claude' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@claude</span>
           <b data-count="annotated_claude_{{ kind }}">{{ pipeline['annotated_claude_' ~ kind] }}</b></a></li>
@@ -138,7 +141,7 @@
         <a class="mg-all {{ 'on' if not mark }}" href="{{ filter_url(here, f, mark=none) }}"
            title="stop filtering by mark">all</a>
         <a class="mg-all {{ 'on' if mark == 'none' }}" href="{{ filter_url(here, f, mark='none') }}"
-           title="select nothing — one click from `all` again">none</a>
+           title="select nothing">none</a>
       </p>
       <table class="mark-grid">
         <thead>
@@ -231,7 +234,7 @@
       <details class="filter-chapter"
                {{ 'open' if chapter_on or (section and section_chapter(section) == group.chapter) }}>
         <summary>{{ group.chapter }}<a class="chapter-pick {{ 'on' if chapter_on }}"
-             title="{{ 'showing only chapter ' ~ group.chapter ~ ' — click to clear' if chapter_on else 'show every section in chapter ' ~ group.chapter }}"
+             title="{{ 'click to clear' if chapter_on else 'show every section in chapter ' ~ group.chapter }}"
              href="{{ filter_url(here, f, chapter=(none if chapter_on else group.chapter), section=none) }}"
              >{{ group.matching }}/{{ group.total }}</a></summary>
       {% endif %}
@@ -270,7 +273,7 @@
       <li class="run-note">{{ cmd.label }}</li>
       {% else %}
       <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
-                  title="{{ cmd.why ~ '&#10;&#10;' if cmd.why }}copy — {{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
+                  title="{{ cmd.why ~ '&#10;&#10;' if cmd.why }}}{{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
         <span class="run-label">{{ cmd.label }}</span>
         {# What it does, in one sentence. The label says which pass and how
            much is waiting; it does not say what the pass *is*, and these are
