@@ -18,7 +18,28 @@ CONFIG_NAMES = (CONFIG_NAME, *LEGACY_CONFIG_NAMES)
 # Which layout a derivative is written in. A typo here would read as
 # "not denominator" and silently change what every card means, so it is
 # refused at load rather than discovered by a wrong `verify`.
+#
+# It lives under `[conventions]` in a source's own file and **nowhere else**:
+# it is a fact about one book, in the same class as "entries are real" or
+# "indices are 1-based", and the only reason the tool knows the word at all is
+# that `verify` has to act on it. See `CONVENTIONS` below.
 LAYOUTS = ("denominator", "numerator")
+
+# The conventions table: `[conventions]` in `source.toml`, free-form.
+#
+# **Open on purpose.** What is ambient in a source is not a vocabulary this
+# tool can enumerate -- the next paper will assume something neither of us has
+# thought of -- so any key is accepted, and every one of them is handed to
+# whoever writes a card (`forge context`, and the guide's "this source" panel).
+# Prose that needs a paragraph still belongs in `conventions.md`; this is for
+# the one-liners worth stating as a value.
+#
+# Exactly one key is *acted* on rather than only shown, and it is listed here
+# so the asymmetry is visible rather than buried in `verify`:
+CONVENTIONS_ACTED_ON = {
+    "layout": "which matrix-derivative layout the source writes; `verify` "
+    "computes denominator and refuses a source that says numerator",
+}
 
 # Whether the order a source prints things in is worth following. A book
 # that builds up should say `printed`; an alphabetical table or a paper
@@ -38,11 +59,9 @@ class SourceConfig:
     citation: str
     tex: Path | None
     pdf: Path | None
-    # Empty means "inherit the repo default". Both of these are facts about
-    # one book, not about this tool: which layout its derivatives use, and
-    # which deck its cards belong in. A repo with one source never sets them.
+    # Empty means "inherit the repo default": which deck this source's cards
+    # belong in. A repo with one source never sets it.
     deck: str = ""
-    layout: str = ""
     order: str = "printed"
     # Points of page shown around this source's crops; 0 inherits.
     crop_context: float = 0.0
@@ -74,10 +93,29 @@ class SourceConfig:
     # read last week, and a scheme that is wrong is worse than none.
     units_from: frozenset[str] = frozenset()
     meanings: Mapping[str, str] = field(default_factory=dict)
+    # What is ambient in this source, as keys rather than prose: `[conventions]`
+    # in `source.toml`. Free-form -- see `CONVENTIONS_ACTED_ON`. There is no
+    # repo-wide counterpart, deliberately: a default convention is a claim
+    # about a book nobody has read yet.
+    conventions: Mapping[str, str] = field(default_factory=dict)
+    # Whether whoever writes a card from this source may look things up on the
+    # web. `None` inherits the repo setting, which is off.
+    web: bool | None = None
 
     @property
     def dir_name(self) -> str:
         return self.name
+
+    @property
+    def layout(self) -> str:
+        """The one convention the tool acts on rather than only shows.
+
+        A property and not a field, so there is a single home for it and no
+        way for the two to disagree. It used to be a first-class key beside
+        `deck` and `order`, which quietly said every source has a
+        matrix-derivative layout; most have nothing of the kind.
+        """
+        return self.conventions.get("layout", "")
 
 
 # What Zotero's annotation kinds are, before you say what you use them for.
@@ -159,7 +197,6 @@ class Config:
     sources_dir: Path
     work_dir: Path
     language: str
-    layout: str
     front_char_cap: int
     crop_context: float
     crop_width: str
@@ -173,6 +210,13 @@ class Config:
     host: str
     port: int
     katex_base: str
+    # Whether whoever writes a card may look things up on the web. Off, and
+    # the default is the whole point: a card is supposed to say what *this
+    # source* says, and the web is where a plausible statement of the general
+    # theorem comes from to quietly replace the one on the page. Turned on per
+    # source, or per unit from triage, where you can see that this particular
+    # unit needs it.
+    web: bool = False
     # Flag number -> what you meant by it. Empty by default: a flag with no
     # meaning here is reported rather than guessed at.
     flags: dict[int, str] = field(default_factory=dict)
@@ -304,23 +348,52 @@ class Config:
             return spec.decks[card_type]
         return spec.deck if spec and spec.deck else self.deck
 
+    def conventions_for(self, source: str) -> Mapping[str, str]:
+        """What is ambient in this source, as keys: `[conventions]`.
+
+        **There is no repo-wide layer to fall back to, and that is the point.**
+        A convention is a fact about one book. Defaulting one here is how a
+        statistics paper came to be told it writes matrix calculus in
+        denominator layout -- the silent mixing CLAUDE.md names, arriving
+        through a default rather than through a mistake.
+        """
+        spec = self.sources.get(source)
+        return dict(spec.conventions) if spec else {}
+
     def layout_for(self, source: str) -> str:
         """Which derivative layout this source's cards are written in.
 
-        `[cards] layout` is the default and a source overrides it. Mixing the
-        two silently is the failure that poisons a deck: on a square matrix
-        the conventions are indistinguishable, so the error survives review
-        and first bites on a rectangular one.
+        One entry in that source's `[conventions]`, and the only one anything
+        acts on: `verify`'s numerical gradient computes denominator layout,
+        the two conventions agree on every square matrix, and a mismatch would
+        pass review and first bite on a rectangular one.
 
-        **Empty is an answer.** It used to default to `denominator`, so a
-        statistics paper that had declared nothing was told it writes matrix
-        calculus in denominator layout -- the same silent mixing, arriving
-        through the default rather than through a mistake. A source that has
-        not said gets no layout, `verify` refuses to run rather than checking
-        against a guess, and a card from it carries no layout clause.
+        **Empty is an answer.** A source that has not said gets no layout,
+        `verify` refuses to run rather than checking against a guess, and a
+        card from it carries no layout clause.
         """
+        return self.conventions_for(source).get("layout", "")
+
+    def web_for(self, source: str, unit: bool | None = None) -> bool:
+        """Whether whoever writes this card may look things up on the web.
+
+        Most specific first, exactly like `context_pages_for`: the unit, then
+        the source, then the repo -- which is `false`.
+
+        Off by default because the failure it prevents is invisible. A card
+        should say what *this source* says, hypotheses and notation included;
+        the web is full of cleaner statements of the general theorem, and one
+        of those substituted for the printed one looks like a better card right
+        up until the exam question turns on the condition the paper had and
+        Wikipedia did not. Granting it per unit is the honest shape: you grant
+        it when you can see why this particular unit needs it.
+        """
+        if unit is not None:
+            return unit
         spec = self.sources.get(source)
-        return spec.layout if spec and spec.layout else self.layout
+        if spec is not None and spec.web is not None:
+            return spec.web
+        return self.web
 
     def scratch(self, *parts: str) -> Path:
         """A directory for intermediate files, created on demand.
@@ -356,6 +429,7 @@ def load(root: Path | None = None) -> Config:
 
     repo = raw.get("repo", {})
     cards = raw.get("cards", {})
+    _refuse_a_repo_wide_convention(cards, path)
     anki = raw.get("anki", {})
     check = raw.get("check", {})
     app = raw.get("app", {})
@@ -379,7 +453,8 @@ def load(root: Path | None = None) -> Config:
             tex=_opt_path(root, spec.get("tex")),
             pdf=_opt_path(root, spec.get("pdf")),
             deck=str(spec.get("deck", "") or ""),
-            layout=_layout(spec.get("layout", ""), f"[sources.{name}]"),
+            conventions=_conventions(spec, f"[sources.{name}]"),
+            web=_opt_bool(spec.get("web")),
             order=_order(spec.get("order", "printed"), f"[sources.{name}]"),
             crop_context=float(spec.get("crop_context", 0.0)),
             crop_width=_crop_width(spec.get("crop_width", ""), f"[sources.{name}]"),
@@ -398,11 +473,11 @@ def load(root: Path | None = None) -> Config:
         sources_dir=root / repo.get("sources_dir", "sources"),
         work_dir=root / repo.get("work_dir", ".forge"),
         language=cards.get("language", "en"),
-        layout=_layout(cards.get("layout", ""), "[cards]"),
         front_char_cap=int(cards.get("front_char_cap", 160)),
         crop_context=float(cards.get("crop_context", 0.0)),
         crop_width=_crop_width(cards.get("crop_width", ""), "[cards]"),
         context_pages=int(cards.get("context_pages", 1)),
+        web=bool(cards.get("web", False)),
         anki_url=os.environ.get("ANKI_CONNECT_URL", anki.get("url", "http://127.0.0.1:8765")),
         deck=anki.get("deck", "Default"),
         note_type_name=str(anki.get("note_type_name", "Math Card")),
@@ -511,6 +586,54 @@ def _flags(raw: Any) -> dict[int, str]:
         if text:
             flags[number] = text
     return flags
+
+
+def _conventions(spec: Mapping[str, Any], where: str) -> dict[str, str]:
+    """`[conventions]` for one source, with the older top-level `layout`.
+
+    Any key is accepted: what is ambient in a source is not a vocabulary this
+    tool can enumerate. `layout` is checked because something acts on it, and a
+    typo there would read as "not denominator" and silently change what every
+    derivative on every card from this source means.
+
+    A top-level `layout = ` is still read, since that is where it used to live
+    and a repo should not have to migrate in the same sitting as the tool. The
+    table wins where both speak.
+    """
+    table = spec.get("conventions")
+    out = {str(k): str(v).strip() for k, v in dict(table or {}).items() if str(v).strip()}
+    legacy = str(spec.get("layout", "") or "").strip()
+    if legacy and "layout" not in out:
+        out["layout"] = legacy
+    if "layout" in out:
+        out["layout"] = _layout(out["layout"], f"{where} [conventions]")
+    return out
+
+
+def _refuse_a_repo_wide_convention(cards: Mapping[str, Any], path: Path) -> None:
+    """`[cards] layout` is gone, and silence would be the wrong way to say so.
+
+    It was the repo-wide default for a matrix-calculus convention, which is a
+    claim about every book in the deck including the ones nobody has read yet.
+    Ignoring a value somebody wrote there would leave `verify` checking against
+    a guess while the file said otherwise -- exactly the failure the key was
+    added to prevent.
+    """
+    if str(cards.get("layout", "") or "").strip():
+        raise ConfigError(
+            f"{path}: [cards] layout is no longer read. A layout is a fact about "
+            "one book, not a repo-wide default -- move it to that source's "
+            "`sources/<name>/source.toml`, under [conventions]."
+        )
+
+
+def _opt_bool(value: Any) -> bool | None:
+    """A tri-state TOML flag: true, false, or absent meaning "inherit"."""
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise ConfigError(f"expected true or false, got {value!r}")
+    return value
 
 
 def _order(value: Any, where: str) -> str:

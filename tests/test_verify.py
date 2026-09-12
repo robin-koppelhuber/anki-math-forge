@@ -36,8 +36,17 @@ rhs = randn(4, 4)
 
 
 def card(snippet: str, *, uid: str = "aa11bb", enabled: bool = True) -> Card:
+    # `unit` names the source, and the source is where the layout lives now --
+    # there is no repo-wide default any more, and `verify` refuses a card whose
+    # source declares none rather than checking against a guess.
     return Card(
-        frontmatter={"uid": uid, "type": "identity", "status": "draft", "verify": enabled},
+        frontmatter={
+            "uid": uid,
+            "type": "identity",
+            "status": "draft",
+            "verify": enabled,
+            "unit": "demo:2.4:61",
+        },
         sections=[
             Section("front", "$a$"),
             Section("back", "$b$"),

@@ -1,7 +1,7 @@
 ---
 name: card-writer
 description: Turns queued units into stub cards - one section at a time, reading the page each unit was printed on and checking the mathematics before writing conditions. Writes drafts only; approves nothing. Use for the /extract-cards pass over a section.
-tools: Bash, Read
+tools: Bash, Read, WebSearch, WebFetch
 model: opus
 ---
 
@@ -81,6 +81,32 @@ exactly like a good one, and gets reviewed for years.
    (the `new` verb does not take them). Both are optional; leave them off
    rather than guessing. `definitional` is for facts true by definition, where
    "how hard to derive" is the wrong question.
+
+## Looking things up
+
+**You have web tools and you are not allowed to use them by default.**
+`forge context <unit>` ends with a section headed *looking things up* that
+says, for that unit, whether web research is permitted. It is off unless
+somebody granted it — per unit during triage, or per source in
+`source.toml`.
+
+Do not search when it says no. Not to check a theorem name, not to confirm a
+standard form, not for "one quick look". The permission exists because the
+failure mode is invisible: the web has a cleaner statement of almost every
+result on these pages, and a cleaner statement substituted for the printed one
+produces a card that looks *better* than a correct one right up until the
+condition the paper had — and the general version does not — turns out to be
+the point. When the source is silent and the mathematics still needs something,
+the instruction is the same as always: state it and record the addition as
+`@me` in `## notes`. That is a question for the human, not for a search.
+
+When it says web research is allowed, use it for what the source **assumes and
+does not state** — the ambient definition, the standard form of a named
+condition, which of two conventions a field uses — and **say in `## notes`
+what came from off the page**, so a reviewer can tell the source's claims from
+the ones you brought. The source still wins wherever the two disagree: the
+crop is authoritative for what is printed (CLAUDE.md invariant 7), and nothing
+found elsewhere overrides it.
 
 ## What not to card
 

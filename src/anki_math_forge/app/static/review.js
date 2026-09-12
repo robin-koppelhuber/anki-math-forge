@@ -12,6 +12,7 @@ function refresh(item, card) {
     badge.className = "badge state-" + card.status;
   }
   paintHeld(item, card);
+  paintGrades(item, card);
   paintAnnotations(item, card);
   // `plain_notes`, not `notes`: the annotations render as their own rows
   // now, so repainting the whole section here printed each one twice.
@@ -153,6 +154,84 @@ async function annotate(audience = "claude") {
   // the note that was just written scrolled off before it could be read back.
   toast("annotated — held out of sync until it is resolved");
 }
+
+/* The two gradings, cycled in place.
+
+   They decide the order Anki introduces new cards in, and until now the only
+   way to set either was to open the file -- which is why so many cards carry
+   neither. You learn that a result is `common` rather than `core` by meeting
+   it, which is to say during review, which is here.
+
+   The cycle passes through unset deliberately. A grading given by a mis-click
+   should be removable by carrying on clicking, not by reaching for an editor.
+
+   Neither is inside `content_hash`, so none of this un-approves a card: the
+   argument is `requires`'s, spelled out in CLAUDE.md -- approving a card is
+   not approving its position in the queue. */
+const GRADES = {
+  frequency: ["core", "common", "rare", ""],
+  derivation: ["definitional", "short", "long", ""],
+};
+
+async function cycleGrade(item, key) {
+  const steps = GRADES[key];
+  const button = item.querySelector(`[data-grade="${key}"]`);
+  const now = button.classList.contains("missing") ? "" : button.textContent.trim();
+  const value = steps[(steps.indexOf(now) + 1) % steps.length];
+  const result = await post(`/api/cards/${item.dataset.uid}/grade`, {
+    key,
+    value,
+    mtime: item.dataset.mtime,
+  });
+  refresh(item, result.card);
+  repaintCounts(result.pipeline);
+  toast(value ? `${key}: ${value}` : `${key} cleared`);
+}
+
+/* Whether whoever augments this card may look things up. Three states, not
+   two: `inherit` is the absence of a decision here, and it is what lets a
+   grant made during triage carry through to the card written from it. */
+const CARD_WEB = [true, false, null];
+
+async function cycleCardWeb(item) {
+  const button = item.querySelector("[data-card-web]");
+  const now = button.classList.contains("own") ? button.classList.contains("on") : null;
+  const web = CARD_WEB[(CARD_WEB.indexOf(now) + 1) % CARD_WEB.length];
+  const result = await post(`/api/cards/${item.dataset.uid}/web`, {
+    web,
+    mtime: item.dataset.mtime,
+  });
+  refresh(item, result.card);
+  toast(
+    result.card.web
+      ? "web lookups allowed for this card"
+      : "no lookups — the card says what the source says",
+  );
+}
+
+function paintGrades(item, card) {
+  [["frequency", card.frequency], ["derivation", card.derivation]].forEach(([key, value]) => {
+    const button = item.querySelector(`[data-grade="${key}"]`);
+    if (!button) return;
+    button.textContent = value || `no ${key}`;
+    button.classList.toggle("missing", !value);
+  });
+  const web = item.querySelector("[data-card-web]");
+  if (!web) return;
+  web.textContent = card.web ? "web: allowed" : "web: no";
+  web.classList.toggle("on", Boolean(card.web));
+  web.classList.toggle("own", Boolean(card.web_own));
+}
+
+document.addEventListener("click", (event) => {
+  const grade = event.target.closest("[data-grade]");
+  if (grade) {
+    cycleGrade(grade.closest(".item"), grade.dataset.grade).catch(() => {});
+    return;
+  }
+  const web = event.target.closest("[data-card-web]");
+  if (web) cycleCardWeb(web.closest(".item")).catch(() => {});
+});
 
 async function openEditor() {
   const item = currentOf(deck);

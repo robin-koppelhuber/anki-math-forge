@@ -96,8 +96,78 @@ def test_changing_what_the_card_claims_still_does(card_path: Path) -> None:
     about the mathematics."""
     card = model.load(card_path)
     before = card.content_hash()
-    card.frontmatter["frequency"] = "rare"
+    card.frontmatter["type"] = "intuition"
     assert card.content_hash() != before
+
+
+def test_a_grading_is_not_a_claim_the_card_makes(card_path: Path) -> None:
+    """`frequency` and `derivation` decide *when you meet* a card, not what it
+    says. They join `requires` on its own argument, which CLAUDE.md states:
+    approving a card is not approving its position in the queue.
+
+    You also learn one by meeting the card, months later -- so hashing them
+    meant that deciding a result was `common` rather than `core` un-approved
+    something nobody had touched.
+    """
+    card = model.load(card_path)
+    before = card.content_hash()
+    card.frontmatter["frequency"] = "rare"
+    card.frontmatter["derivation"] = "short"
+    assert card.content_hash() == before
+
+
+def test_a_grading_carries_the_approval_with_it(card_path: Path) -> None:
+    """Including on a card stamped under the older rule, whose digest covers
+    the very key being changed. Without the re-stamp, the first click on any
+    card approved before the exemption widened would report it as edited --
+    which is a lie: nobody edited the mathematics."""
+    card = model.load(card_path)
+    card.approve()
+    card.frontmatter["content_hash"] = card.content_hash(legacy=True)
+
+    card.set_grade("frequency", "rare")
+
+    assert card.status == "approved"
+    assert card.hash_matches(), "a grading is not an edit"
+    assert card.effective_status == "approved"
+
+
+def test_a_grading_does_not_launder_a_real_edit(card_path: Path) -> None:
+    """The re-stamp happens only when the approval was holding to begin with.
+    A card whose content had already drifted stays drifted: re-stamping that
+    one would push an unreviewed edit to Anki under an old approval."""
+    card = model.load(card_path)
+    card.approve()
+    card.set_section("back", "$something else entirely$")
+
+    card.set_grade("frequency", "rare")
+
+    assert not card.hash_matches()
+    assert card.effective_status == "draft"
+
+
+def test_the_older_digest_is_still_accepted(card_path: Path) -> None:
+    """Widening the exemption changed what `content_hash` computes, and a whole
+    deck was stamped under the old rule. Recomputing alone would have reported
+    108 untouched cards as edited on the strength of a code change."""
+    card = model.load(card_path)
+    card.frontmatter["frequency"] = "core"
+    card.frontmatter["status"] = "approved"
+    card.frontmatter["content_hash"] = card.content_hash(legacy=True)
+
+    assert card.hash_matches()
+    assert card.effective_status == "approved"
+
+
+def test_the_older_digest_does_not_forgive_an_edit(card_path: Path) -> None:
+    """The fallback is weaker in one direction only. Change the mathematics and
+    both digests move, so a legacy stamp rescues nothing it should not."""
+    card = model.load(card_path)
+    card.frontmatter["status"] = "approved"
+    card.frontmatter["content_hash"] = card.content_hash(legacy=True)
+    card.set_section("front", "$a different question$")
+
+    assert not card.hash_matches()
 
 
 def test_approve_stamps_a_matching_hash(card_path: Path) -> None:
@@ -195,7 +265,7 @@ def test_changing_content_still_changes_the_hash() -> None:
     assert edited.content_hash() != before
 
     tagged = model.Card(
-        frontmatter={"uid": "aa11bb", "type": "identity", "frequency": "core"},
+        frontmatter={"uid": "aa11bb", "type": "identity", "tags": ["traces"]},
         sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
     )
     assert tagged.content_hash() != before, "adding a field is a real content change"

@@ -29,6 +29,14 @@ class UnitContext:
     page_text: str
     page_units: list[dict[str, Any]]
     marks: list[dict[str, Any]] = field(default_factory=list)
+    # `[conventions]` from the source's own file: the keyed half of what is
+    # ambient here, beside the prose half above.
+    declared: dict[str, str] = field(default_factory=dict)
+    # Whether whoever writes this card may look things up on the web, already
+    # resolved through unit, source and repo -- so the pass reading this never
+    # has to work out whose setting won.
+    web: bool = False
+    web_from: str = "repo"
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -36,6 +44,9 @@ class UnitContext:
             "locator": self.locator,
             "transcription": self.transcription,
             "conventions": self.conventions,
+            "declared": self.declared,
+            "web": self.web,
+            "web_from": self.web_from,
             "page_text": self.page_text,
             "page_units": self.page_units,
             "marks": self.marks,
@@ -51,6 +62,25 @@ class UnitContext:
                 self.conventions
                 or "(none recorded -- write sources/<name>/conventions.md,"
                 " or whoever writes a card here is guessing at what is ambient)"
+            )
+        )
+        if self.declared:
+            out.append("\n### and what it declares as keys")
+            for key, value in sorted(self.declared.items()):
+                out.append(f"   {key:<16} {value}")
+        # Said plainly and in both directions. An absent line would read as
+        # "nobody thought about it", and the whole value of the permission is
+        # that somebody did.
+        out.append(
+            "\n## looking things up\n   "
+            + (
+                f"Web research is ALLOWED for this unit (granted by the {self.web_from})."
+                " Use it for what the source assumes and does not state, and say"
+                " in `## notes` what came from off the page."
+                if self.web
+                else "No web access. Everything on the card comes from the pages"
+                " below and from the conventions above; if the source does not"
+                " settle it, annotate the unit rather than guessing."
             )
         )
         if self.marks:
@@ -98,11 +128,18 @@ def assemble(
     if path.exists():
         text = path.read_text(encoding="utf-8")
 
+    spec = config.sources.get(source)
+    web_from = (
+        "unit" if unit.web is not None else "source" if spec and spec.web is not None else "repo"
+    )
     return UnitContext(
         unit=unit.id,
         locator=unit.locator.describe(),
         transcription=unit.tex_source or unit.tex_auto or "",
         conventions=source_conventions(config, source),
+        declared=dict(config.conventions_for(source)),
+        web=config.web_for(source, unit.web),
+        web_from=web_from,
         page_text=_page(text, unit.locator.page, spread),
         page_units=_page_units(ledger, unit.locator.page),
         marks=[

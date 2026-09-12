@@ -187,6 +187,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
+        "--web",
+        choices=("yes", "no", "inherit"),
+        default=None,
+        help=(
+            "whether whoever writes --id's card may look things up on the web. "
+            "Off everywhere unless granted, because a card should say what this "
+            "source says; `inherit` takes the override off again and falls back "
+            "to the source, then the repo"
+        ),
+    )
+    p.add_argument(
         "--resolve-notes",
         action="store_true",
         help="clear the @claude annotations on --id, once you have acted on them",
@@ -694,6 +705,7 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
         or args.accept
         or args.dismiss
         or args.context_pages is not None
+        or args.web is not None
     ):
         return _mutate_unit(args, ledgers, config)
 
@@ -776,6 +788,20 @@ def _mutate_unit(
                 print(
                     f"{args.id}: card writers get {asked} page(s) either side"
                     + ("" if target.context_pages is not None else " (inherited)")
+                )
+            if args.web is not None:
+                target = led.get(args.id)
+                if target is None:
+                    print(f"no unit {args.id!r}", file=sys.stderr)
+                    return FAILED
+                target.web = None if args.web == "inherit" else args.web == "yes"
+                led.save()
+                allowed = config.web_for(target.source, target.web)
+                whose = "this unit" if target.web is not None else "inherited"
+                print(
+                    f"{args.id}: web research "
+                    + ("allowed" if allowed else "not allowed")
+                    + f" ({whose})"
                 )
             if args.resolve_notes:
                 # "all" is the only way to reach the clear-everything path, and

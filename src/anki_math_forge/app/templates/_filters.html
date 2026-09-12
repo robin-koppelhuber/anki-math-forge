@@ -152,31 +152,55 @@
     </details>
     {% endif %}
 
-    {# Filter by what a reader marked. Labelled by the mark itself -- the
-       colour and kind you can see on the crop -- and not by what it means:
-       what it means is the guide's job, in "what the marks mean", and the
-       same sentence in both places is one of them not being read. A source
-       with no marks renders nothing, so the Cookbook's rail is unchanged. #}
-    {% if mark_picker is defined and mark_picker %}
+    {# Filter by what a reader marked, as a grid: kinds down, colours across.
+       Labelled by the mark itself -- the colour and kind you can see on the
+       crop -- and not by what it means: what it means is the guide's job, in
+       "what the marks mean", and the same sentence in both places is one of
+       them not being read. The hover says it here, because a tooltip is read
+       at the moment you are choosing and a legend is read once.
+
+       The empty cells matter as much as the full ones: together they are the
+       reader's scheme drawn out, and a combination never used is a fact about
+       how this document was read. A source with no marks renders nothing, so
+       the Cookbook's rail is unchanged. #}
+    {% if mark_matrix is defined and mark_matrix %}
     <details class="filter-group marks" open>
       <summary>marked as</summary>
-      <ul class="mark-picker">
-        {% for group in mark_picker %}
-        <li>
-          <span class="mp-kind" title="{{ group.count }} units">{{ group.kind }}</span>
-          <span class="mp-colours">
-            {% for row in group.colours %}
-            <a class="mp-chip {{ 'on' if mark == row.key }}{{ '' if row.declared else ' undeclared' }}"
-               title="{{ row.colour or row.kind }} — {{ row.meaning }}{{ '' if row.declared else ' (not declared here)' }} — {{ row.count }} unit{{ '' if row.count == 1 else 's' }}{{ ' · click to clear' if mark == row.key }}"
-               href="{{ filter_url(here, f, mark=(none if mark == row.key else row.key)) }}">
-              <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
-              <b>{{ row.count }}</b>
-            </a>
+      <table class="mark-grid">
+        <thead>
+          <tr>
+            <td></td>
+            {% for col in mark_matrix.colours %}
+            <th scope="col" title="{{ col.colour }} — {{ col.count }} unit{{ '' if col.count == 1 else 's' }} across every kind">
+              <span class="swatch c-{{ col.colour }}" aria-hidden="true"></span>
+            </th>
             {% endfor %}
-          </span>
-        </li>
-        {% endfor %}
-      </ul>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in mark_matrix.rows %}
+          <tr>
+            <th scope="row" title="{{ row.label }} — {{ row.count }} unit{{ '' if row.count == 1 else 's' }}">{{ row.kind }}</th>
+            {% for cell in row.cells %}
+            <td>
+              {% if cell.count %}
+              <a class="mg-cell {{ 'on' if mark == cell.key }}{{ '' if cell.declared else ' undeclared' }}"
+                 title="{{ cell.kind }} · {{ cell.colour or 'no colour' }} — {{ cell.meaning }}{{ '' if cell.declared else ' (not declared here: this is what the annotation kind is, not what you used it to mean)' }} — {{ cell.count }} unit{{ '' if cell.count == 1 else 's' }}{{ ' · click to clear' if mark == cell.key }}"
+                 href="{{ filter_url(here, f, mark=(none if mark == cell.key else cell.key)) }}">
+                <span class="swatch c-{{ cell.colour or cell.kind }}" aria-hidden="true"></span>
+                <b>{{ cell.count }}</b>
+              </a>
+              {% else %}
+              <span class="mg-cell empty"
+                    title="nothing in this source is a {{ cell.colour }} {{ cell.kind }}{{ ' — it would read as: ' ~ cell.meaning if cell.meaning }}"
+                    aria-hidden="true"></span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
       {% if mark %}
       <p class="filter-clear"><a href="{{ filter_url(here, f, mark=none) }}">&larr; any mark</a></p>
       {% endif %}

@@ -20,7 +20,6 @@ sources_dir = "sources"
 
 [cards]
 language = "en"
-layout = "denominator"
 front_char_cap = 160
 
 [anki]
@@ -36,6 +35,12 @@ katex_base = "/static/vendor/katex"
 title = "Demo Source"
 citation = "Demo"
 tex = "sources/demo/demo.tex"
+
+# A convention belongs to the source, never to the repo: `[cards] layout` is
+# refused at load now, because defaulting one here is how a statistics paper
+# came to be told it writes matrix calculus.
+[sources.demo.conventions]
+layout = "denominator"
 """
 
 GOOD_CARD = """---

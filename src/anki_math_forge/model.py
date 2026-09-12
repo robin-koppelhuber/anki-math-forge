@@ -37,6 +37,7 @@ FRONTMATTER_ORDER = (
     "requires",
     "tags",
     "verify",
+    "web",
 )
 
 # Two optional judgements about a card, both coarse on purpose.
@@ -103,7 +104,36 @@ UNHASHED_SECTIONS = frozenset({"notes", "verify"})
 # Anki and no reviewer sees it. Leaving it hashed meant turning a test *on*
 # un-approved a card whose mathematics had not changed -- precisely what
 # exempting the section was for, undone by the flag that enables it.
-UNHASHED_FRONTMATTER = frozenset({"status", "content_hash", "requires", "verify"})
+# `frequency` and `derivation` join them on `requires`'s argument, spelled out
+# in CLAUDE.md: approving a card is not approving its position in the queue.
+# Both are coarse judgements about *when you should meet* this card, both reach
+# Anki as tags that `sync` updates without re-approval, and neither changes a
+# word a reviewer read. Hashing them meant that deciding a result was `common`
+# rather than `core` -- which is a thing you learn months later, from meeting
+# it -- silently un-approved a card whose mathematics nobody had touched.
+#
+# `web` is a permission granted to whoever writes or augments the card. It is
+# not a claim the card makes, and it is set from the review view with one
+# click; an approval is not a statement about it.
+UNHASHED_FRONTMATTER = frozenset({
+    "status",
+    "content_hash",
+    "requires",
+    "verify",
+    "frequency",
+    "derivation",
+    "web",
+})
+
+# What `content_hash` used to cover. Kept so that widening the exemption above
+# does not un-approve a deck: every card in it was stamped under the old rule,
+# and recomputing would make 108 approvals stop matching at once -- the exact
+# mass demotion invariant 5 exists to make impossible without a human.
+#
+# This decays on its own. Any re-approval writes the current digest, and the
+# only cards it can rescue are ones that were already approved before the rule
+# changed. See `Card.hash_matches`.
+LEGACY_UNHASHED_FRONTMATTER = frozenset({"status", "content_hash", "requires", "verify"})
 
 STATUSES = ("draft", "approved", "rejected")
 
@@ -175,6 +205,17 @@ class Card:
     @property
     def derivation(self) -> str:
         return str(self.frontmatter.get("derivation", "") or "")
+
+    @property
+    def web(self) -> bool | None:
+        """Whether whoever augments this card may look things up on the web.
+
+        `None` means nothing was said here, which falls back to the card's
+        unit, then its source, then the repo -- resolved by `Config.web_for`,
+        not here, because this object does not know what a source is.
+        """
+        raw = self.frontmatter.get("web")
+        return None if raw is None else bool(raw)
 
     @property
     def units(self) -> list[str]:
@@ -333,13 +374,17 @@ class Card:
         return removed
 
     # -- hashing (DESIGN.md §3.5, §8) -------------------------------------
-    def content_hash(self) -> str:
+    def content_hash(self, *, legacy: bool = False) -> str:
         """Hash of everything that is card content.
 
         Excludes `status`, `content_hash` itself and `## notes`, so approving a
         card or scribbling an annotation on it is not an edit -- but changing
         anything a reviewer looked at is.
+
+        `legacy` recomputes under the older exemption set, which is only ever
+        asked for by `hash_matches`; see `LEGACY_UNHASHED_FRONTMATTER`.
         """
+        exempt = LEGACY_UNHASHED_FRONTMATTER if legacy else UNHASHED_FRONTMATTER
         # Hash the content, not the file. Rendering it would make the digest
         # depend on FRONTMATTER_ORDER, so adding an optional field to that
         # tuple silently invalidated every approval in the deck -- the card
@@ -349,7 +394,7 @@ class Card:
         parts = [
             f"{key}={self.frontmatter[key]!r}"
             for key in sorted(self.frontmatter)
-            if key not in UNHASHED_FRONTMATTER
+            if key not in exempt
         ]
         parts += [
             f"##{s.name}\n{s.canonical().body}"
@@ -360,7 +405,22 @@ class Card:
         return digest[:16]
 
     def hash_matches(self) -> bool:
-        return bool(self.stored_hash) and self.stored_hash == self.content_hash()
+        """Whether this card still says what it was approved saying.
+
+        Two digests are accepted, not one. A card stamped before `frequency`,
+        `derivation` and `web` were exempted carries a hash computed over them,
+        and recomputing it under today's rule would report a whole deck as
+        edited on the strength of a code change rather than a content one.
+
+        The fallback is strictly weaker in the only direction that matters: it
+        can hold an approval that the current rule would also hold, never one
+        the current rule would drop. Change the mathematics and *both* digests
+        move. Change only a grading and only the legacy one does -- which is
+        exactly the case the exemption was widened for.
+        """
+        if not self.stored_hash:
+            return False
+        return self.stored_hash in (self.content_hash(), self.content_hash(legacy=True))
 
     @property
     def demotion(self) -> str:
@@ -398,6 +458,33 @@ class Card:
         everywhere it matters, which is what puts it back in the review queue.
         """
         return "draft" if self.demotion else self.status
+
+    def set_grade(self, key: str, value: Any) -> None:
+        """Change one unhashed judgement, carrying any approval with it.
+
+        `frequency`, `derivation` and `web` are outside `content_hash`, so a
+        card stamped under today's rule survives this untouched. One stamped
+        under the older rule does not -- its digest covers the very key being
+        changed -- and it would come back as `edited`, which is a lie: nobody
+        edited the mathematics, a grading moved.
+
+        So the stamp is refreshed, but **only when the approval was holding to
+        begin with**. A card whose content had already drifted from its hash
+        stays drifted; re-stamping that one would launder a real edit through a
+        grading click, which is precisely the thing invariant 5 forbids.
+
+        An empty value removes the key, which is how a grading is taken off.
+        `False` is a value and not an absence: `web: false` is a refusal that
+        overrides a source-wide grant, and collapsing it into "unset" would
+        make that impossible to say.
+        """
+        held = self.status == "approved" and self.hash_matches()
+        if value is None or value == "":
+            self.frontmatter.pop(key, None)
+        else:
+            self.frontmatter[key] = value
+        if held:
+            self.frontmatter["content_hash"] = self.content_hash()
 
     def approve(self) -> None:
         self.frontmatter["status"] = "approved"

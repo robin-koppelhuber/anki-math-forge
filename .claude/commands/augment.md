@@ -31,6 +31,17 @@ the mathematics needs it, it belongs in `## conditions`; if you are adding
 something the source does not say, say so in `## notes` so the disagreement
 is visible.
 
+**Not by searching for it.** `context` ends with a section headed *looking
+things up*, which says whether web research is permitted for that unit. It is
+off unless somebody granted it. The card's own frontmatter may carry `web:`,
+which overrides; the review view shows the resolved answer next to the
+gradings. When it says no, a gap in the source is a `@me` note, not a search —
+the web has a cleaner statement of nearly every result on these pages, and
+substituting one produces a card that reads better than a correct one until
+the hypothesis the paper had turns out to be the whole point. When it says
+allowed, use it for what the source assumes and does not state, and say in
+`## notes` what came from off the page.
+
 1. Find them — cards with only `## front` and `## back`:
 
    ```

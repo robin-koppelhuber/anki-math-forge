@@ -237,7 +237,7 @@ def create_app(config: Config) -> FastAPI:
                 "filters": filters,
                 "commands": commands_for("units", filters, pipeline, from_marks=from_marks),
                 "mark": mark,
-                "mark_picker": mark_picker(
+                "mark_matrix": mark_matrix(
                     ledger.select(state=state or "all", section=section or None), config, name
                 ),
                 "scheme": scheme_rows(everything, config, name),
@@ -506,6 +506,27 @@ def create_app(config: Config) -> FastAPI:
 
         return _mutate_ledger(config, source, body, apply)
 
+    @app.post("/api/units/{source}/{unit_id:path}/web")
+    def set_unit_web(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Whether whoever writes this card may look things up on the web.
+
+        Three states, not two: yes, no, and "whatever the source says". The
+        third is not the same as `no` -- it is the absence of a decision here,
+        and collapsing the two would make a source-wide grant unrevokable per
+        unit and a source-wide refusal impossible to lift.
+        """
+        raw = body.get("web")
+        allow = None if raw is None else bool(raw)
+
+        def apply(led: Ledger) -> Unit:
+            unit = led.get(unit_id)
+            if unit is None:
+                raise HTTPException(404, f"no unit {unit_id!r}")
+            unit.web = allow
+            return unit
+
+        return _mutate_ledger(config, source, body, apply)
+
     # -- card actions -----------------------------------------------------
 
     @app.post("/api/cards/{uid}/approve")
@@ -525,6 +546,41 @@ def create_app(config: Config) -> FastAPI:
         the editor to make a token change would be a worse way to say so.
         """
         return _mutate_card(config, uid, body, lambda card: card.unapprove())
+
+    @app.post("/api/cards/{uid}/grade")
+    def set_grade(uid: str, body: dict[str, Any] = Body(...)) -> Any:
+        """`frequency` or `derivation`, cycled from the review view.
+
+        Both are coarse judgements about *when* you should meet this card, and
+        both were previously reachable only by opening the file -- which is
+        also why so many cards carry neither. You learn that a result is
+        `common` rather than `core` by meeting it, which is to say during
+        review, which is here.
+
+        An empty value takes the grading off again, so the cycle can pass
+        through "unset" rather than trapping a card in a grade it was given by
+        a mis-click.
+        """
+        key = str(body.get("key", ""))
+        if key not in ("frequency", "derivation"):
+            raise HTTPException(400, f"{key!r} is not a grading")
+        value = str(body.get("value", ""))
+        allowed = model.FREQUENCIES if key == "frequency" else model.DERIVATIONS
+        if value and value not in allowed:
+            raise HTTPException(400, f"{value!r} is not one of {', '.join(allowed)}")
+        return _mutate_card(config, uid, body, lambda card: card.set_grade(key, value))
+
+    @app.post("/api/cards/{uid}/web")
+    def set_card_web(uid: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Whether whoever augments this card may look things up on the web.
+
+        Same three states as the unit's, and it goes through `set_grade`
+        because it is unhashed for the same reason: a permission is not a
+        claim the card makes, and granting one is not an edit to review.
+        """
+        raw = body.get("web")
+        value = "" if raw is None else bool(raw)
+        return _mutate_card(config, uid, body, lambda card: card.set_grade("web", value))
 
     @app.post("/api/cards/{uid}/restore")
     def restore_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -933,6 +989,7 @@ def grouped_marks(rows: list[dict[str, Any]]) -> dict[str, Any]:
     two-word terms can be shut away while the claims stay open.
     """
     groups: dict[str, dict[str, Any]] = {}
+    colours: dict[str, int] = {}
     own = None
     for row in rows:
         if row["own"]:
@@ -943,10 +1000,23 @@ def grouped_marks(rows: list[dict[str, Any]]) -> dict[str, Any]:
             kind, {"kind": kind, "label": KIND_GROUPS.get(kind, kind), "marks": []}
         )
         group["marks"].append(row)
+        # What the swatch filter offers. Keyed the way the row is drawn --
+        # colour, or the kind when a mark has no colour -- so the two cannot
+        # disagree about what a chip turns off.
+        key = str(row["colour"]) or kind
+        colours[key] = colours.get(key, 0) + 1
     ordered = sorted(groups.values(), key=lambda g: -len(g["marks"]))
     for group in ordered:
         group["count"] = len(group["marks"])
-    return {"own": own, "groups": ordered, "count": len(rows)}
+    return {
+        "own": own,
+        "groups": ordered,
+        "count": len(rows),
+        "colours": [
+            {"colour": c, "count": n}
+            for c, n in sorted(colours.items(), key=lambda kv: (-kv[1], kv[0]))
+        ],
+    }
 
 
 def mark_payloads(
@@ -1035,19 +1105,29 @@ def unit_mark(unit: Unit) -> str:
     return f"{own.kind}/{own.colour}" if own.colour else own.kind
 
 
-def mark_picker(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
-    """The marks you can filter by: one row per kind, one swatch per colour.
+def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any]:
+    """The marks you can filter by, as a grid: kinds down, colours across.
 
     A prose source is triaged by what you meant, not by what state a unit is
-    in: "the claims first, the terms never". But five kinds times eight colours
-    is forty rows, and as a flat list of labelled lines that is the whole rail.
-    Grouping by kind makes it a handful of rows of coloured squares, which is
-    also how the marks look on the page you made them on.
+    in: "the claims first, the terms never". Five annotation kinds times eight
+    colours is forty labelled lines, and as a flat list that is the whole rail.
 
-    **Only marks the scheme in force gives a meaning to** -- your declarations
-    first, and `DEFAULT_MEANINGS` under them, so a kind Zotero defines is
-    always filterable and a colour you have not decided about is not silently
-    a category of its own. A chip says which of the two it is.
+    A grid is the right shape because the data *is* two-dimensional and every
+    other arrangement hides one axis. Kind-major rows of chips -- what this
+    was -- made "every green mark, whatever I drew it with" something you had
+    to assemble by eye from four different rows, and left no place at all to
+    show the combinations you have never used. Here a column is a colour, a
+    row is a kind, and the empty cells are as informative as the full ones:
+    they are the reader's scheme, drawn.
+
+    Cells come in three states, and they are three different facts:
+
+    * **declared** -- you said what this combination means. Full strength.
+    * **default only** -- it reads as what Zotero's annotation kind is, which
+      is not the same as a decision. Still filterable, drawn dashed, and the
+      tooltip says so.
+    * **empty** -- nothing in this source is marked that way. Not clickable,
+      because a filter that can only ever return nothing is a dead control.
 
     Nothing appears for a source with no marks, so the Cookbook's rail is
     unchanged: all of this is Zotero's, and a segmented book has none of it.
@@ -1059,25 +1139,61 @@ def mark_picker(units: list[Unit], config: Config, source: str) -> list[dict[str
         if key:
             tally[key] = tally.get(key, 0) + 1
 
-    groups: dict[str, dict[str, Any]] = {}
-    for key, count in sorted(tally.items()):
+    # Only combinations the scheme gives a reading to, so a kind Zotero does
+    # not define never becomes a row -- the floor under your declarations is
+    # Zotero's closed set, not a guess at what "doodle" might have meant.
+    cells: dict[tuple[str, str], dict[str, Any]] = {}
+    kind_total: dict[str, int] = {}
+    colour_total: dict[str, int] = {}
+    for key, count in tally.items():
         kind, _, colour = key.partition("/")
         meaning, where = scheme.reading(kind, colour)
         if not meaning:
             continue
-        group = groups.setdefault(kind, {"kind": kind, "colours": [], "count": 0})
-        group["colours"].append({
+        cells[kind, colour] = {
             "key": key,
             "kind": kind,
             "colour": colour,
             "meaning": meaning,
             "declared": where == "declared",
             "count": count,
+        }
+        kind_total[kind] = kind_total.get(kind, 0) + count
+        colour_total[colour] = colour_total.get(colour, 0) + count
+    if not cells:
+        return {}
+
+    # Commonest first on both axes, so the corner of the grid you look at
+    # first is the part of the scheme you actually use.
+    colours = sorted(colour_total, key=lambda c: (-colour_total[c], c))
+    rows = []
+    for kind in sorted(kind_total, key=lambda k: (-kind_total[k], k)):
+        rows.append({
+            "kind": kind,
+            "label": KIND_GROUPS.get(kind, kind),
+            "count": kind_total[kind],
+            "cells": [
+                cells.get(
+                    (kind, colour),
+                    # A cell that exists only to hold the grid square. It
+                    # carries what it *would* mean, because that is what the
+                    # hover has to say about a combination you have not used.
+                    {
+                        "key": "",
+                        "kind": kind,
+                        "colour": colour,
+                        "meaning": scheme.reading(kind, colour)[0],
+                        "declared": False,
+                        "count": 0,
+                    },
+                )
+                for colour in colours
+            ],
         })
-        group["count"] += count
-    for group in groups.values():
-        group["colours"].sort(key=lambda row: (-int(row["count"]), str(row["colour"])))
-    return sorted(groups.values(), key=lambda g: (-int(g["count"]), str(g["kind"])))
+    return {
+        "colours": [{"colour": c, "count": colour_total[c]} for c in colours],
+        "rows": rows,
+    }
 
 
 def _scheme_key(scheme: Any, kind: str, colour: str) -> str:
@@ -1199,9 +1315,12 @@ def source_facts(config: Config, source: str, *, from_marks: bool = False) -> di
         "zotero_key": spec.zotero_key if spec else "",
         "deck": config.deck_for(source),
         "decks": sorted(spec.decks.items()) if spec else [],
-        # Empty is an answer, and a meaningful one: a source that declares no
-        # layout gets no layout, and `verify` refuses rather than guessing.
-        "layout": config.layout_for(source),
+        # `[conventions]`: what this source declares as keys, all of it, not
+        # only the one entry `verify` acts on. A convention the tool has never
+        # heard of is still a fact whoever writes a card here needs.
+        "declared": sorted(config.conventions_for(source).items()),
+        "web": config.web_for(source),
+        "web_own": spec is not None and spec.web is not None,
         "order": spec.order if spec else "",
         "crop_width": config.crop_width_for(source, from_a_mark=from_marks),
         "crop_context": config.crop_context_for(source),
@@ -1313,7 +1432,6 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     def add(where: str, key: str, value: Any, source: str) -> None:
         rows.append({"where": where, "key": key, "value": value, "from": source})
 
-    add("repo", "layout", config.layout, "forge.toml")
     add("repo", "language", config.language, "forge.toml")
     add("repo", "front_char_cap", config.front_char_cap, "forge.toml")
     add("repo", "crop_context", config.crop_context_for(""), "forge.toml")
@@ -1324,6 +1442,7 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         "forge.toml" if config.crop_width else "by where the geometry came from",
     )
     add("repo", "context_pages", config.context_pages, "forge.toml")
+    add("repo", "web", "allowed" if config.web else "off", "forge.toml")
     add("anki", "deck", config.deck, "forge.toml")
     add("anki", "note type", config.note_type, "forge.toml")
     add("anki", "tag prefix", config.tag_prefix, "forge.toml")
@@ -1337,8 +1456,18 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         inherited = "inherited"
         add(where, "material", source_origin(config, name) or "unset", origin)
         add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
-        add(where, "layout", config.layout_for(name), origin if spec.layout else inherited)
         add(where, "order", spec.order, origin)
+        add(
+            where,
+            "web",
+            "allowed" if config.web_for(name) else "off",
+            origin if spec.web is not None else inherited,
+        )
+        # Everything under `[conventions]`, not only the one key `verify` acts
+        # on. A convention the tool has never heard of is still a fact a card
+        # writer needs, and the table is where it is stated.
+        for key, value in sorted(spec.conventions.items()):
+            add(where, f"conventions.{key}", value, origin)
         add(
             where,
             "crop_context",
@@ -1560,6 +1689,10 @@ def _unit_payload(
             config.context_pages_for(unit.source, unit.context_pages)
         ),
         "context_own": unit.context_pages is not None,
+        # Whether whoever writes this card may look things up, resolved the
+        # same way and shown the same way: the answer, and whose answer it is.
+        "web": config.web_for(unit.source, unit.web),
+        "web_own": unit.web is not None,
     }
 
 
@@ -1588,6 +1721,10 @@ def _card_payload(
         # reviewing, which is a poor way to keep a dependency graph honest.
         "frequency": card.frequency,
         "derivation": card.derivation,
+        # The same permission the unit carries, resolved for this card: its own
+        # answer if it has one, else the unit's, else the source's, else off.
+        "web": _card_web(card, config),
+        "web_own": card.web is not None,
         # Resolved links, not bare uids: each one knows which source its
         # target lives in, and whether it exists at all.
         "requires": (place or {}).get(
@@ -1622,6 +1759,26 @@ def _card_payload(
         "unit_image": _unit_image(card, config),
         "front_length": latex.rendered_length(card.section("front") or ""),
     }
+
+
+def _card_web(card: Card, config: Config) -> bool:
+    """Whether whoever augments this card may look things up.
+
+    Card, then the unit it came from, then source, then repo. The unit sits in
+    the chain because a card is written *from* a unit: granting the permission
+    during triage and then having it evaporate the moment a stub exists would
+    make the grant useless exactly where it was aimed.
+    """
+    if card.web is not None:
+        return card.web
+    source = card.source_name
+    unit = None
+    if card.unit:
+        path = config.units_path(source)
+        if path.exists():
+            found = Ledger.load(path).get(card.unit)
+            unit = found.web if found else None
+    return config.web_for(source, unit)
 
 
 def _unit_image(card: Card, config: Config) -> str:

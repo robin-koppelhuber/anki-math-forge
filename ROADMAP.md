@@ -1201,6 +1201,35 @@ is it for**, reading the deck's structure or editing it? A read-only picture is
 a weekend; draggable edges means writing frontmatter from the browser, which
 invariant 2 allows but does not make free.
 
+### 16a. Per source, on a canvas
+
+Asked for 2026-09-12, and it sharpens both of the open questions above.
+
+**Per source** is the scoping that makes the density argument go away. Nine
+edges across 108 cards is a near-empty picture; nine edges across the thirty
+cards of one paper is a readable one, and it is also the only scope where the
+graph *means* anything — `requires` says "introduce that first", and cards from
+two different books are not competing for a position in the same reading. The
+rest of the app is already scoped this way, so the view inherits the source
+selector rather than inventing a scope of its own.
+
+**A canvas** rather than SVG answers the second question with "editing".
+Dragging is the point: the layout a dependency graph wants is the one the
+person who knows the material would draw, and neither dot-layout nor a force
+simulation knows which two results belong side by side. That means node
+positions have to be stored — and they are a fact about one source's graph, so
+they belong in that source's folder rather than in `localStorage`, where they
+would be invisible to everyone else and lost on a new machine. A
+`sources/<name>/graph.json` of `{uid: [x, y]}`, written by the app and diffable
+like everything else, satisfies invariant 2 without putting layout into card
+frontmatter where it would be hashed.
+
+Still gated on the same trigger: build it when the edges exist. A canvas of
+thirty cards and no arrows is a worse answer than the per-card lines. What this
+*does* change is the order — when it is built, it is per source and draggable
+from the start, rather than a repo-wide read-only picture that then has to be
+rewritten.
+
 ---
 
 # Considered and rejected

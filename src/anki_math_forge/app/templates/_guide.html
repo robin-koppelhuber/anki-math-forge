@@ -76,19 +76,29 @@
             {%- else %}<span class="warn">not configured</span>{% endif %}</dd>
         <dt>deck</dt><dd><code>{{ sf.deck }}</code>
           {%- for type, deck in sf.decks %}<br><code>{{ type }} → {{ deck }}</code>{% endfor %}</dd>
-        <dt>layout</dt>
-        <dd>{% if sf.layout %}<code>{{ sf.layout }}</code>
-            {%- else %}<span class="warn">none declared</span> — <code>verify</code>
-            refuses rather than checking against a guess{% endif %}</dd>
+        {# `[conventions]` from the source's own file -- all of it, not only
+           the one key `verify` acts on. A convention the tool has never heard
+           of is still a fact whoever writes a card here needs, and this is the
+           only place it would otherwise be visible. #}
+        <dt>declares</dt>
+        <dd>{% if sf.declared %}
+            {%- for key, value in sf.declared %}<code>{{ key }}</code> {{ value }}{{ '' if loop.last else '; ' }}{% endfor %}
+            {%- else %}<span class="warn">none declared</span> — nothing in
+            <code>[conventions]</code>, so <code>verify</code> has no layout to
+            check against and refuses rather than guessing{% endif %}</dd>
+        <dt>web</dt>
+        <dd>{% if sf.web %}card writers may look things up
+            {{ 'for this source' if sf.web_own else '(repo-wide)' }}
+            {%- else %}no lookups — a card says what this source says{% endif %}</dd>
         <dt>crops</dt>
         <dd>{{ 'full page width' if sf.crop_width == 'page' else 'the box itself' }},
             {{ sf.crop_context | round | int }}pt around it</dd>
         <dt>context</dt>
         <dd>{{ sf.context_pages }} page{{ '' if sf.context_pages == 1 else 's' }}
             either side, per card written</dd>
-        <dt>conventions</dt>
-        <dd>{% if sf.conventions %}recorded in <code>conventions.md</code>
-            {%- else %}<span class="warn">none written</span> — whoever writes a
+        <dt>and reads</dt>
+        <dd>{% if sf.conventions %}the prose in <code>conventions.md</code>
+            {%- else %}<span class="warn">no conventions.md</span> — whoever writes a
             card from this is guessing at what is ambient{% endif %}</dd>
       </dl>
       <p class="rail-more"><button type="button" class="link-button" data-settings>every
@@ -130,7 +140,13 @@
           written beside it. <b>Whether a marked claim is worth a card on its
           own is mostly a question about its neighbours</b>, and this is them.
           One marked <b>its own unit</b> you will meet again; the rest are only
-          context for this decision.</dd>
+          context for this decision. Two filters over that list, cutting across
+          each other: the group headings fold a <b>kind</b> away, and the
+          swatches above them switch a <b>colour</b> off. Both are yours alone
+          — they change nothing on disk and they are <b>not</b> the rail's
+          "marked as" filter, which decides which units you meet. Narrowing the
+          queue to green claims while also hiding every purple term beside them
+          would remove exactly the context this decision needs.</dd>
       <dt>the maths beside it</dt>
       <dd>the transcription, rendered. A <b>hint, not content</b>: where it
           disagrees with the picture, the picture wins. <span class="badge ocr">transcribed</span>
@@ -189,6 +205,21 @@
           overrides it — because hiding it until it had already been changed
           meant never seeing what you were changing. Click it, or press
           <b>c</b>.</dd>
+      <dt><b>w</b> web lookups</dt>
+      <dd>Whether whoever writes this card may look things up on the web.
+          <b>Off everywhere unless you grant it</b>, and the default is the
+          point: a card is supposed to say what <em>this source</em> says,
+          hypotheses and notation included, and the web is full of cleaner
+          statements of the general theorem. One of those substituted for the
+          printed one looks like a better card right up until the thing you are
+          actually studying turns on the condition the paper had and the
+          internet did not. Grant it here, on a unit that cites a result the
+          source never states — that is the moment you can see the difference.
+          Three states, not two: <b>allowed</b>, <b>no</b>, and neither, which
+          falls back to the source and then the repo. Clicking the one already
+          in force clears the override. A card written from a granted unit
+          inherits the grant, and <code>forge context</code> says which of the
+          three answered.</dd>
       <dt><b>p</b> crop / page / document</dt>
       <dd>Three ways to look at the same geometry. <b>page</b> is the whole
           page with the unit's own box drawn on it: the two ways segmentation
@@ -197,8 +228,11 @@
           one show two numbers inside it. <b>document</b> is every page,
           scrolling, landing on this one — for when the question is not about
           the region at all but about what the passage is <em>saying</em>, and
-          the answer is three paragraphs up. The control in the corner of the
-          picture does the same thing.</dd>
+          the answer is three paragraphs up. Three named buttons in the corner
+          of the picture do the same thing in one click each. <b>Clicking the
+          picture itself does nothing</b>, deliberately: it used to cycle the
+          view, which meant leaning in to read a highlight jumped you to the
+          whole document.</dd>
       <dt><b>z</b> undo</dt>
       <dd>Undo the last decision, however it was made &mdash; a state change,
           an accepted suggestion, a dismissed one. It restores what was
@@ -303,6 +337,24 @@
 
     <h3>what a card is made of</h3>
     <dl>
+      <dt>the two gradings</dt>
+      <dd><b>Click either to cycle it.</b> <code>frequency</code> is how often
+          this turns up, <code>derivation</code> is what reconstructing it
+          would take, and together they decide the order Anki introduces new
+          cards in — most useful first, then easiest. A card missing either
+          sorts to the back as unjudged, so the ones nobody graded are the ones
+          you meet last. <b>Neither un-approves the card</b>: they are outside
+          <code>content_hash</code> on the same argument as
+          <code>requires</code> — approving a card is not approving its
+          position in the queue, and you learn that a result is
+          <code>common</code> rather than <code>core</code> by meeting it,
+          months later. The cycle passes through unset, so one given by a
+          mis-click comes off by carrying on clicking.</dd>
+      <dt><code>web</code></dt>
+      <dd>Whether whoever augments this card may look things up. Inherited from
+          the unit it was written from, then the source, then the repo — where
+          it is off. Click to cycle allowed / no / inherit. Also unhashed: it
+          is a permission, not a claim the card makes.</dd>
       <dt>front, then <b>given</b></dt>
       <dd>The question, and the setting it is asked in. Conditions sit
           <b>above the answer</b>, here and in Anki: a constraint you only

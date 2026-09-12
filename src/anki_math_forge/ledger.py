@@ -192,6 +192,12 @@ class Unit:
     # and the default window would cut them off. Human-owned: extraction never
     # touches it, so it survives a re-segmentation like `state` does.
     context_pages: int | None = None
+    # Whether whoever writes this card may look things up on the web. `None`
+    # inherits the source, which inherits the repo, which is off. Human-owned
+    # like `context_pages`, and granted here for the same reason: triage is
+    # where you can see that this one unit cites a result the paper never
+    # states, and no per-source default knows that.
+    web: bool | None = None
     suggestion: Suggestion | None = None  # proposed, never applied
 
     @property
@@ -236,8 +242,12 @@ class Unit:
             data.pop("marks", None)
         if data.get("suggestion") is None:
             data.pop("suggestion", None)
-        if data.get("context_pages") is None:
-            data.pop("context_pages", None)
+        # Tri-state fields: `None` is "inherit", and writing it out on every
+        # line would turn a 751-unit ledger into a wall of nulls that all mean
+        # "nobody has said anything about this".
+        for tristate in ("context_pages", "web"):
+            if data.get(tristate) is None:
+                data.pop(tristate, None)
         return data
 
     @classmethod

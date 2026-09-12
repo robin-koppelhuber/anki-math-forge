@@ -7,7 +7,8 @@
 <div id="deck" data-source="{{ source }}" data-mtime="{{ mtime }}">
   {% for unit in units %}
   <article class="unit item" data-id="{{ unit.id }}" data-state="{{ unit.state }}"
-           data-context-pages="{{ unit.context_pages }}" hidden>
+           data-context-pages="{{ unit.context_pages }}"
+           data-web="{{ 1 if unit.web else 0 }}" data-web-own="{{ 1 if unit.web_own else 0 }}" hidden>
     <div class="unit-head">
       <span class="locator">{{ unit.locator or unit.id }}</span>
       <span class="badge state-{{ unit.state }}">{{ unit.state }}</span>
@@ -37,6 +38,18 @@
         {% endfor %}
         <i class="chip-whose">{{ 'this unit' if unit.context_own else 'source' }}</i>
       </span>
+
+      {# Whether whoever writes this card may look anything up. Same shape as
+         the context chip and for the same reason: it is a decision you take
+         *here*, looking at a unit that cites a theorem the paper never states.
+         Off everywhere by default, so the chip is normally the quiet one. #}
+      <span class="badge context-chip web-chip{{ ' own' if unit.web_own }}" data-web-chip
+            title="whether whoever writes this card may look things up on the web. A card should say what this source says; grant it where you can see this one needs more. `w` cycles allow / no / inherit.">
+        <i class="chip-what">web</i>
+        <button type="button" class="ctx-step{{ ' on' if unit.web }}" data-web-set="1">allowed</button>
+        <button type="button" class="ctx-step{{ ' on' if not unit.web }}" data-web-set="0">no</button>
+        <i class="chip-whose">{{ 'this unit' if unit.web_own else 'source' }}</i>
+      </span>
     </div>
 
     {# Document on one side, what was written about it on the other, with the
@@ -53,13 +66,25 @@
     <div class="side-by-side {{ 'one-column' if not aside }}">
       {% if unit.image %}
       <figure class="crop">
-        {# `p` does this too. A key nobody can see is a feature nobody finds,
-           and "what does this passage actually say" is a question you have
-           while looking at the picture, not while reading the footer. #}
-        <button type="button" class="crop-view" data-pdf-view
-                title="crop · whole page · the whole document, scrolling (p)">
-          <span data-pdf-view-label>crop</span>
-        </button>
+        {# Three named buttons, not one cycling label. `p` still walks them --
+           a key nobody can see is a feature nobody finds -- but a cycle is a
+           poor pointer control: to reach `document` from `page` you press the
+           thing twice and watch what happens, and there is nowhere to read
+           what the third state even is.
+
+           It also used to be reachable by clicking anywhere on the picture,
+           which was not a design: `item.dataset.pdfView` wrote the same
+           attribute the button was found by, so `closest("[data-pdf-view]")`
+           matched the whole unit. Zooming in on a highlight jumped you to the
+           full document. The state lives on `data-pdf-mode` now. #}
+        <span class="crop-view" role="group" aria-label="how to show this unit">
+          {% for view, label in [('crop', 'crop'), ('page', 'page'), ('document', 'doc')] %}
+          <button type="button" data-pdf-view="{{ view }}" class="{{ 'on' if view == 'crop' }}"
+                  title="{{ {'crop': 'the box and a margin',
+                             'page': 'the whole page, with this box drawn on it',
+                             'document': 'every page, scrolling'}[view] }} (p cycles)">{{ label }}</button>
+          {% endfor %}
+        </span>
         <img src="{{ unit.image }}" alt="crop of {{ unit.id }}" loading="lazy" data-crop>
         <figcaption class="crop-missing" hidden>
           source document not available — crops are rendered from it on demand
@@ -114,12 +139,36 @@
         </div>
         {% endif %}
 
+        {# Two filters over the same list, and they are two different
+           questions. The groups answer "what kind of thing" -- they collapse.
+           The swatches answer "which of my colours", which cuts across every
+           group at once, so it cannot be a per-group control.
+
+           Deliberately not the left rail's filter: that one decides which
+           *units* you meet, and this one decides how much of the page around
+           the unit in front of you is worth reading. Tying them would mean
+           narrowing the queue to green claims also hid every purple term
+           beside them -- which is exactly the context the decision needs. #}
+        {% if unit.marks.colours | length > 1 %}
+        <p class="marks-filter" data-mark-filter>
+          <span class="mf-what">show</span>
+          {% for c in unit.marks.colours %}
+          <button type="button" class="mf-chip on" data-mark-colour="{{ c.colour }}"
+                  title="{{ c.colour }} — {{ c.count }} nearby">
+            <span class="swatch c-{{ c.colour }}" aria-hidden="true"></span><b>{{ c.count }}</b>
+          </button>
+          {% endfor %}
+          <button type="button" class="mf-all" data-mark-colour="*">all</button>
+          <button type="button" class="mf-all" data-mark-colour="">none</button>
+        </p>
+        {% endif %}
+
         {% for group in unit.marks.groups %}
         <details class="mark-group" {{ 'open' if loop.index <= 2 }}>
-          <summary>{{ group.label }}<b>{{ group.count }}</b></summary>
+          <summary>{{ group.label }}<b>{{ group.count }}</b><i class="mg-shown" hidden></i></summary>
           <ul>
             {% for m in group.marks %}
-            <li>
+            <li data-colour="{{ m.colour or m.kind }}">
               <span class="swatch c-{{ m.colour or m.kind }}" aria-hidden="true"></span>
               <div class="mark-body">
                 {% if m.text %}<blockquote>{{ m.text }}</blockquote>{% endif %}
@@ -235,6 +284,7 @@
 <span class="key-group sep"><b>z</b> undo</span>
 <span class="key-group"><b>n</b>/<b>N</b> note for claude/me</span>
 <span class="key-group"><b>c</b> context size</span>
+<span class="key-group"><b>w</b> web lookups</span>
 <span class="key-group"><b>p</b> crop/page/doc</span>
 <span class="key-group"><b>S</b> skip + reason</span>
 <span class="key-group"><b>u</b> back to new</span>

@@ -212,6 +212,122 @@ function contextLabel(pages) {
   return `${pages} page${pages === 1 ? "" : "s"} either side — ${2 * pages + 1} in all`;
 }
 
+/* Whether whoever writes this card may look things up on the web.
+
+   Three states and not two. `inherit` is not the same as `no`: it is the
+   absence of a decision here, and collapsing them would make a source-wide
+   grant unrevokable for one unit and a source-wide refusal unliftable. `w`
+   walks allowed -> no -> inherit, which is also the order you would reach for
+   them in -- you grant it, you change your mind, you stop having an opinion. */
+const WEB_STEPS = [true, false, null];
+
+function cycleWeb() {
+  const item = currentOf(deck);
+  if (!item) return;
+  const now = item.dataset.webOwn === "1" ? item.dataset.web === "1" : null;
+  setWeb(item, WEB_STEPS[(WEB_STEPS.indexOf(now) + 1) % WEB_STEPS.length]);
+}
+
+async function setWeb(item, web) {
+  const result = await post(
+    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/web`,
+    { web, mtime: board.dataset.mtime },
+  );
+  board.dataset.mtime = result.mtime;
+  paintWeb(item, result.unit);
+  toast(
+    result.unit.web
+      ? "web research allowed for this unit"
+      : "no lookups — the card says what the source says",
+  );
+}
+
+function paintWeb(item, unit) {
+  const chip = item.querySelector("[data-web-chip]");
+  if (!chip) return;
+  item.dataset.web = unit.web ? "1" : "0";
+  item.dataset.webOwn = unit.web_own ? "1" : "0";
+  chip.classList.toggle("own", Boolean(unit.web_own));
+  const whose = chip.querySelector(".chip-whose");
+  if (whose) whose.textContent = unit.web_own ? "this unit" : "source";
+  chip.querySelectorAll("[data-web-set]").forEach((button) => {
+    button.classList.toggle("on", (button.dataset.webSet === "1") === Boolean(unit.web));
+  });
+}
+
+/* Which of the neighbouring marks are worth reading right now.
+
+   Independent of the left rail on purpose. That filter decides which *units*
+   you meet; this one decides how much of the page around the unit in front of
+   you is worth reading, and they pull in opposite directions -- narrowing the
+   queue to green claims while also hiding every purple term beside them would
+   remove exactly the context the decision needs.
+
+   Remembered, because you triage one paper in one sitting and the colours that
+   matter do not change between two units in a row. Per source, since a scheme
+   is a fact about how one document was read. */
+const MARK_FILTER_KEY = `anki-forge.marks.${source}`;
+
+function hiddenColours() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(MARK_FILTER_KEY) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function rememberColours(hidden) {
+  try {
+    localStorage.setItem(MARK_FILTER_KEY, JSON.stringify(Array.from(hidden)));
+  } catch {
+    /* a private window still filters, it just forgets between loads */
+  }
+}
+
+function paintMarkFilter(root = document) {
+  const hidden = hiddenColours();
+  root.querySelectorAll(".marks-list").forEach((list) => {
+    list.querySelectorAll("[data-mark-colour]").forEach((chip) => {
+      const colour = chip.dataset.markColour;
+      if (colour && colour !== "*") chip.classList.toggle("on", !hidden.has(colour));
+    });
+    list.querySelectorAll("li[data-colour]").forEach((row) => {
+      row.hidden = hidden.has(row.dataset.colour);
+    });
+    // A group whose rows are all filtered out still has to say so: an empty
+    // `<details>` reads as "nothing of this kind here", which is a different
+    // and false claim.
+    list.querySelectorAll(".mark-group").forEach((group) => {
+      const rows = Array.from(group.querySelectorAll("li[data-colour]"));
+      const shown = rows.filter((row) => !row.hidden).length;
+      group.classList.toggle("all-filtered", rows.length > 0 && shown === 0);
+      const note = group.querySelector(".mg-shown");
+      if (!note) return;
+      note.hidden = shown === rows.length;
+      note.textContent = shown ? `${shown} shown` : "all filtered out";
+    });
+  });
+}
+
+document.addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-mark-colour]");
+  if (!chip) return;
+  event.preventDefault();
+  const list = chip.closest(".marks-list");
+  const every = Array.from(list.querySelectorAll("[data-mark-colour]"))
+    .map((node) => node.dataset.markColour)
+    .filter((colour) => colour && colour !== "*");
+  const hidden = hiddenColours();
+  if (chip.dataset.markColour === "*") every.forEach((colour) => hidden.delete(colour));
+  else if (chip.dataset.markColour === "") every.forEach((colour) => hidden.add(colour));
+  else if (hidden.has(chip.dataset.markColour)) hidden.delete(chip.dataset.markColour);
+  else hidden.add(chip.dataset.markColour);
+  rememberColours(hidden);
+  paintMarkFilter();
+});
+
+paintMarkFilter();
+
 /* Three ways to look at the same geometry, cycled with `p`.
 
    crop     -- the box and a margin. Is this the right region?
@@ -237,7 +353,7 @@ const PDF_VIEW_SAID = {
 function cyclePdfView() {
   const item = currentOf(deck);
   if (!item) return;
-  const now = item.dataset.pdfView || "crop";
+  const now = item.dataset.pdfMode || "crop";
   showPdfView(item, PDF_VIEWS[(PDF_VIEWS.indexOf(now) + 1) % PDF_VIEWS.length]);
 }
 
@@ -246,11 +362,15 @@ async function showPdfView(item, view) {
   const img = item.querySelector("[data-crop]");
   if (!figure || !img) return;
   if (!item.dataset.cropSrc) item.dataset.cropSrc = img.getAttribute("src");
-  item.dataset.pdfView = view;
+  /* `pdfMode`, not `pdfView`: the buttons are found by `[data-pdf-view]`, and
+     writing that attribute onto the item made `closest` match the whole unit
+     -- so clicking anywhere on the picture cycled the view. */
+  item.dataset.pdfMode = view;
   item.classList.toggle("whole-page", view === "page");
   item.classList.toggle("whole-document", view === "document");
-  const label = item.querySelector("[data-pdf-view-label]");
-  if (label) label.textContent = view;
+  item.querySelectorAll("[data-pdf-view]").forEach((button) => {
+    button.classList.toggle("on", button.dataset.pdfView === view);
+  });
   toast(PDF_VIEW_SAID[view]);
 
   if (view === "document") {
@@ -337,9 +457,11 @@ followHash();
    are deciding about should be reachable with the pointer you are already
    using to read with. */
 document.addEventListener("click", (event) => {
-  if (event.target.closest("[data-pdf-view]")) {
+  const pick = event.target.closest("button[data-pdf-view]");
+  if (pick) {
     event.preventDefault();
-    cyclePdfView();
+    const item = pick.closest(".item");
+    if (item) showPdfView(item, pick.dataset.pdfView);
     return;
   }
   const add = event.target.closest("[data-annotate]");
@@ -371,6 +493,16 @@ document.addEventListener("click", (event) => {
     if (item) setContext(item, Number(step.dataset.contextStep));
     return;
   }
+  const grant = event.target.closest("[data-web-set]");
+  if (grant) {
+    event.preventDefault();
+    const item = grant.closest(".item");
+    // Clicking the one already in force clears the override rather than
+    // re-asserting it, the same way every other filter here toggles.
+    const wanted = grant.dataset.webSet === "1";
+    if (item) setWeb(item, grant.classList.contains("on") ? null : wanted);
+    return;
+  }
   const link = event.target.closest("[data-goto]");
   if (!link || event.metaKey || event.ctrlKey || event.shiftKey) return;
   if (deck.items.some((item) => item.dataset.id === link.dataset.goto)) {
@@ -382,6 +514,7 @@ document.addEventListener("click", (event) => {
 bindKeys({
   "?": cycleGuide,
   c: cycleContext,
+  w: cycleWeb,
   p: cyclePdfView,
   f: toggleFilters,
   g: openGallery,

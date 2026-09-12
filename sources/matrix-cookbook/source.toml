@@ -6,8 +6,15 @@ deck = "Mathe::Matrix-Calculus"
 order = "printed"
 tags = []
 
-# The book differentiates in denominator layout. A machine key rather than only
-# prose below, because `verify` has to act on it: its numerical gradient
-# computes one layout, the two agree on every square matrix, and a mismatch
-# would pass review and first bite on a rectangular one.
+# What is ambient in this book. Free-form: any key here is handed to whoever
+# writes a card, through `forge context`, so a convention the tool has never
+# heard of still reaches the person who needs it. Prose that wants a paragraph
+# belongs in conventions.md; this is for the one-liners worth stating as a
+# value.
+#
+# `layout` is the one key anything *acts* on -- `verify`'s numerical gradient
+# computes denominator layout, the two conventions agree on every square
+# matrix, and a mismatch would pass review and first bite on a rectangular one.
+[conventions]
 layout = "denominator"
+entries = "real unless the card says otherwise"

@@ -42,8 +42,37 @@ def test_it_says_when_a_value_was_inherited(repo: Path) -> None:
     write_source(repo, "book", 'title = "A Book"')
     rows = rows_for(config_mod.load(repo), "source: book")
 
-    assert rows["layout"]["from"] == "inherited"
-    assert rows["layout"]["value"] == config_mod.load(repo).layout
+    assert rows["context_pages"]["from"] == "inherited"
+    assert rows["context_pages"]["value"] == config_mod.load(repo).context_pages
+
+
+def test_a_convention_is_listed_whether_or_not_anything_acts_on_it(repo: Path) -> None:
+    """`[conventions]` is open: what is ambient in a source is not a vocabulary
+    this tool can enumerate, and the next paper will assume something neither
+    of us has thought of. `verify` acts on `layout` alone; the rest still have
+    to reach whoever writes a card, and this table is where they are visible.
+    """
+    write_source(
+        repo,
+        "book",
+        'title = "A Book"\n\n[conventions]\nlayout = "numerator"\nindices = "1-based"',
+    )
+    rows = rows_for(config_mod.load(repo), "source: book")
+
+    assert rows["conventions.layout"]["value"] == "numerator"
+    assert rows["conventions.indices"]["value"] == "1-based"
+
+
+def test_there_is_no_repo_wide_convention_to_inherit(repo: Path) -> None:
+    """A convention is a fact about one book. Defaulting one repo-wide is how a
+    statistics paper came to be told it writes matrix calculus in denominator
+    layout -- the silent mixing CLAUDE.md names, arriving through a default
+    rather than through a mistake."""
+    write_source(repo, "book", 'title = "A Book"')
+    rows = rows_for(config_mod.load(repo), "source: book")
+
+    assert not [key for key in rows if key.startswith("conventions.")]
+    assert config_mod.load(repo).layout_for("book") == ""
 
 
 def test_a_per_type_deck_is_listed_on_its_own_row(repo: Path) -> None:

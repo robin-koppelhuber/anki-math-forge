@@ -29,13 +29,22 @@ crop_width = ""
 # where you can see that a theorem's hypotheses are two pages back. A large
 # number means the whole document.
 context_pages = 1
-# The repo-wide default layout, and empty is the honest value. Which one a book
-# uses is a fact about that book, so it belongs in the book's own file. Naming
-# one here told a statistics paper that had declared nothing that it writes
-# matrix calculus -- the silent mixing this key exists to prevent, arriving
-# through the default. A source that declares none gets no layout clause on its
-# cards, and `verify` refuses to run rather than checking against a guess.
-layout = ""
+# Whether whoever writes a card may look things up on the web. Off, and the
+# default is the point: a card is supposed to say what *this source* says,
+# hypotheses and notation included, and the web is where a cleaner statement of
+# the general theorem comes from to quietly replace the one on the page. A
+# source may turn it on, and a single unit may turn it on from triage (`w`),
+# which is where you can see that this one needs it.
+web = false
+
+# There is no `layout` key here any more, and no conventions section either.
+# A convention is a fact about one book -- which matrix-derivative layout it
+# writes, whether entries are real -- so it lives in that book's own
+# `sources/<name>/source.toml`, under `[conventions]`. A repo-wide default for
+# one is a claim about every book in the deck including the ones nobody has
+# read yet, and naming `denominator` here once told a statistics paper that it
+# writes matrix calculus. A value left here now raises at load rather than
+# being ignored.
 
 [anki]
 url = "http://127.0.0.1:8765"

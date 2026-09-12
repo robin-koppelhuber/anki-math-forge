@@ -23,7 +23,15 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
 4. **`tex_auto` is a hint.** When writing a stub from a unit, the crop is
    authoritative. A transcription error must not become a card by inheritance.
 5. **Editing an approved card un-approves it.** Enforced by `content_hash`,
-   which covers everything except `status`, `content_hash` and `## notes`.
+   which covers the card's *content* and nothing else: `status`,
+   `content_hash`, `## notes`, `## verify`, `verify`, `requires`, `frequency`,
+   `derivation` and `web` are all outside it. Those last four are not claims
+   the card makes — three decide *when* you meet it and one is a permission
+   granted to whoever writes it — and approving a card is not approving its
+   position in the queue. Nothing rewrites a file to enforce this: an approval
+   that no longer holds is reported by `Card.demotion` and counts as a draft
+   everywhere it matters, so resolving whatever broke it restores the approval
+   with no re-review.
 6. **Card content guidelines live in the skill, not in code.** The Python never
    generates or rewrites card text.
 7. **A crop is authoritative for what is printed, and silent about the rest.**
@@ -51,7 +59,7 @@ place a card's source is recorded, and every loader `rglob`s, so a card in the
 wrong folder still loads and still syncs.
 Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
-`unit`, `tags`, `verify`, and optionally `frequency` and `derivation`.
+`unit`, `tags`, `verify`, and optionally `frequency`, `derivation` and `web`.
 
 **A card is not one-to-one with a unit, in either direction.** One unit splits
 into several cards (`uids` on the unit); several units merge into one card
@@ -108,17 +116,43 @@ above the fence *and* renders the Markdown below it.
 
 - **`source.toml`** is what a key can express, and it is what the tool acts
   on: `title`, `citation`, `pdf`/`tex`, `zotero`, `documents`, `deck`,
-  `layout`, `order`, `tags`, `crop_context`/`crop_width`, `context_pages`, and
-  a source's own reading of its Zotero marks. A `layout` outside
-  `denominator | numerator` is refused at load, because an unrecognised one
-  would read as "not denominator" and silently change what every card from
-  that source means; `crop_width` outside `box | page` is refused for the same
-  reason. `documents` names which of a Zotero item's PDFs to read, by title or
+  `order`, `tags`, `crop_context`/`crop_width`, `context_pages`, `web`, a
+  `[conventions]` table, and a source's own reading of its Zotero marks.
+  `crop_width` outside `box | page` is refused at load, because an
+  unrecognised value would read as "not box" and silently change every crop.
+  `documents` names which of a Zotero item's PDFs to read, by title or
   key — an item routinely carries the paper and a preprint of the paper, and
   marks made in one are not marks in the other. `tags` are yours to invent:
   nothing writes one for you, because a label the tool made up means whatever
   the tool guessed and you would be filtering by it without having decided
   what it says.
+- **`[conventions]`** is the keyed half of what is ambient here, and it is
+  **open**: any key is accepted, and every one of them is handed to whoever
+  writes a card, through `forge context`. What a source assumes is not a
+  vocabulary this tool can enumerate — the next paper will take something for
+  granted that neither of us has thought of — so the table carries what it is
+  given rather than checking it against a list. **There is no repo-wide
+  counterpart, deliberately**: a convention is a fact about one book, and
+  defaulting one in `forge.toml` is how a statistics paper came to be told
+  which matrix-derivative convention it writes. `[cards] layout` now raises at
+  load rather than being quietly ignored.
+
+  Exactly one entry is *acted* on rather than only shown, and the asymmetry is
+  worth knowing: `layout`, one of `denominator | numerator`, because `verify`'s
+  numerical gradient computes one of the two. A value outside them is refused
+  at load — an unrecognised one would read as "not the one you meant" and
+  silently change what every derivative on every card from that source means.
+  **Which of the two a source uses is that source's business to declare**, and
+  this file does not name a winner.
+- **`web`** is whether whoever writes or augments a card from this source may
+  look things up. Off repo-wide, and overridable per source, per unit (from
+  triage, `w`) and per card. Off by default because the failure is invisible:
+  a card should say what *this source* says, hypotheses and notation included,
+  and the web's cleaner statement of the general theorem substituted for the
+  printed one reads as a *better* card until the condition the paper had — and
+  the general version has not — turns out to be the point. `forge context`
+  resolves unit over source over repo and says the answer in words, so the
+  pass reading it never has to work out whose setting won.
 - **`conventions.md`** is what a key cannot express: the ambient mathematical
   setting, what is assumed constant, how a contested convention was settled.
   `forge context <unit>` prints it, so whoever writes or reviews a card sees
@@ -136,9 +170,10 @@ is silently a boolean. A folder with neither `source.toml` nor the older
 `source.md` is not a source: discovery does not guess.
 
 `forge.toml` keeps what is genuinely repo-wide — `[cards] language`, the
-note type, `[anki] deck` and `[cards] layout` as fallbacks, `[zotero]` defaults
-— and a `[sources.<name>]` block there still works for a repo that has not
-moved yet.
+note type, `[anki] deck` as a fallback, `[cards] web` as the floor under every
+source's permission, `[zotero]` defaults — and a `[sources.<name>]` block there
+still works for a repo that has not moved yet. Conventions are the one thing it
+does **not** keep: see `[conventions]` above.
 
 What is true of the *tool* stays here:
 
@@ -161,7 +196,9 @@ uv run forge classify           # *propose* skips; applies nothing
 uv run forge audit              # is the index trustworthy? 1..N, no gaps
 uv run forge crops --section 2.4 --untranscribed --out DIR --json
 uv run forge context <unit-id>  # the page it was printed on (--pages N for more,
-                                #   counted *either side*: 3 hands over seven)
+                                #   counted *either side*: 3 hands over seven),
+                                #   plus whether web lookups are allowed here
+uv run forge units --id <id> --web yes|no|inherit   # grant or refuse them
 uv run forge source-text <src>  # the book text, for card-writing context
 uv run forge check              # lint (always; blocks sync)
 uv run forge units --state queued --json

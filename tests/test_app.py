@@ -156,6 +156,97 @@ def test_an_unknown_card_is_a_404(client: TestClient, card_path: Path) -> None:
     assert client.post("/api/cards/ffffff/approve", json={}).status_code == 404
 
 
+# -- the two gradings, set from where you learn them ------------------------
+
+
+def test_a_grading_can_be_set_from_the_review_view(
+    client: TestClient, card_path: Path
+) -> None:
+    """You learn that a result is `common` rather than `core` by meeting it,
+    which is to say during review. Until now the only way to record that was to
+    open the file, which is why so many cards carry neither."""
+    response = client.post(
+        "/api/cards/7f3a2b/grade",
+        json={"key": "frequency", "value": "common", "mtime": mtime(card_path)},
+    )
+    assert response.status_code == 200
+    assert response.json()["card"]["frequency"] == "common"
+    assert model.load(card_path).frequency == "common"
+
+
+def test_a_grading_can_be_taken_off_again(client: TestClient, card_path: Path) -> None:
+    """The cycle passes through unset, so a grading given by a mis-click comes
+    off by carrying on clicking rather than by reaching for an editor."""
+    client.post(
+        "/api/cards/7f3a2b/grade",
+        json={"key": "derivation", "value": "short", "mtime": mtime(card_path)},
+    )
+    client.post(
+        "/api/cards/7f3a2b/grade",
+        json={"key": "derivation", "value": "", "mtime": mtime(card_path)},
+    )
+    assert "derivation" not in model.load(card_path).frontmatter
+
+
+def test_setting_a_grading_does_not_un_approve_the_card(
+    client: TestClient, card_path: Path
+) -> None:
+    """`requires`'s argument, which CLAUDE.md states: approving a card is not
+    approving its position in the queue. Both gradings decide *when* you meet
+    it and neither changes a word a reviewer read."""
+    client.post("/api/cards/7f3a2b/approve", json={"mtime": mtime(card_path)})
+    client.post(
+        "/api/cards/7f3a2b/grade",
+        json={"key": "frequency", "value": "rare", "mtime": mtime(card_path)},
+    )
+    card = model.load(card_path)
+    assert card.status == "approved"
+    assert card.hash_matches()
+    assert card.effective_status == "approved"
+
+
+def test_a_value_outside_the_scale_is_refused(client: TestClient, card_path: Path) -> None:
+    """`check` errors on an unrecognised grading because a typo would silently
+    become its own `freq::` tag and split the deck. The endpoint must not be
+    the way one gets in."""
+    for body in (
+        {"key": "frequency", "value": "often"},
+        {"key": "tags", "value": "anything"},
+    ):
+        response = client.post(
+            "/api/cards/7f3a2b/grade", json={**body, "mtime": mtime(card_path)}
+        )
+        assert response.status_code == 400, body
+
+
+# -- looking things up ------------------------------------------------------
+
+
+def test_a_unit_can_be_granted_web_access(
+    client: TestClient, config: Config, units: Ledger
+) -> None:
+    path = config.units_path("demo")
+    response = client.post("/api/units/demo/demo:1:1/web", json={"web": True, "mtime": mtime(path)})
+    assert response.status_code == 200
+    assert response.json()["unit"]["web"] is True
+    assert response.json()["unit"]["web_own"] is True
+    assert Ledger.load(path).get("demo:1:1").web is True
+
+
+def test_clearing_the_grant_is_not_the_same_as_refusing_it(
+    client: TestClient, config: Config, units: Ledger
+) -> None:
+    """`None` is the absence of a decision on this unit, and it is what lets a
+    source-wide setting apply. Collapsing it into `false` would make a
+    source-wide grant unrevokable and a source-wide refusal unliftable."""
+    path = config.units_path("demo")
+    client.post("/api/units/demo/demo:1:1/web", json={"web": False, "mtime": mtime(path)})
+    assert Ledger.load(path).get("demo:1:1").web is False
+
+    client.post("/api/units/demo/demo:1:1/web", json={"web": None, "mtime": mtime(path)})
+    assert Ledger.load(path).get("demo:1:1").web is None
+
+
 # -- annotations (DESIGN.md §6, §8) ----------------------------------------
 
 

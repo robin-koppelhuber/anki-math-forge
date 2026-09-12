@@ -1027,13 +1027,30 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   border: 1px solid var(--line);
   border-radius: 4px;
 }
+/* Both gradings are buttons now: they decide the order Anki introduces new
+   cards in, and the only way to set one used to be opening the file. Neither
+   is hashed, so clicking one does not un-approve the card. */
 .place .grade {
+  font: inherit;
+  font-size: 1em;
   padding: 0.05rem 0.4rem;
+  border: 1px solid transparent;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--ink);
+  cursor: pointer;
 }
+.place .grade:hover { border-color: var(--accent); }
 .place .grade.missing { background: none; border: 1px dashed var(--line); color: var(--muted); }
+/* The web permission rides the same row but is not a grading: it is the one
+   control here that changes what may reach a card from off the page, so the
+   granted state is the loud one and the default is quiet. */
+.place .grade.web { background: none; border: 1px solid var(--line); color: var(--muted); }
+.place .grade.web.on {
+  background: color-mix(in srgb, var(--warn) 20%, transparent);
+  color: var(--ink);
+}
+.place .grade.web.own { border-color: var(--warn); }
 .place .dep { margin: 0.1rem 0; color: var(--muted); }
 .place .dep code { color: var(--ink); }
 .place .dep.needs { border-left: 2px solid var(--accent); padding-left: 0.4rem; }
@@ -1382,44 +1399,77 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   background: var(--bg);
 }
 
-/* -- marks, as a picker rather than a list ------------------------------
-   Five kinds times eight colours is forty rows, and as labelled lines that is
-   the whole rail. One row per kind and a square per colour is a handful of
-   rows -- and it is also how the marks look on the page you made them on. */
-.mark-picker { list-style: none; margin: 0.2rem 0 0.4rem; padding: 0 0 0 0.4rem; }
-.mark-picker > li {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  padding: 0.2rem 0;
-}
-.mp-kind {
-  flex: none;
-  width: 4.6rem;
-  color: var(--muted);
+/* -- marks, as a grid rather than a list --------------------------------
+   Five kinds times eight colours is forty labelled lines, which is the whole
+   rail. The data is two-dimensional, so the control is: a column is a colour,
+   a row is a kind, and a cell is one filter. The empty cells carry as much as
+   the full ones -- together they are the reader's scheme, drawn.
+
+   Table layout rather than grid, because the header row and column are
+   genuinely headers: the tooltip on each says what the whole row or column
+   totals, and a screen reader gets `scope` for free. */
+.mark-grid {
+  border-collapse: collapse;
+  margin: 0.25rem 0 0.4rem 0.2rem;
   font-size: 11px;
+}
+.mark-grid th {
+  font-weight: 400;
+  color: var(--muted);
+  text-align: left;
+  padding: 0;
+}
+.mark-grid thead th { padding-bottom: 0.15rem; text-align: center; }
+.mark-grid tbody th {
+  /* The kind names run to "underline"; anything longer is a kind the tool
+     does not know, and it does not get a row. */
+  max-width: 5.2rem;
+  padding-right: 0.35rem;
+  font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.mp-colours { display: flex; flex-wrap: wrap; gap: 0.2rem; }
-.mp-chip {
-  display: inline-flex;
+.mark-grid td { padding: 1px; }
+.mg-cell {
+  display: flex;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.05rem 0.3rem 0.05rem 0.25rem;
+  justify-content: center;
+  gap: 0.12rem;
+  min-width: 1.55rem;
+  height: 1.15rem;
+  padding: 0 0.15rem;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 3px;
   text-decoration: none;
   color: var(--muted);
-  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
-.mp-chip:hover { border-color: var(--line); color: var(--ink); }
-.mp-chip.on { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.mp-chip .swatch { margin-right: 0; }
-.mp-chip b { font-weight: 500; }
+.mg-cell:hover { border-color: var(--line); color: var(--ink); }
+.mg-cell.on {
+  border-color: var(--accent);
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.mg-cell b { font-weight: 500; font-size: 10px; }
+.mg-cell .swatch { margin-right: 0; }
+/* A combination you have not decided about. Still clickable -- it reads as
+   something -- but not dressed as a category you chose. */
+.mg-cell.undeclared .swatch { opacity: 0.55; border-style: dashed; }
+/* A combination nothing in this source uses. Greyed and inert: a filter that
+   can only ever return nothing is a dead control, and drawing it as live is
+   how you learn that by clicking it. */
+.mg-cell.empty {
+  background: repeating-linear-gradient(
+    -45deg, transparent, transparent 3px,
+    color-mix(in srgb, var(--muted) 22%, transparent) 3px,
+    color-mix(in srgb, var(--muted) 22%, transparent) 4px
+  );
+  opacity: 0.45;
+  cursor: default;
+}
 
 /* -- the guide's two panes ----------------------------------------------- */
 .guide-panes {
@@ -1452,10 +1502,6 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 
 /* A meaning nobody declared: the floor under your scheme, said quietly. */
 .scheme-default { display: block; font-size: 10px; color: var(--warn); opacity: 0.85; line-height: 1.3; }
-/* A chip whose colour you have not decided about. Still clickable -- it has a
-   meaning -- but not dressed as a category you chose. */
-.mp-chip .swatch { outline: 1px dashed transparent; }
-.mp-chip.undeclared .swatch { opacity: 0.55; border-style: dashed; }
 
 /* The context badge is a button now: always on screen, saying whose number it
    is. Hiding it until the unit had already overridden the source meant you
@@ -1503,24 +1549,40 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
    crop, whole page, and the whole thing scrolling. The last is images the
    browser stacks -- the cheap half of a viewer, and all that reading needs. */
 .crop { position: relative; }
+/* Three named buttons in the corner, not one cycling label. Small, because it
+   sits on top of the thing it is about; named, because reaching the third
+   state by pressing a button twice and watching is not a control. */
 .crop-view {
   position: absolute;
   top: 0.35rem;
   right: 0.35rem;
   z-index: 2;
+  display: inline-flex;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  opacity: 0.75;
+}
+.crop-view:hover { opacity: 1; }
+.crop-view button {
   font: inherit;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 4px;
+  background: none;
+  border: 0;
+  border-left: 1px solid var(--line);
   padding: 0.1rem 0.4rem;
   cursor: pointer;
-  opacity: 0.75;
 }
-.crop-view:hover { opacity: 1; color: var(--ink); border-color: var(--accent); }
+.crop-view button:first-child { border-left: 0; }
+.crop-view button:hover { color: var(--ink); }
+.crop-view button.on {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
 
 .doc-scroll {
   max-height: min(78vh, 60rem);
@@ -1626,6 +1688,69 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   color: var(--ink);
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   font-weight: 600;
+}
+/* The web chip rides the same rail. Its resting state is `no` on every unit
+   in the repo, so it has to be quiet when it says nothing -- and loud when it
+   does: a granted lookup is the one setting here that changes what may end up
+   on a card from somewhere other than the page. */
+.badge.web-chip .ctx-step.on { background: none; font-weight: 500; }
+.badge.web-chip[data-web-chip] .ctx-step[data-web-set="1"].on {
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.badge.web-chip.own { border-color: var(--warn); }
+.badge.web-chip.own .chip-whose { color: var(--warn); opacity: 1; }
+
+/* Which of the neighbouring marks are worth reading right now. Sits with the
+   collapsible group headings because it is the other half of the same
+   question: they filter by kind, these by colour, and the two cut across each
+   other. Independent of the left rail -- that one decides which units you
+   meet, this one how much of the page around one is worth reading. */
+.marks-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin: 0 0 0.5rem;
+}
+.mf-what {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-right: 0.2rem;
+}
+.mf-chip, .mf-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font: inherit;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 0.05rem 0.25rem;
+  cursor: pointer;
+}
+.mf-chip:hover, .mf-all:hover { border-color: var(--line); color: var(--ink); }
+.mf-chip .swatch { margin: 0; }
+/* Off, not gone: a colour you have hidden is still the thing you click to
+   bring back, so it has to stay legible while clearly not counting. */
+.mf-chip:not(.on) { opacity: 0.4; }
+.mf-chip:not(.on) .swatch { filter: grayscale(1); }
+.mf-chip.on { border-color: var(--line); color: var(--ink); }
+.mf-all { text-transform: uppercase; letter-spacing: 0.04em; }
+/* A group with every row filtered out. Kept visible and dimmed, because
+   removing it would say "nothing of this kind here" -- a different claim. */
+.mark-group.all-filtered { opacity: 0.45; }
+.mg-shown {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: 0.35rem;
 }
 
 /* -- the triage column's two panes --------------------------------------

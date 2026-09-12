@@ -243,6 +243,83 @@ def test_the_picture_cycles_three_ways_and_says_so() -> None:
     assert "p: cyclePdfView," in view_js
 
 
+def test_clicking_the_picture_does_not_change_the_view() -> None:
+    """It did, and it was not a design. `item.dataset.pdfView` wrote the same
+    attribute the buttons are found by, so `closest("[data-pdf-view]")` matched
+    the whole unit: leaning in to read a highlight jumped you to the scrolling
+    document. The state and the control must not share an attribute name.
+    """
+    view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    assert "item.dataset.pdfView" not in view_js, "the state cannot use the control's name"
+    assert "item.dataset.pdfMode" in view_js
+    assert 'closest("button[data-pdf-view]")' in view_js, "scoped to the button"
+
+
+def test_each_view_of_the_picture_is_reachable_in_one_click() -> None:
+    """A cycling label is a poor pointer control: reaching the third state
+    means pressing the thing twice and watching what happens, and there is
+    nowhere to read what the third state even is. `p` still walks them."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    assert "('crop', 'crop'), ('page', 'page'), ('document', 'doc')" in units, "one button each"
+    assert 'data-pdf-view="{{ view }}"' in units, "and each one names the view it shows"
+    assert "data-pdf-view-label" not in units, "no cycling label left"
+    # The three names live in two places -- the template's buttons and the
+    # keyboard cycle -- and they have to agree, or `p` walks to a state no
+    # button can reach.
+    assert '["crop", "page", "document"]' in view_js
+
+
+def test_a_neighbours_filter_is_not_the_rails_filter() -> None:
+    """Two filters over marks, pulling in opposite directions. The rail decides
+    which *units* you meet; this one decides how much of the page around the
+    one in front of you is worth reading. Tying them would mean narrowing the
+    queue to green claims also hid every purple term beside them -- which is
+    exactly the context the decision needs."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    assert "data-mark-filter" in units and "data-mark-colour" in units
+    assert 'data-mark-colour="*"' in units and 'data-mark-colour=""' in units, "all and none"
+    # Client-side and per viewer: it changes nothing on disk and travels with
+    # no query parameter, so it cannot reach the rail's filter by accident.
+    assert "filter_url" not in units[units.index("data-mark-filter") :]
+    assert "anki-forge.marks." in view_js, "remembered per source"
+
+
+def test_a_group_filtered_empty_says_so_rather_than_vanishing() -> None:
+    """An empty `<details>` reads as "nothing of this kind here", which is a
+    different and false claim."""
+    view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    assert "all-filtered" in view_js
+    assert "all filtered out" in view_js
+    assert "opacity" in rule(".mark-group.all-filtered"), "dimmed, not removed"
+
+
+def test_the_permission_to_look_things_up_is_visible_on_the_unit() -> None:
+    """Off on every unit in the repo by default, so it has to be quiet when it
+    says nothing -- and loud when it does. It is the one setting here that
+    changes what may reach a card from somewhere other than the page."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    chip = units[units.index("data-web-chip") - 500 : units.index("data-web-chip") + 500]
+    assert 'data-web-set="1"' in chip and 'data-web-set="0"' in chip
+    assert "this unit" in chip and "source" in chip, "whose answer it is"
+    assert "--warn" in rule(".badge.web-chip.own"), "not the accent the others use"
+
+
+def test_a_grading_is_something_you_can_click() -> None:
+    """Both decide the order Anki introduces new cards in, and the only way to
+    set either used to be opening the file -- which is why so many cards carry
+    neither. You learn that a result is `common` rather than `core` by meeting
+    it, which is to say during review."""
+    review = (APP / "templates" / "review.html").read_text(encoding="utf-8")
+    review_js = (APP / "static" / "review.js").read_text(encoding="utf-8")
+    assert 'data-grade="frequency"' in review and 'data-grade="derivation"' in review
+    assert "cursor: pointer" in rule(".place .grade")
+    # Through unset, so a grading given by a mis-click comes off by carrying on
+    # clicking rather than by reaching for an editor.
+    assert '"rare", ""]' in review_js and '"long", ""]' in review_js
+
+
 def test_the_context_chip_shows_every_size_and_whose_it_is() -> None:
     """Hiding it until the unit had already overridden the source meant never
     seeing what you were overriding. A row of bare numbers is five things to
