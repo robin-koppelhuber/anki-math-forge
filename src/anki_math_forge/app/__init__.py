@@ -93,30 +93,33 @@ def create_app(config: Config) -> FastAPI:
     def index() -> RedirectResponse:
         return RedirectResponse("/review")
 
-    @app.get("/config", response_class=HTMLResponse)
-    def config_view(request: Request, source: str = "") -> Any:
-        """Every resolved setting, and where it came from. Read-only."""
+    @app.get("/api/config")
+    def config_api(source: str = "") -> Any:
+        """Every resolved setting, and where it came from. Read-only.
+
+        A panel over the view you were on rather than a page of its own: it
+        answers a question you have *while deciding something else* -- which
+        layout did this card resolve to -- and a navigation away and back is a
+        poor way to look something up mid-decision.
+
+        The source in force comes first. With fifty of them, landing at the top
+        of an alphabetical list and scrolling is not an answer.
+        """
         name = resolve_source(config, source)
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in effective_config(config):
             grouped.setdefault(str(row["where"]), []).append(row)
-        # The source in force comes first. Arriving here from the rail asks
-        # about *this* book; with fifty of them, landing at the top of an
-        # alphabetical list and scrolling is not an answer.
         focus = f"source: {name}"
-        if focus in grouped:
-            grouped = {focus: grouped[focus], **{k: v for k, v in grouped.items() if k != focus}}
-        return templates.TemplateResponse(
-            request,
-            "config.html",
-            {
-                "config": config,
-                "source": name,
-                "sources": source_names(config),
-                "grouped": grouped,
-                "focus": focus,
-            },
-        )
+        order = [focus, *(g for g in grouped if g != focus)]
+        return {
+            "source": name,
+            "focus": focus,
+            "groups": [
+                {"where": where, "rows": grouped[where], "focused": where == focus}
+                for where in order
+                if where in grouped
+            ],
+        }
 
     @app.get("/units", response_class=HTMLResponse)
     def units_view(
@@ -227,7 +230,7 @@ def create_app(config: Config) -> FastAPI:
                 "filters": filters,
                 "commands": commands_for("units", filters, pipeline, from_marks=from_marks),
                 "mark": mark,
-                "mark_rows": mark_rows(
+                "mark_picker": mark_picker(
                     ledger.select(state=state or "all", section=section or None), config, name
                 ),
                 "scheme": scheme_rows(everything, config, name),
@@ -870,12 +873,23 @@ def unit_mark(unit: Unit) -> str:
     return f"{own.kind}/{own.colour}" if own.colour else own.kind
 
 
-def mark_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
-    """Every kind of mark in this source, with what you said it means.
+def mark_picker(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
+    """The marks you can filter by: one row per kind, one swatch per colour.
 
     A prose source is triaged by what you meant, not by what state a unit is
-    in: "the claims first, the terms never". Nothing appears for a source with
-    no marks, so the Cookbook's rail is unchanged.
+    in: "the claims first, the terms never". But five kinds times eight colours
+    is forty rows, and as a flat list of labelled lines that is the whole rail.
+    Grouping by kind makes it a handful of rows of coloured squares, which is
+    also how the marks look on the page you made them on.
+
+    **Only combinations you have declared a meaning for.** An undeclared colour
+    is not a category yet -- it is a colour you have not decided about, and
+    offering it as a filter presents a decision you have not taken as one you
+    have. Undeclared marks are not hidden: the guide's legend lists them, which
+    is where the decision belongs.
+
+    Nothing appears for a source with no marks, so the Cookbook's rail is
+    unchanged.
     """
     scheme = config.zotero_for(source)
     tally: dict[str, int] = {}
@@ -883,18 +897,25 @@ def mark_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, 
         key = unit_mark(unit)
         if key:
             tally[key] = tally.get(key, 0) + 1
-    rows: list[dict[str, Any]] = []
-    for key, count in tally.items():
+
+    groups: dict[str, dict[str, Any]] = {}
+    for key, count in sorted(tally.items()):
         kind, _, colour = key.partition("/")
-        rows.append({
+        meaning = scheme.means(kind, colour)
+        if not meaning:
+            continue
+        group = groups.setdefault(kind, {"kind": kind, "colours": [], "count": 0})
+        group["colours"].append({
             "key": key,
             "kind": kind,
             "colour": colour,
-            "meaning": scheme.means(kind, colour),
+            "meaning": meaning,
             "count": count,
         })
-    rows.sort(key=lambda row: (-int(row["count"]), str(row["key"])))
-    return rows
+        group["count"] += count
+    for group in groups.values():
+        group["colours"].sort(key=lambda row: (-int(row["count"]), str(row["colour"])))
+    return sorted(groups.values(), key=lambda g: (-int(g["count"]), str(g["kind"])))
 
 
 def _scheme_key(scheme: Any, kind: str, colour: str) -> str:

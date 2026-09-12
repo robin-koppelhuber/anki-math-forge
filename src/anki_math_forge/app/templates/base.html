@@ -24,23 +24,23 @@
    it: they used to start at y=0 with a higher stacking order, which put the
    filter panel on top of the view links -- the one row that is supposed to be
    reachable from everywhere. #}
+{# No `units` / `review` links. The left rail already carries both lanes as
+   counts you can click -- `new 16`, `approved 108` -- and those say where the
+   work is as well as where to go, which two bare words never did. #}
 <header class="bar" id="topbar">
-  <nav class="views">
-    <a href="/units?source={{ src }}" class="{{ 'on' if view == 'units' }}">units</a>
-    <a href="/review?source={{ src }}" class="{{ 'on' if view == 'review' }}">review</a>
-    <a href="/config?source={{ src }}" class="{{ 'on' if view == 'config' }}"
-       title="what every setting resolved to, and where it came from">config</a>
-  </nav>
   {% if sources is defined and sources %}
-  {# A button rather than a select. A dropdown answers "which one am I on" and
-     nothing else; with a shelf of papers the question is which one to work on
-     next, and that is a comparison -- so this opens the gallery, which shows
-     where each source came from and how far along it is. #}
+  {# A button rather than a select, and no caret: a caret promises a list
+     dropping down from here, and what opens is the gallery -- every source at
+     once, with where each came from and how far along it is. A dropdown
+     answers "which one am I on" and nothing else. #}
   <button type="button" class="source-pick" id="source-pick"
           title="all sources, with their counts (g)">
+    <span class="pick-icon" aria-hidden="true">▦</span>
     <span class="source-pick-name">{{ src or 'no source' }}</span>
-    <span class="source-pick-caret" aria-hidden="true">▾</span>
   </button>
+  <button type="button" class="icon-button" id="config-open"
+          title="what every setting resolved to, and where it came from"
+          aria-label="settings">⚙</button>
   {% endif %}
   {% block filters %}{% endblock %}
   <span class="position" id="position"></span>
@@ -100,6 +100,33 @@
   <div class="gallery-chips" id="gallery-chips"></div>
   <div class="gallery-grid" id="gallery-grid"></div>
   <p class="gallery-empty" id="gallery-empty" hidden>nothing matches that.</p>
+</dialog>
+
+{# The effective configuration, over the view you were on. It answers a
+   question you have *while deciding something else* -- which layout did this
+   card resolve to -- and a navigation away and back is a poor way to look
+   something up mid-decision.
+
+   Read-only. The config is read at startup, so an edit here would take effect
+   at some unrelated later moment, and half these keys change the meaning of
+   content that already exists. #}
+<dialog class="gallery settings" id="settings" aria-label="configuration">
+  <header class="gallery-head">
+    <div class="gallery-title">
+      <h2>settings</h2>
+      <p class="gallery-totals" id="settings-note">
+        what every setting resolved to, and where the value came from
+      </p>
+    </div>
+    <button type="button" class="gallery-close" id="settings-close"
+            title="close (esc)">&times;</button>
+  </header>
+  <div class="settings-body" id="settings-body"></div>
+  <p class="rail-more settings-foot">
+    Read-only: the config is read at startup, and half these keys change what
+    content that already exists <em>means</em>. Edit
+    <code>forge.toml</code> or <code>sources/&lt;name&gt;/source.md</code>.
+  </p>
 </dialog>
 {% endif %}
 {% block scripts %}{% endblock %}

@@ -86,3 +86,42 @@ def test_document_round_trips_and_stays_out_of_the_way(tmp_path: Path) -> None:
     assert back.get("papers:wegel:a1").locator.document == "ZIETASLD"
     assert back.get("demo:2.4:61").locator.document == ""
     assert "document" not in led.path.read_text(encoding="utf-8").splitlines()[1]
+
+
+# -- narrowing which documents a source reads -------------------------------
+
+
+def marked(uid: str, document: str, **kw: object) -> Unit:
+    return Unit(id=f"paper:{uid}", locator=Locator(document=document, page=1), **kw)  # type: ignore[arg-type]
+
+
+def test_units_from_a_dropped_document_are_forgotten(tmp_path: Path) -> None:
+    """Narrowing `documents` leaves the earlier import behind, describing a PDF
+    this source has stopped reading -- and it is indistinguishable from real
+    work in every count, filter and command the app generates."""
+    ledger = Ledger(tmp_path / "units.jsonl", [marked("a", "KEEP"), marked("b", "GONE")])
+    assert ledger.drop_from_documents({"GONE"}) == (1, 0)
+    assert [u.id for u in ledger] == ["paper:a"]
+
+
+def test_a_decision_is_never_deleted_to_tidy_up_a_config_change(tmp_path: Path) -> None:
+    """Deleting a triage decision because a setting changed is not a trade this
+    tool gets to make on your behalf. They stay, and are counted so you know."""
+    ledger = Ledger(
+        tmp_path / "units.jsonl",
+        [
+            marked("queued", "GONE", state="queued"),
+            marked("carded", "GONE", uids=["abc123"]),
+            marked("noted", "GONE", notes=["@me decide later"]),
+            marked("fresh", "GONE"),
+        ],
+    )
+    dropped, kept = ledger.drop_from_documents({"GONE"})
+    assert (dropped, kept) == (1, 3)
+    assert {u.id for u in ledger} == {"paper:queued", "paper:carded", "paper:noted"}
+
+
+def test_dropping_nothing_touches_nothing(tmp_path: Path) -> None:
+    ledger = Ledger(tmp_path / "units.jsonl", [marked("a", "KEEP")])
+    assert ledger.drop_from_documents(set()) == (0, 0)
+    assert len(list(ledger)) == 1

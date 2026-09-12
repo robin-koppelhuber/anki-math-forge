@@ -236,14 +236,25 @@ document.addEventListener(
 
    Measured rather than assumed, because the header wraps: at a narrow window
    it is two rows tall, which is exactly when a hard-coded height is wrong. */
-(function trackHeaderHeight() {
-  const bar = document.getElementById("topbar");
-  if (!bar) return;
+(function trackBarHeights() {
+  const bars = [
+    ["--header-h", document.getElementById("topbar")],
+    // The footer is sticky at the bottom and stacks above the rails, so a rail
+    // running to `bottom: 0` had its last panel -- the commands -- sliding
+    // underneath the shortcut row and out of reach.
+    ["--footer-h", document.querySelector("footer.bar")],
+  ].filter(([, el]) => el);
   const set = () =>
-    document.documentElement.style.setProperty("--header-h", `${bar.offsetHeight}px`);
+    bars.forEach(([name, el]) =>
+      document.documentElement.style.setProperty(name, `${el.offsetHeight}px`),
+    );
   set();
-  if (window.ResizeObserver) new ResizeObserver(set).observe(bar);
-  else window.addEventListener("resize", set);
+  if (window.ResizeObserver) {
+    const watch = new ResizeObserver(set);
+    bars.forEach(([, el]) => watch.observe(el));
+  } else {
+    window.addEventListener("resize", set);
+  }
 })();
 
 /* The filter-rail. Its state persists: a triage session is long, and being asked
@@ -352,6 +363,15 @@ const SPLITS = {
     right: "--split-card-right",
     fallback: 0.72,
   },
+  /* The guide's two panes split *vertically*: the diagram is glanced at and
+     the legend is read, and which deserves the room changes with the work. */
+  guide: {
+    key: "anki-forge.split.guide",
+    left: "--split-guide",
+    right: "--split-guide-bottom",
+    fallback: 0.55,
+    axis: "y",
+  },
 };
 
 /* The right rail has two widths, because it has two jobs. At `counts` it is a
@@ -451,6 +471,13 @@ function applyRail(name, px) {
       return;
     }
     const box = drag.box.getBoundingClientRect();
+    // A vertical split reads the same way down the other axis. One helper for
+    // both, because two hand-rolled drag loops is how they end up behaving
+    // differently -- and only the axis actually differs.
+    if ((SPLITS[drag.name] || {}).axis === "y") {
+      if (box.height) applySplit(drag.name, (event.clientY - box.top) / box.height);
+      return;
+    }
     if (box.width) applySplit(drag.name, (event.clientX - box.left) / box.width);
   });
 
@@ -702,9 +729,66 @@ async function openGallery() {
   });
 })();
 
+/* The effective configuration, over whatever you were doing. It answers a
+   question you have *mid-decision* -- which layout did this card resolve to --
+   and a navigation away and back is a poor way to look something up. Read-only
+   for the reason the panel says: the config is read at startup, and half these
+   keys change what existing content means. */
+async function openSettings() {
+  const dialog = document.getElementById("settings");
+  if (!dialog) return;
+  dialog.showModal();
+  const body = document.getElementById("settings-body");
+  body.textContent = "reading…";
+  const source = new URL(location.href).searchParams.get("source") || "";
+  let data;
+  try {
+    const response = await fetch(`/api/config?source=${encodeURIComponent(source)}`);
+    data = await response.json();
+  } catch {
+    body.textContent = "could not read the configuration";
+    return;
+  }
+  body.textContent = "";
+  data.groups.forEach((group) => {
+    const section = el("section", "config-group" + (group.focused ? " focus" : ""));
+    section.appendChild(el("h2", "", group.where));
+    const table = el("table", "config-table");
+    const tbody = document.createElement("tbody");
+    group.rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.appendChild(el("th", "", row.key));
+      const value = document.createElement("td");
+      // An empty value is an answer -- a source that declares no layout gets
+      // no layout -- but a blank cell reads as a rendering failure, so say it.
+      const text = String(row.value);
+      value.appendChild(text ? el("code", "", text) : el("span", "muted", "unset"));
+      tr.appendChild(value);
+      tr.appendChild(el("td", "origin" + (row.from === "inherited" ? " inherited" : ""), row.from));
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    section.appendChild(table);
+    body.appendChild(section);
+  });
+}
+
+(function wireSettings() {
+  const dialog = document.getElementById("settings");
+  if (!dialog) return;
+  document.getElementById("settings-close").addEventListener("click", () => dialog.close());
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("#config-open, [data-settings]")) openSettings();
+  });
+})();
+
+/* Any modal over the deck owns the keyboard: `s` typed into the gallery's
+   search box would otherwise skip whatever unit was behind it. */
 function galleryIsOpen() {
-  const dialog = document.getElementById("gallery");
-  return Boolean(dialog && dialog.open);
+  return ["gallery", "settings"].some((id) => {
+    const dialog = document.getElementById(id);
+    return Boolean(dialog && dialog.open);
+  });
 }
 
 /* The mini diagram counts either the whole source or what the filters leave.
@@ -813,4 +897,3 @@ const COUNT_POLL_MS = 4000;
   document.addEventListener("visibilitychange", tick);
   tick();
 })();
-

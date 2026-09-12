@@ -68,11 +68,27 @@ def test_the_anki_url_says_the_environment_can_override_it(config: Config) -> No
     assert "ANKI_CONNECT_URL" in str(rows_for(config, "anki")["url"]["from"])
 
 
-def test_the_page_renders(config: Config) -> None:
+def test_it_is_served_as_a_panel_not_a_page(config: Config) -> None:
+    """It answers a question you have *while deciding something else* -- which
+    layout did this card resolve to -- so it opens over the view you were on.
+    A navigation away and back is a poor way to look something up."""
     from fastapi.testclient import TestClient
 
     from anki_math_forge.app import create_app
 
-    response = TestClient(create_app(config)).get("/config")
-    assert response.status_code == 200
-    assert "effective configuration" in response.text
+    payload = TestClient(create_app(config)).get("/api/config").json()
+    assert payload["groups"], "every resolved setting, grouped by where it applies"
+    assert {"where", "rows", "focused"} <= set(payload["groups"][0])
+
+
+def test_the_source_in_force_comes_first(pdf_source: Config) -> None:
+    """With fifty of them, landing at the top of an alphabetical list and
+    scrolling is not an answer."""
+    from fastapi.testclient import TestClient
+
+    from anki_math_forge.app import create_app
+
+    client = TestClient(create_app(pdf_source))
+    payload = client.get("/api/config?source=book").json()
+    assert payload["groups"][0]["where"] == "source: book"
+    assert payload["groups"][0]["focused"]

@@ -30,13 +30,18 @@
             {{ 'hidden' if not unit.context_own }}>{{ unit.context_pages }}p</span>
     </div>
 
-    {# The transcription pane is dropped for a unit that came from a mark and
-       has none. There is nothing to put there and never will be: a highlight
-       already carries the text it covers, so the panel read "no transcription;
-       read the crop" while taking half the width away from the crop it was
-       telling you to read. A mark that *has* been transcribed keeps it. #}
+    {# Document on one side, what was written about it on the other, with the
+       split between them draggable: a dense matrix wants the picture wide, a
+       long identity wants the text wide, and the right ratio is not the same
+       for two units in a row. Below 760px it stacks instead.
+
+       What goes on the right is the transcription, the marks, or both -- but
+       never an empty panel. A unit from a mark has no transcription and never
+       will, and "no transcription; read the crop" took half the width from the
+       crop it was telling you to read. #}
     {% set reads = unit.tex or not unit.marks %}
-    <div class="side-by-side {{ 'one-column' if not reads }}">
+    {% set aside = reads or unit.marks %}
+    <div class="side-by-side {{ 'one-column' if not aside }}">
       {% if unit.image %}
       <figure class="crop">
         <img src="{{ unit.image }}" alt="crop of {{ unit.id }}" loading="lazy" data-crop>
@@ -47,8 +52,10 @@
       {% else %}
       <p class="crop-missing">no crop geometry for this unit</p>
       {% endif %}
-      {% if reads %}
+      {% if aside %}
       <div class="splitter" data-splitter="units" title="drag to resize — double-click to reset"></div>
+      <div class="beside">
+      {% if reads %}
       <div class="transcription">
         {% if unit.tex and unit.transcription == 'ok' %}
         <div class="math">$${{ unit.tex }}$$</div>
@@ -60,7 +67,6 @@
         {% endif %}
       </div>
       {% endif %}
-    </div>
 
     {# What the reader actually wrote. The crop shows *where* the marks are;
        this is what they say -- the sentence each one covers and the note left
@@ -92,6 +98,9 @@
       </ul>
     </details>
     {% endif %}
+      </div>{# .beside #}
+      {% endif %}
+    </div>{# .side-by-side #}
 
     {% if unit.suggestion %}
     <p class="suggestion">

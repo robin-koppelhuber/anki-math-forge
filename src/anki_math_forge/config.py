@@ -60,7 +60,15 @@ class SourceConfig:
     decks: Mapping[str, str] = field(default_factory=dict)
     # Free labels, so a picker with fifty papers in it can be narrowed. Not a
     # hierarchy: a source is one thing that may be several kinds of thing.
+    # **Yours to invent.** Nothing writes one for you: a label the tool made up
+    # is a label that means whatever the tool guessed, and you would be
+    # filtering by it without ever having decided what it says.
     tags: tuple[str, ...] = ()
+    # Which of a Zotero item's attachments to read, by title or by key. Empty
+    # means all of them, which is right until it is not: an item routinely
+    # carries the paper and a preprint of the paper, and marks made in one are
+    # not marks in the other.
+    documents: tuple[str, ...] = ()
     # What this source's marks mean, overriding the repo-wide `[zotero]`.
     # Colour schemes drift between a book you read last year and a paper you
     # read last week, and a scheme that is wrong is worse than none.
@@ -346,6 +354,7 @@ def load(root: Path | None = None) -> Config:
             zotero_key=str(spec.get("zotero", "") or ""),
             decks={str(k): str(v) for k, v in (spec.get("decks") or {}).items()},
             tags=tuple(str(x) for x in spec.get("tags", ())),
+            documents=tuple(str(x) for x in spec.get("documents", ())),
             units_from=frozenset(str(x) for x in spec.get("units_from", ())),
             meanings={str(k): str(v) for k, v in (spec.get("meanings") or {}).items()},
         )

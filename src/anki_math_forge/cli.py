@@ -402,11 +402,13 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
         reports = []
         for item in items:
             source = args.source or _source_name(item)
+            spec = config.sources.get(source)
             report = zotero_units.build(
                 client,
                 item,
                 source=source,
                 zotero=config.zotero_for(source),
+                documents=spec.documents if spec else (),
                 text_for=None if args.dry_run else _text_cacher(config, source),
             )
             reports.append((source, item, report))
@@ -415,8 +417,21 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                 fresh = zotero_units.write_source_stub(stub, item)
                 ledger = ledger_mod.Ledger.load(config.units_path(source))
                 added, refreshed = ledger.upsert(report.units)
+                # Narrowing `documents` leaves the earlier import behind,
+                # describing a PDF this source has stopped reading. Untouched
+                # units go; anything decided stays and is reported.
+                dropped, kept = ledger.drop_from_documents(report.excluded)
                 ledger.save()
+                # And the text layer cached for a document nothing reads any
+                # more. `source-text` prints every one it finds, so leaving it
+                # would hand a card writer a paper this source has dropped.
+                for key in report.excluded:
+                    extract_mod.source_text_path(config, source, key).unlink(missing_ok=True)
                 report_line = f"{added} new, {refreshed} refreshed"
+                if dropped:
+                    report_line += f", {dropped} dropped"
+                if kept:
+                    report_line += f"; {kept} triaged units kept from excluded documents"
                 if fresh:
                     report_line += f"; wrote {stub.relative_to(config.root)}"
             else:
@@ -436,6 +451,10 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                         "item": item.key,
                         "citation": item.citation,
                         "documents": r.documents,
+                        "attachments": [
+                            {"key": key, "title": title, "read": taken}
+                            for key, title, taken in r.attachments
+                        ],
                         "marks": r.annotations,
                         "units": [u.id for u in r.units],
                         "unmapped": r.unmapped,
@@ -491,6 +510,16 @@ def _print_zotero(source: str, item: Any, report: Any, written: str) -> None:
         f"{len(report.units)} units; {written}"
         + (f"; {report.text_chars // 1000}k chars of text layer" if report.text_chars else "")
     )
+    # Every PDF on the item, every run. You cannot choose between attachments
+    # you have never been shown, and an item routinely carries the paper and a
+    # preprint of it -- importing both silently doubles every mark.
+    if len(report.attachments) > 1:
+        print("  attachments:")
+        for key, title, taken in report.attachments:
+            mark = "*" if taken else " "
+            print(f"   {mark} {title or '(untitled)'}  [{key}]")
+        if all(taken for _, _, taken in report.attachments):
+            print("     all of them; name the ones you want in `documents = [...]`")
     for name, count in sorted(report.unmapped.items(), key=lambda kv: -kv[1]):
         print(f"  unmapped: {name} x{count} -- say what it means in [zotero.meanings]")
     for line in report.skipped:

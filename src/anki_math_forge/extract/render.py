@@ -27,7 +27,14 @@ RENDER_ZOOM = 3.0
 # costs a review, and a crop with too much around it costs nothing.
 TRIAGE_CONTEXT = 90.0
 OUTLINE_WIDTH = 3  # pixels
-OUTLINE_COLOUR = (210, 120, 90)
+# Red, and nothing else on a page is. This box is the answer to the only
+# question the crop is being read for -- *which* of the things on this page is
+# the unit -- and the muted orange it used to be read as one more highlight
+# among the reader's own colours, none of which is red.
+OUTLINE_COLOUR = (208, 48, 40)
+# Points of clearance between the box and the outline drawn round it, so it
+# reads as *around* the mark rather than as part of it.
+OUTLINE_MARGIN = 4.0
 
 # How wide a crop is cut.
 #
@@ -215,7 +222,10 @@ class CropRenderer:
             for annot in reversed(drawn):
                 target.delete_annot(annot)
         if outline and context > 0:
-            self._draw_outline(pixmap, box, clip)
+            # Rect + tuple expands; a little clearance so the outline reads as
+            # being around the mark rather than as part of it.
+            margin = (-OUTLINE_MARGIN, -OUTLINE_MARGIN, OUTLINE_MARGIN, OUTLINE_MARGIN)
+            self._draw_outline(pixmap, (box + margin) & clip, clip)
         return bytes(pixmap.tobytes("png"))
 
     def _draw_regions(self, page: Any, regions: Sequence[Region]) -> list[Any]:

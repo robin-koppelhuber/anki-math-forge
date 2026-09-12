@@ -22,6 +22,38 @@
               title="guide — cycle: counts / everything / hidden (?)">?</button>
     </div>
 
+    {# Two panes, and the split between them drags. The diagram is what you
+       glance at and the legend is what you read, so neither ratio is right for
+       everyone: while triaging a marked-up paper the colours are most of the
+       screen you need, and while working a queue the counts are. #}
+    <div class="guide-panes">
+    <div class="guide-pane top">
+      {# Which population the diagram is counting. "all" is the whole source,
+         which is what you want when deciding where to work next; "filtered"
+         is what is on screen, which is what you want while working. The two
+         answer different questions, so neither is the right default for
+         both. #}
+      <p class="counts-scope">
+        <a class="{{ '' if counts_scope == 'filtered' else 'on' }}"
+           href="{{ filter_url(here, f, counts_scope=none) }}"
+           title="count everything in this source">all</a>
+        <a class="{{ 'on' if counts_scope == 'filtered' else '' }}"
+           href="{{ filter_url(here, f, counts_scope='filtered') }}"
+           title="count only what the active filters leave">filtered</a>
+      </p>
+      <div class="at-a-glance">
+        {% include "_fsm_mini.html" %}
+
+        {# The order Anki introduces new cards in. A picture would be a poor
+           one: nine dependency edges across a hundred cards is a near-empty
+           graph, and the rule is four keys long. #}
+        <p class="order-key" title="what decides which new card you meet next">
+          <b>study order</b>
+          <span>frequency</span><span>derivation</span><span>source order</span>
+          <em>requires wins</em>
+        </p>
+      </div>
+
     {# The source itself, before any of the counting. Which layout a card
        resolved to, which deck it will land in, how much page a card writer
        gets -- all of it decided how the card in front of you was written, and
@@ -59,60 +91,10 @@
             {%- else %}<span class="warn">none written</span> — whoever writes a
             card from this is guessing at what is ambient{% endif %}</dd>
       </dl>
-      <p class="rail-more"><a href="/config?source={{ sf.name }}">every setting, and where it came from &rarr;</a></p>
+      <p class="rail-more"><button type="button" class="link-button" data-settings>every
+        setting, and where it came from &rarr;</button></p>
     </section>
     {% endif %}
-
-    {# What you meant by each colour. The filter rail lists the same marks as
-       something to click; this is the legend, and it includes what you
-       declared but have not used and -- more usefully -- what you have used
-       and not declared. #}
-    {% if scheme is defined and scheme %}
-    <section class="rail-card scheme">
-      <h3>what your marks mean</h3>
-      <ul class="scheme-list">
-        {% for row in scheme %}
-        <li class="{{ 'unused' if not row.count }}">
-          <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
-          <span class="scheme-text">
-            <b>{{ row.key }}</b>
-            {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
-            <span class="scheme-meaning">{{ row.meaning or 'nothing declared — it reaches a card writer as a coloured box with no caption' }}</span>
-          </span>
-          <b class="scheme-count">{{ row.count }}</b>
-        </li>
-        {% endfor %}
-      </ul>
-      <p class="rail-more">declared in <code>[zotero.meanings]</code>, or per source in
-        <code>source.md</code></p>
-    </section>
-    {% endif %}
-
-    <div class="at-a-glance">
-      {# Which population the diagram is counting. "all" is the whole source,
-         which is what you want when deciding where to work next; "filtered"
-         is what is on screen, which is what you want while working. The two
-         answer different questions, so neither is the right default for
-         both. #}
-      <p class="counts-scope">
-        <a class="{{ '' if counts_scope == 'filtered' else 'on' }}"
-           href="{{ filter_url(here, f, counts_scope=none) }}"
-           title="count everything in this source">all</a>
-        <a class="{{ 'on' if counts_scope == 'filtered' else '' }}"
-           href="{{ filter_url(here, f, counts_scope='filtered') }}"
-           title="count only what the active filters leave">filtered</a>
-      </p>
-      {% include "_fsm_mini.html" %}
-
-      {# The order Anki introduces new cards in. A picture would be a poor
-         one: nine dependency edges across a hundred cards is a near-empty
-         graph, and the rule is four keys long. #}
-      <p class="order-key" title="what decides which new card you meet next">
-        <b>study order</b>
-        <span>frequency</span><span>derivation</span><span>source order</span>
-        <em>requires wins</em>
-      </p>
-    </div>
 
     <div class="in-full">
 {% if view == 'units' %}
@@ -321,6 +303,41 @@
           how three errors in the source were caught.</dd>
     </dl>
 {% endif %}
+    </div>
+    </div>
+
+    {# Drag the split. The diagram is glanced at and the legend is read, and
+       which of the two deserves the room changes with what you are doing:
+       triaging a marked-up paper, the colours are most of what you need. #}
+    <div class="splitter y" data-splitter="guide"
+         title="drag to resize — double-click to reset"></div>
+
+    <div class="guide-pane bottom">
+    {# What you meant by each colour. The filter rail lists the same marks as
+       something to click; this is the legend, and it includes what you
+       declared but have not used and -- more usefully -- what you have used
+       and not declared. #}
+    {% if scheme is defined and scheme %}
+    <section class="rail-card scheme">
+      <h3>what your marks mean</h3>
+      <ul class="scheme-list">
+        {% for row in scheme %}
+        <li class="{{ 'unused' if not row.count }}">
+          <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
+          <span class="scheme-text">
+            <b>{{ row.key }}</b>
+            {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
+            <span class="scheme-meaning">{{ row.meaning or 'nothing declared — it reaches a card writer as a coloured box with no caption' }}</span>
+          </span>
+          <b class="scheme-count">{{ row.count }}</b>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="rail-more">declared in <code>[zotero.meanings]</code>, or per source in
+        <code>source.md</code></p>
+    </section>
+    {% endif %}
+    </div>
     </div>
   </div>
 </aside>

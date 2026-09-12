@@ -335,3 +335,67 @@ def test_the_stub_never_overwrites(tmp_path: Path) -> None:
 
     assert write_source_stub(path, Item(key="X", title="Theirs")) is False
     assert "Mine" in path.read_text(encoding="utf-8")
+
+
+# -- which of an item's PDFs to read ----------------------------------------
+
+
+def wegel_client() -> FakeZotero:
+    return FakeZotero(
+        {
+            "/api/users/0/items/VFD2E2BR/children": load("children-wegel.json"),
+            "/api/users/0/items?itemType=annotation": load("annotations.json"),
+        }
+    )
+
+
+def test_every_pdf_on_the_item_is_reported_every_run() -> None:
+    """You cannot choose between attachments you have never been shown. This
+    item carries the paper twice -- `PDF` and `MOL_appendix.pdf` -- and reading
+    both silently imported every mark against the wrong page numbers."""
+    item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
+    report = build(wegel_client(), item, source="wegel", zotero=zcfg("note"))
+    assert {title for _, title, _ in report.attachments} == {"PDF", "MOL_appendix.pdf"}
+    assert all(taken for _, _, taken in report.attachments), "empty `documents` is all of them"
+
+
+def test_documents_selects_by_title() -> None:
+    item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
+    report = build(
+        wegel_client(), item, source="wegel", zotero=zcfg("note"), documents=("PDF",)
+    )
+    taken = {title for _, title, keep in report.attachments if keep}
+    assert taken == {"PDF"}
+    assert report.excluded == {"VX8CZN3W"}
+
+
+def test_documents_selects_by_key_too() -> None:
+    """Both are things you can see: the title is what Zotero shows and the key
+    is what the ledger records."""
+    item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
+    report = build(
+        wegel_client(), item, source="wegel", zotero=zcfg("note"), documents=("ZIETASLD",)
+    )
+    assert {title for _, title, keep in report.attachments if keep} == {"PDF"}
+
+
+def test_naming_an_attachment_that_is_not_there_is_refused_loudly() -> None:
+    """Silently importing nothing looks exactly like a document with no marks
+    in it, which is a real state and not this one."""
+    item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
+    report = build(
+        wegel_client(), item, source="wegel", zotero=zcfg("note"), documents=("appendix",)
+    )
+    assert not report.ok
+    assert "matches none of its attachments" in report.skipped[0]
+    assert "MOL_appendix.pdf" in report.skipped[0], "and says what there was to choose from"
+
+
+def test_the_stub_invents_no_tags(tmp_path: Path) -> None:
+    """A label the tool made up means whatever the tool guessed, and you would
+    be filtering a shelf by it without ever having decided what it says."""
+    path = tmp_path / "wegel" / "source.md"
+    item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
+    write_source_stub(path, item)
+    assert "tags = []" in path.read_text(encoding="utf-8")
+    assert "documents = []" in path.read_text(encoding="utf-8")

@@ -53,10 +53,32 @@ class ImportReport:
     unmapped: dict[str, int] = field(default_factory=dict)
     skipped: list[str] = field(default_factory=list)
     text_chars: int = 0
+    # Every PDF on the item, as `(key, title, taken)`. Printed on every run,
+    # because you cannot choose between two attachments you have never been
+    # shown -- and an item routinely carries a paper and a preprint of it.
+    attachments: list[tuple[str, str, bool]] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
         return not self.skipped
+
+    @property
+    def excluded(self) -> set[str]:
+        """Attachment keys `documents` left out. Units already imported from
+        one of these are stale: they describe a document this source no longer
+        reads."""
+        return {key for key, _, taken in self.attachments if not taken}
+
+
+def wanted(attachment: api.Attachment, documents: tuple[str, ...]) -> bool:
+    """Is this attachment one the source asked for?
+
+    By title or by key, because both are things you can see: the title is what
+    Zotero shows you and the key is what the ledger records. Empty means all of
+    them, which is right until an item carries the paper and its appendix as
+    two PDFs and every mark gets imported twice.
+    """
+    return not documents or attachment.title in documents or attachment.key in documents
 
 
 def page_heights(pdf: Path) -> dict[int, float]:
@@ -166,7 +188,10 @@ def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ())
     """
     if path.exists():
         return False
-    quoted = [f'"{t}"' for t in ("paper", *tags)]
+    # Tags are left empty on purpose. A label invented here means whatever the
+    # tool guessed it means, and you would be filtering a shelf by it without
+    # ever having decided what it says.
+    quoted = [f'"{t}"' for t in tags]
     lines = [
         "+++",
         f'title = "{item.title}"',
@@ -176,6 +201,11 @@ def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ())
         "# Which Zotero item this came from. The units carry attachment keys,",
         "# and this is what they hang off.",
         f'zotero = "{item.key}"',
+        "",
+        "# Which of its attachments to read, by title or by key. Empty means",
+        "# all of them; name them when the item carries more than one PDF of",
+        "# the same thing, since marks made in one are not marks in the other.",
+        "documents = []",
         "+++",
         "",
         f"# {item.title}",
@@ -196,13 +226,15 @@ def build(
     *,
     source: str,
     zotero: ZoteroConfig,
+    documents: tuple[str, ...] = (),
     text_for: Callable[[str, Path], int] | None = None,
 ) -> ImportReport:
     """Every unit-making mark on every PDF of one Zotero item.
 
-    `text_for` caches a document's text layer and returns its size. Passed in
-    rather than done here, so this stays a function of Zotero and a config and
-    nothing else has to exist for a test to call it.
+    `documents` names the attachments to read, by title or key; empty is all of
+    them. `text_for` caches a document's text layer and returns its size.
+    Passed in rather than done here, so this stays a function of Zotero and a
+    config and nothing else has to exist for a test to call it.
     """
     report = ImportReport(item=item.key)
     if not zotero.units_from:
@@ -212,9 +244,17 @@ def build(
         )
         return report
 
-    attachments = client.attachments(item.key)
-    if not attachments:
+    every = client.attachments(item.key)
+    if not every:
         report.skipped.append(f"{item.citation}: no PDF attachments")
+        return report
+    attachments = [a for a in every if wanted(a, documents)]
+    report.attachments = [(a.key, a.title, wanted(a, documents)) for a in every]
+    if not attachments:
+        names = ", ".join(sorted(a.title for a in every)) or "(untitled)"
+        report.skipped.append(
+            f"{item.citation}: `documents` matches none of its attachments ({names})"
+        )
         return report
 
     annotations = client.annotations({a.key for a in attachments})

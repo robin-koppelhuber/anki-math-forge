@@ -366,6 +366,34 @@ class Ledger:
                 refreshed += 1
         return added, refreshed
 
+    def drop_from_documents(self, documents: set[str]) -> tuple[int, int]:
+        """Forget untouched units that came from documents no longer read.
+
+        Returns `(dropped, kept)`. Narrowing a source's `documents` leaves its
+        earlier imports behind, describing a PDF this source has stopped
+        reading -- and they are indistinguishable from real work in every
+        count, filter and command the app generates.
+
+        **Only units nothing human has touched**: still `new`, no cards, no
+        notes, no suggestion acted on. Anything else is kept and counted, since
+        deleting a decision to tidy up a config change is not a trade this tool
+        gets to make on your behalf.
+        """
+        if not documents:
+            return 0, 0
+        dropped, kept = [], 0
+        for unit in self.units:
+            if unit.locator.document not in documents:
+                dropped.append(unit)
+                continue
+            if unit.state == "new" and not unit.uids and not unit.notes:
+                continue  # forget it
+            kept += 1
+            dropped.append(unit)
+        removed = len(self.units) - len(dropped)
+        self.units = dropped
+        return removed, kept
+
     def suggest(self, unit_id: str, state: str, reason: str, detail: str, by: str) -> Unit:
         """Record a proposed decision. Changes no state."""
         if state not in STATES:

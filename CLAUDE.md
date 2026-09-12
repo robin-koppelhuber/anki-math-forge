@@ -104,12 +104,18 @@ So they live with the source, in **`sources/<name>/source.md`**: TOML between
 `+++` fences, then prose. One file, two halves.
 
 - **Above the fence** is what a key can express, and it is what the tool acts
-  on: `title`, `citation`, `pdf`/`tex`, `zotero`, `deck`, `layout`, `order`,
-  `tags`, `crop_context`/`crop_width`, `context_pages`, and a source's own
-  reading of its Zotero marks. A `layout` outside `denominator | numerator` is
-  refused at load, because an unrecognised one would read as "not denominator"
-  and silently change what every card from that source means; `crop_width`
-  outside `box | page` is refused for the same reason.
+  on: `title`, `citation`, `pdf`/`tex`, `zotero`, `documents`, `deck`,
+  `layout`, `order`, `tags`, `crop_context`/`crop_width`, `context_pages`, and
+  a source's own reading of its Zotero marks. A `layout` outside
+  `denominator | numerator` is refused at load, because an unrecognised one
+  would read as "not denominator" and silently change what every card from
+  that source means; `crop_width` outside `box | page` is refused for the same
+  reason. `documents` names which of a Zotero item's PDFs to read, by title or
+  key — an item routinely carries the paper and a preprint of the paper, and
+  marks made in one are not marks in the other. `tags` are yours to invent:
+  nothing writes one for you, because a label the tool made up means whatever
+  the tool guessed and you would be filtering by it without having decided
+  what it says.
 - **Below it** is what a key cannot: the ambient mathematical
   setting, what is assumed constant, how a contested convention was settled.
   `forge context <unit>` prints it, so whoever writes or reviews a card

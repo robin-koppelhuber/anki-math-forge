@@ -5,7 +5,7 @@ pdf = "sources/matrix-cookbook/matrixcookbook.pdf"
 tex = ""
 deck = "Mathe::Matrix-Calculus"
 order = "printed"
-tags = ["maths", "reference"]
+tags = []
 
 # The book differentiates in denominator layout. A machine key rather than only
 # prose below, because `verify` has to act on it: its numerical gradient

@@ -207,6 +207,17 @@ main {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   text-align: center;
+  /* Stays put while you read down thirty marks beside it. The whole triage
+     decision is "does this mark, in this context, deserve a card", and
+     scrolling the evidence off the top to read the context is the one thing
+     that makes it harder. */
+  position: sticky;
+  top: calc(var(--header-h, 2.6rem) + 0.8rem);
+}
+@media (max-width: 760px) {
+  /* Stacked, the crop is above the marks rather than beside them, and a
+     sticky element would cover the list it is meant to accompany. */
+  .crop { position: static; }
 }
 .crop img { max-width: 100%; height: auto; }
 .crop.small { padding: 0.4rem; margin-top: 1rem; }
@@ -478,7 +489,10 @@ footer.bar {
 .filter-rail {
   position: fixed;
   top: var(--header-h, 2.6rem);
-  bottom: 0;
+  /* Above the sticky footer, not under it. The footer stacks over the rails,
+     so a rail running to 0 had its last panel -- the commands -- sliding
+     beneath the shortcut row and out of reach. */
+  bottom: var(--footer-h, 0px);
   left: 0;
   width: var(--left-rail);
   background: var(--panel);
@@ -493,7 +507,7 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 
 .filter-rail-scroll {
   overflow-y: auto;
-  padding: 0.2rem 0.6rem 1rem;
+  padding: 0.2rem 0.6rem 0.6rem;
   font-size: 13px;
   flex: 1;
 }
@@ -711,7 +725,7 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 .guide {
   position: fixed;
   top: var(--header-h, 2.6rem);
-  bottom: 0;
+  bottom: var(--footer-h, 0px);
   right: 0;
   width: var(--right-rail);
   background: var(--panel);
@@ -721,7 +735,14 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   flex-direction: column;
   transition: width 0.12s ease-out, transform 0.12s ease-out;
 }
-.guide-scroll { overflow: auto; padding: 0.6rem 0.7rem 2.6rem; }
+/* A column, so the two panes below it can share the height. */
+.guide-scroll {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 0.6rem 0.7rem 0.6rem;
+}
 
 .guide-head {
   display: flex;
@@ -1167,6 +1188,9 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   border-radius: var(--radius);
 }
 .gallery-close {
+  /* Pushed right by the search box in the gallery; the settings panel has no
+     search box, and without this the close button sat mid-header. */
+  margin-left: auto;
   border: 1px solid var(--line); background: transparent; color: var(--muted);
   border-radius: 5px; width: 1.7rem; height: 1.7rem; cursor: pointer;
   font: inherit; font-size: 16px; line-height: 1;
@@ -1311,3 +1335,115 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 /* The focused source's block, when the config page was reached from the rail. */
 .config-group.focus > h2 { color: var(--accent); }
 .config-group.focus { border-left: 2px solid var(--accent); padding-left: 0.8rem; }
+
+/* -- the header's two buttons -------------------------------------------
+   No caret on the source picker: a caret promises a list dropping down from
+   here, and what opens is the gallery. The glyph says "a grid of them". */
+.pick-icon { color: var(--muted); font-size: 11px; }
+.icon-button {
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+.icon-button:hover { color: var(--ink); border-color: var(--accent); }
+
+/* A button that reads as prose, for the places where the thing it opens is a
+   panel rather than a page and a link would lie about that. */
+.link-button {
+  font: inherit;
+  font-size: inherit;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.link-button:hover { text-decoration: underline; }
+
+/* -- the settings panel -------------------------------------------------- */
+/* Head and foot fixed, body scrolling. Letting the dialog scroll as a whole
+   put the "read-only, edit the files" note below everything, which is exactly
+   where it is not read. */
+.settings { max-width: 60rem; height: min(84vh, 48rem); overflow: hidden; }
+/* `[open]`, and it matters: a `display` on the element itself overrides the
+   browser's own `dialog:not([open]) { display: none }`, which left the whole
+   settings panel painted over the page at all times. */
+.settings[open] { display: flex; flex-direction: column; }
+.settings-body { padding: 0.8rem 1.1rem 0; overflow: auto; flex: 1; min-height: 0; }
+.settings .config-group { margin-top: 1.2rem; }
+.settings .config-group:first-child { margin-top: 0.2rem; }
+.settings-foot {
+  margin: 0;
+  padding: 0.7rem 1.1rem 0.9rem;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+
+/* -- marks, as a picker rather than a list ------------------------------
+   Five kinds times eight colours is forty rows, and as labelled lines that is
+   the whole rail. One row per kind and a square per colour is a handful of
+   rows -- and it is also how the marks look on the page you made them on. */
+.mark-picker { list-style: none; margin: 0.2rem 0 0.4rem; padding: 0 0 0 0.4rem; }
+.mark-picker > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.2rem 0;
+}
+.mp-kind {
+  flex: none;
+  width: 4.6rem;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mp-colours { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+.mp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.05rem 0.3rem 0.05rem 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.mp-chip:hover { border-color: var(--line); color: var(--ink); }
+.mp-chip.on { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.mp-chip .swatch { margin-right: 0; }
+.mp-chip b { font-weight: 500; }
+
+/* -- the guide's two panes ----------------------------------------------- */
+.guide-panes {
+  display: grid;
+  grid-template-rows: var(--split-guide, 1fr) 14px var(--split-guide-bottom, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+.guide-pane { overflow-y: auto; min-height: 0; }
+.guide-pane.bottom { border-top: 0; padding-top: 0.2rem; }
+/* The vertical handle. Same machinery as the column splitters, one axis over. */
+.splitter.y {
+  cursor: row-resize;
+  min-height: 0;
+  align-self: stretch;
+}
+.splitter.y::before { inset: 6px 0; }
+
+/* Beside the crop: the transcription, the marks, or both. A page-wide crop of
+   small type next to what was written about it is the whole triage decision. */
+.beside { display: flex; flex-direction: column; gap: 0.9rem; min-width: 0; }
+.beside .marks-list { margin: 0; }
+.beside .marks-list ul { max-height: none; }

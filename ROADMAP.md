@@ -445,7 +445,10 @@ preamble.
   Each mark's lines are drawn separately -- their union covers both lines end
   to end, including the half of each the reader left unmarked. About 65ms for
   28 marks on top of the 70ms the document open already costs
-- **built:** what the marks *say*, listed under the crop -- the sentence each
+- **built:** a red box around the mark the unit *is*. Nothing else on a page
+  is red -- the reader's own palette has no red in it -- and the muted orange
+  it used to be read as one more highlight among them
+- **built:** what the marks *say*, beside the crop -- the sentence each
   one covers and anything written beside it, the unit's own first. Deciding
   whether a marked claim is worth a card on its own is mostly a question about
   its neighbours, and reading them meant opening the PDF. A neighbour that is a
@@ -521,6 +524,34 @@ have.
 
 ## 8. Triage and review at scale (partly built)
 
+- **Built: which of an item's PDFs to read** (`documents`, by title or key).
+  A Zotero item routinely carries the paper twice -- a preprint and a version
+  with the appendix -- and importing both doubled every mark against page
+  numbers that do not correspond. Every attachment is now printed on every run,
+  taken or not, because you cannot choose between things you have never been
+  shown. Narrowing the list drops the units it orphans **only where nothing
+  human has touched them**: a triaged unit is kept and counted, since deleting
+  a decision to tidy up a config change is not a trade this tool gets to make.
+  The stale text-layer cache goes with them, or `source-text` would hand a card
+  writer a document this source has stopped reading.
+- **Built: the marks filter is a picker, not a list.** Five annotation kinds
+  times eight colours is forty rows, and as labelled lines that is the entire
+  rail. One row per kind, one coloured square per colour -- which is also how
+  the marks look on the page you made them on. **Only combinations you have
+  declared a meaning for**: an undeclared colour is not a category yet, it is
+  one you have not decided about, and offering it as a filter presents a
+  decision you have not taken as one you have. The guide's legend still lists
+  it, which is where that decision belongs.
+- **Built: the header stopped repeating the rail.** `units` and `review` as
+  bare words said where to go and nothing else; the rail carries both lanes as
+  counts you can click, which says where the work *is* as well. What is left is
+  the source picker -- no caret, since a caret promises a dropdown and what
+  opens is the gallery -- and a gear beside it.
+- **Built: the configuration is a panel, not a page.** It answers a question
+  you have *while deciding something else* -- which layout did this card
+  resolve to -- and a navigation away and back is a poor way to look something
+  up. One renderer, over `/api/config`; the page it replaced is gone rather
+  than kept as a second way to draw the same table.
 - **Built: one job per rail.** The left one **acts** -- filters, and the
   commands that run on what they leave. The right one **tells you what you are
   looking at** and changes nothing. That is the whole layout rule, and it

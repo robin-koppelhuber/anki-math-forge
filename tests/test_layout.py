@@ -123,7 +123,7 @@ def test_the_resolved_settings_are_reachable_without_leaving_the_view() -> None:
     """Which layout a card resolved to decides what every derivative on it
     means, and there was no way to see it but to read Python."""
     assert "source-facts" in GUIDE
-    assert "/config?source=" in GUIDE
+    assert "data-settings" in GUIDE, "and the full table opens over the view, not away from it"
 
 
 # -- the picker -------------------------------------------------------------
@@ -150,9 +150,67 @@ def test_a_modal_over_the_deck_owns_the_keyboard() -> None:
     assert "galleryIsOpen()" in block
 
 
-def test_the_gallery_is_on_every_view_that_has_a_picker(pdf_source: Config) -> None:
+def test_both_panels_are_on_every_view(pdf_source: Config) -> None:
+    """The picker and the settings are questions you have mid-decision, so
+    they open over whatever you were doing rather than navigating away."""
     client = TestClient(create_app(pdf_source))
-    for url in ("/units", "/review", "/config"):
+    for url in ("/units", "/review"):
         body = client.get(url).text
         assert 'id="gallery"' in body, url
         assert 'id="source-pick"' in body, url
+        assert 'id="settings"' in body, url
+        assert 'id="config-open"' in body, url
+
+
+def test_the_header_does_not_repeat_the_rail(pdf_source: Config) -> None:
+    """`units` and `review` as bare words said where to go and nothing else.
+    The rail carries both lanes as counts you can click -- `new 16`,
+    `approved 108` -- which says where the work *is* as well."""
+    body = TestClient(create_app(pdf_source)).get("/units").text
+    header = body[body.index("<header") : body.index("</header>")]
+    assert ">units<" not in header and ">review<" not in header
+
+
+# -- nothing slides under the footer ---------------------------------------
+
+
+def test_the_rails_stop_above_the_sticky_footer() -> None:
+    """The footer stacks over the rails, so a rail running to `bottom: 0` had
+    its last panel -- the commands -- sliding beneath the shortcut row and out
+    of reach."""
+    for selector in (".filter-rail", ".guide"):
+        assert "bottom: var(--footer-h" in rule(selector), selector
+    assert "--footer-h" in JS, "measured, like the header"
+
+
+# -- the guide's two panes --------------------------------------------------
+
+
+def test_the_diagram_is_above_the_legend_and_the_split_drags() -> None:
+    """They answer different questions and neither ratio is right for everyone:
+    triaging a marked-up paper, the colours are most of what you need."""
+    panes = GUIDE.index('class="guide-panes"')
+    assert GUIDE.index("_fsm_mini.html") > panes
+    assert GUIDE.index("_fsm_mini.html") < GUIDE.index('class="rail-card scheme"')
+    assert 'data-splitter="guide"' in GUIDE
+    assert "grid-template-rows" in rule(".guide-panes")
+
+
+def test_a_vertical_split_reads_the_other_axis() -> None:
+    """One drag helper for both, because two hand-rolled loops is how they end
+    up behaving differently -- and only the axis actually differs."""
+    assert 'axis: "y"' in JS
+    assert "event.clientY" in JS
+
+
+def test_a_dialog_keeps_the_browser_s_hidden_rule() -> None:
+    """Setting `display` on a `<dialog>` overrides the UA's own
+    `dialog:not([open]) { display: none }`, and the settings panel was painted
+    over every page at all times. Any display we set must be on `[open]`."""
+    on_the_dialog = re.compile(r"^(\.(?:gallery|settings)(?:\[open\])?)\s*\{([^}]*)\}", re.M)
+    seen = 0
+    for selector, body in on_the_dialog.findall(CSS):
+        seen += 1
+        if "display:" in body:
+            assert "[open]" in selector, f"{selector} hides nothing when closed"
+    assert seen, "the dialog rules moved; this test is watching nothing"

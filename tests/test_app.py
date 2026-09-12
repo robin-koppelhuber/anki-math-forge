@@ -1099,12 +1099,18 @@ def test_pipeline_counts_scope_to_one_source(pdf_source: Config) -> None:
     assert pipeline_counts(pdf_source, "book")["draft"] == 1
 
 
-def test_view_links_carry_the_source(pdf_source: Config) -> None:
-    """Switching view must not silently switch book."""
+def test_crossing_between_the_two_lanes_carries_the_source(pdf_source: Config) -> None:
+    """Switching view must not silently switch book.
+
+    The header used to carry `units` / `review` links for this. It no longer
+    does -- the rail's own state rows cross between the lanes, and they say
+    where the work *is* as well as where to go -- so the guarantee moved to
+    them.
+    """
     write_card(pdf_source, "bbb222", "book:1.1:1")
     body = TestClient(create_app(pdf_source)).get("/review?source=book").text
-    assert 'href="/units?source=book"' in body
-    assert 'href="/review?source=book"' in body
+    assert "/units?source=book" in body, "the unit counts lead back to the same book"
+    assert "/review?source=book" in body
 
 
 def test_rail_card_links_carry_the_source(pdf_source: Config) -> None:
