@@ -451,7 +451,7 @@
       <ul class="scheme-list">
         {% for row in scheme %}
         <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}{{ ' undeclared' if not row.declared }}"
-            title="{{ row.entries | map(attribute='key') | join(' · ') }} — {{ row.meaning }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}{{ ' — not declared: this is what Zotero calls the annotation kind, not what you used it to mean' if not row.declared }}">
+            title="{{ row.entries | map(attribute='key') | join(' · ') }}&#10;{{ row.meaning }}{{ '&#10;a mark like this becomes a unit of its own' if row.makes_a_unit }}{{ '&#10;not declared: this is what Zotero calls the annotation kind, not what you used it to mean' if not row.declared }}">
           <span class="sl-mark">
             {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
             <b class="sl-label">{{ row.label }}</b>

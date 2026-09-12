@@ -64,10 +64,10 @@
           {% if card.position %}<span class="pos" title="its place in the study order for this source, which does not move when you filter">order {{ card.position }}/{{ card.total }}</span>{% endif %}
           <button type="button" class="grade {{ 'missing' if not card.frequency }}"
                   data-grade="frequency"
-                  title="how often this identity turns up — click to cycle core / common / rare / unset. Not part of the content hash, so this does not un-approve the card.">{{ card.frequency or 'no frequency' }}</button>
+                  title="how often this identity turns up. Click to cycle core / common / rare / unset. Not part of the content hash, so this does not un-approve the card.">{{ card.frequency or 'no frequency' }}</button>
           <button type="button" class="grade {{ 'missing' if not card.derivation }}"
                   data-grade="derivation"
-                  title="what reconstructing it would take — click to cycle definitional / short / long / unset. Not part of the content hash.">{{ card.derivation or 'no derivation' }}</button>
+                  title="what reconstructing it would take. Click to cycle definitional / short / long / unset. Not part of the content hash.">{{ card.derivation or 'no derivation' }}</button>
           {# The same permission the unit carries, resolved for this card. It
              is what `/augment` is allowed to do when it fills in the optional
              sections, and it was invisible from here. #}

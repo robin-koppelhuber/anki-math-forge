@@ -37,7 +37,7 @@
       {% else %}<span class="badge bad">not transcribed</span>{% endif %}
       {% if unit.uids %}<span class="badge carded">{{ unit.uids|join(', ') }}</span>{% endif %}
       {% if unit.state == 'new' and not unit.suggestion %}
-      <span class="badge quiet" title="{% if unit.equation %}the book numbered this one, so nothing was allowed to propose skipping it{% else %}nothing had an opinion about this one{% endif %} — a decision is required either way">no suggestion</span>
+      <span class="badge quiet" title="{% if unit.equation %}the book numbered this one, so nothing was allowed to propose skipping it{% else %}nothing had an opinion about this one{% endif %}. A decision is required either way">no suggestion</span>
       {% endif %}
       {# The id is what you paste into a command. Small and selectable rather
          than a line of its own under everything. #}
@@ -156,7 +156,7 @@
            its heading and its `add` button, which is all the affordance a
            place to write needs. #}
         <details class="note-section" open>
-        <summary title="Read by /extract-cards before it writes — &#34;two cards, one per convention&#34;, &#34;the transcription is wrong, read the crop&#34;, &#34;merge with the one above&#34;. It is the only instruction that pass gets."><h3>the brief for whoever writes the card
+        <summary title="Read by /extract-cards before it writes: &#34;two cards, one per convention&#34;, &#34;the transcription is wrong, read the crop&#34;, &#34;merge with the one above&#34;. It is the only instruction that pass gets."><h3>the brief for whoever writes the card
           <span class="at">@claude</span>
           <button type="button" class="note-add" data-annotate="claude">add</button></h3></summary>
         {% if for_claude %}
@@ -244,7 +244,7 @@
             <span class="mf-what">show</span>
             {% for c in group.colours %}
             <button type="button" class="mf-chip on" data-mark-colour="{{ c.key }}"
-                    title="{{ c.colour }} {{ group.kind }} — {{ c.count }} nearby">
+                    title="{{ c.colour }} {{ group.kind }} · {{ c.count }} nearby">
               <span class="swatch c-{{ c.colour }}" aria-hidden="true"></span><b>{{ c.count }}</b>
             </button>
             {% endfor %}
@@ -288,7 +288,7 @@
        a unit nobody has proposed anything about. #}
     {% if unit.suggestion %}
     <p class="suggestion">
-      <b>suggested: {{ unit.suggestion.state }}</b> &mdash; {{ unit.suggestion.detail or unit.suggestion.reason }}
+      <b>suggested: {{ unit.suggestion.state }}</b> &middot; {{ unit.suggestion.detail or unit.suggestion.reason }}
       <span class="by">proposed by {{ unit.suggestion.by }}; nothing has been applied</span>
       <span class="how"><b>a</b> accept &middot; <b>d</b> dismiss &middot; or decide directly</span>
     </p>

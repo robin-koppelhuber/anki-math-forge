@@ -47,9 +47,9 @@
     </marker>
   </defs>
 
-  <text class="lane" x="8" y="20">UNIT — a located region of the source</text>
+  <text class="lane" x="8" y="20">UNIT: a located region of the source</text>
   <line class="lane-rule" x1="0" y1="330" x2="960" y2="330"/>
-  <text class="lane" x="8" y="354">CARD — a file in cards/</text>
+  <text class="lane" x="8" y="354">CARD: a file in cards/</text>
 
   <!-- unit lane -->
   {# What actually makes a unit here. It said `extract` for every source,
@@ -81,33 +81,33 @@
     <text x="748" y="93">skipped</text></g>
 
   <path class="edge you back" d="M748,70 V30 H160 V68" marker-end="url(#ar)"/>
-  <text class="lbl you" x="452" y="24">u — returns any unit to new, a carded one included</text>
+  <text class="lbl you" x="452" y="24">u returns any unit to new, a carded one included</text>
 
   <!-- what a unit gains: a reading of what it says, one of what it is about,
        and a proposed decision. None of the three moves it. -->
   <g class="prop">
     <rect x="90" y="128" width="300" height="46" rx="6"/>
-    <text x="102" y="146">transcription — /transcribe</text>
+    <text x="102" y="146">transcription · /transcribe</text>
     <text class="sub" x="102" y="164">none → ok · the crop, read into tex_auto</text>
   </g>
   <path class="edge dash" d="M138,108 V126" marker-end="url(#ar)"/>
 
   <g class="prop">
     <rect x="90" y="182" width="300" height="46" rx="6"/>
-    <text x="102" y="200">gist — /gist</text>
+    <text x="102" y="200">gist · /gist</text>
     <text class="sub" x="102" y="218">one line: what a card here would be about</text>
   </g>
   <path class="edge dash" d="M138,174 V180" marker-end="url(#ar)"/>
 
   <g class="overlay">
     <rect x="90" y="236" width="300" height="48" rx="6"/>
-    <text x="102" y="254">suggestion — /classify</text>
+    <text x="102" y="254">suggestion · /classify</text>
     <text class="sub" x="102" y="272">proposed, never applied · a accept · d dismiss</text>
   </g>
   <path class="edge dash" d="M240,228 V234" marker-end="url(#ar)"/>
 
   <path class="edge dash" d="M90,260 H40 V95 H86" marker-end="url(#ar)"/>
-  <text class="lbl" x="240" y="304">a applies whatever state it proposed — usually skipped, not only skipped</text>
+  <text class="lbl" x="240" y="304">a applies whatever state it proposed, usually skipped but not only skipped</text>
 
   <!-- the split: one moment, two objects from here on -->
   <path class="edge twin" d="M520,108 V370" marker-end="url(#ar)"/>
@@ -130,12 +130,12 @@
   <path class="gate" d="M788,383 V399"/>
 
   <path class="edge cycle" d="M708,410 V440 H580 V412" marker-end="url(#ar)"/>
-  <text class="lbl cycle" x="644" y="456">u, or any edit — back to draft</text>
+  <text class="lbl cycle" x="644" y="456">u, or any edit, goes back to draft</text>
 
   <!-- what a card gains: drawn like the unit's, under the state it acts on -->
   <g class="prop">
     <rect x="240" y="452" width="300" height="52" rx="6"/>
-    <text x="252" y="472">the optional sections — /augment</text>
+    <text x="252" y="472">the optional sections · /augment</text>
     <text class="sub" x="252" y="492">conditions, proof, prose · still a draft after</text>
   </g>
   <path class="edge dash" d="M500,410 V450" marker-end="url(#ar)"/>
@@ -148,12 +148,12 @@
   <!-- annotations: everywhere, so pointed nowhere in particular -->
   <g class="overlay warn">
     <rect x="580" y="480" width="360" height="130" rx="6"/>
-    <text x="592" y="502">@claude / @me annotation — n</text>
+    <text x="592" y="502">@claude / @me annotation · n</text>
     <text class="sub" x="592" y="522">on any unit or any card, at any state</text>
     <text class="sub" x="592" y="542">@claude is the brief for whoever writes</text>
     <text class="sub" x="592" y="562">the card · @me parks a decision</text>
     <text class="sub" x="592" y="582">an open note holds an approved card in the</text>
-    <text class="sub" x="592" y="602">draft pile — resolving it restores approval</text>
+    <text class="sub" x="592" y="602">draft pile; resolving it restores approval</text>
   </g>
   <path class="edge dash warn" d="M788,478 V402" marker-end="url(#ar)"/>
   <text class="lbl warn" x="796" y="440">blocks sync, wherever it sits</text>
