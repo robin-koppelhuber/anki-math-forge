@@ -306,6 +306,48 @@ def test_the_permission_to_look_things_up_is_visible_on_the_unit() -> None:
     assert "--warn" in rule(".badge.web-chip.own"), "not the accent the others use"
 
 
+def test_each_stage_says_what_it_decides() -> None:
+    """A unit is a decision; a card is the content (CLAUDE.md invariant 9).
+    Both views now say which of the two they are, at the top of the guide,
+    because everything below only makes sense in that light -- and because
+    depth applied at triage buys nothing and costs the throughput the stage
+    exists for."""
+    units_part, review_part = GUIDE.split("{% else %}", 1)
+    for part in (units_part, review_part):
+        assert "what this stage decides" in part
+    assert "worth a card at all" in units_part
+    assert "do not have to\n        be able to transcribe" in units_part.replace("<b>", "")
+    assert "already settled" in review_part, "the card stage does not re-triage"
+
+
+def test_queueing_can_record_what_the_card_is_about() -> None:
+    """The second half of what triage decides, and it only had a key by
+    accident: a separate `n`, on a unit that had usually scrolled past. Which
+    is why most units reach `/extract-cards` carrying nothing but a picture.
+
+    Symmetric with `s`/`S` -- bare key does not stop to ask, shifted one
+    records the sentence that makes the decision useful later."""
+    view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    assert "Q: queueWithABrief," in view_js
+    assert "<b>Q</b> queue + brief" in units, "and the footer names it"
+    # The state change first: a failure writing the note leaves a queued unit
+    # with no brief, which `n` fixes -- nothing fixes a decision that never
+    # landed.
+    body = view_js[view_js.index("async function queueWithABrief") :][:700]
+    assert body.index('setState("queued")') < body.index("noteOn(item, text)")
+
+
+def test_a_marked_unit_is_not_asked_for_a_transcription() -> None:
+    """You do not have to be able to transcribe a unit to triage it. A marked
+    passage carries the sentence it covers and nothing will ever read a picture
+    of it, so the pane is absent rather than empty -- and the badge says what
+    the unit *is* instead of accusing it of missing something it cannot have."""
+    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
+    assert "{% set reads = unit.tex or not unit.marks %}" in units
+    assert "marked while reading" in units
+
+
 def test_a_grading_is_something_you_can_click() -> None:
     """Both decide the order Anki introduces new cards in, and the only way to
     set either used to be opening the file -- which is why so many cards carry

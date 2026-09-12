@@ -97,6 +97,15 @@ async function decideOnSuggestion(verb) {
   }
 }
 
+async function noteOn(item, text) {
+  const result = await post(
+    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/annotate`,
+    { text, mtime: board.dataset.mtime },
+  );
+  board.dataset.mtime = result.mtime;
+  return result;
+}
+
 async function annotate(audience = "claude") {
   const item = currentOf(deck);
   if (!item) return;
@@ -108,13 +117,32 @@ async function annotate(audience = "claude") {
     prefix,
   );
   if (!text) return;
-  const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/annotate`,
-    { text, mtime: board.dataset.mtime },
-  );
-  board.dataset.mtime = result.mtime;
-  repaintNotes(item, result.unit);
+  repaintNotes(item, (await noteOn(item, text)).unit);
   toast("annotated");
+}
+
+/* Queue it, and say what the card is about, in one keystroke.
+
+   The unit stage answers two questions -- is this worth a card, and roughly
+   what would the card be about -- and only the first had a key. The second
+   was a separate `n`, on a unit that had already scrolled past, which is why
+   most units reach `/extract-cards` carrying nothing but a picture.
+
+   Symmetric with `s`/`S`: the bare key is the common case and does not stop to
+   ask, the shifted one records the sentence that makes the decision useful
+   later. The note goes on *after* the state change, so a failure here leaves a
+   queued unit with no brief rather than losing the queue -- and `n` fixes
+   that, while nothing fixes a decision that never landed.
+
+   Deliberately not `repaintNotes`: the unit has settled and is leaving the
+   view, and that function reloads the page when the note count moves. */
+async function queueWithABrief() {
+  const item = currentOf(deck);
+  if (!item) return;
+  const text = await ask("what should the card be about?", "@claude ");
+  if (text === null) return;
+  await setState("queued");
+  if (text.trim()) await noteOn(item, text);
 }
 
 /* Answering keeps the question. Deleting the line throws away both halves, and
@@ -520,6 +548,7 @@ bindKeys({
   g: openGallery,
   z: undo,
   q: () => setState("queued"),
+  Q: queueWithABrief,
   /* No prompt. A skip is the commonest action in triage, and stopping to type
      a word turned one keystroke into a dialogue. `S` still asks, for the times
      the reason is worth recording. */
@@ -539,3 +568,4 @@ bindKeys({
   ArrowDown: () => deck.nextPending(),
   ArrowUp: () => deck.prev(),
 });
+

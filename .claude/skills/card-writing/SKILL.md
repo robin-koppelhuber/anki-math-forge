@@ -8,6 +8,13 @@ description: How to turn a mathematical unit into a card worth reviewing - what 
 The Python enforces structure. This file is the craft: nothing here is
 checkable by a linter, which is exactly why it is written down.
 
+**Which stage you are at matters.** A unit is a decision; a card is the
+content (CLAUDE.md invariant 9). Triage answered two questions — is this worth
+a card, and roughly what about — and a unit's `@claude` brief is that second
+answer written down. Read it first: it is the only instruction this pass gets.
+Everything else on this page is the *card* stage, where depth belongs. Take
+the context you need and iterate; a draft is not a commitment.
+
 **A note on the examples.** The rules here are meant to survive a change of
 source: each is stated without reference to any particular subject. The worked
 examples are matrix calculus because that is what this deck currently holds,
@@ -57,6 +64,21 @@ Skip it when:
 
 When in doubt, skip. A skip is sticky and cheap; a bad card is a small tax on
 every review session for years.
+
+**This is the triage question, and on a prose source it is asked differently.**
+Everything above is written for an identity: a named result, a short answer, a
+stray transpose that would cost you time. None of those tests fires on a
+marked paragraph, and applying them there skips every intuition card in the
+book. What to ask instead: *would I be annoyed to have to reconstruct this
+reasoning?* A passage earns a card when it settles something — why a bound is
+tight, which hypothesis is load-bearing, what a term is actually measuring —
+and not merely because it was worth marking while reading. Marking says "this
+mattered as I read"; carding says "this is worth meeting again, cold, in six
+months", and the gap between those two is most of what triage is for.
+
+Judge it from the passage and what you wrote beside it. **Do not demand a
+transcription first** — the sentence is right there, and a boxed figure has no
+transcription to wait for.
 
 ## Fronts
 

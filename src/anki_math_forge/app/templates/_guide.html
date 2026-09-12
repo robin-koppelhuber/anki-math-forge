@@ -108,6 +108,26 @@
 
     <div class="in-full">
 {% if view == 'units' %}
+    {# The division of labour between the two stages, said once and at the
+       top, because everything below it only makes sense in that light. #}
+    <section class="rail-card stage-note">
+      <h3>what this stage decides</h3>
+      <p><b>Two questions, and only two.</b> Is this worth a card at all, and
+        roughly what would the card be about. That is the whole of triage.</p>
+      <p>Everything on screen serves those two — the crop, the sentence you
+        marked, what you wrote beside it, the neighbours. <b>You do not have to
+        be able to transcribe a unit to triage it</b>: a marked passage carries
+        its own sentence, a boxed figure carries nothing and is still obviously
+        worth a card or obviously not.</p>
+      <p>An answer that needs more than <i>yes, and it is about X</i> is a
+        <b>brief</b>, not a decision to postpone — <b>Q</b> queues and records
+        one in the same keystroke. Depth belongs to the card stage, where
+        <code>/extract-cards</code> and <code>/augment</code> pull the page,
+        the pages either side and the source's conventions, and iterate until
+        it can be approved. Here it buys nothing and costs the throughput this
+        stage exists for.</p>
+    </section>
+
     <h3>the whole machine</h3>
     {% include "_fsm.html" %}
 
@@ -163,6 +183,17 @@
       <dd><b>This becomes a card.</b> The greenlight: <code>/extract-cards</code>
           reads everything queued and writes a stub for it. Nothing reaches
           Anki without you approving the card afterwards, in the review view.</dd>
+      <dt><b>Q</b> queue, and say what it is about</dt>
+      <dd>The same, plus the <code>@claude</code> brief, in one keystroke.
+          <b>This is the second half of what this stage decides</b> and it only
+          had a key by accident before — a separate <b>n</b>, on a unit that
+          had usually scrolled past, which is why so many units reach
+          <code>/extract-cards</code> carrying nothing but a picture. One
+          sentence is enough: <i>two cards, one per convention</i>, <i>this is
+          about why the bound is tight, not the bound</i>, <i>merge with the
+          one above</i>. Symmetric with <b>s</b>/<b>S</b>: the bare key does
+          not stop to ask, the shifted one records the sentence that makes the
+          decision useful a month later.</dd>
       <dt><b>s</b> skip</dt>
       <dd><b>Never offer this again.</b> Sticky — it survives re-extraction.
           You are asked for a one-word reason, which is stored.</dd>
@@ -272,6 +303,19 @@
           take a direct decision, and <b>a</b>/<b>d</b> do nothing on them.</dd>
     </dl>
 {% else %}
+    <section class="rail-card stage-note">
+      <h3>what this stage decides</h3>
+      <p><b>Whether the content is right.</b> The unit stage already settled
+        that this is worth a card and roughly what about; nothing here revisits
+        that. What is open is the wording, the hypotheses, the grading and the
+        order — everything that has to be true before it reaches Anki.</p>
+      <p>This is where depth belongs. <code>/augment</code> has the page, the
+        pages either side and the source's conventions, and iterates until
+        <code>check</code> passes; a card can be revised any number of times
+        while it is a draft. <b>Approving is the only irreversible-feeling
+        step, and it is yours alone.</b></p>
+    </section>
+
     <h3>the whole machine</h3>
     {% include "_fsm.html" %}
 

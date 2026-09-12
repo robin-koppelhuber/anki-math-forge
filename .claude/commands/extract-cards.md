@@ -17,6 +17,25 @@ Arguments: `$ARGUMENTS`
 Pass both straight through to the `forge` commands below. The units view
 writes this line for you from whatever you had filtered to.
 
+## Where you are in the pipeline
+
+**The unit stage already decided two things and neither is yours to revisit:**
+that this is worth a card at all, and roughly what the card is about. If a
+unit carries an `@claude` brief, that second answer is written down — read it
+before anything else, because it is the only instruction this pass gets and it
+routinely says something the crop cannot ("two cards, one per convention",
+"this is about *why* the bound is tight, not the bound").
+
+**Everything else is yours.** This is the stage where depth belongs: the exact
+wording, the hypotheses, which of two readings the source meant, whether it
+needs a proof. Pull as much context as the unit was granted and iterate — a
+draft can be revised any number of times before anyone approves it, and
+nothing you write here is final until a human says so.
+
+The one thing that *is* yours to revisit is whether the unit is cardable at
+all — a fragment, a heading, something unreadable. Say so with a suggestion
+rather than deciding (see **What not to card**).
+
 ## Load the context first
 
 A card is only as good as the context you had when you wrote it. Before

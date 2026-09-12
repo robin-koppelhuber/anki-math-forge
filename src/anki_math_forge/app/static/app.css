@@ -1282,6 +1282,17 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   color: var(--muted); margin: 0 0 0.3rem;
 }
 .rail-card .warn { color: var(--warn); }
+/* What this stage decides, said once and at the top: the two questions triage
+   answers, and the fact that depth is the *other* stage's job. Everything
+   below it only makes sense in that light, so it reads before the machine
+   rather than after it. */
+.stage-note {
+  border-left: 2px solid var(--accent);
+  padding-left: 0.6rem;
+}
+.stage-note p { margin: 0 0 0.5rem; color: var(--muted); }
+.stage-note p:last-child { margin-bottom: 0; }
+.stage-note b { color: var(--ink); }
 .sf-title { margin: 0 0 0.4rem; font-size: 12.5px; line-height: 1.35; }
 .source-facts dl {
   display: grid; grid-template-columns: 5.2rem 1fr; gap: 0.2rem 0.5rem;

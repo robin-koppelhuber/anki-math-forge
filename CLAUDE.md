@@ -50,6 +50,33 @@ Turns mathematical source material into reviewed Anki cards. Design doc:
    colours the reader used, the unit's own at full strength and its neighbours
    faded, because a page with six highlights on it has to say which one the
    card is about.
+9. **A unit is a decision; a card is the content.** Two stages, two questions,
+   and neither does the other's work.
+
+   The **unit stage** answers exactly two things: *is this worth a card at
+   all*, and *roughly what would the card be about*. That is the whole of
+   triage. Everything on screen there serves those two questions — the crop,
+   the sentence you marked, what you wrote beside it, the neighbouring marks,
+   and a transcription where one happens to exist. An answer that needs more
+   than "yes, and it is about X" is a brief (`@claude`), not a decision to
+   postpone: `Q` queues and records one in the same keystroke.
+
+   The **card stage** is where content is settled. `/extract-cards` and
+   `/augment` pull whatever context the unit was granted — the page it was
+   printed on, the pages either side, the source's conventions, web lookups
+   where those were granted — and iterate until `check` passes and a human can
+   approve it. Depth belongs here. It does not belong at triage, where it buys
+   nothing and costs the throughput the stage exists for.
+
+   The consequence worth stating: **you do not have to be able to transcribe a
+   unit in order to triage it.** `tex_auto` exists to keep a *segmented*
+   source legible enough to judge (DESIGN.md §4) — the same two questions, not
+   a head start on the answer (invariant 4). A marked passage carries the
+   sentence it covers and needs nothing more; a boxed figure carries neither
+   text nor maths and is still obviously worth a card or obviously not. On a
+   prose source the subject of a unit is what you highlighted and what you
+   wrote about it, never a formula, which is why the triage view shows those
+   and renders no transcription pane at all rather than an empty one.
 
 ## Card format
 
