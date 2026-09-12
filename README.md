@@ -329,6 +329,5 @@ uv run mypy
 - [docs/CONTRACT.md](docs/CONTRACT.md) — the same rules with the reasoning, plus
   the card format and how a source declares its conventions
 - [docs/DESIGN.md](docs/DESIGN.md) — the design doc
-- [docs/ROADMAP.md](docs/ROADMAP.md) — what is missing, and what was rejected
-- [docs/PLAN.md](docs/PLAN.md) — one planning round, closed: the questions and
-  the answers
+- [docs/ROADMAP.md](docs/ROADMAP.md) — what is left, what the Cookbook taught
+  us about its own extraction, and what was rejected

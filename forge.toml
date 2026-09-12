@@ -1,4 +1,23 @@
 # anki-math-forge configuration. One file, all knobs (DESIGN.md ss11).
+#
+# This is a working repo's config, not a template. It is tracked deliberately:
+# `cards/` and every `units.jsonl` are committed too, and they only mean
+# anything against the settings that produced them. A clone with no config
+# renders the committed deck against defaults that are not the ones it was
+# built with, and CI's `forge check` would be linting a different repo.
+#
+# Four values here are decisions of the person whose deck this is, not defaults
+# anybody should inherit. Change these first and leave the rest alone:
+#
+#   [anki] deck            which deck in *your* collection new cards land in
+#   [anki.flags]           what you meant when you flagged a card mid-review
+#   [zotero] units_from    which of your highlight colours start a unit
+#   [zotero.meanings]      what your colour scheme means
+#
+# There is no `forge.example.toml`, because secrets and decisions are not the
+# same thing. `.env` holds credentials and is untracked with a template beside
+# it; everything below is a record of how this deck was built, which is the
+# same reason `sources/<name>/source.toml` is committed.
 
 [repo]
 cards_dir = "cards"
