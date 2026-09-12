@@ -40,7 +40,8 @@ never learns what a card is.
 @dataclass(frozen=True)
 class Node:
     id: str       # opaque and stable. A card node uses its uid
-    label: str    # drawn in the box
+    label: str    # drawn in the box. For a card this is `card_gist`, which is
+                  # the card's own caption, else the unit's, else empty
     detail: str   # second line, and the tooltip
     kind: str     # "card" today; a styling hook, never branched on in Python
     state: str    # "approved" | "draft" | ...; another styling hook
@@ -66,6 +67,13 @@ def card_graph(cards: list[Card], *, homes: dict[str, str]) -> Graph: ...
 means *b before a*, so the edge is `Edge(src=b, dst=a)`. Reading the canvas
 left to right is then reading study order, which is what the key means. Write
 the test for this first.
+
+**A node with no label shows its uid, muted, and says so.** `card_gist`
+returns the empty string for a card nobody has named, and inventing one from
+the filename slug would draw `prod-i-lambda-i-where-lambda-i-text-eig`, which
+is a transliteration of the LaTeX and so exactly what a caption is meant to
+spare you. Showing the gap is also what tells you which cards to name, the way
+the marks legend shows an undeclared colour.
 
 **The id is opaque.** Nothing may assume six hex digits. A concept node would
 use `adjugate` or similar, and every layer below (layout, the position file,

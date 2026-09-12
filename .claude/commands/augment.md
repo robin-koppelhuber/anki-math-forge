@@ -71,6 +71,13 @@ allowed, use it for what the source assumes and does not state, and say in
    - `## uses` — only where the answer alone leaves you asking *why would I
      ever need this*. One clause, the setting in plain words with its formal
      name in parentheses. Most cards should not have one.
+   - `gist` — a few words naming the card, and **refine the one that is
+     already there** rather than leaving a stub's first guess. At most about
+     sixty characters: "the adjugate in terms of the inverse", "why the bound
+     needs independence", "Lemma 2". It is a caption, so it is read wherever
+     the LaTeX front is not: a list, a link from another card, a graph node.
+     Never part of the card, never seen in Anki, and unhashed, so improving
+     the wording costs no re-review.
    - `frequency` and `derivation` — **both, on every card.** `frequency` is
      `core | common | rare`, `derivation` is `definitional | short | long`.
      They are not decoration: `sync` introduces new cards in that order, most

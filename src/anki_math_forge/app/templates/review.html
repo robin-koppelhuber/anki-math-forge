@@ -42,6 +42,14 @@
         <code>{{ card.uid }}</code>
         {% if card.verify %}<span class="badge verify">verify</span>{% endif %}
       </div>
+      {# A few words naming the card. The front beside it is the thing to
+         review; this is the thing to recognise it by in a list, in a link from
+         another card, or on a graph node, where the LaTeX is unreadable.
+         Inherited from the unit when the card has none of its own. #}
+      {% if card.gist %}
+      <p class="gist{{ '' if card.gist_own else ' inherited' }}"
+         title="{{ 'from this card' if card.gist_own else 'from the unit this card was written from' }}. A caption, never part of the card.">{{ card.gist }}</p>
+      {% endif %}
       {% if card.source %}<p class="src">{{ card.source }}</p>{% endif %}
       {% if card.tags %}<p class="tags">{% for tag in card.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</p>{% endif %}
       <p class="path"><code>{{ card.path }}</code></p>

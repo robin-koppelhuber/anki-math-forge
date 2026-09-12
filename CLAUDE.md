@@ -25,9 +25,9 @@ Tests cite these by number. Each links to the reasoning.
    must not become a card by inheritance.
 5. **Editing an approved card un-approves it.** `content_hash` covers content
    and nothing else. Outside it: `status`, `content_hash`, `## notes`,
-   `## verify`, `verify`, `requires`, `frequency`, `derivation`, `web`. Nothing
-   rewrites a file to enforce this; `Card.demotion` reports it, and fixing the
-   cause restores the approval with no re-review.
+   `## verify`, `verify`, `requires`, `frequency`, `derivation`, `web`, `gist`.
+   Nothing rewrites a file to enforce this; `Card.demotion` reports it, and
+   fixing the cause restores the approval with no re-review.
 6. **Card content guidelines live in the skill, not in code.** The Python never
    generates or rewrites card text.
 7. **A crop is authoritative for what is printed and silent about the rest.**
@@ -51,7 +51,8 @@ source and every loader `rglob`s.
 Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
 `unit`, `tags`, `verify`, and optionally `frequency` (`core | common | rare`),
-`derivation` (`definitional | short | long`) and `web`. An unrecognised
+`derivation` (`definitional | short | long`), `web` and `gist` (a few words
+naming the card, for a list or a graph node; never reaches Anki). An unrecognised
 `frequency` or `derivation` is a `check` error.
 
 Sections: `## front` and `## back` required; `conditions`, `prose`, `uses`,

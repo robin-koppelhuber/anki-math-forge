@@ -116,7 +116,22 @@ def test_nothing_downstream_consumes_it() -> None:
     """
     from anki_math_forge import check, context, sync
 
-    for module in (context, sync, check):
+    # `context` builds what a card writer reads and `sync` builds what reaches
+    # Anki. A gist in either becomes an instruction or becomes content, which
+    # is the whole failure this field is shaped to avoid.
+    for module in (context, sync):
         assert ".gist" not in Path(module.__file__).read_text(encoding="utf-8"), (
             f"{module.__name__} reads the gist; it is a window, not a wire"
+        )
+
+    # `check` is the exception, and a narrow one: it may measure the caption's
+    # length, because linting a field is not consuming it. It may not let the
+    # caption decide anything else, so there is exactly one mention and it is
+    # the length rule.
+    source = Path(check.__file__).read_text(encoding="utf-8")
+    reads = [line.strip() for line in source.splitlines() if ".gist" in line]
+    assert reads, "the length rule went away"
+    for line in reads:
+        assert "len(card.gist)" in line, (
+            f"check reads the caption's content, not only its length: {line}"
         )

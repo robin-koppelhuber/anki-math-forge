@@ -1686,6 +1686,29 @@ def card_section(card: Card, config: Config) -> str:
     return unit.locator.section if unit else card.section_name
 
 
+def card_gist(card: Card, config: Config) -> str:
+    """A few words naming this card, or the empty string.
+
+    The card's own `gist` first. Failing that, the gist of the unit it was
+    written from, which answered the same question one stage earlier: a unit's
+    gist says what a card from it would be about, and this *is* that card.
+    Inherited rather than copied into the file, so re-running `/gist` on the
+    unit corrects the label everywhere at once.
+
+    Empty when neither exists, and callers show that as a gap rather than
+    inventing a name from the slug. A caption derived from
+    `prod-i-lambda-i-where-lambda-i-text-eig` is a transliteration of the
+    LaTeX, which is the thing a caption is supposed to spare you.
+    """
+    if card.gist:
+        return card.gist
+    if not card.unit:
+        return ""
+    ledger = _ledgers(config).get(card.source_name)
+    unit = ledger.get(card.unit) if ledger else None
+    return unit.gist if unit else ""
+
+
 def card_in_source(card: Card, source: str) -> bool:
     """Does this card belong to the source the header is scoped to?
 
@@ -2217,6 +2240,10 @@ def _card_payload(
         "source": card.source,
         "unit": card.unit,
         "tags": card.tags,
+        # A few words naming the card, for anywhere the LaTeX front is
+        # unreadable: a list, a graph node, a link to it from another card.
+        "gist": card_gist(card, config),
+        "gist_own": bool(card.gist),
         # What decides where this card lands in the new-card queue. All of it
         # was invisible here: you author `frequency`, `derivation` and
         # `requires` by hand in the file and could not see any of them while

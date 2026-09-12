@@ -1922,6 +1922,22 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 }
 .gist-text { font-size: 1.05em; color: var(--ink); line-height: 1.3; }
 
+/* The same caption on a card, in the meta column beside the front. No label
+   here: on a unit the gist is a reading of a picture and has to say so, while
+   on a card the content is right there to check it against.
+
+   An inherited one is dimmed, because it names the unit's subject rather than
+   this card's, and a unit that became two cards gives both the same words. */
+.meta .gist {
+  display: block;
+  margin: 0 0 0.5rem;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
+  cursor: help;
+}
+.meta .gist.inherited { color: var(--muted); font-style: italic; }
+
 /* The context chip: every size on screen, the one in force written out. A row
    of bare numbers is five things to decode; this reads as a sentence with the
    answer in it -- `context 1 · 3 pages either side · 10 · all`. */

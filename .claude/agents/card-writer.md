@@ -77,10 +77,17 @@ exactly like a good one, and gets reviewed for years.
    occasionally worth its own card. See the skill, *A condition must be worth
    stating*.
 
-5. Set `frequency` and `derivation` in the frontmatter after writing the card
-   (the `new` verb does not take them). Both are optional; leave them off
-   rather than guessing. `definitional` is for facts true by definition, where
-   "how hard to derive" is the wrong question.
+5. Set `gist` in the frontmatter after writing the card: a few words naming
+   it, at most about sixty characters. You have just written the card, so you
+   know what it is about better than any later pass reading it back. It is a
+   caption for a list or a graph node, where the LaTeX front is unreadable,
+   and `/augment` refines it later. Never part of the card, and it never
+   reaches Anki.
+
+6. Set `frequency` and `derivation` in the frontmatter too (the `new` verb
+   takes none of the three). Both are optional; leave them off rather than
+   guessing. `definitional` is for facts true by definition, where "how hard
+   to derive" is the wrong question.
 
 ## Looking things up
 

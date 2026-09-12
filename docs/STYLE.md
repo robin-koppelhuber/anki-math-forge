@@ -94,7 +94,7 @@ entry exists to stop.
 | **scheme** | what each `kind/colour` pair means, declared in `[zotero.meanings]` | legend, palette, mapping |
 | **annotation** | a `@claude` or `@me` line in `## notes`. Blocks sync wherever it sits | note, comment, mark |
 | **brief** | the `@claude` annotation on a unit: the only instruction `/extract-cards` gets | note, prompt |
-| **gist** | one line saying what a card from this unit would be about. A reading, and nothing downstream consumes it | summary, description, title |
+| **gist** | a few words naming what something is about. On a unit, what a card from it would be about; on a card, what the card is. Read as a caption, never as instructions | summary, description, title |
 | **suggestion** | a state `classify` proposed. Never applied on its own | decision, skip |
 | **triage** | the unit stage. Is this worth a card, and roughly about what | review, sorting |
 | **review** | the card stage. Is the content right | triage, checking |

@@ -22,6 +22,11 @@ WARN = "warn"
 # being used for something else.
 USES_CHAR_CAP = 150
 
+# A few words. "Lemma 2", "why the bound needs independence", "the adjugate in
+# terms of the inverse". Long enough to name a card, short enough to fit in a
+# box on a graph without being cut.
+GIST_CAP = 60
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -149,6 +154,18 @@ def check_card(
             "front-too-long",
             f"rendered front is ~{length} chars, cap is {config.front_char_cap} "
             "-- a prompt this long is usually two cards",
+        )
+
+    # A gist is a caption, not a sentence: it labels the card in a list or on a
+    # graph node, where anything past a few words is truncated by whatever is
+    # drawing it. Warn rather than error, because a long one is still better
+    # than none and no card is blocked from syncing by its caption.
+    if len(card.gist) > GIST_CAP:
+        add(
+            WARN,
+            "gist-too-long",
+            f"`gist` is {len(card.gist)} chars, and it is a label rather than a "
+            f"sentence -- past about {GIST_CAP} it is cut off wherever it is shown",
         )
 
     # A `uses` line is meant to be glanceable: one clause naming where the

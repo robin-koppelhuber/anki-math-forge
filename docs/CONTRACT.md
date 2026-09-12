@@ -45,11 +45,12 @@ become a card by inheritance.
 
 Enforced by `content_hash`, which covers the card's content and nothing else.
 Outside it: `status`, `content_hash`, `## notes`, `## verify`, `verify`,
-`requires`, `frequency`, `derivation`, `web`.
+`requires`, `frequency`, `derivation`, `web`, `gist`.
 
-The last four are not claims the card makes. Three decide when you meet it, one
-is a permission granted to whoever writes it, and approving a card is not
-approving its position in the queue.
+The last five are not claims the card makes. Three decide when you meet it, one
+is a permission granted to whoever writes it, one is the caption it appears
+under in a list, and approving a card is not approving its position in the
+queue.
 
 Nothing rewrites a file to enforce this. An approval that no longer holds is
 reported by `Card.demotion` and counts as a draft everywhere it matters, so
@@ -97,12 +98,24 @@ not a decision to postpone. `Q` queues and records one in the same keystroke.
 and writes one line saying what a card from it would be about: "Lemma 2", "why
 the bound needs independence".
 
-It is a reading, and nothing downstream consumes it. `/extract-cards` still
-works from the crop, the page and the brief. Keeping it out of that path is the
-safety property: a machine's guess, written where the next pass reads
-instructions, is indistinguishable from yours one pass later. Its value is that
-disagreeing with it costs one keystroke here, where the same misunderstanding
-found after a card exists costs a rewrite.
+It is a reading, and **no pass that writes content consumes it**.
+`/extract-cards` still works from the crop, the page and the brief. Keeping it
+out of that path is the safety property: a machine's guess, written where the
+next pass reads instructions, is indistinguishable from yours one pass later.
+Its value is that disagreeing with it costs one keystroke here, where the same
+misunderstanding found after a card exists costs a rewrite.
+
+**A card carries a `gist` too**, and it is the same object with the same rule.
+Once a card exists its front is LaTeX, which is the right thing to review and
+the wrong thing to label a list entry or a graph node with, so the card keeps a
+few words naming itself. `/extract-cards` writes the first one, because it has
+just written the card and knows, and `/augment` refines it. A card with none
+inherits the unit's, since that answered the same question one stage earlier.
+
+The line that keeps it safe is that it is **read as a caption and never as
+instructions**: nothing writes card content from it, so a wrong one is a wrong
+label rather than a wrong card. It is unhashed for the same reason, so refining
+the wording costs no re-review, and it never reaches Anki.
 
 **The card stage** is where content is settled. `/extract-cards` and `/augment`
 pull whatever context the unit was granted (the page it was printed on, the
@@ -133,7 +146,8 @@ folder still loads and still syncs.
 
 Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
-`unit`, `tags`, `verify`, and optionally `frequency`, `derivation` and `web`.
+`unit`, `tags`, `verify`, and optionally `frequency`, `derivation`, `web` and
+`gist`.
 
 Sections: `## front` and `## back` are required. `conditions`, `prose`, `uses`,
 `proof`, `verify`, `notes` are optional. They read in that order on the card:

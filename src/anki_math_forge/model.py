@@ -32,6 +32,7 @@ FRONTMATTER_ORDER = (
     "content_hash",
     "source",
     "unit",
+    "gist",
     "frequency",
     "derivation",
     "requires",
@@ -115,6 +116,13 @@ UNHASHED_SECTIONS = frozenset({"notes", "verify"})
 # `web` is a permission granted to whoever writes or augments the card. It is
 # not a claim the card makes, and it is set from the review view with one
 # click; an approval is not a statement about it.
+#
+# `gist` is a caption. It never reaches Anki, no reviewer sees it, and nothing
+# writes card content from it -- it names the card in a list or on a graph node
+# where the LaTeX front is unreadable. A later pass refining the wording must
+# not cost a re-review of mathematics nobody touched. Safe to add without
+# re-stamping anything: no card carries the key yet, so exempting it changes no
+# digest that exists.
 UNHASHED_FRONTMATTER = frozenset({
     "status",
     "content_hash",
@@ -123,6 +131,7 @@ UNHASHED_FRONTMATTER = frozenset({
     "frequency",
     "derivation",
     "web",
+    "gist",
 })
 
 # What `content_hash` used to cover. Kept so that widening the exemption above
@@ -283,6 +292,25 @@ class Card:
             if len(parts) >= 3 and parts[1].strip():
                 return parts[1].strip()
         return ""
+
+    @property
+    def gist(self) -> str:
+        """A few words naming this card, for a list or a graph node.
+
+        A card's own content is LaTeX: `$\\frac{\\partial}{\\partial X}
+        \\prod_i \\lambda_i$` is the right thing to review and the wrong thing
+        to label a box with. This is the name a person would use out loud.
+
+        **Consumed as a label and never as instructions.** That is the line
+        that keeps it as safe as a unit's gist: nothing writes card content
+        from it, so a machine's wrong guess here is a wrong caption rather than
+        a wrong card. Unhashed for the same reason, so refining it does not
+        un-approve anything.
+
+        Empty is the honest state for a card nobody has named. Callers show
+        that rather than inventing a label out of the slug.
+        """
+        return str(self.frontmatter.get("gist") or "").strip()
 
     @property
     def requires(self) -> list[str]:
