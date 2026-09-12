@@ -36,7 +36,7 @@
     </div>
 
     <div class="splitter" data-splitter="card"
-         title="drag to resize — double-click to reset"></div>
+         title="drag to resize · double-click to reset"></div>
     <aside class="meta">
       <div class="row"><span class="badge state-{{ card.status }}">{{ card.status }}</span>
         <code>{{ card.uid }}</code>
@@ -92,8 +92,7 @@
       <p class="held">
         <b>back in the draft pile</b>
         {% if card.demotion == 'annotated' %}while a note is open. Nothing about
-        the card changed and the approval is not withdrawn: resolve the note and
-        it is approved again.{% else %}because it was edited after approval.
+        the card changed. Resolve the note and it is approved again.{% else %}because it was edited after approval.
         Re-read it and approve again.{% endif %}
       </p>
       {% endif %}

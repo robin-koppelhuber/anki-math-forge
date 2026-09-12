@@ -316,7 +316,11 @@ def test_each_stage_says_what_it_decides() -> None:
     for part in (units_part, review_part):
         assert "what this stage decides" in part
     assert "worth a card at all" in units_part
-    assert "do not have to\n        be able to transcribe" in units_part.replace("<b>", "")
+    # Whitespace-normalised and tag-stripped: this used to match on the line
+    # the sentence happened to wrap at, so rewording the paragraph around it
+    # failed a test about what the paragraph *says*.
+    said = " ".join(re.sub(r"<[^>]+>", "", units_part).split())
+    assert "do not have to be able to transcribe" in said
     assert "already settled" in review_part, "the card stage does not re-triage"
 
 
@@ -457,7 +461,7 @@ def test_the_gist_is_labelled_as_a_reading(zotero_config: Config) -> None:
     block = units[units.index('class="gist"') - 200 : units.index('class="gist"') + 500]
     assert "reads as" in block, "not 'is about' -- it is somebody's reading"
     assert "/gist" in block, "and it says who read it"
-    assert "decides nothing" in block, "and that nothing downstream acts on it"
+    assert "Nothing downstream reads it" in block, "and that nothing acts on it"
     assert "cursor: help" in rule(".gist-what")
 
 

@@ -152,7 +152,7 @@ async function annotate(audience = "claude") {
   // The cursor stays. Annotating was treated as a decision -- "said, done,
   // move on" -- which is wrong twice over: a card often wants two notes, and
   // the note that was just written scrolled off before it could be read back.
-  toast("annotated — held out of sync until it is resolved");
+  toast("annotated. Held out of sync until it is resolved");
 }
 
 /* The two gradings, cycled in place.
@@ -205,7 +205,7 @@ async function cycleCardWeb(item) {
   toast(
     result.card.web
       ? "web lookups allowed for this card"
-      : "no lookups — the card says what the source says",
+      : "no lookups: the card says what the source says",
   );
 }
 
@@ -276,7 +276,7 @@ async function resolveAnnotation(index) {
   item.dataset.mtime = result.card ? result.card.mtime : item.dataset.mtime;
   repaintCounts(result.pipeline);
   if (result.card) refresh(item, result.card);
-  toast("resolved — the line is gone from ## notes");
+  toast("resolved. The line is gone from ## notes");
 }
 
 document.addEventListener("click", (event) => {
@@ -303,7 +303,7 @@ function followHash() {
   if (!uid) return;
   // Say so rather than doing nothing. A link that lands on a filter which
   // still excludes its target used to be indistinguishable from a dead one.
-  if (!showByUid(uid)) toast(`${uid} is not in this view — try the status filter`);
+  if (!showByUid(uid)) toast(`${uid} is not in this view. Try the status filter`);
 }
 
 window.addEventListener("hashchange", followHash);

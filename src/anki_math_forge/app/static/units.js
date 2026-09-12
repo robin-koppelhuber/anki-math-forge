@@ -266,7 +266,7 @@ async function setWeb(item, web) {
   toast(
     result.unit.web
       ? "web research allowed for this unit"
-      : "no lookups — the card says what the source says",
+      : "no lookups: the card says what the source says",
   );
 }
 
@@ -434,7 +434,7 @@ const PDF_VIEWS = ["crop", "page", "document"];
 const PDF_VIEW_SAID = {
   crop: "the crop",
   page: "the whole page, box drawn on it",
-  document: "the whole document — scroll it",
+  document: "the whole document, scrolling",
 };
 
 function cyclePdfView() {
@@ -534,7 +534,7 @@ function followHash() {
   if (!id) return;
   // Say so rather than doing nothing: a link that lands on a filter which
   // still excludes its target is otherwise indistinguishable from a dead one.
-  if (!showById(id)) toast(`${id} is not in this view — try the state filter`);
+  if (!showById(id)) toast(`${id} is not in this view. Try the state filter`);
 }
 
 window.addEventListener("hashchange", followHash);

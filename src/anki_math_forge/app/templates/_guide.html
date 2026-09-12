@@ -14,12 +14,12 @@
 {% set counts_scope = counts_scope | default('', true) %}
 <aside class="guide" id="guide" aria-label="what am I looking at">
   <div class="rail-grip right" data-rail="right"
-       title="drag to resize — double-click to reset"></div>
+       title="drag to resize · double-click to reset"></div>
   <div class="guide-scroll">
     <div class="guide-head">
       <span class="guide-title">guide</span>
       <button type="button" class="guide-cycle" id="guide-cycle"
-              title="guide — cycle: counts / everything / hidden (?)">?</button>
+              title="cycle: counts / everything / hidden (?)">?</button>
     </div>
 
     {# Two panes, and the split between them drags. The diagram is what you
@@ -83,13 +83,13 @@
         <dt>declares</dt>
         <dd>{% if sf.declared %}
             {%- for key, value in sf.declared %}<code>{{ key }}</code> {{ value }}{{ '' if loop.last else '; ' }}{% endfor %}
-            {%- else %}<span class="warn">none declared</span> — nothing in
+            {%- else %}<span class="warn">none declared</span>. Nothing in
             <code>[conventions]</code>, so <code>verify</code> has no layout to
-            check against and refuses rather than guessing{% endif %}</dd>
+            check against and refuses rather than guess{% endif %}</dd>
         <dt>web</dt>
         <dd>{% if sf.web %}card writers may look things up
             {{ 'for this source' if sf.web_own else '(repo-wide)' }}
-            {%- else %}no lookups — a card says what this source says{% endif %}</dd>
+            {%- else %}no lookups. A card says what this source says{% endif %}</dd>
         <dt>crops</dt>
         <dd>{{ 'full page width' if sf.crop_width == 'page' else 'the box itself' }},
             {{ sf.crop_context | round | int }}pt around it</dd>
@@ -98,8 +98,8 @@
             either side, per card written</dd>
         <dt>and reads</dt>
         <dd>{% if sf.conventions %}the prose in <code>conventions.md</code>
-            {%- else %}<span class="warn">no conventions.md</span> — whoever writes a
-            card from this is guessing at what is ambient{% endif %}</dd>
+            {%- else %}<span class="warn">no conventions.md</span>. Whoever
+            writes a card here is guessing at what is ambient{% endif %}</dd>
       </dl>
       <p class="rail-more"><button type="button" class="link-button" data-settings>every
         setting, and where it came from &rarr;</button></p>
@@ -113,19 +113,18 @@
     <section class="rail-card stage-note">
       <h3>what this stage decides</h3>
       <p><b>Two questions, and only two.</b> Is this worth a card at all, and
-        roughly what would the card be about. That is the whole of triage.</p>
-      <p>Everything on screen serves those two — the crop, the sentence you
-        marked, what you wrote beside it, the neighbours. <b>You do not have to
-        be able to transcribe a unit to triage it</b>: a marked passage carries
-        its own sentence, a boxed figure carries nothing and is still obviously
-        worth a card or obviously not.</p>
-      <p>An answer that needs more than <i>yes, and it is about X</i> is a
-        <b>brief</b>, not a decision to postpone — <b>Q</b> queues and records
-        one in the same keystroke. Depth belongs to the card stage, where
-        <code>/extract-cards</code> and <code>/augment</code> pull the page,
-        the pages either side and the source's conventions, and iterate until
-        it can be approved. Here it buys nothing and costs the throughput this
-        stage exists for.</p>
+        roughly what would the card be about.</p>
+      <p>Everything on screen serves those two: the crop, the sentence you
+        marked, what you wrote beside it, the neighbours. <b>You do not have
+        to be able to transcribe a unit to triage it.</b> A marked passage
+        carries its own sentence. A boxed figure carries none and is still
+        obviously worth a card, or obviously not.</p>
+      <p>If the answer needs more than <i>yes, and it is about X</i>, write a
+        <b>brief</b>. <b>Q</b> queues and records one in the same keystroke.</p>
+      <p>Depth belongs to the card stage, where <code>/extract-cards</code>
+        and <code>/augment</code> have the page, the pages either side and the
+        source's conventions, and iterate until the card can be approved. Here
+        it costs throughput and buys nothing.</p>
     </section>
 
     <h3>the whole machine</h3>
@@ -134,84 +133,82 @@
     <h3>the unit</h3>
     <dl>
       <dt>where it is</dt>
-      <dd>the section, page and — where the source numbers things — the number
-          it printed. <b>Whatever the source names it by is what makes this
-          unit's id stable</b>: an equation number for a book that has them, a
-          Zotero annotation key for a document you marked up. Neither is a
-          position, which is why adding one more mark renumbers nothing.</dd>
+      <dd>the section, the page, and the number the source printed if it
+          numbers things. <b>The id is built from whatever the source names it
+          by</b>: an equation number in a book that has them, a Zotero
+          annotation key in a document you marked up. Neither is a position,
+          so marking up more of a document renumbers nothing.</dd>
       <dt>the picture</dt>
-      <dd>rendered from the PDF on demand, showing a margin of surrounding page
-          with the unit's own box drawn on it — how much is
-          <code>crop_context</code>, and a source may set its own. <b>The box is
-          what this unit claims to be.</b> If the box holds two numbered
-          equations, or the equation continues outside it, segmentation got it
-          wrong — annotate rather than card it. <b>p</b> cycles the crop, the
-          whole page, and the whole document scrolling.</dd>
+      <dd>rendered from the PDF on demand, with a margin of surrounding page
+          and the unit's own box drawn on it. How much margin is
+          <code>crop_context</code>, and a source may set its own. <b>The box
+          is what this unit claims to be.</b> If it holds two numbered
+          equations, or the equation runs on outside it, segmentation got it
+          wrong: annotate the unit rather than card it. <b>p</b> cycles the
+          crop, the whole page, and the whole document scrolling.</dd>
       <dt>the colours on it</dt>
       <dd>what a reader marked, painted back on in the colours they used. The
-          mark this unit came from is at <b>full strength</b>; everything
+          mark this unit came from is at <b>full strength</b> and everything
           marked nearby is faded, so a page with six highlights on it still
-          says which one the card is about. A unit that came from a mark is cut
-          to the <b>full width of the page</b> — a mark's box is the union of
-          the lines a sentence happened to span, so its left and right edges
-          are wherever that sentence started and stopped mid-column.</dd>
+          says which one the card is about. A unit that came from a mark is
+          cut to the <b>full width of the page</b>. A mark's box is the union
+          of the lines a sentence spanned, so its left and right edges are
+          only wherever that sentence started and stopped mid-column.</dd>
       <dt>the marks underneath</dt>
-      <dd>what each one actually says — the sentence it covers, and anything
-          written beside it. <b>Whether a marked claim is worth a card on its
-          own is mostly a question about its neighbours</b>, and this is them.
-          One marked <b>its own unit</b> you will meet again; the rest are only
-          context for this decision. Two filters over that list, cutting across
-          each other: the group headings fold a <b>kind</b> away, and the
-          swatches above them switch a <b>colour</b> off. Both are yours alone
-          — they change nothing on disk and they are <b>not</b> the rail's
-          "marked as" filter, which decides which units you meet. Narrowing the
-          queue to green claims while also hiding every purple term beside them
-          would remove exactly the context this decision needs.</dd>
+      <dd>what each one says: the sentence it covers, and anything written
+          beside it. <b>Whether a marked claim is worth a card on its own is
+          mostly a question about its neighbours</b>, and these are them. One
+          is marked <b>its own unit</b> and you will meet it again; the rest
+          are context for this decision. Two filters cut across the list: a
+          group heading folds a <b>kind</b> away, and the swatches above them
+          switch a <b>colour</b> off. Both are yours alone and change nothing
+          on disk. Neither is the rail's "marked as" filter, which decides
+          which units you meet at all, and narrowing the queue to green claims
+          while hiding the purple terms beside them would remove exactly the
+          context this decision needs.</dd>
       <dt>the maths beside it</dt>
-      <dd>the transcription, rendered. A <b>hint, not content</b>: where it
-          disagrees with the picture, the picture wins. <span class="badge ocr">transcribed</span>
-          means something read the crop; <span class="badge bad">not transcribed</span>
-          means run <code>/transcribe</code>, or read the crop yourself.</dd>
+      <dd>the transcription, rendered. <b>Treat it as a hint.</b> Where it
+          disagrees with the picture, the picture wins.
+          <span class="badge ocr">transcribed</span> means something read the
+          crop; <span class="badge bad">not transcribed</span> means run
+          <code>/transcribe</code>, or read the crop yourself.</dd>
       <dt>the grey text underneath</dt>
-      <dd>the prose immediately above the equation in the book — the sentence
-          that introduces it. Context for deciding, never a transcription.</dd>
+      <dd>the sentence the book printed just above the equation, to introduce
+          it. Context for deciding. It is not a transcription.</dd>
     </dl>
 
     <h3>what each key does</h3>
     <dl>
       <dt><b>q</b> queue</dt>
-      <dd><b>This becomes a card.</b> The greenlight: <code>/extract-cards</code>
-          reads everything queued and writes a stub for it. Nothing reaches
-          Anki without you approving the card afterwards, in the review view.</dd>
+      <dd><b>This becomes a card.</b> <code>/extract-cards</code> reads
+          everything queued and writes a stub for it. Nothing reaches Anki
+          until you approve the card afterwards, in the review view.</dd>
       <dt><b>Q</b> queue, and say what it is about</dt>
       <dd>The same, plus the <code>@claude</code> brief, in one keystroke.
-          <b>This is the second half of what this stage decides</b> and it only
-          had a key by accident before — a separate <b>n</b>, on a unit that
-          had usually scrolled past, which is why so many units reach
-          <code>/extract-cards</code> carrying nothing but a picture. One
+          <b>This is the second half of what this stage decides.</b> One
           sentence is enough: <i>two cards, one per convention</i>, <i>this is
           about why the bound is tight, not the bound</i>, <i>merge with the
           one above</i>. Symmetric with <b>s</b>/<b>S</b>: the bare key does
-          not stop to ask, the shifted one records the sentence that makes the
-          decision useful a month later.</dd>
+          not stop to ask, and the shifted one records the sentence that makes
+          the decision useful a month later.</dd>
       <dt><b>s</b> skip</dt>
-      <dd><b>Never offer this again.</b> Sticky — it survives re-extraction.
-          You are asked for a one-word reason, which is stored.</dd>
+      <dd><b>Never offer this again.</b> Sticky, so it survives
+          re-extraction.</dd>
       <dt><b>S</b> skip, with a reason</dt>
       <dd>The same, but asks for one word first. Plain <b>s</b> does not,
           because a skip is the commonest key in triage and stopping to type
-          turned one keystroke into a dialogue.</dd>
+          turns one keystroke into a dialogue.</dd>
       <dt><b>u</b> back to new</dt>
       <dd>Undo a decision: the unit returns to the untriaged pool. This is the
           only way back from a skip.</dd>
       <dt><b>a</b> accept &middot; <b>d</b> dismiss</dt>
       <dd>Act on a suggestion, or throw it away. Suggestions come from
-          <code>forge classify</code> or from <code>/classify</code>;
-          both only ever <em>propose</em>. Pressing <b>q</b> or <b>s</b>
-          yourself also clears the suggestion &mdash; you overruled it.</dd>
+          <code>forge classify</code> or <code>/classify</code>, and both only
+          ever <em>propose</em>. Pressing <b>q</b> or <b>s</b> yourself also
+          clears the suggestion, since you overruled it.</dd>
       <dt><b>n</b> / <b>N</b> the brief, and what you parked</dt>
       <dd><b>n</b> writes the <code>@claude</code> brief: the instruction
-          <code>/extract-cards</code> reads before it writes anything — "two
+          <code>/extract-cards</code> reads before it writes anything. "Two
           cards, one per layout convention", "the transcription is wrong, read
           the crop", "merge with the one above". <b>It is the only instruction
           that pass gets</b>, which is why it sits open in the panel rather
@@ -219,61 +216,56 @@
           yourself instead. Both show up in <code>forge todo</code>.</dd>
       <dt>answering an <code>@me</code></dt>
       <dd><b>yes</b>, <b>no</b>, or your own words. The answer is written back
-          <em>with the question</em> — <code>same as 2.4? — no</code> — and
-          unaddressed, so it is a record rather than new work. The <b>&times;</b>
-          deletes without recording anything, which is right when the note was
-          a reminder rather than a question.</dd>
+          <em>with the question</em> (<code>same as 2.4? — no</code>) and
+          unaddressed, so it reads as a record rather than new work. The
+          <b>&times;</b> deletes without recording anything, which is right
+          when the note was a reminder rather than a question.</dd>
       <dt><b>c</b> context size</dt>
       <dd>How much of the document whoever writes this card is handed. <b>The
-          numbers are pages <em>either side</em></b>: 3 hands over seven pages,
-          this one and three each way. Every size is on the chip; click one, or
-          press <b>c</b> to walk them. Cycles
-          through those rather than asking for a number, because the decision
-          is "a bit more" or "all of it" and not a measurement. This is the
-          moment you can tell — the theorem is here and its hypotheses are two
-          pages back, and no per-source default knows that. The badge is always
-          on screen and says whose number it is — <b>source</b> until this unit
-          overrides it — because hiding it until it had already been changed
-          meant never seeing what you were changing. Click it, or press
-          <b>c</b>.</dd>
+          numbers are pages <em>either side</em></b>: 3 hands over seven
+          pages, this one and three each way. Every size is on the chip, so
+          click one or press <b>c</b> to walk them. Sizes rather than a number
+          box, because the decision is "a bit more" or "all of it" and not a
+          measurement. Triage is the moment you can tell, when the theorem is
+          here and its hypotheses are two pages back and no per-source default
+          knows that. The badge is always on screen and says whose number it
+          is, <b>source</b> until this unit overrides it.</dd>
       <dt><b>w</b> web lookups</dt>
       <dd>Whether whoever writes this card may look things up on the web.
-          <b>Off everywhere unless you grant it</b>, and the default is the
-          point: a card is supposed to say what <em>this source</em> says,
-          hypotheses and notation included, and the web is full of cleaner
-          statements of the general theorem. One of those substituted for the
-          printed one looks like a better card right up until the thing you are
-          actually studying turns on the condition the paper had and the
-          internet did not. Grant it here, on a unit that cites a result the
-          source never states — that is the moment you can see the difference.
-          Three states, not two: <b>allowed</b>, <b>no</b>, and neither, which
-          falls back to the source and then the repo. Clicking the one already
-          in force clears the override. A card written from a granted unit
-          inherits the grant, and <code>forge context</code> says which of the
-          three answered.</dd>
+          <b>Off everywhere unless you grant it.</b> A card is supposed to say
+          what <em>this source</em> says, hypotheses and notation included,
+          and the web is full of cleaner statements of the general theorem.
+          Substitute one of those for the printed one and you get what looks
+          like a better card, until the thing you are studying turns on the
+          condition the paper had and the internet did not. Grant it here, on
+          a unit that cites a result the source never states. Three states,
+          not two: <b>allowed</b>, <b>no</b>, and neither, which falls back to
+          the source and then the repo. Click the one already in force to
+          clear the override. A card written from a granted unit inherits the
+          grant, and <code>forge context</code> says which of the three
+          answered.</dd>
       <dt><b>p</b> crop / page / document</dt>
       <dd>Three ways to look at the same geometry. <b>page</b> is the whole
-          page with the unit's own box drawn on it: the two ways segmentation
-          fails are only visible against the surroundings, since a split
-          equation shows its missing lines outside the box and two merged into
-          one show two numbers inside it. <b>document</b> is every page,
-          scrolling, landing on this one — for when the question is not about
-          the region at all but about what the passage is <em>saying</em>, and
-          the answer is three paragraphs up. Three named buttons in the corner
-          of the picture do the same thing in one click each. <b>Clicking the
-          picture itself does nothing</b>, deliberately: it used to cycle the
-          view, which meant leaning in to read a highlight jumped you to the
-          whole document.</dd>
+          page with the unit's own box drawn on it, which is the only way to
+          see how segmentation failed: a split equation shows its missing
+          lines outside the box, and two merged into one show two numbers
+          inside it. <b>document</b> is every page, scrolling, landing on this
+          one, for when the question is not about the region at all but about
+          what the passage is <em>saying</em> three paragraphs up. Three named
+          buttons in the corner of the picture do the same in one click.
+          <b>Clicking the picture itself does nothing</b>, deliberately: it
+          used to cycle the view, so leaning in to read a highlight jumped you
+          to the whole document.</dd>
       <dt><b>z</b> undo</dt>
-      <dd>Undo the last decision, however it was made &mdash; a state change,
-          an accepted suggestion, a dismissed one. It restores what was
-          actually there before, including the reason and any suggestion the
-          action cleared, so a mis-pressed key costs one keystroke. Repeat to
-          walk further back.</dd>
+      <dd>Undo the last decision, however it was made: a state change, an
+          accepted suggestion, a dismissed one. It restores what was actually
+          there before, including the reason and any suggestion the action
+          cleared, so a mis-pressed key costs one keystroke. Repeat to walk
+          further back.</dd>
       <dt><b>j</b> / <b>k</b></dt>
       <dd>Next / previous. Queuing and skipping move you on to the next unit
-          still awaiting a decision &mdash; but the one you just acted on
-          <b>stays in the list</b>, so <b>k</b> always gets you back to it.</dd>
+          still awaiting a decision, but the one you just acted on <b>stays in
+          the list</b>, so <b>k</b> always gets you back to it.</dd>
       <dt><b>f</b> filters &middot; <b>?</b> this guide</dt>
       <dd>Both panels toggle. The guide cycles three sizes: counts, then
           everything, then hidden. Drag either edge to resize it. The left
@@ -287,33 +279,34 @@
     <h3>filters</h3>
     <dl>
       <dt>new / queued / skipped / carded</dt>
-      <dd>The unit's state. <b>new</b> is untriaged, <b>carded</b> means a card
-          exists for it.</dd>
+      <dd>The unit's state. <b>new</b> is untriaged, <b>carded</b> means a
+          card exists for it.</dd>
       <dt>transcribed</dt>
       <dd>Only units whose <code>tex_auto</code> passed the KaTeX gate, so the
           maths is written out beside the crop instead of only pictured. The
-          crop stays authoritative &mdash; if the two disagree, believe the
-          crop and annotate the unit.</dd>
+          crop stays authoritative: if the two disagree, believe the crop and
+          annotate the unit.</dd>
       <dt>suggested</dt>
       <dd>Only units something has proposed a decision for. A suggestion is
-          <b>never applied on its own</b> &mdash; it waits. Most units have
-          none, and that is a result rather than a gap: the classifier is not
-          permitted to propose a skip for an equation the book gave a number,
-          because numbering it is the document asserting it is a result. Those
-          take a direct decision, and <b>a</b>/<b>d</b> do nothing on them.</dd>
+          <b>never applied on its own</b>. Most units have none, which is a
+          result rather than a gap: the classifier may not propose a skip for
+          an equation the book gave a number, because numbering it is the
+          document asserting it is a result. Those take a direct decision, and
+          <b>a</b>/<b>d</b> do nothing on them.</dd>
     </dl>
 {% else %}
     <section class="rail-card stage-note">
       <h3>what this stage decides</h3>
       <p><b>Whether the content is right.</b> The unit stage already settled
-        that this is worth a card and roughly what about; nothing here revisits
-        that. What is open is the wording, the hypotheses, the grading and the
-        order — everything that has to be true before it reaches Anki.</p>
+        that this is worth a card and roughly what about, and nothing here
+        revisits that. What is open is the wording, the hypotheses, the
+        grading and the order: everything that has to be true before it
+        reaches Anki.</p>
       <p>This is where depth belongs. <code>/augment</code> has the page, the
         pages either side and the source's conventions, and iterates until
-        <code>check</code> passes; a card can be revised any number of times
-        while it is a draft. <b>Approving is the only irreversible-feeling
-        step, and it is yours alone.</b></p>
+        <code>check</code> passes. A card can be revised any number of times
+        while it is a draft. <b>Approving is the only step that feels
+        irreversible, and it is yours alone.</b></p>
     </section>
 
     <h3>the whole machine</h3>
@@ -324,51 +317,52 @@
       <dt><b>a</b> approve</dt>
       <dd>This card is right. Stamps <code>content_hash</code>, and
           <code>sync</code> will push it to Anki. <b>Editing it afterwards
-          un-approves it</b> — the hash stops matching and it returns here.</dd>
+          un-approves it</b>: the hash stops matching and it returns
+          here.</dd>
       <dt><b>u</b> back to draft</dt>
-      <dd>Un-approve a card you have changed your mind about. Editing one
-          does this as a side effect &mdash; <code>content_hash</code> stops
-          matching &mdash; but changing your mind is not an edit, and a token
-          change in the editor would be a worse way to say so. Clears the
-          hash, so nothing syncs it.</dd>
+      <dd>Un-approve a card you have changed your mind about. Editing one does
+          this as a side effect, since <code>content_hash</code> stops
+          matching, but changing your mind is not an edit and a token change
+          in the editor would be a worse way to say so. Clears the hash, so
+          nothing syncs it.</dd>
       <dt><b>r</b> reject</dt>
-      <dd>This card is wrong and is not worth fixing. It stays on disk; nothing
-          syncs it.</dd>
+      <dd>This card is wrong and is not worth fixing. It stays on disk and
+          nothing syncs it.</dd>
       <dt><b>e</b> open in $EDITOR</dt>
       <dd>Fix it yourself. The app re-reads from disk, and refuses to write
           over a file that changed underneath it.</dd>
       <dt><b>z</b> undo</dt>
       <dd>Undo the last approve or reject. Approving stamps
           <code>content_hash</code> and rejecting drops it, so this restores
-          the hash too &mdash; the card goes back to the state it was actually
-          in, not merely to the same status. The card you just acted on also
-          stays in the list, so <b>k</b> reaches it.</dd>
+          the hash too: the card goes back to the state it was actually in,
+          not merely to the same status. The card you just acted on stays in
+          the list, so <b>k</b> reaches it.</dd>
       <dt><b>n</b> / <b>N</b> annotate</dt>
-      <dd><b>n</b> leaves an <code>@claude</code> note, a request for Claude;
-          <b>N</b> parks an <code>@me</code> decision instead.
-          <b>Sync refuses any card with an open annotation of either kind,
-          whatever its status</b>, so the note alone holds the card back and
-          you do not touch its status. Annotating moves you on to the next
-          card, like every other decision here; <b>k</b> goes back.</dd>
-      <dt><b>r</b> reject &mdash; and what it is not</dt>
+      <dd><b>n</b> leaves an <code>@claude</code> note, a request for Claude.
+          <b>N</b> parks an <code>@me</code> decision instead. <b>Sync refuses
+          any card with an open annotation of either kind, whatever its
+          status</b>, so the note alone holds the card back and you do not
+          touch its status. Annotating moves you on to the next card, like
+          every other decision here; <b>k</b> goes back.</dd>
+      <dt><b>r</b> reject, and what it is not</dt>
       <dd><code>rejected</code> means <b>this card should not exist</b>. It is
           not a way to park something: an annotated card is already refused by
-          sync <em>whatever</em> its status, so a note alone is enough to hold
-          it back. Rejecting to clear it from the draft list leaves a card
-          Anki is still showing you while the repo says never sync it &mdash;
+          sync <em>whatever</em> its status, so a note alone holds it back.
+          Rejecting to clear it from the draft list leaves a card Anki is
+          still showing you while the repo says never sync it, and
           <code>sync</code> never deletes. Use <b>no notes</b> in the filter
           rail to review only what is actually waiting on you.</dd>
       <dt><b>x</b> resolve</dt>
       <dd>Resolve the card's first annotation, or click <b>resolve</b> on any
-          one of them. <b>Resolving is deleting the line</b>: there is no
+          one of them. <b>Resolving is deleting the line.</b> There is no
           reply and no done-flag, because a note still in the file still
-          blocks sync. Answering it with a second annotation therefore makes
-          things worse, not better &mdash; now two notes block the card.
-          Resolve a <code>@claude</code> note once the work is done;
-          resolve a <code>@me</code> note once you have taken the decision it
-          was holding open. The edit is to <code>## notes</code>, which is
-          outside <code>content_hash</code>, so resolving does <em>not</em>
-          send an approved card back to draft.</dd>
+          blocks sync, so answering one with a second annotation leaves two
+          notes blocking the card. Resolve a <code>@claude</code> note once
+          the work is done, and a <code>@me</code> note once you have taken
+          the decision it was holding open. The edit is to
+          <code>## notes</code>, which is outside <code>content_hash</code>,
+          so resolving does <em>not</em> send an approved card back to
+          draft.</dd>
       <dt><b>j</b> / <b>k</b></dt>
       <dd>Next / previous. Approving or rejecting moves you on to the next
           card still awaiting a decision; the one you just acted on stays in
@@ -383,39 +377,40 @@
     <dl>
       <dt>the two gradings</dt>
       <dd><b>Click either to cycle it.</b> <code>frequency</code> is how often
-          this turns up, <code>derivation</code> is what reconstructing it
-          would take, and together they decide the order Anki introduces new
-          cards in — most useful first, then easiest. A card missing either
-          sorts to the back as unjudged, so the ones nobody graded are the ones
-          you meet last. <b>Neither un-approves the card</b>: they are outside
+          this turns up and <code>derivation</code> is what reconstructing it
+          would take. Together they decide the order Anki introduces new cards
+          in: most useful first, then easiest. A card missing either sorts to
+          the back as unjudged, so the ones nobody graded are the ones you
+          meet last. <b>Neither un-approves the card.</b> They sit outside
           <code>content_hash</code> on the same argument as
-          <code>requires</code> — approving a card is not approving its
+          <code>requires</code>: approving a card is not approving its
           position in the queue, and you learn that a result is
-          <code>common</code> rather than <code>core</code> by meeting it,
-          months later. The cycle passes through unset, so one given by a
+          <code>common</code> rather than <code>core</code> by meeting it
+          months later. The cycle passes through unset, so a grade given by a
           mis-click comes off by carrying on clicking.</dd>
       <dt><code>web</code></dt>
-      <dd>Whether whoever augments this card may look things up. Inherited from
-          the unit it was written from, then the source, then the repo — where
-          it is off. Click to cycle allowed / no / inherit. Also unhashed: it
-          is a permission, not a claim the card makes.</dd>
+      <dd>Whether whoever augments this card may look things up. Inherited
+          from the unit it was written from, then the source, then the repo,
+          where it is off. Click to cycle allowed / no / inherit. Also
+          unhashed: it is a permission rather than a claim the card
+          makes.</dd>
       <dt>front, then <b>given</b></dt>
       <dd>The question, and the setting it is asked in. Conditions sit
-          <b>above the answer</b>, here and in Anki: a constraint you only
-          see after answering is a verdict, not a condition.</dd>
+          <b>above the answer</b>, here and in Anki. A constraint you only see
+          after answering is a verdict rather than a condition.</dd>
       <dt>back</dt>
       <dd>The shortest complete answer.</dd>
       <dt>used for</dt>
       <dd>One line, usually absent: where this result actually turns up.
-          Distinct from prose &mdash; prose says what it <em>means</em>,
-          this says where it <em>appears</em>.</dd>
+          Prose says what it <em>means</em>; this says where it
+          <em>appears</em>.</dd>
       <dt>proof &middot; prose</dt>
-      <dd>A short derivation when it is load-bearing; one sentence of
+      <dd>A short derivation when it is load-bearing, and one sentence of
           intuition when it earns its place.</dd>
       <dt>verify</dt>
       <dd>Python that checks the identity numerically. <b>Never reaches
-          Anki</b> &mdash; it is a check on whoever wrote the card, and it is
-          how three errors in the source were caught.</dd>
+          Anki.</b> It is a check on whoever wrote the card, and it is how
+          three errors in the source were caught.</dd>
     </dl>
 {% endif %}
     </div>
@@ -425,7 +420,7 @@
        which of the two deserves the room changes with what you are doing:
        triaging a marked-up paper, the colours are most of what you need. #}
     <div class="splitter y" data-splitter="guide"
-         title="drag to resize — double-click to reset"></div>
+         title="drag to resize · double-click to reset"></div>
 
     <div class="guide-pane bottom">
     {# What you meant by each colour. The filter rail lists the same marks as
@@ -456,7 +451,7 @@
       <ul class="scheme-list">
         {% for row in scheme %}
         <li class="{{ 'unused' if not row.count }}{{ ' makes-units' if row.makes_a_unit }}{{ ' undeclared' if not row.declared }}"
-            title="{{ row.entries | map(attribute='key') | join(' · ') }} — {{ row.meaning }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}{{ ' — not declared: this is what Zotero says the annotation kind is, not what you used it to mean' if not row.declared }}">
+            title="{{ row.entries | map(attribute='key') | join(' · ') }} — {{ row.meaning }}{{ ' — a mark like this becomes a unit of its own' if row.makes_a_unit }}{{ ' — not declared: this is what Zotero calls the annotation kind, not what you used it to mean' if not row.declared }}">
           <span class="sl-mark">
             {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
             <b class="sl-label">{{ row.label }}</b>
@@ -468,9 +463,9 @@
       </ul>
       {% if undecided %}
       <p class="scheme-default">{{ undecided | length }} of these you have not
-        declared: they read as what Zotero says the annotation <em>kind</em> is,
-        which is not what you used it to mean. Until one is declared it reaches
-        a card writer as a coloured box with no caption.</p>
+        declared. They read as what Zotero calls the annotation <em>kind</em>,
+        which is not what you used it to mean, and until one is declared it
+        reaches a card writer as a coloured box with no caption.</p>
       {% endif %}
       <p class="rail-more">declared in <code>[zotero.meanings]</code> as
         <code>"kind/colour"</code>, or per source in <code>source.toml</code></p>

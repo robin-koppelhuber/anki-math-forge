@@ -35,7 +35,10 @@
    through a box, no overlapping labels. Hand-authored SVG does not stay
    correct on its own. #}
 <figure class="fsm">
-<svg viewBox="0 0 960 640" role="img" aria-labelledby="fsm-title">
+{# 1000 rather than 960: the `blocks sync` label starts at x=796 and runs
+   about 185px, so at 960 its last two words were clipped by the viewBox.
+   Widening adds right-hand margin and leaves every coordinate alone. #}
+<svg viewBox="0 0 1000 640" role="img" aria-labelledby="fsm-title">
   <title id="fsm-title">The life of a unit and the card it becomes</title>
   <defs>
     <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7"
@@ -158,12 +161,12 @@
 <figcaption>
   Two objects, two gates. Everything in <b class="you-key">accent</b> is a
   decision only you make; everything else is mechanical or a command.
-  <b>carded and draft are one moment</b> — the card file is written and the
-  unit is marked in the same breath, and from there on there are two things to
-  keep track of. <b>Transcription</b>, the <b>gist</b> and <b>augmentation</b>
-  are the assistive passes: each hangs off the state it acts on, and none of
-  them moves anything. A <b>suggestion</b> proposes a state and never applies it. An
-  <b>annotation</b> attaches anywhere — which is why it has no arrow to any
-  one box — and <b>stops sync</b> until it is resolved.
+  <b>carded and draft are one moment</b>: the card file is written and the
+  unit marked in the same call, so from here on there are two things to
+  track. <b>Transcription</b>, the <b>gist</b> and <b>augmentation</b>
+  are the assistive passes. Each hangs off the state it acts on and none of
+  them moves anything. A <b>suggestion</b> proposes a state and never applies
+  it. An <b>annotation</b> attaches anywhere, which is why it has no arrow to
+  any one box, and it <b>stops sync</b> until it is resolved.
 </figcaption>
 </figure>

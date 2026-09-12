@@ -19,7 +19,7 @@
        stage costs one keystroke, where disagreeing at the card stage costs a
        rewrite. That asymmetry is the whole argument for the pass. #}
     {% if unit.gist %}
-    <p class="gist"><i class="gist-what" title="written by `/gist`, which read the crop and little else. It decides nothing: /extract-cards still works from the crop, the page and your @claude brief.">reads as</i>
+    <p class="gist"><i class="gist-what" title="written by `/gist`, which read the crop and little else. Nothing downstream reads it: /extract-cards still works from the crop, the page and your @claude brief.">reads as</i>
       <span class="gist-text">{{ unit.gist }}</span></p>
     {% endif %}
     <div class="unit-head">
@@ -106,14 +106,14 @@
         </span>
         <img src="{{ unit.image }}" alt="crop of {{ unit.id }}" loading="lazy" data-crop>
         <figcaption class="crop-missing" hidden>
-          source document not available — crops are rendered from it on demand
+          source document not available. Crops are rendered from it on demand
         </figcaption>
       </figure>
       {% else %}
       <p class="crop-missing">no crop geometry for this unit</p>
       {% endif %}
       {% if aside %}
-      <div class="splitter" data-splitter="units" title="drag to resize — double-click to reset"></div>
+      <div class="splitter" data-splitter="units" title="drag to resize · double-click to reset"></div>
       <div class="beside">
       {% if reads %}
       <div class="transcription">
@@ -121,7 +121,7 @@
         <div class="math">$${{ unit.tex }}$$</div>
         {% elif unit.tex %}
         <pre class="raw">{{ unit.tex }}</pre>
-        <p class="muted">does not parse under KaTeX — the crop is the authority</p>
+        <p class="muted">does not parse under KaTeX. Trust the crop</p>
         {% else %}
         <p class="muted">no transcription; read the crop</p>
         {% endif %}
@@ -197,7 +197,7 @@
 
       </div>
       <div class="splitter y" data-splitter="beside"
-           title="drag to resize — double-click to reset"></div>
+           title="drag to resize · double-click to reset"></div>
       <div class="beside-pane bottom">
 
       {# What the reader actually wrote. The crop shows *where* the marks are;

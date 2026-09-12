@@ -19,7 +19,7 @@ function renderMath(root) {
   if (typeof renderMathInElement !== "function") {
     if (!katexWarned) {
       katexWarned = true;
-      toast("KaTeX did not load — maths is showing as raw LaTeX, not wrong", "bad");
+      toast("KaTeX did not load. The maths is raw LaTeX, not wrong", "bad");
     }
     return;
   }
@@ -87,7 +87,7 @@ async function post(url, body) {
     payload = { error: response.statusText };
   }
   if (response.status === 409) {
-    toast(payload.error || "file changed on disk — reloading", "bad");
+    toast(payload.error || "file changed on disk, reloading", "bad");
     setTimeout(() => location.reload(), 1400);
     throw new Error("stale");
   }
@@ -210,7 +210,7 @@ class Deck {
    filter look like a broken keyboard, so say which it is. */
 function currentOf(deck) {
   const item = deck.current;
-  if (!item) toast("nothing here to act on — the filter is empty");
+  if (!item) toast("nothing to act on: the filter is empty");
   return item;
 }
 
