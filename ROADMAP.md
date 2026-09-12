@@ -604,6 +604,24 @@ have.
   resolve to -- and a navigation away and back is a poor way to look something
   up. One renderer, over `/api/config`; the page it replaced is gone rather
   than kept as a second way to draw the same table.
+- **Built: an open note holds an approved card in the draft pile.** `sync` has
+  always refused an annotated card whatever its status, so it was never going
+  to Anki -- but it sat in the approved pile looking like it was, and
+  `approved 108` counted work that could not move. `Card.demotion` says why an
+  approval is not holding (`edited` or `annotated`) and `effective_status`
+  reads `draft` while it does. **The file is untouched**: `status: approved`
+  stays, so resolving the note restores the approval with no re-review and no
+  re-stamped hash -- which is the whole reason `## notes` sits outside
+  `content_hash`. The card says so, because "draft" alone reads as work lost.
+- **Built: annotating stays on the card.** It was treated as a decision --
+  said, done, move on -- which is wrong twice over: a card often wants two
+  notes, and the one just written scrolled off before it could be read back.
+  The note also now *appears*: the panel was rendered once by the server and
+  never rebuilt, so writing one looked like nothing had happened.
+- **Built: the rail speaks about the work, not to the reader.** "needs you"
+  became "action required", "you decide" became "a human decision". The
+  distinction the labels are actually drawing is mechanical-versus-human, and
+  addressing the reader was a roundabout way of saying it.
 - **Built: the annotation panel, in one fixed place.** `@claude` and `@me`
   were scattered down the main column under everything else, and the `@claude`
   half was a *shut* `<details>` labelled "not for this decision" -- which is a

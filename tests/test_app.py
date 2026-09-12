@@ -414,7 +414,7 @@ def test_notes_are_titled_and_split_by_audience(config: Config, units: Ledger) -
     page = TestClient(create_app(config)).get("/units?state=all").text
     deck = page.split('id="deck"')[1].split('id="empty-filter"')[0]
     assert "the brief for whoever writes the card" in deck
-    assert "yours to decide" in deck
+    assert "parked for a decision" in deck
     assert "decide whether this is worth carding" in deck
     assert "line 3 of 6" in deck
     assert "<details" not in deck.split("notes-pane")[1], "the brief is not collapsed"
@@ -1201,18 +1201,54 @@ def test_review_filters_by_annotation_audience(pdf_source: Config) -> None:
     assert "aaa111" in both and "bbb222" in both and "ccc333" not in both
 
 
-def test_the_annotation_filter_keeps_the_stage_filter(pdf_source: Config) -> None:
-    """"@me on approved cards" is one click from "approved", not a view of
-    its own."""
-    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me on a draft")
+def test_annotating_an_approved_card_returns_it_to_the_draft_pile(
+    pdf_source: Config,
+) -> None:
+    """`sync` has always refused an annotated card whatever its status, so it
+    was never going to Anki -- but it sat in the approved pile looking like it
+    was, and `approved 108` counted work that could not move.
+
+    The file is untouched: `status: approved` stays, so resolving the note
+    restores the approval with no re-review and no re-stamped hash. That is the
+    whole reason `## notes` sits outside `content_hash`.
+    """
     annotate(pdf_source, "bbb222", "demo:2.4:61", "@me on an approved card")
-    card = model.load(next(pdf_source.cards_dir.rglob("bbb222-*.md")))
+    path = next(pdf_source.cards_dir.rglob("bbb222-*.md"))
+    card = model.load(path)
     card.approve()
     card.save()
+
+    held = model.load(path)
+    assert held.status == "approved", "the file still says so"
+    assert held.effective_status == "draft"
+    assert held.demotion == "annotated"
+
+    client = TestClient(create_app(pdf_source))
+    assert "bbb222" not in client.get("/review?status=approved").text
+    assert "bbb222" in client.get("/review?status=draft").text
+
+
+def test_a_resolved_note_restores_the_approval_by_itself(pdf_source: Config) -> None:
+    """No re-review, no re-stamped hash: the approval was never withdrawn."""
+    annotate(pdf_source, "bbb222", "demo:2.4:61", "@me a question")
+    path = next(pdf_source.cards_dir.rglob("bbb222-*.md"))
+    card = model.load(path)
+    card.approve()
+    card.save()
+    assert model.load(path).effective_status == "draft"
+
+    TestClient(create_app(pdf_source)).post("/api/cards/bbb222/resolve", json={"index": 0})
+    assert model.load(path).effective_status == "approved"
+
+
+def test_the_annotation_filter_keeps_the_stage_filter(pdf_source: Config) -> None:
+    """"@me on drafts" is one click from "draft", not a view of its own."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me on a draft")
+    write_card(pdf_source, "ccc333", "demo:2.4:61")
     client = TestClient(create_app(pdf_source))
 
-    approved = client.get("/review?status=approved&annotated=me").text
-    assert "bbb222" in approved and "aaa111" not in approved
+    drafts = client.get("/review?status=draft&annotated=me").text
+    assert "aaa111" in drafts and "ccc333" not in drafts
 
 
 def test_counts_split_annotations_by_audience(pdf_source: Config) -> None:
@@ -1291,9 +1327,9 @@ def test_empty_html_still_shows_when_the_repo_has_no_cards(client: TestClient) -
 # -- the filter rail: every toggle has a way back out ---------------------
 
 
-def needs_you(body: str) -> dict[str, tuple[bool, str]]:
-    """The `needs you` rows, as {label: (active, href)}."""
-    block = re.search(r"<summary>needs you</summary>(.*?)</details>", body, re.S).group(1)
+def action_rows(body: str) -> dict[str, tuple[bool, str]]:
+    """The `action required` rows, as {label: (active, href)}."""
+    block = re.search(r"<summary>action required</summary>(.*?)</details>", body, re.S).group(1)
     rows = {}
     for li in re.findall(r"<li>(.*?)</li>", block, re.S):
         href = re.search(r'href="([^"]+)"', li).group(1).replace("&amp;", "&")
@@ -1304,17 +1340,17 @@ def needs_you(body: str) -> dict[str, tuple[bool, str]]:
 
 def test_an_active_filter_links_to_clearing_itself(client: TestClient, units: Ledger) -> None:
     """It was one-way: once on, the only way off was editing the URL."""
-    rows = needs_you(client.get("/units?state=all&suggested=1").text)
+    rows = action_rows(client.get("/units?state=all&suggested=1").text)
     active, href = rows["suggested"]
     assert active
     assert "suggested=1" not in href, "an active filter must link to its own removal"
 
-    assert not needs_you(client.get("/units?state=all").text)["suggested"][0]
+    assert not action_rows(client.get("/units?state=all").text)["suggested"][0]
 
 
 def test_clearing_one_filter_keeps_the_others(client: TestClient, units: Ledger) -> None:
     """Turning `@me` off should not quietly take `suggested` with it."""
-    rows = needs_you(client.get("/units?state=all&suggested=1&annotated=me").text)
+    rows = action_rows(client.get("/units?state=all&suggested=1&annotated=me").text)
 
     assert rows["@me"][0] and rows["suggested"][0]
     assert "annotated=me" not in rows["@me"][1]
@@ -1324,7 +1360,7 @@ def test_clearing_one_filter_keeps_the_others(client: TestClient, units: Ledger)
 
 def test_me_and_claude_replace_each_other(client: TestClient, units: Ledger) -> None:
     """`annotated` holds one value, so they are alternatives, not a pair."""
-    rows = needs_you(client.get("/units?state=all&annotated=me").text)
+    rows = action_rows(client.get("/units?state=all&annotated=me").text)
     assert rows["@claude"][1].endswith("annotated=claude")
     assert "annotated=me" not in rows["@claude"][1]
 
@@ -1345,7 +1381,7 @@ def test_the_annotation_count_matches_the_view_it_links_to(pdf_source: Config) -
             led.annotate(unit_id, "@me a decision on a unit")
 
     client = TestClient(create_app(pdf_source))
-    assert needs_you(client.get("/review?status=draft").text)["@me"][1]
+    assert action_rows(client.get("/review?status=draft").text)["@me"][1]
     card_count = re.search(
         r'data-count="annotated_me_card">(\d+)<',
         client.get("/review?status=draft").text,
@@ -1466,9 +1502,9 @@ def test_filtering_to_cards_with_no_annotation(pdf_source: Config) -> None:
     clear = client.get("/review?status=draft&annotated=none").text
     assert "bbb222" in clear and "aaa111" not in clear
 
-    rows = needs_you(client.get("/review?status=draft").text)
+    rows = action_rows(client.get("/review?status=draft").text)
     assert rows["no"][1].endswith("annotated=none"), "offered when it is off"
-    assert not needs_you(clear)["no"][1].endswith("annotated=none"), "clears when on"
+    assert not action_rows(clear)["no"][1].endswith("annotated=none"), "clears when on"
 
 
 def test_the_no_notes_count_is_the_complement(pdf_source: Config) -> None:
@@ -1501,14 +1537,25 @@ def test_enter_in_the_prompt_means_ok_not_cancel(client: TestClient, card_path: 
     assert "prompt-cancel" in js, "a non-submit cancel has to be closed by hand"
 
 
-def test_annotate_advances_like_every_other_decision() -> None:
-    """Annotating is a decision: you have said your piece and are done with
-    the card. Leaving the cursor put meant reaching for `j` every time."""
-    js = (Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
-          / "review.js").read_text(encoding="utf-8")
-    body = js[js.index("async function annotate"):js.index("async function openEditor")]
-    assert "deck.nextPending()" in body or "deck.settle" in body, "annotate must move on"
-    assert "activeAnnotated" in body, "and settle out when the filter excludes it"
+def test_annotating_stays_on_the_card() -> None:
+    """It was treated as a decision -- "said, done, move on" -- which is wrong
+    twice over: a card often wants two notes, and the one just written scrolled
+    off before it could be read back."""
+    app = Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
+    js = (app / "review.js").read_text(encoding="utf-8")
+    body = js[js.index("async function annotate") : js.index("async function openEditor")]
+    assert "deck.nextPending()" not in body and "deck.settle" not in body
+
+
+def test_a_new_note_appears_without_a_reload() -> None:
+    """The panel was rendered once by the server and never rebuilt, so writing
+    a note looked like nothing had happened."""
+    app = Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app" / "static"
+    review = (app / "review.js").read_text(encoding="utf-8")
+    assert "function paintAnnotations" in review
+    assert "paintAnnotations(item, card)" in review, "on every refresh, not only on add"
+    units = (app / "units.js").read_text(encoding="utf-8")
+    assert "repaintNotes(item, result.unit)" in units
 
 
 def place_of(body: str, uid: str) -> str:

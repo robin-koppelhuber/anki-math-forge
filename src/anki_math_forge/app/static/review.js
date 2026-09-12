@@ -3,7 +3,6 @@
 
 const deck = new Deck();
 const activeStatus = new URLSearchParams(location.search).get("status") || "draft";
-const activeAnnotated = new URLSearchParams(location.search).get("annotated") || "";
 
 function refresh(item, card) {
   item.dataset.mtime = card.mtime;
@@ -12,6 +11,8 @@ function refresh(item, card) {
     badge.textContent = card.status;
     badge.className = "badge state-" + card.status;
   }
+  paintHeld(item, card);
+  paintAnnotations(item, card);
   // `plain_notes`, not `notes`: the annotations render as their own rows
   // now, so repainting the whole section here printed each one twice.
   const notes = item.querySelector(".notes");
@@ -24,6 +25,64 @@ function refresh(item, card) {
   } else if (notes) {
     notes.remove();
   }
+}
+
+/* An approval that is not holding. Saying "draft" alone reads as work lost:
+   the file still says `approved` and resolving the note restores it, so the
+   card has to show both halves. */
+function paintHeld(item, card) {
+  const meta = item.querySelector(".meta");
+  let banner = item.querySelector(".held");
+  if (!card.demotion) {
+    if (banner) banner.remove();
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement("p");
+    banner.className = "held";
+    meta.insertBefore(banner, item.querySelector(".findings, .checks-ok"));
+  }
+  banner.textContent =
+    card.demotion === "annotated"
+      ? "back in the draft pile while a note is open. Nothing about the card changed and the approval is not withdrawn: resolve the note and it is approved again."
+      : "back in the draft pile because it was edited after approval. Re-read it and approve again.";
+}
+
+/* The note that was just written has to appear. It did not: the panel was
+   rendered once by the server and never rebuilt, so writing one looked like
+   nothing had happened -- and the only way to see it was a reload. */
+function paintAnnotations(item, card) {
+  if (!card.annotations) return;
+  let list = item.querySelector(".annotations");
+  if (!card.annotations.length) {
+    if (list) list.remove();
+    return;
+  }
+  if (!list) {
+    list = document.createElement("ul");
+    list.className = "annotations";
+    const meta = item.querySelector(".meta");
+    meta.insertBefore(list, item.querySelector(".notes") || item.querySelector("figure.crop"));
+  }
+  list.textContent = "";
+  card.annotations.forEach((note, index) => {
+    const row = document.createElement("li");
+    row.className = "annotation " + note.audience;
+    const who = document.createElement("span");
+    who.className = "who";
+    who.textContent = "@" + note.audience;
+    const what = document.createElement("span");
+    what.className = "what";
+    what.textContent = note.text;
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.className = "resolve";
+    drop.dataset.resolve = String(index);
+    drop.title = "resolve: deletes the line, which is the only thing that unblocks sync";
+    drop.textContent = "resolve";
+    row.append(who, what, drop);
+    list.appendChild(row);
+  });
 }
 
 /* Same contract as the units view: the server returns what it replaced, so
@@ -75,10 +134,13 @@ async function act(verb) {
   }
 }
 
-async function annotate() {
+async function annotate(audience = "claude") {
   const item = currentOf(deck);
   if (!item) return;
-  const text = await ask("annotation for " + item.dataset.uid, "@claude ");
+  const text = await ask(
+    audience === "me" ? "a decision to park" : "a request for Claude",
+    audience === "me" ? "@me " : "@claude ",
+  );
   if (!text) return;
   const result = await post(`/api/cards/${item.dataset.uid}/annotate`, {
     text,
@@ -86,15 +148,10 @@ async function annotate() {
   });
   refresh(item, result.card);
   repaintCounts(result.pipeline);
-  // Annotating *is* a decision: you have said your piece and you are done
-  // with the card. Leaving the cursor put meant reaching for `j` every time,
-  // which is the one thing every other action here does for you.
-  if (activeAnnotated === "none") {
-    deck.settle("annotated");
-  } else {
-    deck.nextPending();
-  }
-  toast("annotated — sync refuses it until resolved · k goes back");
+  // The cursor stays. Annotating was treated as a decision -- "said, done,
+  // move on" -- which is wrong twice over: a card often wants two notes, and
+  // the note that was just written scrolled off before it could be read back.
+  toast("annotated — held out of sync until it is resolved");
 }
 
 async function openEditor() {
@@ -113,7 +170,8 @@ bindKeys({
   u: () => act("unapprove"),
   r: () => act("reject"),
   e: openEditor,
-  n: annotate,
+  n: () => annotate("claude"),
+  N: () => annotate("me"),
   x: () => resolveAnnotation(0),
   j: () => deck.nextPending(),
   k: () => deck.prev(),
@@ -138,8 +196,7 @@ async function resolveAnnotation(index) {
   });
   item.dataset.mtime = result.card ? result.card.mtime : item.dataset.mtime;
   repaintCounts(result.pipeline);
-  const row = rows[index];
-  if (row) row.closest(".annotation").remove();
+  if (result.card) refresh(item, result.card);
   toast("resolved — the line is gone from ## notes");
 }
 

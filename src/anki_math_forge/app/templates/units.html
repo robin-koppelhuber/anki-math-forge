@@ -29,7 +29,7 @@
          and hiding it until it had been overridden meant never seeing what you
          were overriding. Click any size, or `c` to walk them. #}
       <span class="badge context-chip{{ ' own' if unit.context_own }}" data-context-chip
-            title="pages either side of this unit's own page, handed to whoever writes its card. 3 means seven pages in all. Inherited from the source until you change it here.">
+            title="pages either side of this unit's own page, handed to whoever writes its card. 3 means seven pages in all. Inherited from the source until set here.">
         <i class="chip-what">context</i>
         {% for step in unit.context_steps %}
         <button type="button" class="ctx-step{{ ' on' if step.on }}"
@@ -127,7 +127,7 @@
                 <p class="mark-meta">
                   {% if m.page %}<span class="mark-page">p{{ m.page }}</span>{% endif %}
                   {% if m.unit %}<a class="mark-goto" href="#{{ m.unit }}"
-                     data-goto="{{ m.unit }}" title="a unit of its own — you will meet it again">its own unit</a>{% endif %}
+                     data-goto="{{ m.unit }}" title="a unit of its own — it comes round again in this deck">its own unit</a>{% endif %}
                 </p>
               </div>
             </li>
@@ -170,7 +170,7 @@
           the one above". It is the only instruction that pass gets.</p>
         {% endif %}
 
-        <h3>yours to decide <span class="at me">@me</span>
+        <h3>parked for a decision <span class="at me">@me</span>
           <button type="button" class="note-add" data-annotate="me">add</button></h3>
         {% if for_me %}
         <ul class="note-list mine">
@@ -183,16 +183,16 @@
             <span class="note-answers">
               <button type="button" data-answer="yes">yes</button>
               <button type="button" data-answer="no">no</button>
-              <button type="button" data-answer="?" title="answer in your own words">…</button>
+              <button type="button" data-answer="?" title="answer in free text">…</button>
               <button type="button" class="note-drop" data-answer="" title="delete without recording an answer">&times;</button>
             </span>
           </li>
           {% endfor %}
         </ul>
         {% else %}
-        <p class="muted note-empty">Nothing parked. <code>@me</code> is for a
-          decision you cannot take yet — answering one leaves the question and
-          the answer behind, so the reasoning survives.</p>
+        <p class="muted note-empty">Nothing parked. <code>@me</code> holds a
+          decision that cannot be taken yet — answering one leaves the question
+          and the answer behind, so the reasoning survives.</p>
         {% endif %}
       </section>
 
@@ -206,7 +206,7 @@
     <p class="suggestion">
       <b>suggested: {{ unit.suggestion.state }}</b> &mdash; {{ unit.suggestion.detail or unit.suggestion.reason }}
       <span class="by">proposed by {{ unit.suggestion.by }}; nothing has been applied</span>
-      <span class="how"><b>a</b> accept &middot; <b>d</b> dismiss &middot; or just decide yourself</span>
+      <span class="how"><b>a</b> accept &middot; <b>d</b> dismiss &middot; or decide directly</span>
     </p>
     {% elif unit.state == 'new' %}
     {# Silence here used to look like a missing feature. It is a result: for a
@@ -214,7 +214,7 @@
     <p class="no-suggestion">
       no suggestion &mdash;
       {% if unit.equation %}the book numbered this one, so nothing proposed skipping it{% else %}nothing had an opinion about this one{% endif %}.
-      Yours to decide.
+      A decision is required.
     </p>
     {% endif %}
     {% if unit.context %}<p class="context">{{ unit.context }}</p>{% endif %}

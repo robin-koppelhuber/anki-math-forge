@@ -1572,7 +1572,13 @@ def _card_payload(
     mine = [f.as_dict() for f in check.findings_for(findings, card)]
     return {
         "uid": card.uid,
-        "status": card.status,
+        "status": card.effective_status,
+        # `status` above is what the card *counts as*; this is what the file
+        # says, and `demotion` is why the two differ. An approval held by an
+        # open note is not withdrawn -- resolving the note restores it -- so
+        # the view has to show both halves or it reads as a lost approval.
+        "declared": card.status,
+        "demotion": card.demotion,
         "source": card.source,
         "unit": card.unit,
         "tags": card.tags,

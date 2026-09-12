@@ -114,7 +114,7 @@ def test_the_meaning_of_a_mark_is_on_the_information_side() -> None:
     you can see on the crop. What one *means* is a fact about the material, so
     it belongs on the right -- and the same sentence in both places is one of
     them not being read."""
-    assert "what your marks mean" in GUIDE
+    assert "what the marks mean" in GUIDE
     assert "scheme-meaning" in GUIDE
     assert "scheme-meaning" not in FILTERS
 
@@ -318,3 +318,29 @@ def test_adding_a_source_is_answered_where_you_would_ask() -> None:
     """The gallery is where you go when the one you want is not on the list."""
     assert "gallery-add" in BASE
     assert "forge zotero --list" in BASE
+
+
+# -- things that should not scale for ever ---------------------------------
+
+
+def test_the_compact_diagram_stops_growing_with_the_rail() -> None:
+    """It tracked the rail exactly, so dragging the rail to half the window
+    scaled a 220-unit viewBox to 900px -- a state machine at poster size, with
+    the legend it shares the rail with pushed off the bottom."""
+    assert "max-width" in rule(".at-a-glance .fsm svg")
+
+
+def test_an_approval_held_by_a_note_says_it_is_not_withdrawn() -> None:
+    """Saying "draft" alone reads as work lost: the file still says approved,
+    and resolving the note restores it."""
+    review = (APP / "templates" / "review.html").read_text(encoding="utf-8")
+    assert "card.demotion" in review
+    assert "not withdrawn" in review
+    assert "function paintHeld" in (APP / "static" / "review.js").read_text(encoding="utf-8")
+
+
+def test_the_rail_speaks_about_the_work_not_to_the_reader() -> None:
+    """"needs you" and "you decide" address the reader; the rail is labelling
+    states of the work."""
+    for banned in ("needs you", "you decide", "yours to decide", "your judgement"):
+        assert banned not in FILTERS, f"{banned!r} is still in the rail"

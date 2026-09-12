@@ -231,12 +231,11 @@
           crop and annotate the unit.</dd>
       <dt>suggested</dt>
       <dd>Only units something has proposed a decision for. A suggestion is
-          <b>never applied on its own</b> &mdash; it waits for you.
-          Most units have none, and that is a result rather than a gap: the
-          classifier is not permitted to propose a skip for an equation the
-          book gave a number, because numbering it is the document asserting
-          it is a result. Those are yours to decide, and <b>a</b>/<b>d</b>
-          do nothing on them.</dd>
+          <b>never applied on its own</b> &mdash; it waits. Most units have
+          none, and that is a result rather than a gap: the classifier is not
+          permitted to propose a skip for an equation the book gave a number,
+          because numbering it is the document asserting it is a result. Those
+          take a direct decision, and <b>a</b>/<b>d</b> do nothing on them.</dd>
     </dl>
 {% else %}
     <h3>the whole machine</h3>
@@ -266,9 +265,9 @@
           the hash too &mdash; the card goes back to the state it was actually
           in, not merely to the same status. The card you just acted on also
           stays in the list, so <b>k</b> reaches it.</dd>
-      <dt><b>n</b> annotate</dt>
-      <dd>Leave an <code>@claude</code> note, a request for Claude. Prefix
-          the text <code>@me</code> instead to park a decision for yourself.
+      <dt><b>n</b> / <b>N</b> annotate</dt>
+      <dd><b>n</b> leaves an <code>@claude</code> note, a request for Claude;
+          <b>N</b> parks an <code>@me</code> decision instead.
           <b>Sync refuses any card with an open annotation of either kind,
           whatever its status</b>, so the note alone holds the card back and
           you do not touch its status. Annotating moves you on to the next
@@ -339,7 +338,7 @@
        and not declared. #}
     {% if scheme is defined and scheme %}
     <section class="rail-card scheme">
-      <h3>what your marks mean</h3>
+      <h3>what the marks mean</h3>
       <ul class="scheme-list">
         {% for row in scheme %}
         <li class="{{ 'unused' if not row.count }}">
@@ -348,8 +347,8 @@
             <b>{{ row.key }}</b>
             {% if row.makes_a_unit %}<i class="scheme-unit" title="a mark like this becomes a unit of its own">unit</i>{% endif %}
             <span class="scheme-meaning">{{ row.meaning }}</span>
-            {% if not row.declared %}<span class="scheme-default">not declared here — this is
-              what the annotation kind is, not what you meant by it</span>{% endif %}
+            {% if not row.declared %}<span class="scheme-default">not declared — this is what the
+              annotation kind is, not what it was used to mean here</span>{% endif %}
           </span>
           <b class="scheme-count">{{ row.count }}</b>
         </li>

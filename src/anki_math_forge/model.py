@@ -363,19 +363,41 @@ class Card:
         return bool(self.stored_hash) and self.stored_hash == self.content_hash()
 
     @property
+    def demotion(self) -> str:
+        """Why an approved card is not really approved: `edited`, `annotated`.
+
+        Two ways an approval stops holding, and they are different situations
+        worth telling apart in the view:
+
+        * **edited** -- the content no longer matches the hash it was approved
+          under. Somebody changed the mathematics after it was signed off.
+        * **annotated** -- an open `@claude` or `@me` line. Nothing about the
+          card changed; a question was raised about it. `sync` has always
+          refused an annotated card whatever its status, so it was never going
+          to Anki -- but it sat in the approved pile looking like it was, and
+          `approved 108` counted work that could not move.
+
+        Neither rewrites the file. `status: approved` stays, so resolving the
+        note restores the approval with no re-review and no re-stamped hash --
+        which is the whole reason `## notes` is outside `content_hash`.
+        """
+        if self.status != "approved":
+            return ""
+        if not self.hash_matches():
+            return "edited"
+        return "annotated" if self.annotations() else ""
+
+    @property
     def effective_status(self) -> str:
-        """`status`, except that an edited approval is really a draft again.
+        """`status`, except that an approval which no longer holds is a draft.
 
         DESIGN.md §8 promises that resolving an annotation "drops the card back
         to `draft` and re-enters review automatically". Nothing rewrites the
         file to make that true -- and it should not, silently -- so the rule
-        lives here instead: a card whose content no longer matches the hash it
-        was approved under counts as a draft everywhere it matters, which is
-        what puts it back in the review queue.
+        lives here instead: a card that cannot go to Anki counts as a draft
+        everywhere it matters, which is what puts it back in the review queue.
         """
-        if self.status == "approved" and not self.hash_matches():
-            return "draft"
-        return self.status
+        return "draft" if self.demotion else self.status
 
     def approve(self) -> None:
         self.frontmatter["status"] = "approved"

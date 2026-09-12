@@ -65,6 +65,19 @@
         {% endif %}
       </div>
 
+      {# An approval that is not holding. It is not withdrawn -- the file still
+         says `approved`, and resolving the note restores it with no re-review
+         -- so saying "draft" alone would read as work lost. #}
+      {% if card.demotion %}
+      <p class="held">
+        <b>back in the draft pile</b>
+        {% if card.demotion == 'annotated' %}while a note is open. Nothing about
+        the card changed and the approval is not withdrawn: resolve the note and
+        it is approved again.{% else %}because it was edited after approval.
+        Re-read it and approve again.{% endif %}
+      </p>
+      {% endif %}
+
       {% if card.findings %}
       <ul class="findings">
         {% for finding in card.findings %}
@@ -114,7 +127,7 @@
 <span class="key-group"><b>u</b> back to draft</span>
 <span class="key-group sep"><b>z</b> undo</span>
 <span class="key-group"><b>e</b> $EDITOR</span>
-<span class="key-group"><b>n</b> annotate &amp; next</span>
+<span class="key-group"><b>n</b>/<b>N</b> note for claude/me</span>
 <span class="key-group"><b>x</b> resolve first note</span>
 <span class="key-group sep"><b>j</b>/<b>k</b> next/prev</span>
 <span class="key-group"><b>f</b> filters</span>

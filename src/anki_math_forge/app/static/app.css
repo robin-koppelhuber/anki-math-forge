@@ -905,9 +905,6 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .in-full .fsm svg { min-width: 620px; }
 .in-full { overflow-x: auto; }
 
-/* The compact diagram is the opposite case: it is built to be narrow, so it
-   should track the rail exactly. */
-.at-a-glance .fsm svg { min-width: 0; }
 
 /* Fenced code in a card -- `## verify` is Python. `<pre>` deliberately: KaTeX
    skips it, which is what you want for code and wrong for prose. */
@@ -1761,3 +1758,23 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 }
 .gallery-add .muted { font-size: 12px; line-height: 1.5; margin: 0 0 0.6rem; max-width: 52rem; }
 .gallery-add .filter-list.runs { max-width: 34rem; padding: 0; }
+
+/* An approval that is not holding. Saying "draft" alone reads as work lost:
+   the file still says `approved`, and resolving the note restores it. */
+.held {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0.6rem 0;
+  padding: 0.5rem 0.6rem;
+  border-left: 3px solid var(--warn);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--ink);
+}
+.held b { display: block; color: var(--warn); }
+
+/* The compact diagram is built to be narrow. Tracking the rail exactly meant
+   that dragging the rail to half the window scaled a 220-unit viewBox up to
+   900px -- a state machine rendered at poster size, with the legend it shares
+   the rail with pushed off the bottom. */
+.at-a-glance .fsm svg { min-width: 0; max-width: 300px; }
