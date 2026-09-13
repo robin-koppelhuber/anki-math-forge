@@ -31,6 +31,16 @@
    showed until it did. */
 [hidden] { display: none !important; }
 
+/* And a closed dialog must win for the same reason, one element down.
+
+   The browser's own `dialog:not([open]) { display: none }` is a UA rule, so any
+   class rule that sets `display` outranks it. `.gallery.adder { display: flex }`
+   did: the card picker's close button set `open` to false and the panel stayed
+   on screen, over the canvas, with the keyboard still going to it. Measured in
+   a real browser -- `dialog.open = false` and `display = flex` at the same
+   time -- which is a state no amount of reading the markup would show. */
+dialog:not([open]) { display: none !important; }
+
 body {
   margin: 0;
   font: 16px/1.55 -apple-system, "Segoe UI", system-ui, sans-serif;
@@ -2329,6 +2339,10 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 
 /* The card picker: which card to put on the canvas. Narrower than the source
    gallery, because a row is one line of text rather than a tile with counts. */
+.gallery.adder[open] {
+  display: flex;
+  flex-direction: column;
+}
 .gallery.adder {
   max-width: 44rem;
   /* The source gallery is deliberately the window: choosing what to work on
@@ -2336,8 +2350,6 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
      question, so it takes the room it needs and stops. */
   height: auto;
   max-height: min(80vh, 44rem);
-  display: flex;
-  flex-direction: column;
 }
 .gallery.adder .add-list { flex: 1; min-height: 0; }
 
@@ -2384,14 +2396,21 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 }
 .order-note a { display: inline-block; margin-top: 0.15rem; }
 
-/* The graph view's way back. The header carries no view links anywhere else,
-   because the filter rail carries both lanes as counts you can click; this
-   view has no rail, so it is the one page where a bare word is the whole
-   navigation. */
-.back-link {
+/* The rare button on a toolbar of common ones. Pushed to the far end so it
+   does not read as a third thing of the same weight as the two beside the
+   counts. */
+.chip.quiet {
+  margin-left: auto;
   color: var(--muted);
-  text-decoration: none;
-  font-weight: 600;
-  white-space: nowrap;
+  border-style: dashed;
 }
-.back-link:hover { color: var(--ink); }
+.chip.quiet:hover { color: var(--ink); border-style: solid; }
+
+/* The header's icon links sit with the gear, so they carry its metrics rather
+   than an anchor's. */
+a.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}

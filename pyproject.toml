@@ -17,6 +17,12 @@ dependencies = [
 # need it. NOTE: PyMuPDF is AGPL-3.0 (or commercial) -- fine for a private repo,
 # worth knowing before this is ever redistributed.
 pdf = ["pymupdf>=1.24"]
+# Driving the app in a real browser (`tests/test_graph_browser.py`). Opt-in and
+# skipped without it, because it starts a server and launches Chrome, and
+# because the rest of the suite needs neither. It uses the Chrome already
+# installed rather than downloading one: `assets/make_assets.py` assumes a
+# local Chrome too, so this is a pip package and nothing else.
+browser = ["playwright>=1.44"]
 # NOTE: there is deliberately no `ocr` extra. Transcription is a Claude Code
 # skill (`/transcribe`) reading crops, not a local vision model -- which is
 # what keeps torch, and a 4 GB dependency tree, out of this project entirely.

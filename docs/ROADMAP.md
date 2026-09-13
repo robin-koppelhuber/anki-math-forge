@@ -46,6 +46,12 @@ What it stops short of, and the trigger for each.
   does not fit.
 - **Quadtree hit-testing.** Linear over every node on `pointermove` is
   microseconds at 108 and fine at 700. Revisit past a few thousand.
+- **Browser tests for the other two views.** `tests/browser/` covers the
+  canvas, because a `<canvas>` and a pointer are the one thing the rest of
+  the suite cannot reach. The units and review views are markup and are
+  covered as markup; the case for driving them is the same one that found
+  a closed dialog still painted over the canvas, so it is a matter of when
+  rather than whether.
 
 What it taught about the deck, which is the answer to the density objection
 this item used to carry: 18 of the Cookbook's 108 cards touch an edge. All 108

@@ -1,0 +1,180 @@
+"""A real browser against a real server, for the one view tests cannot reach.
+
+Everything else in this suite asserts against markup, a payload or a file. The
+canvas has none of those: it is a `<canvas>` and a pointer, so "clicking a box
+opens the card" is not a property of any string. These are the tests that need
+a browser.
+
+**Opt in**, because it starts a server and launches Chrome. `uv sync --extra
+browser`, then `uv run pytest`; without the extra they skip with a line saying
+so, and the rest of the suite is unaffected.
+
+It drives the Chrome that is already installed (`channel="chrome"`) rather than
+downloading one. `assets/make_assets.py` already assumes a local Chrome, so
+this costs a Python package and nothing else.
+"""
+
+from __future__ import annotations
+
+import os
+import socket
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from collections.abc import Iterator
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[2]
+
+pytest.importorskip(
+    "playwright.sync_api",
+    reason="needs the `browser` extra: uv sync --extra browser",
+)
+
+
+def spare_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+# The deck every test starts from: one edge, `aaa111 -> bbb222`, and two cards
+# with none so the picker has something in it.
+DECK = (
+    ("aaa111", "the determinant of a 2 by 2 matrix", ()),
+    ("bbb222", "the inverse of a 2 by 2 matrix", ("aaa111",)),
+    ("ccc333", "the trace as the sum of the diagonal", ()),
+    ("ddd444", "the adjugate as the transposed cofactor matrix", ()),
+)
+
+
+def lay_out(repo: Path) -> None:
+    """Write the deck, replacing whatever the last test left behind."""
+    cards = repo / "cards" / "demo"
+    cards.mkdir(parents=True, exist_ok=True)
+    (repo / "sources" / "demo").mkdir(parents=True, exist_ok=True)
+    (repo / "sources" / "demo" / "graph.json").unlink(missing_ok=True)
+    for uid, gist, needs in DECK:
+        requires = f"requires: [{', '.join(needs)}]\n" if needs else ""
+        (cards / f"{uid}-x.md").write_text(
+            f"---\nuid: {uid}\ntype: identity\nstatus: draft\n"
+            f'source: "Demo"\nunit: "demo:1:1"\ngist: {gist}\n{requires}---\n\n'
+            "## front\n\n$a$\n\n## back\n\n$b$\n",
+            encoding="utf-8",
+        )
+
+
+@pytest.fixture(scope="session")
+def served(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, Path]]:
+    """One server for the whole session, over a throwaway repo.
+
+    Its own repo, not this one: a browser test that drags arrows around would
+    otherwise be writing `requires` into the real deck.
+
+    The server is never restarted between tests, and does not need to be. The
+    app re-reads from disk on every request and caches nothing (invariant 2),
+    so rewriting the card files *is* resetting the fixture.
+    """
+    repo = tmp_path_factory.mktemp("served")
+    (repo / "forge.toml").write_text(
+        '[repo]\ncards_dir = "cards"\nsources_dir = "sources"\n\n'
+        '[sources.demo]\ntitle = "Demo"\ncitation = "Demo"\n',
+        encoding="utf-8",
+    )
+    lay_out(repo)
+
+    port = spare_port()
+    base = f"http://127.0.0.1:{port}"
+    proc = subprocess.Popen(
+        [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "--port",
+            str(port),
+            "--factory",
+            "conftest:_app",
+        ],
+        cwd=Path(__file__).parent,
+        env={
+            **os.environ,
+            "FORGE_TEST_REPO": str(repo),
+            "PYTHONPATH": str(ROOT / "src"),
+            "PYTHONIOENCODING": "utf-8",
+        },
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    deadline = time.monotonic() + 40
+    try:
+        while time.monotonic() < deadline:
+            try:
+                urllib.request.urlopen(f"{base}/api/counts", timeout=1)
+                break
+            except (urllib.error.URLError, OSError):
+                time.sleep(0.2)
+        else:
+            pytest.fail("the test server never came up")
+        yield base, repo
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def _app():  # type: ignore[no-untyped-def]
+    """Uvicorn's `--factory` target: the app over whatever repo was named."""
+    from anki_math_forge import config as config_mod
+    from anki_math_forge.app import create_app
+
+    return create_app(config_mod.load(Path(os.environ["FORGE_TEST_REPO"])))
+
+
+@pytest.fixture
+def live(served: tuple[str, Path]) -> str:
+    """The base URL, with the deck put back to what every test expects.
+
+    Named rather than autouse: a test asking for `live` is asking for a server
+    *and* a known deck, and a fixture that rewrites files should be something a
+    test names out loud.
+    """
+    base, repo = served
+    lay_out(repo)
+    return base
+
+
+@pytest.fixture(scope="session")
+def browser() -> Iterator[object]:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as play:
+        # The installed Chrome, not a downloaded one.
+        launched = play.chromium.launch(channel="chrome")
+        yield launched
+        launched.close()
+
+
+@pytest.fixture
+def page(browser, live):  # type: ignore[no-untyped-def]
+    """A page, with whatever the console complained about collected on it.
+
+    A canvas cannot show a broken script the way markup can: an uncaught error
+    just stops the picture updating, and everything still looks like a page.
+    """
+    pg = browser.new_page(viewport={"width": 1400, "height": 900})
+    pg.complaints = []
+    pg.on("pageerror", lambda e: pg.complaints.append(f"pageerror: {e}"))
+    pg.on(
+        "console",
+        lambda m: pg.complaints.append(f"console.error: {m.text}")
+        if m.type == "error"
+        else None,
+    )
+    yield pg
+    pg.close()

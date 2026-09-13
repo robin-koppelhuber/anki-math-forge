@@ -102,8 +102,9 @@ GRAPH: tuple[Key, ...] = (
     # `f` rather than `a`, which approves on one view and accepts on the other.
     # This is the only filter the canvas has, so `f` is what it is elsewhere.
     Key("every-card", "f", "every card"),
-    Key("drop-edge", "Delete", "remove the selected arrow"),
-    Key("drop-edge-alt", "Backspace", ""),
+    Key("remove-selected", "Delete", "remove what is selected"),
+    Key("remove-selected-alt", "Backspace", ""),
+    Key("open-card", "Enter", "open the selected card"),
     Key("undo", "z", "undo", sep=True),
     # Clears what is under the pointer, which is what `x` does on the review
     # view: an annotation there, a hand-placed position here.

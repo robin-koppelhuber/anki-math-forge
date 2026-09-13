@@ -110,6 +110,9 @@ read from, not the human output.
 
 `uv run pytest` · `uv run ruff check .` · `uv run mypy`
 
+`tests/browser/` drives the app in a real browser (the canvas has no markup
+to assert against). Opt in with `uv sync --extra browser`; it skips without.
+
 ## Frozen
 
 `src/anki_math_forge/extract/pdf.py` is frozen

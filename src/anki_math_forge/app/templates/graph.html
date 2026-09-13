@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set view = "graph" %}
 
 {% block title %}graph · {{ source | default('', true) }} · forge{% endblock %}
 
@@ -6,23 +7,16 @@
    is about what is drawn, the header is where the source picker already lives,
    and a floating panel would cover the part of the picture it describes. #}
 {% block filters %}
-{# The one view link in the app.
-
-   The header deliberately carries none: the left rail holds both lanes as
-   counts you can click, which says where the work is as well as where to go,
-   and two bare words never did. That reasoning does not reach this page --
-   there is no rail here -- and without this the graph view linked to nothing
-   at all, so an empty canvas was a dead end. In the header rather than among
-   the key hints, because this is navigation and that row is a legend. #}
-<a class="back-link" href="/review?source={{ source | urlencode }}&amp;status=all"
-   title="back to the cards themselves">&larr; review</a>
 <button type="button" class="chip" id="graph-all"
-        title="draw every card, including the ones nothing needs and that need nothing (a)">every card</button>
+        title="draw every card, including the ones nothing needs and that need nothing ({{ key('every-card') }})">every card</button>
 <button type="button" class="chip" id="graph-add"
-        title="put a card with no dependencies on the canvas, so you can connect it (n)">add a card</button>
-<button type="button" class="chip" id="graph-reset"
-        title="every box back to its computed place. For one box, point at it and press x.">reset arrangement</button>
+        title="put a card with no dependencies on the canvas, so you can connect it ({{ key('add-card') }})">add a card</button>
 <span class="graph-counts" id="graph-counts"></span>
+{# Last, and pushed to the far end. It undoes every arrangement in the source
+   and is reached perhaps once; beside the two you press constantly it read as
+   a third thing of the same weight. #}
+<button type="button" class="chip quiet" id="graph-reset"
+        title="every box back to its computed place. For one box, point at it and press {{ key('forget-position') }}.">reset arrangement</button>
 {% endblock %}
 
 {% block main %}
@@ -52,8 +46,8 @@
   <p class="gallery-empty" id="add-empty" hidden></p>
   <p class="rail-more settings-foot">
     A card lands in the middle of the view and stays on the canvas until you
-    point at it and press <b>x</b>. Being here is a position in
-    <code>graph.json</code>, not a change to the card.
+    point at it and press <b>{{ key('forget-position') }}</b>. Being here is a
+    position in <code>graph.json</code>, not a change to the card.
   </p>
 </dialog>
 {% endblock %}
@@ -62,7 +56,8 @@
 {# Gestures, which are not keys and so are not in the keymap. #}
 <span class="key-group"><b>drag a dot</b> connect two cards</span>
 <span class="key-group"><b>drag</b> a box to arrange · the background to pan</span>
-<span class="key-group"><b>click</b> a box opens the card · an arrow selects it</span>
+<span class="key-group"><b>click</b> selects a box or an arrow</span>
+<span class="key-group"><b>double-click</b> opens the card</span>
 {% include "_keys.html" %}
 <span class="muted">an arrow writes <code>requires</code> into the card that needs the other</span>
 {% endblock %}

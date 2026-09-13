@@ -173,16 +173,19 @@ The crop link matters: when a card looks off, the fastest resolution is comparin
 
 ### Graph view (`/graph`)
 
-The `requires` of one source, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all.
+The `requires` of one source, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all. Reached from the button between the source picker and the settings gear, on every view.
 
-- `drag a dot` on the left or right of a box to connect two cards, `drag` a box to arrange it, `drag` the background to pan
-- `click` a box opens the card, `click` an arrow selects it, `del` removes it
-- `n` puts a card with no dependencies on the canvas · `x` takes one off · `z` undo · `a` every card · `0` recentres
+- every box has a dot on each side. **Drag from a dot to another card** to connect them, and which dot you grabbed decides which card ends up with the `requires` line
+- `click` selects a box or an arrow · `double-click` opens the card · `del` removes what is selected
+- `drag` a box to arrange it, `drag` the background to pan
+- `+` puts a card with no dependencies on the canvas · `x` puts a box back · `z` undo · `f` every card · `0` recentre
 - the arrangement is written to `sources/<name>/graph.json`, committed and diffable
 
-An arrow writes `requires` into the card that needs the other, which is a write to a card file and is checked like one: refused before the write for a self-reference, an unknown uid, or a cycle, with the loop named. `requires` sits outside `content_hash` under both the current rule and the legacy one, so linking two approved cards demotes neither.
+An arrow runs dot to dot, out of the prerequisite's right port and into the dependent's left port, so the line you drew is the line you get. Dropping one on empty space opens the card picker and connects whatever you choose, because the card you meant is usually one of the ones not drawn.
 
-The default picture is the part of the deck that has edges, and the count it left out is on screen beside the toggle. A card with no dependency either way is drawn once it has a position, which is what `n` writes: being on the canvas is a position in `graph.json`, not a change to the card.
+Writing an arrow writes `requires` into the card that needs the other, which is a write to a card file and is checked like one: refused before the write for a self-reference, an unknown uid, or a cycle, with the loop named. `requires` sits outside `content_hash` under both the current rule and the legacy one, so linking two approved cards demotes neither.
+
+The default picture is the part of the deck that has edges, and the count it left out is on screen beside the toggle. A card with no dependency either way is drawn once it has a position, which is what `+` writes: being on the canvas is a position in `graph.json`, not a change to the card.
 
 `[app] graph = false` turns the whole view off. `requires` still decides the order Anki introduces cards in.
 

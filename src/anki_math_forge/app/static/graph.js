@@ -175,15 +175,20 @@ function whyNot(prereq, dependent) {
   return "";
 }
 
+/* Along the curve, not along the straight line between its ends: an arrow that
+   bows out is grabbed where it is drawn, not where it would have been. */
 function nearEdge(x, y) {
   for (const edge of data.edges) {
-    const a = centre(edge.src);
-    const b = centre(edge.dst);
-    const dx = b.x - a.x;
-    const dy = b.y - a.y;
-    const len = dx * dx + dy * dy;
-    const t = len ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len)) : 0;
-    if (Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy)) <= EDGE_GRAB) return edge;
+    const points = along(port(edge.src, "right"), port(edge.dst, "left"));
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1];
+      const b = points[i];
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len = dx * dx + dy * dy;
+      const u = len ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len)) : 0;
+      if (Math.hypot(x - (a.x + u * dx), y - (a.y + u * dy)) <= EDGE_GRAB) return edge;
+    }
   }
   return null;
 }
@@ -205,21 +210,36 @@ function boxPath(x, y, w, h, r) {
   ctx.closePath();
 }
 
-/* Where the line from `from` to `to` leaves `to`'s box. Drawn centre to centre
-   the arrowheads land under the boxes and the direction -- the one thing the
-   picture is for -- is invisible. */
-function onBorder(from, to) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  if (!dx && !dy) return to;
-  const half = { x: NODE_W / 2 + 6, y: NODE_H / 2 + 6 };
-  const scale = Math.min(
-    dx ? half.x / Math.abs(dx) : Infinity,
-    dy ? half.y / Math.abs(dy) : Infinity,
-  );
-  return { x: to.x - dx * scale, y: to.y - dy * scale };
+/* An arrow runs dot to dot: out of the prerequisite's right port and into the
+   dependent's left port, which are the two things you dragged between.
+
+   Centre to centre, clipped at the border, was the first version and it is what
+   made the picture read as clunky: the line met the box wherever the geometry
+   happened to put it, so the arrow you had just drawn between two dots arrived
+   somewhere else, and two arrows into one card entered at two different places.
+
+   A curve rather than a straight line, because the ports face outwards. The
+   handles are horizontal, so every arrow leaves to the right and enters from
+   the left even when the dependent has been dragged to the left of what it
+   needs -- which is the case a straight line cuts back through both boxes. */
+function bend(from, to) {
+  const reach = Math.max(45, Math.abs(to.x - from.x) * 0.4);
+  return [
+    { x: from.x + reach, y: from.y },
+    { x: to.x - reach, y: to.y },
+  ];
 }
 
+function curve(from, to) {
+  const [c1, c2] = bend(from, to);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, to.x, to.y);
+  ctx.stroke();
+}
+
+/* Where the curve is going as it arrives, so the head points along it rather
+   than along the straight line between the two ends. */
 function arrowhead(from, to) {
   const angle = Math.atan2(to.y - from.y, to.x - from.x);
   const wing = 9;
@@ -231,16 +251,47 @@ function arrowhead(from, to) {
   ctx.fill();
 }
 
+function headOfCurve(from, to) {
+  const [, c2] = bend(from, to);
+  arrowhead(c2, to);
+}
+
+/* The curve as points, for hit-testing and nothing else. Twenty segments is
+   under a pixel of error at the sizes this draws at, and the alternative is
+   solving a cubic for the nearest point. */
+function along(from, to, steps = 20) {
+  const [c1, c2] = bend(from, to);
+  const out = [];
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const v = 1 - u;
+    out.push({
+      x: v ** 3 * from.x + 3 * v * v * u * c1.x + 3 * v * u * u * c2.x + u ** 3 * to.x,
+      y: v ** 3 * from.y + 3 * v * v * u * c1.y + 3 * v * u * u * c2.y + u ** 3 * to.y,
+    });
+  }
+  return out;
+}
+
 function stateOf(id) {
   const node = (data.nodes || []).find((n) => n.id === id);
   return node ? node.state : "";
 }
 
 function drawEdge(edge) {
-  const from = centre(edge.src);
-  const to = onBorder(from, centre(edge.dst));
+  const from = port(edge.src, "right");
+  const at_ = port(edge.dst, "left");
+  /* Stop just short of the dot. Ending on its centre buries the head inside a
+     circle filled with the panel colour, which reads as an arrow that fades
+     out rather than one that arrives. The curve enters horizontally, so
+     backing off along x is backing off along the curve. */
+  const to = { x: at_.x - (PORT_R + 2), y: at_.y };
   const lit = hover && (edge.src === hover.id || edge.dst === hover.id);
-  const on = selected && selected.src === edge.src && selected.dst === edge.dst;
+  const on =
+    selected &&
+    selected.kind === "edge" &&
+    selected.src === edge.src &&
+    selected.dst === edge.dst;
   /* An approved card whose prerequisite is not approved. `sync` would
      introduce it without its foundation, and `check` says so as
      `requires-unapproved` -- after the fact, in a list you read later. The
@@ -258,35 +309,37 @@ function drawEdge(edge) {
   ctx.fillStyle = ctx.strokeStyle;
   ctx.lineWidth = on ? 3 : lit || edge === hoverEdge ? 2 : 1.25;
   if (unbuilt && !on) ctx.setLineDash([7, 4]);
-  ctx.beginPath();
-  ctx.moveTo(from.x, from.y);
-  ctx.lineTo(to.x, to.y);
-  ctx.stroke();
+  curve(from, to);
   ctx.setLineDash([]);
-  arrowhead(from, to);
+  headOfCurve(from, to);
   ctx.restore();
 }
 
 /* The arrow being dragged, and whether it may land where it is pointing. */
 function drawPending() {
   const spot = port(link.node.id, link.side);
-  const tip = link.target ? centre(link.target.id) : link.to;
-  const end = link.target ? onBorder(spot, tip) : tip;
+  /* Onto the target's *opposite* port, so the shape you are dragging is the
+     shape you will get. */
+  const end = link.target
+    ? port(link.target.id, link.side === "right" ? "left" : "right")
+    : link.to;
   ctx.save();
   ctx.strokeStyle = link.why ? colours.bad : colours.accent;
   ctx.fillStyle = ctx.strokeStyle;
   ctx.lineWidth = 2;
   ctx.setLineDash([6, 4]);
-  ctx.beginPath();
-  ctx.moveTo(spot.x, spot.y);
-  ctx.lineTo(end.x, end.y);
-  ctx.stroke();
-  ctx.setLineDash([]);
   /* The head is on the end that will carry it once this lands, which for a
      left-port drag is the box you started from. Drawn now rather than on
      release, so the direction is settled before you commit to it. */
-  if (link.side === "right") arrowhead(spot, end);
-  else arrowhead(end, spot);
+  if (link.side === "right") {
+    curve(spot, end);
+    ctx.setLineDash([]);
+    headOfCurve(spot, end);
+  } else {
+    curve(end, spot);
+    ctx.setLineDash([]);
+    headOfCurve(end, spot);
+  }
   ctx.restore();
 }
 
@@ -367,6 +420,7 @@ const STATE_INK = {
 function drawNode(node) {
   const p = at(node.id);
   const edge = colours[STATE_COLOUR[node.state] || "line"];
+  const picked = selected && selected.kind === "node" && selected.id === node.id;
   const lit = (hover && hover.id === node.id) || (link && link.target === node);
 
   ctx.save();
@@ -380,8 +434,8 @@ function drawNode(node) {
   boxPath(p.x, p.y, NODE_W, NODE_H, NODE_R);
   ctx.fillStyle = colours.panel;
   ctx.fill();
-  ctx.strokeStyle = lit ? colours.accent : edge;
-  ctx.lineWidth = lit ? 2 : 1.25;
+  ctx.strokeStyle = picked || lit ? colours.accent : edge;
+  ctx.lineWidth = picked ? 3 : lit ? 2 : 1.25;
   /* A card from another source is a real node: `requires` may cross them, and
      hiding the target would draw a card whose foundation is elsewhere as a
      foundation itself. Dashed, because it is not yours to arrange here. */
@@ -466,10 +520,13 @@ function describe() {
      this page: add two cards and drag between their dots. It used to say
      "add `requires: [<uid>]` to a card", which was the only way when nothing
      here could write one. */
+  /* The keys are configurable, so the one sentence that teaches this view
+     reads them rather than naming the defaults it was written against. */
+  const keys = keymap();
   note.textContent = data.total
     ? `No card in ${data.source} needs another one yet. ` +
-      "Press n to put a card on the canvas, then drag from a dot on its edge " +
-      "to another card to say which comes first."
+      `Press ${keys["add-card"] || "+"} to put a card on the canvas, then drag ` +
+      "from a dot on its edge to another card to say which comes first."
     : `No cards in ${data.source} yet. Card some units first.`;
 }
 
@@ -511,7 +568,10 @@ async function save(positions) {
 }
 
 async function putBack(node) {
-  if (!node) return;
+  if (!node) {
+    toast("point at a card, or select one");
+    return;
+  }
   /* For a box that has an arrow, this is "go back to where the layout puts
      you". For one that has none, its position is the only reason it is drawn
      at all, so forgetting it takes it off the canvas. Same rule, two visible
@@ -585,6 +645,11 @@ async function undo() {
 const picker = {
   open: false,
   query: "",
+  /* Set when the picker was opened by dropping an arrow on empty space:
+     `{from, side, at}`. Whatever gets picked lands at `at` and is connected to
+     `from` in the same step, which is the gesture finishing rather than being
+     thrown away. */
+  connect: null,
 };
 
 function pickerRows() {
@@ -603,10 +668,10 @@ function paintPicker() {
   const empty = document.getElementById("add-empty");
   list.textContent = "";
   const rows = pickerRows();
-  rows.slice(0, 200).forEach((node) => {
+  rows.slice(0, 200).forEach((node, i) => {
     const row = document.createElement("button");
     row.type = "button";
-    row.className = "add-row";
+    row.className = `add-row${i === 0 ? " first" : ""}`;
     const name = document.createElement("span");
     name.className = `add-name${node.label ? "" : " unnamed"}`;
     name.textContent = node.label || "no caption yet";
@@ -621,8 +686,10 @@ function paintPicker() {
   empty.textContent = (data.absent || []).length
     ? "nothing matches that."
     : "every card in this source is already on the canvas.";
-  document.getElementById("add-count").textContent =
-    `${(data.absent || []).length} not on the canvas`;
+  const left = (data.absent || []).length;
+  document.getElementById("add-count").textContent = picker.connect
+    ? `connect ${labelOf(picker.connect.from.id)} to one of ${left}`
+    : `${left} not on the canvas`;
 }
 
 /* Dropped where you are looking, not at the origin: the canvas pans, and a
@@ -630,29 +697,63 @@ function paintPicker() {
    down and right so they do not land on each other. */
 let dropped = 0;
 
-async function addToCanvas(node) {
+function landingSpot() {
+  if (picker.connect) {
+    /* Under the arrow that was dropped, offset so the box is not centred on
+       the pointer and half on top of the port it came from. */
+    const side = picker.connect.side === "right" ? 0 : -NODE_W;
+    return [
+      Math.round(picker.connect.at.x + side),
+      Math.round(picker.connect.at.y - NODE_H / 2),
+    ];
+  }
   const box = stage.getBoundingClientRect();
   const step = dropped++ * 28;
-  const spot = [
+  return [
     Math.round(-pan.x + box.width / 2 - NODE_W / 2 + step),
     Math.round(-pan.y + box.height / 2 - NODE_H / 2 + step),
   ];
-  if (!(await save({ [node.id]: spot }))) return;
+}
+
+async function addToCanvas(node) {
+  const joining = picker.connect;
+  if (!(await save({ [node.id]: landingSpot() }))) return;
+  if (joining) {
+    /* Close first: the arrow appears behind the panel otherwise, and the
+       gesture is finished either way. */
+    togglePicker(false);
+    const { prereq, dependent } = ends(joining.from, joining.side, node);
+    await load({ recentre: false });
+    await connect(dependent, prereq);
+    return;
+  }
   await load({ recentre: false });
   paintPicker();
   toast(`${node.label || node.id} added · drag a dot to connect it`);
+}
+
+function openPicker(connect = null) {
+  picker.connect = connect;
+  togglePicker(true);
 }
 
 function togglePicker(open) {
   const dialog = document.getElementById("add-card");
   if (!dialog) return;
   picker.open = open === undefined ? !dialog.open : open;
+  const search = document.getElementById("add-search");
   if (picker.open) {
     dropped = 0;
+    /* Cleared every time it opens. It kept whatever you last typed, so
+       reopening showed a list filtered by a word you had forgotten about and
+       read as most of the deck having vanished. */
+    picker.query = "";
+    search.value = "";
     paintPicker();
-    dialog.showModal();
-    document.getElementById("add-search").focus();
+    if (!dialog.open) dialog.showModal();
+    search.focus();
   } else {
+    picker.connect = null;
     dialog.close();
   }
 }
@@ -667,7 +768,16 @@ if (canvas) {
        box would otherwise swallow half of every grab. */
     const grabbed = portAt(p.x, p.y);
     if (grabbed) {
-      link = { node: grabbed.node, side: grabbed.side, to: p, target: null, why: "" };
+      link = {
+        node: grabbed.node,
+        side: grabbed.side,
+        to: p,
+        target: null,
+        why: "",
+        grabX: event.clientX,
+        grabY: event.clientY,
+        far: false,
+      };
       canvas.setPointerCapture(event.pointerId);
       draw();
       return;
@@ -689,6 +799,14 @@ if (canvas) {
     const p = pointer(event);
     if (link) {
       link.to = p;
+      if (
+        Math.abs(event.clientX - link.grabX) > CLICK_SLOP ||
+        Math.abs(event.clientY - link.grabY) > CLICK_SLOP
+      ) {
+        /* A click on a dot that never moved is a mis-click, not an attempt to
+           connect to nothing. Only a real drag offers the picker. */
+        link.far = true;
+      }
       const over = nodeAt(p.x, p.y);
       link.target = over && over !== link.node ? over : null;
       if (link.target) {
@@ -745,27 +863,48 @@ if (canvas) {
         connect(dependent, prereq);
       } else if (pending.why) {
         toast(pending.why, "bad");
+      } else if (pending.far) {
+        /* Let go over nothing, having actually dragged somewhere. The card you
+           meant to connect to is very likely one of the ninety that are not
+           drawn -- that is the whole reason the picker exists -- so offer it
+           rather than throwing the gesture away. Whatever is picked lands
+           where the arrow was dropped and is connected in the same step. */
+        openPicker({ from: pending.node, side: pending.side, at: pending.to });
       }
       return;
     }
     if (!drag) return;
     const { node, far } = drag;
     drag = null;
-    if (node && !far) {
-      if (node.href) location.href = node.href;
-      return;
-    }
     if (node && far) {
       save({ [node.id]: moved[node.id] });
       return;
     }
-    /* A click on nothing. Either an arrow was under it, or the selection is
-       being let go. */
-    if (!far) {
-      const p = pointer(event);
-      selected = nearEdge(p.x, p.y);
-      draw();
-    }
+    if (far) return; /* a pan */
+    /* A click. It selects, and never navigates: opening a card on a single
+       click meant the gesture that picks something out of the picture was also
+       the gesture that left it. Double-click opens, and so does Enter. */
+    const p = pointer(event);
+    /* Named fields rather than a spread: an `Edge` carries its own `kind`
+       ("requires"), so `{kind: "edge", ...edge}` put that back and every test
+       of `selected.kind === "edge"` was false. The arrow drew unselected and
+       Delete quietly did nothing. */
+    const edge = node ? null : nearEdge(p.x, p.y);
+    selected = node
+      ? { kind: "node", id: node.id }
+      : edge && { kind: "edge", src: edge.src, dst: edge.dst };
+    if (!selected) selected = null;
+    draw();
+  });
+
+  /* Open what is selected. Safe to hang off `dblclick` now that the first
+     click only selects: the two gestures no longer fight, which is why the
+     put-a-box-back action had to be a key before. */
+  canvas.addEventListener("dblclick", (event) => {
+    if (!data) return;
+    const p = pointer(event);
+    const node = nodeAt(p.x, p.y);
+    if (node && node.href) location.href = node.href;
   });
 
   canvas.addEventListener("pointercancel", () => {
@@ -795,18 +934,28 @@ document.getElementById("graph-reset").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("graph-add").addEventListener("click", () => togglePicker(true));
+document.getElementById("graph-add").addEventListener("click", () => openPicker());
 document.getElementById("add-close").addEventListener("click", () => togglePicker(false));
 document.getElementById("add-search").addEventListener("input", (event) => {
   picker.query = event.target.value;
   paintPicker();
 });
 
-/* Escape closes the picker, cancels an arrow being drawn, and lets a selected
-   one go, in that order -- innermost first, which is what the key means. */
+/* Type a word, press Enter, take the first match. The list is sorted by
+   nothing in particular, so this is only worth having because the search is
+   over captions: two or three words usually leave one row. */
+document.getElementById("add-search").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  const first = document.querySelector(".add-row");
+  if (first) first.click();
+});
+
+/* Escape closes the picker, cancels an arrow being drawn, and lets a selection
+   go, in that order -- innermost first, which is what the key means. */
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (picker.open) return; /* the dialog closes itself */
+  if (picker.open) return; /* the dialog closes itself, and `close` tidies up */
   if (link) {
     link = null;
     canvas.title = "";
@@ -819,16 +968,49 @@ document.addEventListener("keydown", (event) => {
 
 document.getElementById("add-card").addEventListener("close", () => {
   picker.open = false;
+  picker.connect = null;
 });
+
+/* Delete acts on the selection, whichever kind it is: an arrow goes out of the
+   card file, a card comes off the canvas. A card that has an arrow cannot come
+   off, because an arrow is why it is drawn -- so that says so rather than
+   doing nothing. */
+async function removeSelected() {
+  if (!selected) {
+    toast("nothing selected. Click an arrow or a card first");
+    return;
+  }
+  if (selected.kind === "edge") {
+    await disconnect(selected);
+    return;
+  }
+  const node = data.nodes.find((n) => n.id === selected.id);
+  if (!node) return;
+  if (data.edges.some((e) => e.src === node.id || e.dst === node.id)) {
+    toast("that card has an arrow. Remove the arrow first", "bad");
+    return;
+  }
+  selected = null;
+  await putBack(node);
+}
 
 bindKeys({
   "every-card": () => document.getElementById("graph-all").click(),
-  "add-card": () => togglePicker(true),
+  "add-card": () => openPicker(),
   recentre,
-  "forget-position": () => putBack(hover),
+  "forget-position": () => putBack(hover || (selected && selected.kind === "node"
+    ? data.nodes.find((n) => n.id === selected.id)
+    : null)),
   undo,
-  "drop-edge": () => disconnect(selected),
-  "drop-edge-alt": () => disconnect(selected),
+  "remove-selected": removeSelected,
+  "remove-selected-alt": removeSelected,
+  "open-card": () => {
+    const node = selected && selected.kind === "node"
+      ? data.nodes.find((n) => n.id === selected.id)
+      : hover;
+    if (node && node.href) location.href = node.href;
+    else toast("no card selected");
+  },
   /* The one shared key this view can honour beyond undo. `filters` here is
      the only filter the canvas has, and `guide` has no guide to open. */
   sources: openGallery,
