@@ -49,14 +49,28 @@ STATIC = HERE / "static"
 CDN_KATEX = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist"
 
 
-def key_context(config: Config, view: str) -> dict[str, Any]:
+#: What the "nothing here yet" page can actually do. It has no deck, so none
+#: of the per-item keys have anything to act on -- and it loads no view script,
+#: so until `empty.js` there was nothing bound at all while the footer listed
+#: all fifteen. The first screen anybody sees was the one that lied about how
+#: to drive it.
+EMPTY_VIEW_KEYS = ("filters", "sources", "guide")
+
+
+def key_context(
+    config: Config, view: str, only: tuple[str, ...] | None = None
+) -> dict[str, Any]:
     """Both renderings of one keymap: the legend, and what the browser binds.
 
     Handed to every view rather than assembled per template, so a view cannot
     ship a footer without the bindings that go with it -- which is the shape
     the three hand-written copies were in before `app/keys.py`.
+
+    `only` narrows both halves together, for a page that binds a subset.
     """
     resolved = keymod.resolve(view, config.keys)
+    if only is not None:
+        resolved = [key for key in resolved if key.action in only]
     return {
         "keymap": resolved,
         "keymap_keys": {k.action: k.key for k in resolved},
@@ -204,7 +218,7 @@ def create_app(config: Config) -> FastAPI:
                     "what": "units",
                     "hint": "run `forge extract`",
                     "view": "units",
-                    **key_context(config, "units"),
+                    **key_context(config, "units", EMPTY_VIEW_KEYS),
                     "config": config,
                     "source": resolve_source(config, source),
                     "sources": source_names(config),
@@ -212,9 +226,19 @@ def create_app(config: Config) -> FastAPI:
                 },
             )
         name = resolve_source(config, source)
-        if name not in ledgers:
+        # Asked for, or landed on: the two want opposite things.
+        #
+        # A source named in the URL is honoured even with nothing extracted,
+        # and its view comes up empty. It used to fall through to
+        # `next(iter(ledgers))`, so the URL said `hollow`, the header said
+        # `hollow`, and you were triaging the first book in the config.
+        #
+        # Nothing named is a default, and a default that lands you on an empty
+        # view reads as a broken import. So that one steps past a source with
+        # no ledger to one that has units.
+        if not source and name not in ledgers:
             name = next(iter(ledgers))
-        ledger = ledgers[name]
+        ledger = ledgers.get(name) or Ledger(config.units_path(name))
         # The section rows must show what clicking one would give, so they
         # are counted over everything the *other* filters leave -- the same
         # population, minus the section filter itself.
@@ -358,7 +382,7 @@ def create_app(config: Config) -> FastAPI:
                     "what": "cards",
                     "hint": ("queue some units in the units view, then run `/extract-cards`"),
                     "view": "review",
-                    **key_context(config, "review"),
+                    **key_context(config, "review", EMPTY_VIEW_KEYS),
                     "config": config,
                     "source": name,
                     "sources": source_names(config),
@@ -551,17 +575,14 @@ def create_app(config: Config) -> FastAPI:
             if pair is None or (isinstance(pair, (list, tuple)) and len(pair) == 2)
         }
         path = graph_mod.positions_path(config.sources_dir, name)
-        # Not `_expected_mtime`, which reads "0" as no precondition. That is
-        # right for a card, which always exists by the time anything writes to
-        # it. Here "0" is what the browser was told when the source had no
-        # arrangement yet, and a file that has appeared since belongs to a
-        # reader whose picture of it is empty.
-        raw = str(body.get("mtime", "")).strip()
+        # No staleness check, unlike every other write here. `graph.move` merges
+        # per node, so a writer working from a stale picture cannot destroy a
+        # position it never mentions -- and the guard, while it was on, made two
+        # tabs arranging different halves of one graph ping-pong a 409 and a
+        # reload at each other. See `graph.move` for the whole argument.
         try:
-            positions = graph_mod.move(
-                path, moved, expect_mtime_ns=int(raw) if raw.isdigit() else None
-            )
-        except StaleFileError as exc:
+            positions = graph_mod.move(path, moved)
+        except StaleFileError as exc:  # pragma: no cover - no caller passes one
             return JSONResponse({"error": str(exc), "stale": True}, status_code=409)
         return {
             "positions": {k: list(v) for k, v in positions.items()},
@@ -2262,7 +2283,14 @@ def commands_for(
 def resolve_source(config: Config, source: str) -> str:
     """The source actually in force. An unknown or absent name falls back
     to the first, so a stale link lands somewhere real rather than on an
-    empty deck."""
+    empty deck.
+
+    `source_names` includes a source configured in `forge.toml` with nothing
+    extracted yet, which is the case worth naming: it *is* a source, so it
+    resolves to itself and its view comes up empty rather than silently showing
+    a different book under its name. Only a name that is not a source at all
+    falls back.
+    """
     names = source_names(config)
     if source in names:
         return source

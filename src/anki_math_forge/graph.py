@@ -316,12 +316,20 @@ def move(
     coordinate instead would freeze today's arrangement into the file and stop
     it ever being recomputed.
 
-    The `mtime` precondition is checked inside the lock, which is the only
-    place it means anything: outside it the file can change between the check
-    and the write. **Zero is a precondition, not a missing one**: it is what a
-    reader sees when there is no file, and a file that has appeared since is a
-    reader whose whole picture of the arrangement is empty and wrong. `None`
-    is the missing precondition, for a caller that never read the file.
+    **There is deliberately no `mtime` precondition**, unlike every other write
+    in this app, and the difference is what is being written. A card write
+    rewrites a whole file, so a writer working from a stale copy destroys
+    whatever it did not know about; the precondition is the only thing standing
+    between two tabs and a lost edit. This merges *per node*, so a stale writer
+    cannot destroy a key it never mentions.
+
+    It was guarded, on the reasoning that a reader with a stale picture should
+    be told. Measured with two tabs on one source: each arrangement drag landed
+    and the next one from the other tab took a 409 and a full page reload, so
+    two people arranging different halves of a graph ping-ponged, losing one
+    drag each per turn -- to protect a merge that was already safe. The merge
+    is the guarantee here. `expect_mtime_ns` is kept for a caller that wants
+    the check, and nothing in the app passes it.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     with lock(path):

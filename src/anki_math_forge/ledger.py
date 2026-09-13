@@ -468,6 +468,12 @@ class Ledger:
         unit.state = state
         if state == "skipped" or reason:
             unit.reason = reason
+        elif unit.reason:
+            # A reason belongs to the skip it explains. Leaving it behind meant
+            # `u` produced a `new` unit still captioned "skipped: a heading,
+            # not a claim", and nothing could ever clear it: this branch was
+            # the only writer and it only ever wrote.
+            unit.reason = ""
         # Deciding for yourself overrules anything that was proposed.
         unit.suggestion = None
         return unit

@@ -41,7 +41,8 @@
         {# Just the key. `.step.you` is already the accent colour, so "a human
            decision" was the styling written out a second time, and the other
            steps are bare names already. #}
-        <li class="step you" title="q queues it; Q queues it and records what the card should be about, which is the other half of what this stage decides">q / Q</li>
+        {# The letters come from the keymap, like the footer and the guide. Spelt out here they were the one panel still teaching the default to somebody who had configured something else -- and it is the panel you are looking at while pressing the key. #}
+        <li class="step you" title="{{ key('queue') }} queues it; {{ key('queue-with-brief') }} queues it and records what the card should be about, which is the other half of what this stage decides">{{ key('queue') }} / {{ key('queue-with-brief') }}</li>
         <li><a class="{{ 'on' if view == 'units' and state == 'queued' }}"
                href="{{ filter_url('/units', shared, state='queued') }}">queued<b data-count="queued">{{ pipeline.queued }}</b></a></li>
         <li class="step">/extract-cards</li>
@@ -57,7 +58,7 @@
       <ul class="filter-list flow">
         <li><a class="{{ 'on' if view == 'review' and status == 'draft' }}"
                href="{{ filter_url('/review', shared, status='draft') }}">draft<b data-count="draft">{{ pipeline.draft }}</b></a></li>
-        <li class="step you" title="approve the card; sync pushes it to Anki">a</li>
+        <li class="step you" title="approve the card; sync pushes it to Anki">{{ key('approve') }}</li>
         <li><a class="{{ 'on' if view == 'review' and status == 'approved' }}"
                href="{{ filter_url('/review', shared, status='approved') }}">approved<b data-count="approved">{{ pipeline.approved }}</b></a></li>
         <li class="step">sync → Anki</li>

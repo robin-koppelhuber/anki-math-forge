@@ -59,9 +59,14 @@ let hoverEdge = null;
 /* The dragged position lives here until `pointerup` posts it. Writing on every
    `pointermove` would be a file write per frame. */
 let moved = {};
-/* Inverse operations, newest last. An edge undo is "remove what you added",
-   which is exact and needs nothing remembered about the file; the app's own
-   undo stack restores a *status* snapshot and has nothing to say here. */
+/* Inverse operations, newest last: `{dependent, add|remove}` for an arrow,
+   `{positions}` for an arrangement.
+
+   Moves have to be on here too. They were not, and `z` after moving a box
+   popped the newest *edge* op instead -- so a keystroke that should have put a
+   box back deleted a `requires` from a card file, silently, possibly from a
+   card you had not touched. An edge undo is "remove what you added", which
+   needs nothing remembered; a move undo is the positions from before it. */
 const undone = [];
 
 function palette() {
@@ -74,6 +79,11 @@ function palette() {
     accent: read("--accent"),
     panel: read("--panel"),
     bad: read("--bad"),
+    /* Missing, and `ctx.strokeStyle = undefined` is a silent no-op: the one
+       arrow the picture is supposed to draw attention to -- an approved card
+       resting on a draft one -- kept whatever colour was set last, which on
+       the dark ground made it the least visible line on screen. */
+    warn: read("--warn"),
   };
 }
 
@@ -689,14 +699,14 @@ async function write(dependent, body, said) {
 }
 
 async function connect(dependent, prereq) {
-  if (await write(dependent, { add: prereq }, `${labelOf(dependent)} needs ${labelOf(prereq)} · z undoes`)) {
+  if (await write(dependent, { add: prereq }, `${labelOf(dependent)} needs ${labelOf(prereq)} · ${undoKeyName()} undoes`)) {
     undone.push({ dependent, remove: prereq });
   }
 }
 
 async function disconnect(edge) {
   if (!edge) return;
-  const said = `${labelOf(edge.dst)} no longer needs ${labelOf(edge.src)} · z undoes`;
+  const said = `${labelOf(edge.dst)} no longer needs ${labelOf(edge.src)} · ${undoKeyName()} undoes`;
   if (await write(edge.dst, { remove: edge.src }, said)) {
     undone.push({ dependent: edge.dst, add: edge.src });
     picked = { nodes: [], edge: null };
@@ -707,6 +717,14 @@ async function undo() {
   const step = undone.pop();
   if (!step) {
     toast("nothing to undo");
+    return;
+  }
+  if (step.positions) {
+    if (await save(step.positions)) {
+      await load({ recentre: false });
+      const moved = Object.keys(step.positions).length;
+      toast(`undone: ${moved} ${moved === 1 ? "box" : "boxes"} back`);
+    }
     return;
   }
   const { dependent, ...op } = step;
@@ -902,11 +920,19 @@ if (canvas) {
          one that *is* in the selection keeps the whole selection, which is how
          six boxes move together. */
       if (event.shiftKey) {
+        /* Toggle and stop. It used to fall through into the drag, which built
+           `drag.from` from the selection *after* removing the box under the
+           pointer: a shift-click that wandered four pixels rewrote the
+           positions of every other selected card and left the one you clicked
+           where it was. There is no undo for an arrangement you did not make.
+           */
         const rest = picked.nodes.filter((id) => id !== node.id);
         pickNodes(isPicked(node.id) ? rest : [node.id], !isPicked(node.id));
-      } else if (!isPicked(node.id)) {
-        pickNodes([node.id]);
+        canvas.setPointerCapture(event.pointerId);
+        draw();
+        return;
       }
+      if (!isPicked(node.id)) pickNodes([node.id]);
       drag = {
         kind: "boxes",
         from: Object.fromEntries(pickedBoxes().map((n) => [n.id, at(n.id)])),
@@ -950,7 +976,10 @@ if (canvas) {
         const { prereq, dependent } = ends(link.node, link.side, link.target);
         link.why = whyNot(prereq, dependent);
       } else {
-        link.why = "";
+        /* Over its own box is a refusal `whyNot` already has the words for.
+           Nulling the target lost it, and the release then read as a drop on
+           empty space and opened the card picker. */
+        link.why = over === link.node ? "a card cannot need itself" : "";
       }
       canvas.title = link.why || "";
       draw();
@@ -1015,6 +1044,11 @@ if (canvas) {
         connect(dependent, prereq);
       } else if (pending.why) {
         toast(pending.why, "bad");
+      } else if (pending.far && !(data.absent || []).length) {
+        /* Nothing to offer. In `every card` mode `absent` is empty by
+           construction, so the fallback was always a dead end: a panel saying
+           "connect this to one of 0". */
+        toast("every card is already on the canvas");
       } else if (pending.far) {
         /* Let go over nothing, having actually dragged somewhere. The card you
            meant is very likely one of the ones not drawn -- that is the whole
@@ -1052,12 +1086,24 @@ if (canvas) {
     }
     if (finished.kind === "pan") return;
     if (finished.far) {
-      /* Every box that moved, in one write. Six separate ones would be six
-         merges racing each other, and five of them would lose the mtime. */
+      /* Keyed off what the drag started with, not off `picked`. A key pressed
+         mid-drag -- Escape, Delete -- clears the selection while the drag runs
+         on, and the save then found nothing to write: the box stayed drawn
+         where you had dragged it and went back on the next reload, with
+         nothing on screen saying so. */
       const places = Object.fromEntries(
-        picked.nodes.filter((id) => moved[id]).map((id) => [id, moved[id]]),
+        Object.keys(finished.from)
+          .filter((id) => moved[id])
+          .map((id) => [id, moved[id]]),
       );
-      if (Object.keys(places).length) save(places);
+      if (Object.keys(places).length) {
+        undone.push({
+          positions: Object.fromEntries(
+            Object.keys(places).map((id) => [id, (data.positions || {})[id] || null]),
+          ),
+        });
+        save(places);
+      }
     }
     draw();
   });
@@ -1144,6 +1190,15 @@ document.getElementById("add-search").addEventListener("keydown", (event) => {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (picker.open) return; /* the dialog closes itself, and `close` tidies up */
+  if (drag && drag.kind === "boxes") {
+    /* Put them back where the drag started. Clearing the selection and leaving
+       the drag running is what left a box drawn somewhere it had not been
+       saved to. */
+    Object.entries(drag.from).forEach(([id, spot]) => delete moved[id]);
+    drag = null;
+    draw();
+    return;
+  }
   if (link) {
     link = null;
     canvas.title = "";
@@ -1196,26 +1251,62 @@ async function removeSelected() {
   }
 }
 
+/* A key pressed with a drag or an arrow in flight. `bindKeys` guards on a
+   modal being open and nothing guarded on a gesture being live, so `+`
+   mid-drag opened the picker *over* an arrow that then still landed under it,
+   and `A` changed the selection an in-flight drag was reading. */
+/* The whole selection, as `remove-selected` does. Acting on one box out of
+   six is the kind of asymmetry you only find by pressing it. */
+async function forgetPositions() {
+  const boxes = hover ? [hover] : pickedBoxes();
+  if (!boxes.length) {
+    toast("point at a card, or select some");
+    return;
+  }
+  if (await save(Object.fromEntries(boxes.map((n) => [n.id, null])))) {
+    await load({ recentre: false });
+    toast(
+      boxes.length === 1
+        ? `${labelOf(boxes[0].id)} back to its computed place`
+        : `${boxes.length} boxes back to their computed places`,
+    );
+  }
+}
+
+function openSelected() {
+  const node = hover || pickedBoxes()[0];
+  if (node && node.href) location.href = node.href;
+  else toast("no card selected");
+}
+
+function selectAll() {
+  pickNodes(data.nodes.map((n) => n.id));
+  toast(`${picked.nodes.length} selected`);
+  draw();
+}
+
+function mid(handler) {
+  return () => {
+    if (link || drag) {
+      toast("finish the drag first");
+      return;
+    }
+    handler();
+  };
+}
+
 bindKeys({
-  "every-card": () => document.getElementById("graph-all").click(),
-  "add-card": () => openPicker(),
+  "every-card": mid(() => document.getElementById("graph-all").click()),
+  "add-card": mid(() => openPicker()),
   recentre,
-  "forget-position": () => putBack(hover || pickedBoxes()[0]),
+  "forget-position": forgetPositions,
   undo,
   "remove-selected": removeSelected,
   "remove-selected-alt": removeSelected,
-  "open-card": () => {
-    const node = hover || pickedBoxes()[0];
-    if (node && node.href) location.href = node.href;
-    else toast("no card selected");
-  },
+  "open-card": openSelected,
   "zoom-in": () => zoomBy(ZOOM.step),
   "zoom-out": () => zoomBy(1 / ZOOM.step),
-  "select-all": () => {
-    pickNodes(data.nodes.map((n) => n.id));
-    toast(`${picked.nodes.length} selected`);
-    draw();
-  },
+  "select-all": mid(selectAll),
   /* The one shared key this view can honour beyond undo. `filters` here is
      the only filter the canvas has, and `guide` has no guide to open. */
   sources: openGallery,

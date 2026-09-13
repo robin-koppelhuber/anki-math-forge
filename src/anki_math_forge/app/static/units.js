@@ -64,9 +64,9 @@ async function setState(state, reason) {
   repaintCounts(result.pipeline);
   recordUndo(item, result, state);
   paintState(item, result.unit);
-  toast(`${result.unit.id} → ${result.unit.state} · z undoes`);
+  toast(`${result.unit.id} → ${result.unit.state} · ${undoKeyName()} undoes`);
   if (activeState !== "all" && result.unit.state !== activeState) {
-    deck.settle(result.unit.state);
+    deck.settle(result.unit.state, item);
   } else {
     deck.next();
   }
@@ -75,6 +75,15 @@ async function setState(state, reason) {
 async function decideOnSuggestion(verb) {
   const item = currentOf(deck);
   if (!item) return;
+  /* Both keys refuse the same way. `accept` was refused by the server, which
+     `post` turns into a toast *and* a rethrow nobody caught -- so a routine
+     miss on a key the footer invites you to press became an uncaught page
+     error. `dismiss` was worse: it claimed success and pushed an undo step for
+     a suggestion that was never there. */
+  if (!item.querySelector(".suggestion")) {
+    toast(`${item.dataset.id} has nothing suggested`);
+    return;
+  }
   const result = await post(
     `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/${verb}`,
     { mtime: board.dataset.mtime },
@@ -86,14 +95,14 @@ async function decideOnSuggestion(verb) {
   if (note) note.remove();
   if (verb === "accept") {
     paintState(item, result.unit);
-    toast(`${result.unit.id} → ${result.unit.state} (accepted) · z undoes`);
+    toast(`${result.unit.id} → ${result.unit.state} (accepted) · ${undoKeyName()} undoes`);
     if (activeState !== "all" && result.unit.state !== activeState) {
-      deck.settle(result.unit.state);
+      deck.settle(result.unit.state, item);
     } else {
       deck.next();
     }
   } else {
-    toast("suggestion dismissed · z undoes");
+    toast("suggestion dismissed · ${undoKeyName()} undoes");
   }
 }
 
@@ -109,16 +118,19 @@ async function noteOn(item, text) {
 async function annotate(audience = "claude") {
   const item = currentOf(deck);
   if (!item) return;
-  const prefix = audience === "me" ? "@me " : "@claude ";
-  const text = await ask(
-    audience === "me"
-      ? "a decision to park for yourself"
-      : "the brief for whoever writes the card",
-    prefix,
+  /* The prefix is added here rather than pre-filled into the box. It was the
+     box's starting value, selected, so the first keystroke wiped it and `N`
+     filed an unaddressed note -- which `Ledger.annotate` reads as `@claude`.
+     `N` was indistinguishable from `n`. Asking for the text alone also means
+     an empty answer stays empty rather than writing a bare `@claude` with
+     nothing after it. */
+  const mine = audience === "me";
+  const said = await ask(
+    mine ? "a decision to park for yourself" : "the brief for whoever writes the card",
   );
-  if (!text) return;
-  repaintNotes(item, (await noteOn(item, text)).unit);
-  toast("annotated");
+  if (!said) return;
+  repaintNotes(item, (await noteOn(item, `${mine ? "@me" : "@claude"} ${said}`)).unit);
+  toast(`annotated for ${mine ? "you" : "claude"}`);
 }
 
 /* Queue it, and say what the card is about, in one keystroke.

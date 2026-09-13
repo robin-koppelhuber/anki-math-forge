@@ -23,6 +23,21 @@ from anki_math_forge.config import Config
 APP = Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
 
 
+def deck(config: Config) -> Config:
+    """A repo with a card in it, so the views render themselves rather than
+    the "nothing here yet" page -- which deliberately shows a three-key legend
+    now, because three keys are what it binds."""
+    path = config.cards_dir / "demo" / "aaa111-x.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\nuid: aaa111\ntype: identity\nstatus: draft\n"
+        'unit: "demo:2.4:61"\n---\n\n## front\n\n$a$\n\n## back\n\n$b$\n',
+        encoding="utf-8",
+    )
+    return config
+
+
+
 def test_a_key_means_one_thing_across_the_views_that_have_it() -> None:
     """The rule the defaults are chosen by, and worth more than any individual
     mnemonic: a key that approves here and shows everything there is a key you
@@ -61,7 +76,7 @@ def test_the_footer_and_the_bindings_are_one_list(config: Config) -> None:
     cannot disagree, because the page renders both from `resolve`."""
     import json
 
-    body = TestClient(create_app(config)).get("/review").text
+    body = TestClient(create_app(deck(config))).get("/review").text
     footer = body[body.index('<footer class="bar keys">') : body.index("</footer>")]
     listed = set(re.findall(r"<b>([^<]+)</b>", footer))
     # Parsed rather than pattern-matched, because the failure this guards is
@@ -109,7 +124,7 @@ def with_keys(repo: Path, table: str) -> None:
 def test_a_remapped_key_moves_the_binding_and_the_legend_together(
     config: Config,
 ) -> None:
-    moved = dataclasses.replace(config, keys={"approve": "y"})
+    moved = dataclasses.replace(deck(config), keys={"approve": "y"})
     body = TestClient(create_app(moved)).get("/review").text
     assert "<b>y</b> approve" in body
     assert '"approve": "y"' in body
@@ -119,6 +134,9 @@ def test_a_remapped_key_moves_the_binding_and_the_legend_together(
 def test_a_remapped_key_reaches_the_guide_too(config: Config) -> None:
     """The guide is where a key is explained. Left hard-coded it would teach
     the default to somebody who had configured something else."""
+    from anki_math_forge import extract
+
+    extract.run(config, "demo")
     moved = dataclasses.replace(config, keys={"queue": "1"})
     body = TestClient(create_app(moved)).get("/units").text
     explained = body[body.index("what each key does") :]
@@ -185,3 +203,35 @@ def test_each_view_keeps_its_own_undo_stack() -> None:
         assert f'loadUndo("{view}")' in js
         assert f'saveUndo("{view}"' in js
         assert f"step.{shape}" in js, "and the two shapes really do differ"
+
+
+def test_the_nothing_here_yet_page_binds_the_keys_it_lists(config: Config) -> None:
+    """It extends the same base as the other views, so it renders the same
+    header, rails and footer -- but it overrode no `scripts` block, so
+    `bindKeys` was never called and not one of the fifteen keys its footer
+    listed did anything. The first screen anybody sees was the one that lied
+    about how to drive it.
+
+    Three now, on both sides: `EMPTY_VIEW_KEYS` narrows the legend and
+    `empty.js` binds the same three, so neither can advertise what the other
+    does not do.
+    """
+    from anki_math_forge.app import EMPTY_VIEW_KEYS
+
+    body = TestClient(create_app(config)).get("/review").text
+    assert "no cards here yet" in body, "the fixture repo has no cards"
+    assert '/static/empty.js' in body, "the page loads something that binds"
+
+    footer = body[body.index('<footer class="bar keys">') : body.index("</footer>")]
+    listed = set(re.findall(r"<b>([^<]+)</b>", footer))
+    expected = {
+        entry.key
+        for entry in keymod.resolve("review", {})
+        if entry.action in EMPTY_VIEW_KEYS
+    }
+    assert listed == expected, f"listed {sorted(listed)}, binds {sorted(expected)}"
+
+    js = (APP / "static" / "empty.js").read_text(encoding="utf-8")
+    block = js[js.index("bindKeys({") : js.index("});", js.index("bindKeys({"))]
+    handled = set(re.findall(r"^\s{2}([a-z][a-z-]*):", block, re.M))
+    assert handled == set(EMPTY_VIEW_KEYS), f"binds {sorted(handled)}"

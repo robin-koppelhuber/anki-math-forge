@@ -100,10 +100,19 @@ async function undo() {
     return;
   }
   const item = deck.items.find((node) => node.dataset.uid === step.uid);
-  const result = await post(`/api/cards/${step.uid}/restore`, {
-    snapshot: step.before,
-    mtime: item ? item.dataset.mtime : "",
-  });
+  let result;
+  try {
+    result = await post(`/api/cards/${step.uid}/restore`, {
+      snapshot: step.before,
+      mtime: step.mtime || (item ? item.dataset.mtime : ""),
+    });
+  } catch (e) {
+    /* `post` has already toasted and, on a 409, scheduled the reload. Letting
+       it through leaves an uncaught rejection in the console of a page that is
+       behaving correctly, which is noise in the one place you look when
+       something is actually wrong. */
+    return;
+  }
   repaintCounts(result.pipeline);
   if (item) {
     refresh(item, result.card);
@@ -122,14 +131,26 @@ async function act(verb) {
     mtime: item.dataset.mtime,
   });
   if (result.before) {
-    undoStack.push({ uid: item.dataset.uid, before: result.before, what: verb });
+    /* The mtime this write produced, not the one on the element. Undo is the
+       only write that can target a card the current filter does not list, and
+       for that card `item` is null and the mtime went out empty -- which
+       `_expected_mtime` reads as "no precondition", so `Card.save` skipped the
+       staleness check. Approve a card, move to a filter that excludes it, let
+       another tab reject it, press undo: the rejection was overwritten with no
+       409 and no warning. It was the one unguarded write in the app. */
+    undoStack.push({
+      uid: item.dataset.uid,
+      before: result.before,
+      what: verb,
+      mtime: result.card.mtime,
+    });
     saveUndo("review", undoStack);
   }
   repaintCounts(result.pipeline);
   refresh(item, result.card);
-  toast(`${result.card.uid} → ${result.card.status} · z undoes`);
+  toast(`${result.card.uid} → ${result.card.status} · ${undoKeyName()} undoes`);
   if (activeStatus !== "all" && result.card.status !== activeStatus) {
-    deck.settle(result.card.status);
+    deck.settle(result.card.status, item);
   } else {
     deck.next();
   }
@@ -300,11 +321,22 @@ function showByUid(uid) {
 
 function followHash() {
   const uid = location.hash.replace(/^#/, "");
-  if (!uid) return;
+  if (!uid) {
+    /* Back out of a jump. An empty hash meant "nothing to do", so the back
+       button left you on the card you had jumped *to* -- while the comment on
+       `showByUid` promised it returned you to the one you came from. */
+    if (cameFrom !== null) deck.show(cameFrom);
+    cameFrom = null;
+    return;
+  }
   // Say so rather than doing nothing. A link that lands on a filter which
   // still excludes its target used to be indistinguishable from a dead one.
   if (!showByUid(uid)) toast(`${uid} is not in this view. Try the status filter`);
 }
+
+/* Where the deck was before a `#uid` jump, so the back button has somewhere
+   to go. */
+let cameFrom = null;
 
 window.addEventListener("hashchange", followHash);
 followHash();
@@ -316,6 +348,14 @@ document.addEventListener("click", (event) => {
   if (deck.items.some((item) => item.dataset.uid === uid)) {
     // Already here: move the cursor and leave the page alone.
     event.preventDefault();
+    cameFrom = deck.index;
+    if (location.hash === `#${uid}`) {
+      /* Setting a hash to the value it already holds fires no `hashchange`,
+         and `preventDefault` has already cancelled the href -- so a second
+         click on the same link did nothing at all, silently. Jump directly. */
+      showByUid(uid);
+      return;
+    }
     location.hash = uid;
   }
   // Otherwise the href does the work: it clears the filters that hide it.

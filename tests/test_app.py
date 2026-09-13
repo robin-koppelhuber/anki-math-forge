@@ -1193,6 +1193,9 @@ def test_the_guide_explains_every_key_it_shows(config: Config) -> None:
     # And a remap really reaches it, rather than the helper being unused.
     import dataclasses
 
+    from anki_math_forge import extract
+
+    extract.run(config, "demo")
     remapped = dataclasses.replace(config, keys={"queue": "1"})
     body = TestClient(create_app(remapped)).get("/units").text
     assert re.search(r"<b>1</b>\s*queue", body), "the footer follows the remap"

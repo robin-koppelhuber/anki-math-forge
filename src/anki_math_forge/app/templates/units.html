@@ -294,7 +294,9 @@
     </p>
     {% endif %}
     {% if unit.context %}<p class="context">{{ unit.context }}</p>{% endif %}
-    {% if unit.reason %}<p class="reason">skipped: {{ unit.reason }}</p>{% endif %}
+    {# Only while it is skipped. The word is "skipped:", so on a unit in any
+       other state it is a caption for a decision that has been taken back. #}
+    {% if unit.reason and unit.state == 'skipped' %}<p class="reason">skipped: {{ unit.reason }}</p>{% endif %}
   </article>
   {% endfor %}
 </div>

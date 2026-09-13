@@ -218,30 +218,35 @@ def test_putting_a_box_back_deletes_its_entry(tmp_path: Path) -> None:
     assert graph_mod.move(path, {"aaa111": None}) == {}
 
 
-def test_a_stale_write_is_refused(tmp_path: Path) -> None:
-    """The same guard every other write in the app has: an editor open beside
-    the browser is normal here, and silent clobbering is worse than a retry."""
+def test_a_stale_arrangement_merges_rather_than_being_refused(tmp_path: Path) -> None:
+    """The one write in this app with no staleness check, and the difference is
+    what is being written.
+
+    A card write rewrites a whole file, so a writer holding a stale copy
+    destroys what it did not know about, and the precondition is all that
+    stands between two tabs and a lost edit. This merges *per node*, so a stale
+    writer cannot touch a key it never mentions.
+
+    It was guarded. Measured in a browser with two tabs on one source: each
+    drag landed and the next one from the other tab took a 409 and a full page
+    reload, so two people arranging different halves ping-ponged and lost a
+    drag each per turn -- to protect a merge that was already safe.
+    """
+    path = tmp_path / "graph.json"
+    graph_mod.save_positions(path, {"aaa111": (1.0, 2.0)})
+    assert graph_mod.move(path, {"bbb222": (3.0, 4.0)}) == {
+        "aaa111": (1.0, 2.0),
+        "bbb222": (3.0, 4.0),
+    }, "the other tab's box is still there"
+
+
+def test_the_guard_is_still_there_for_a_caller_that_wants_it(tmp_path: Path) -> None:
+    """Kept rather than deleted. Nothing in the app passes it; a caller that
+    read the whole file and rewrote it would need it."""
     path = tmp_path / "graph.json"
     graph_mod.save_positions(path, {"aaa111": (1.0, 2.0)})
     with pytest.raises(StaleFileError):
         graph_mod.move(path, {"aaa111": (9.0, 9.0)}, expect_mtime_ns=1)
-
-
-def test_expecting_no_file_is_a_precondition_rather_than_the_lack_of_one(
-    tmp_path: Path,
-) -> None:
-    """Zero is what a reader is told when the source has no arrangement yet. A
-    file that has appeared since belongs to somebody else's drag, and this
-    reader's whole picture of where the boxes are is empty.
-
-    Measured before this was fixed, against the real deck: a browser that
-    loaded an unarranged source and posted twice had its second write accepted,
-    because "0" read as no precondition at all.
-    """
-    path = tmp_path / "graph.json"
-    assert graph_mod.move(path, {"aaa111": (1.0, 2.0)}, expect_mtime_ns=0)
-    with pytest.raises(StaleFileError):
-        graph_mod.move(path, {"bbb222": (3.0, 4.0)}, expect_mtime_ns=0)
 
 
 # -- through the app --------------------------------------------------------
@@ -319,187 +324,33 @@ def test_dragging_a_box_writes_the_file_and_nothing_else(config: Config) -> None
     assert client.get("/api/graph/demo").json()["positions"] == {"aaa111": [120.0, 240.0]}
 
 
-def test_a_drag_against_a_changed_file_is_refused(config: Config) -> None:
-    write(config, "aaa111")
-    write(config, "bbb222", requires=["aaa111"])
-    client = TestClient(create_app(config))
-    graph_mod.save_positions(
-        graph_mod.positions_path(config.sources_dir, "demo"), {"bbb222": (1.0, 1.0)}
-    )
-    response = client.post(
-        "/api/graph/demo/positions",
-        json={"positions": {"aaa111": [1, 1]}, "mtime": "1"},
-    )
-    assert response.status_code == 409
-    assert response.json()["stale"] is True
-
-
-def test_a_drag_that_thought_the_source_was_unarranged_is_refused(
-    config: Config,
-) -> None:
-    """The route reads "0" as *expect no file*, unlike `_expected_mtime`, which
-    reads it as no precondition. That is right for a card, which exists by the
-    time anything writes to it, and wrong here: a source with no arrangement is
-    the ordinary starting state, and it is exactly when two tabs both think
-    they are the first to drag something."""
-    write(config, "aaa111")
-    write(config, "bbb222", requires=["aaa111"])
-    client = TestClient(create_app(config))
-    first = client.post(
-        "/api/graph/demo/positions", json={"positions": {"aaa111": [1, 1]}, "mtime": "0"}
-    )
-    assert first.status_code == 200
-    second = client.post(
-        "/api/graph/demo/positions", json={"positions": {"aaa111": [9, 9]}, "mtime": "0"}
-    )
-    assert second.status_code == 409
-
-
-def test_no_position_reaches_a_card_file(config: Config) -> None:
-    """Positions are a view preference. In frontmatter they would be hashed,
-    and dragging a box would un-approve a card."""
-    card = write(config, "aaa111")
-    write(config, "bbb222", requires=["aaa111"])
-    client = TestClient(create_app(config))
-    assert card.path is not None
-    before = card.path.read_text(encoding="utf-8")
-    client.post(
-        "/api/graph/demo/positions",
-        json={"positions": {"aaa111": [120, 240]}, "mtime": "0"},
-    )
-    assert card.path.read_text(encoding="utf-8") == before
-
-
-# -- drawing an edge --------------------------------------------------------
-
-
 def two(config: Config) -> TestClient:
+    """Two cards and a client, the fixture most of these start from."""
     write(config, "aaa111", gist="the product of the eigenvalues")
     write(config, "bbb222", gist="the determinant")
     return TestClient(create_app(config))
 
 
-def needs(config: Config, uid: str) -> list[str]:
-    card = next(c for c in model.load_all(config.cards_dir) if c.uid == uid)
-    return card.requires
-
-
-def test_an_arrow_writes_requires_on_the_card_that_needs_the_other(
-    config: Config,
-) -> None:
-    """The direction, once more, at the layer that writes a file. `requires`
-    lives on the dependent and the arrow points at it, so the two read
-    opposite ways and this is where that gets mixed up."""
-    client = two(config)
-    assert client.post("/api/cards/bbb222/requires", json={"add": "aaa111"}).status_code == 200
-    assert needs(config, "bbb222") == ["aaa111"]
-    assert needs(config, "aaa111") == []
-
-    edges = client.get("/api/graph/demo").json()["edges"]
-    assert edges == [{"src": "aaa111", "dst": "bbb222", "kind": "requires"}]
-
-
-def test_linking_two_approved_cards_demotes_neither(config: Config) -> None:
-    """The fact the whole feature rests on: `requires` is outside
-    `content_hash` under the current rule *and* the legacy one, so an arrow
-    drawn between two approved cards is not an edit to either.
-
-    Stamped the way the deck is stamped, with the legacy digest, because a
-    fresh card's two digests coincide and would prove nothing.
-    """
-    for uid in ("aaa111", "bbb222"):
-        card = model.load(
-            write(config, uid, status="draft", gist="x").path  # type: ignore[arg-type]
-        )
-        card.frontmatter["frequency"] = "core"
-        card.frontmatter["content_hash"] = card.content_hash(legacy=True)
-        card.frontmatter["status"] = "approved"
-        card.save()
-
+def test_two_tabs_can_arrange_the_same_source(config: Config) -> None:
+    """Positions are merged per node, so a drag from a page that has not seen
+    the other one's drag keeps both. This is the write that is deliberately
+    unguarded; see `graph.move`."""
+    write(config, "aaa111")
+    write(config, "bbb222", requires=["aaa111"])
     client = TestClient(create_app(config))
-    payload = client.post("/api/cards/bbb222/requires", json={"add": "aaa111"}).json()
-    assert payload["card"]["status"] == "approved"
-    after = [c for c in model.load_all(config.cards_dir) if c.uid in ("aaa111", "bbb222")]
-    assert all(c.hash_matches() and c.effective_status == "approved" for c in after)
+    stale = client.get("/api/graph/demo").json()["mtime"]
 
-
-def test_a_cycle_is_refused_before_the_write_and_names_the_loop(
-    config: Config,
-) -> None:
-    """`check` reports a cycle after the fact. A card file written into a state
-    the lint refuses is a worse answer than a refusal at the drag, and being
-    told "that would make a cycle" without being told which one leaves you
-    hunting through the graph you opened because you could not see it."""
-    client = two(config)
-    client.post("/api/cards/bbb222/requires", json={"add": "aaa111"})
-    response = client.post("/api/cards/aaa111/requires", json={"add": "bbb222"})
-    assert response.status_code == 400
-    assert "cycle" in response.json()["detail"]
-    assert "aaa111 needs bbb222 needs aaa111" in response.json()["detail"]
-    assert needs(config, "aaa111") == [], "nothing was written"
-
-
-def test_a_longer_cycle_is_refused_too(config: Config) -> None:
-    client = two(config)
-    write(config, "ccc333")
-    client.post("/api/cards/bbb222/requires", json={"add": "aaa111"})
-    client.post("/api/cards/ccc333/requires", json={"add": "bbb222"})
-    response = client.post("/api/cards/aaa111/requires", json={"add": "ccc333"})
-    assert response.status_code == 400
-    assert "aaa111 needs ccc333 needs bbb222 needs aaa111" in response.json()["detail"]
-
-
-def test_a_card_cannot_be_made_to_need_itself(config: Config) -> None:
-    client = two(config)
-    assert client.post("/api/cards/aaa111/requires", json={"add": "aaa111"}).status_code == 400
-
-
-def test_an_edge_to_a_card_that_is_not_here_is_refused(config: Config) -> None:
-    """`check` calls this `requires-unknown`: the ordering ignores what it
-    cannot resolve, so a typo would quietly do nothing."""
-    client = two(config)
-    assert client.post("/api/cards/aaa111/requires", json={"add": "ffffff"}).status_code == 400
-
-
-def test_drawing_the_same_arrow_twice_writes_one(config: Config) -> None:
-    client = two(config)
-    client.post("/api/cards/bbb222/requires", json={"add": "aaa111"})
-    client.post("/api/cards/bbb222/requires", json={"add": "aaa111"})
-    assert needs(config, "bbb222") == ["aaa111"]
-
-
-def test_removing_the_last_one_takes_the_key_off(config: Config) -> None:
-    """Rather than leaving `requires: []`, which reads as a considered empty
-    list instead of a card with no dependencies."""
-    client = two(config)
-    client.post("/api/cards/bbb222/requires", json={"add": "aaa111"})
-    client.post("/api/cards/bbb222/requires", json={"remove": "aaa111"})
-    card = next(c for c in model.load_all(config.cards_dir) if c.uid == "bbb222")
-    assert "requires" not in card.frontmatter
-
-
-def test_an_edge_write_against_a_changed_card_is_refused(config: Config) -> None:
-    """The same guard every other card write has."""
-    client = two(config)
-    response = client.post(
-        "/api/cards/bbb222/requires", json={"add": "aaa111", "mtime": "1"}
+    first = client.post(
+        "/api/graph/demo/positions", json={"positions": {"aaa111": [1, 1]}, "mtime": stale}
     )
-    assert response.status_code == 409
-    assert response.json()["stale"] is True
-
-
-def test_it_takes_exactly_one_of_add_or_remove(config: Config) -> None:
-    client = two(config)
-    assert client.post("/api/cards/bbb222/requires", json={}).status_code == 400
-    assert (
-        client.post(
-            "/api/cards/bbb222/requires", json={"add": "aaa111", "remove": "aaa111"}
-        ).status_code
-        == 400
+    assert first.status_code == 200
+    # The same stale mtime the first write was made with, as a second tab would
+    # still be holding.
+    second = client.post(
+        "/api/graph/demo/positions", json={"positions": {"bbb222": [2, 2]}, "mtime": stale}
     )
-
-
-# -- putting a card on the canvas -------------------------------------------
+    assert second.status_code == 200
+    assert second.json()["positions"] == {"aaa111": [1.0, 1.0], "bbb222": [2.0, 2.0]}
 
 
 def test_a_card_with_no_edges_is_drawn_once_it_has_a_position(config: Config) -> None:

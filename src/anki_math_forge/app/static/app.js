@@ -35,6 +35,22 @@ function toast(message, kind = "") {
   el._timer = setTimeout(() => (el.hidden = true), 2600);
 }
 
+/* Chrome's `<input type="search">` eats the first Escape to clear itself, so
+   a dialog whose search box has focus -- which is every one of them, they all
+   focus it on open -- took two presses to close while its button said
+   "close (esc)". The box still clears; the dialog closes with it. */
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  const box = event.target;
+  if (!(box instanceof HTMLInputElement) || box.type !== "search") return;
+  const dialog = box.closest("dialog");
+  if (!dialog) return;
+  event.preventDefault();
+  box.value = "";
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  dialog.close();
+});
+
 /* Cancel is not a submit button (see base.html), so it needs closing by
    hand. Bound once, not per call. */
 document.addEventListener("DOMContentLoaded", () => {
@@ -46,6 +62,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+/* `value` is a starting point to edit, not a prefix to type after.
+
+   It used to be selected on open, so the first character replaced it. That was
+   harmless for an editable default and silently wrong for `N`, which pre-filled
+   `@me ` and carried the audience nowhere else: typing wiped it, the note
+   arrived unaddressed, and `Ledger.annotate` files an unaddressed line as
+   `@claude`. `N` was indistinguishable from `n` unless you pressed End first.
+   Callers that want a prefix now add it to the answer instead. */
 function ask(label, value = "") {
   const dialog = document.getElementById("prompt");
   const input = document.getElementById("prompt-input");
@@ -53,7 +77,7 @@ function ask(label, value = "") {
   input.value = value;
   dialog.showModal();
   input.focus();
-  input.select();
+  input.setSelectionRange(input.value.length, input.value.length);
   return new Promise((resolve) => {
     dialog.addEventListener(
       "close",
@@ -187,8 +211,15 @@ class Deck {
      you with no way back to the thing you had just acted on, because `k`
      could not reach a node that no longer existed. The file is the truth;
      this is the view keeping up until the next reload. */
-  settle(label) {
-    const item = this.current;
+  /* `item` is passed in, not read off `this.current`.
+
+     Every caller captures the item, awaits a write, and settles afterwards --
+     and `this.current` has moved on if a second key was pressed during the
+     round trip. Measured: two quick presses of `q` queued unit one on disk and
+     painted "queued, no longer matches this filter" over unit *two*, which was
+     still `new`. `nextPending` then skipped it forever and it dropped out of
+     triage until a reload. */
+  settle(label, item = this.current) {
     if (!item) return;
     item.dataset.settled = label || "done";
     let banner = item.querySelector(".settled");
@@ -197,7 +228,8 @@ class Deck {
       banner.className = "settled";
       item.prepend(banner);
     }
-    banner.textContent = `${label} — no longer matches this filter. z undoes it.`;
+    banner.textContent =
+      `${label} — no longer matches this filter. ${undoKeyName()} undoes it.`;
     this.nextPending();
   }
 
@@ -218,6 +250,14 @@ function currentOf(deck) {
    Empty if the server predates it, in which case nothing binds and the footer
    is empty too -- which is the honest pair, rather than a legend listing keys
    that do nothing. */
+/* What to call the undo key in a message. It is configurable through
+   `[app.keys]`, and seven toasts across three views said "z undoes" whatever
+   it was actually bound to -- which is worse than saying nothing, because it
+   names a key that does nothing. */
+function undoKeyName() {
+  return keymap().undo || "undo";
+}
+
 function keymap() {
   const tag = document.getElementById("keymap");
   try {
@@ -712,7 +752,12 @@ function sourceHref(name) {
      in another, and carrying it over lands you on an empty deck that looks
      like the import failed. */
   const url = new URL(location.href);
-  ["section", "mark"].forEach((key) => url.searchParams.delete(key));
+  /* `chapter` belongs with these. A chapter number from one book means
+     nothing in another exactly as a section number does, the server treats
+     them as siblings, and carrying it over lands you on an empty deck that
+     looks like the import failed -- which is the sentence this line was
+     written for. */
+  ["section", "mark", "chapter"].forEach((key) => url.searchParams.delete(key));
   url.searchParams.set("source", name);
   url.hash = "";
   return url.toString();

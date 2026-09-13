@@ -8,9 +8,13 @@
 <p class="muted">{{ hint }}</p>
 {% endblock %}
 
-{# The deck is empty; the view is not. `f`, `g` and `?` still work here, and
-   the footer was blank, so the one screen where you have never seen this app
-   before was also the one that said nothing about how to drive it. #}
+{# The deck is empty; the view is not. The rails are here, so the three keys
+   that work them are too -- and only those three, because there is no deck for
+   anything per-item to act on. `EMPTY_VIEW_KEYS` narrows the legend and
+   `empty.js` binds the same three, so neither can advertise what the other
+   does not do. #}
 {% block keys %}
 {% include "_keys.html" %}
 {% endblock %}
+
+{% block scripts %}<script defer src="/static/empty.js"></script>{% endblock %}

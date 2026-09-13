@@ -52,11 +52,37 @@ DECK = (
 )
 
 
+DEMO_TEX = r"""
+\documentclass{article}
+\begin{document}
+\section{Basics}
+Prose about traces, and what a determinant is.
+\begin{equation}
+\operatorname{tr}(AB) = \operatorname{tr}(BA)
+\end{equation}
+\subsection{Derivatives}
+The identity everyone forgets.
+\begin{equation}
+\frac{\partial}{\partial X}\log\det X = X^{-\top}
+\end{equation}
+\begin{equation}
+\det(AB) = \det(A)\det(B)
+\end{equation}
+\end{document}
+"""
+
+
 def lay_out(repo: Path) -> None:
-    """Write the deck, replacing whatever the last test left behind."""
+    """Write the deck and the ledger, replacing what the last test left.
+
+    Units as well as cards, because the triage view is half of what these
+    tests drive and an empty ledger renders the "nothing here yet" page.
+    """
     cards = repo / "cards" / "demo"
     cards.mkdir(parents=True, exist_ok=True)
     (repo / "sources" / "demo").mkdir(parents=True, exist_ok=True)
+    (repo / "sources" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
+    (repo / "sources" / "demo" / "units.jsonl").unlink(missing_ok=True)
     (repo / "sources" / "demo" / "graph.json").unlink(missing_ok=True)
     for uid, gist, needs in DECK:
         requires = f"requires: [{', '.join(needs)}]\n" if needs else ""
@@ -66,6 +92,19 @@ def lay_out(repo: Path) -> None:
             "## front\n\n$a$\n\n## back\n\n$b$\n",
             encoding="utf-8",
         )
+    _extract(repo)
+
+
+def _extract(repo: Path) -> None:
+    """`forge extract`, in-process. The ledger has to be there before the
+    first request: the units view renders the empty page without one."""
+    import sys
+
+    sys.path.insert(0, str(ROOT / "src"))
+    from anki_math_forge import config as config_mod
+    from anki_math_forge import extract
+
+    extract.run(config_mod.load(repo), "demo")
 
 
 @pytest.fixture(scope="session")
@@ -82,7 +121,8 @@ def served(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, Path
     repo = tmp_path_factory.mktemp("served")
     (repo / "forge.toml").write_text(
         '[repo]\ncards_dir = "cards"\nsources_dir = "sources"\n\n'
-        '[sources.demo]\ntitle = "Demo"\ncitation = "Demo"\n',
+        '[sources.demo]\ntitle = "Demo"\ncitation = "Demo"\n'
+        'tex = "sources/demo/demo.tex"\n',
         encoding="utf-8",
     )
     lay_out(repo)
