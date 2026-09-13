@@ -36,7 +36,16 @@ const ctx = canvas && canvas.getContext("2d");
 
 let data = null;
 let everything = false;
+/* The view transform: where the origin of the picture sits on screen, and how
+   big. Every coordinate crosses it exactly once, through `toScreen` and
+   `toWorld`, because a canvas with two places that convert is a canvas where
+   hit-testing and drawing disagree by a scale factor. */
 let pan = { x: MARGIN, y: MARGIN };
+let scale = 1;
+/* A box drags smaller than this and the labels stop being labels; bigger and
+   four cards fill the window. */
+const ZOOM = { min: 0.25, max: 2.5, step: 1.15 };
+let marquee = null;
 let drag = null;
 let hover = null;
 let hoverPort = null;
@@ -47,7 +56,6 @@ let link = null;
    wide and a key that removes one on hover is a key that removes the wrong
    one. */
 let hoverEdge = null;
-let selected = null;
 /* The dragged position lives here until `pointerup` posts it. Writing on every
    `pointermove` would be a file write per frame. */
 let moved = {};
@@ -103,7 +111,30 @@ function nodeAt(x, y) {
 
 function pointer(event) {
   const box = canvas.getBoundingClientRect();
-  return { x: event.clientX - box.left - pan.x, y: event.clientY - box.top - pan.y };
+  return toWorld(event.clientX - box.left, event.clientY - box.top);
+}
+
+function toWorld(x, y) {
+  return { x: (x - pan.x) / scale, y: (y - pan.y) / scale };
+}
+
+/* Zoom about a fixed point: the thing under the pointer stays under the
+   pointer. Zooming about the origin instead sends whatever you were looking at
+   off the edge, which is the version that feels broken. */
+function zoomTo(next, atX, atY) {
+  const clamped = Math.min(ZOOM.max, Math.max(ZOOM.min, next));
+  if (clamped === scale) return;
+  const box = canvas.getBoundingClientRect();
+  const sx = atX === undefined ? box.width / 2 : atX;
+  const sy = atY === undefined ? box.height / 2 : atY;
+  const before = toWorld(sx, sy);
+  scale = clamped;
+  pan = { x: sx - before.x * scale, y: sy - before.y * scale };
+  draw();
+}
+
+function zoomBy(factor) {
+  zoomTo(scale * factor);
 }
 
 // -- the connectors --------------------------------------------------------
@@ -127,7 +158,7 @@ function portAt(x, y) {
   for (let i = data.nodes.length - 1; i >= 0; i--) {
     for (const side of ["left", "right"]) {
       const spot = port(data.nodes[i].id, side);
-      if (Math.hypot(x - spot.x, y - spot.y) <= PORT_GRAB) {
+      if (Math.hypot(x - spot.x, y - spot.y) <= PORT_GRAB / scale) {
         return { node: data.nodes[i], side };
       }
     }
@@ -187,7 +218,7 @@ function nearEdge(x, y) {
       const dy = b.y - a.y;
       const len = dx * dx + dy * dy;
       const u = len ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / len)) : 0;
-      if (Math.hypot(x - (a.x + u * dx), y - (a.y + u * dy)) <= EDGE_GRAB) return edge;
+      if (Math.hypot(x - (a.x + u * dx), y - (a.y + u * dy)) <= EDGE_GRAB / scale) return edge;
     }
   }
   return null;
@@ -287,11 +318,7 @@ function drawEdge(edge) {
      backing off along x is backing off along the curve. */
   const to = { x: at_.x - (PORT_R + 2), y: at_.y };
   const lit = hover && (edge.src === hover.id || edge.dst === hover.id);
-  const on =
-    selected &&
-    selected.kind === "edge" &&
-    selected.src === edge.src &&
-    selected.dst === edge.dst;
+  const on = picked.edge && picked.edge.src === edge.src && picked.edge.dst === edge.dst;
   /* An approved card whose prerequisite is not approved. `sync` would
      introduce it without its foundation, and `check` says so as
      `requires-unapproved` -- after the fact, in a list you read later. The
@@ -420,7 +447,7 @@ const STATE_INK = {
 function drawNode(node) {
   const p = at(node.id);
   const edge = colours[STATE_COLOUR[node.state] || "line"];
-  const picked = selected && selected.kind === "node" && selected.id === node.id;
+  const chosen = isPicked(node.id);
   const lit = (hover && hover.id === node.id) || (link && link.target === node);
 
   ctx.save();
@@ -434,8 +461,8 @@ function drawNode(node) {
   boxPath(p.x, p.y, NODE_W, NODE_H, NODE_R);
   ctx.fillStyle = colours.panel;
   ctx.fill();
-  ctx.strokeStyle = picked || lit ? colours.accent : edge;
-  ctx.lineWidth = picked ? 3 : lit ? 2 : 1.25;
+  ctx.strokeStyle = chosen || lit ? colours.accent : edge;
+  ctx.lineWidth = chosen ? 3 : lit ? 2 : 1.25;
   /* A card from another source is a real node: `requires` may cross them, and
      hiding the target would draw a card whose foundation is elsewhere as a
      foundation itself. Dashed, because it is not yours to arrange here. */
@@ -488,18 +515,71 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, box.width, box.height);
   ctx.translate(pan.x, pan.y);
+  ctx.scale(scale, scale);
   data.edges.forEach(drawEdge);
   data.nodes.forEach(drawNode);
   if (link) drawPending();
+  if (marquee) drawMarquee();
 }
 
-/* Put the whole picture on screen, top-left, rather than wherever the last pan
-   left it. Also what `0` does. */
+/* The selection box. Drawn in world coordinates like everything else, so its
+   line stays one screen pixel whatever the zoom. */
+function drawMarquee() {
+  const x = Math.min(marquee.from.x, marquee.to.x);
+  const y = Math.min(marquee.from.y, marquee.to.y);
+  const w = Math.abs(marquee.to.x - marquee.from.x);
+  const h = Math.abs(marquee.to.y - marquee.from.y);
+  ctx.save();
+  ctx.fillStyle = colours.accent;
+  ctx.globalAlpha = 0.12;
+  ctx.fillRect(x, y, w, h);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = colours.accent;
+  ctx.lineWidth = 1 / scale;
+  ctx.setLineDash([5 / scale, 4 / scale]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
+function inMarquee() {
+  const x1 = Math.min(marquee.from.x, marquee.to.x);
+  const y1 = Math.min(marquee.from.y, marquee.to.y);
+  const x2 = Math.max(marquee.from.x, marquee.to.x);
+  const y2 = Math.max(marquee.from.y, marquee.to.y);
+  /* Touched, not enclosed. Requiring a box to be wholly inside means a careful
+     drag that clips one corner silently leaves that card out, and you find out
+     when you move the rest without it. */
+  return data.nodes.filter((n) => {
+    const p = at(n.id);
+    return p.x <= x2 && p.x + NODE_W >= x1 && p.y <= y2 && p.y + NODE_H >= y1;
+  });
+}
+
+/* The whole picture on screen at once: scaled down if it does not fit, never
+   scaled up past life size. `0` does this, and it is the way back from any
+   pan or zoom that lost the graph. */
 function recentre() {
   if (!data || !data.nodes.length) return;
-  const xs = data.nodes.map((n) => at(n.id).x);
-  const ys = data.nodes.map((n) => at(n.id).y);
-  pan = { x: MARGIN - Math.min(...xs), y: MARGIN - Math.min(...ys) };
+  const spots = data.nodes.map((n) => at(n.id));
+  const x1 = Math.min(...spots.map((p) => p.x));
+  const y1 = Math.min(...spots.map((p) => p.y));
+  const x2 = Math.max(...spots.map((p) => p.x)) + NODE_W;
+  const y2 = Math.max(...spots.map((p) => p.y)) + NODE_H;
+  /* The stage, not the canvas. A `<canvas>` with no width attribute measures
+     300 by 150 until `draw` sizes it, and `recentre` runs first on load: the
+     whole graph came up clamped to the minimum zoom in the top-left corner,
+     laid out for a box a fifth of the window. The stage is a styled div and
+     has its real size from the stylesheet before any script runs. */
+  const box = stage.getBoundingClientRect();
+  const room = Math.min(
+    (box.width - MARGIN * 2) / Math.max(1, x2 - x1),
+    (box.height - MARGIN * 2) / Math.max(1, y2 - y1),
+  );
+  scale = Math.min(1, Math.max(ZOOM.min, room));
+  pan = {
+    x: (box.width - (x2 - x1) * scale) / 2 - x1 * scale,
+    y: (box.height - (y2 - y1) * scale) / 2 - y1 * scale,
+  };
   draw();
 }
 
@@ -542,7 +622,7 @@ async function load({ recentre: centre = true } = {}) {
   moved = {};
   /* An edge write refetches, and jumping the view back to the top-left after
      every arrow would undo the panning you did to reach the two boxes. */
-  selected = null;
+  picked = { nodes: picked.nodes.filter((id) => data.nodes.some((n) => n.id === id)), edge: null };
   hoverEdge = null;
   document.getElementById("graph-all").classList.toggle("on", everything);
   describe();
@@ -619,7 +699,7 @@ async function disconnect(edge) {
   const said = `${labelOf(edge.dst)} no longer needs ${labelOf(edge.src)} · z undoes`;
   if (await write(edge.dst, { remove: edge.src }, said)) {
     undone.push({ dependent: edge.dst, add: edge.src });
-    selected = null;
+    picked = { nodes: [], edge: null };
   }
 }
 
@@ -709,9 +789,10 @@ function landingSpot() {
   }
   const box = stage.getBoundingClientRect();
   const step = dropped++ * 28;
+  const middle = toWorld(box.width / 2, box.height / 2);
   return [
-    Math.round(-pan.x + box.width / 2 - NODE_W / 2 + step),
-    Math.round(-pan.y + box.height / 2 - NODE_H / 2 + step),
+    Math.round(middle.x - NODE_W / 2 + step),
+    Math.round(middle.y - NODE_H / 2 + step),
   ];
 }
 
@@ -758,7 +839,39 @@ function togglePicker(open) {
   }
 }
 
+// -- selection --------------------------------------------------------------
+
+/* What is picked: any number of boxes, or one arrow, never both. They are
+   different kinds of thing to act on -- an arrow comes out of a card file, a
+   box comes off the canvas -- and a Delete that had to choose between them
+   would be guessing. */
+let picked = { nodes: [], edge: null };
+
+function isPicked(id) {
+  return picked.nodes.includes(id);
+}
+
+function pickNodes(ids, add = false) {
+  picked = { nodes: add ? [...new Set([...picked.nodes, ...ids])] : [...ids], edge: null };
+}
+
+function pickedBoxes() {
+  return data.nodes.filter((n) => isPicked(n.id));
+}
+
 // -- pointer ---------------------------------------------------------------
+
+/* Space turns a left-drag back into a pan, which is the one gesture the
+   marquee took over. Middle-drag does it too, for a mouse with a wheel. */
+let spaceHeld = false;
+document.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" || aModalIsOpen()) return;
+  spaceHeld = true;
+  if (canvas) canvas.style.cursor = "grab";
+});
+document.addEventListener("keyup", (event) => {
+  if (event.code === "Space") spaceHeld = false;
+});
 
 if (canvas) {
   canvas.addEventListener("pointerdown", (event) => {
@@ -783,14 +896,38 @@ if (canvas) {
       return;
     }
     const node = nodeAt(p.x, p.y);
+    if (node) {
+      /* Grabbing a box that is not in the selection picks it, so a drag moves
+         what you grabbed rather than the leftovers of an earlier one. Grabbing
+         one that *is* in the selection keeps the whole selection, which is how
+         six boxes move together. */
+      if (event.shiftKey) {
+        const rest = picked.nodes.filter((id) => id !== node.id);
+        pickNodes(isPicked(node.id) ? rest : [node.id], !isPicked(node.id));
+      } else if (!isPicked(node.id)) {
+        pickNodes([node.id]);
+      }
+      drag = {
+        kind: "boxes",
+        from: Object.fromEntries(pickedBoxes().map((n) => [n.id, at(n.id)])),
+        grabX: event.clientX,
+        grabY: event.clientY,
+        far: false,
+      };
+      canvas.setPointerCapture(event.pointerId);
+      draw();
+      return;
+    }
+    const panning = spaceHeld || event.button === 1;
     drag = {
-      node,
-      from: node ? at(node.id) : null,
+      kind: panning ? "pan" : "marquee",
       grabX: event.clientX,
       grabY: event.clientY,
       pan: { ...pan },
+      shift: event.shiftKey,
       far: false,
     };
+    if (!panning) marquee = { from: p, to: p };
     canvas.setPointerCapture(event.pointerId);
   });
 
@@ -831,15 +968,21 @@ if (canvas) {
       hover = over;
       hoverPort = overPort;
       hoverEdge = overEdge;
-      canvas.style.cursor = overPort ? "crosshair" : over || overEdge ? "pointer" : "grab";
+      canvas.style.cursor = spaceHeld
+        ? "grab"
+        : overPort
+          ? "crosshair"
+          : over || overEdge
+            ? "pointer"
+            : "default";
       canvas.title = overPort
         ? overPort.side === "right"
           ? "drag to a card that needs this one"
           : "drag to a card this one needs"
         : over
-          ? [over.label || "no caption yet", over.detail, over.id].filter(Boolean).join(" — ")
+          ? [over.label || "no caption yet", over.detail, over.id].filter(Boolean).join(" \u2014 ")
           : overEdge
-            ? `${labelOf(overEdge.dst)} needs ${labelOf(overEdge.src)} — click to select`
+            ? `${labelOf(overEdge.dst)} needs ${labelOf(overEdge.src)} \u2014 click to select`
             : "";
       draw();
       return;
@@ -847,8 +990,17 @@ if (canvas) {
     const dx = event.clientX - drag.grabX;
     const dy = event.clientY - drag.grabY;
     if (Math.abs(dx) > CLICK_SLOP || Math.abs(dy) > CLICK_SLOP) drag.far = true;
-    if (drag.node) moved[drag.node.id] = [drag.from.x + dx, drag.from.y + dy];
-    else pan = { x: drag.pan.x + dx, y: drag.pan.y + dy };
+    if (drag.kind === "boxes") {
+      /* Screen pixels divided by the zoom, so a box keeps up with the pointer
+         rather than lagging behind it at anything but life size. */
+      Object.entries(drag.from).forEach(([id, spot]) => {
+        moved[id] = [spot.x + dx / scale, spot.y + dy / scale];
+      });
+    } else if (drag.kind === "pan") {
+      pan = { x: drag.pan.x + dx, y: drag.pan.y + dy };
+    } else if (marquee) {
+      marquee.to = p;
+    }
     draw();
   });
 
@@ -865,51 +1017,87 @@ if (canvas) {
         toast(pending.why, "bad");
       } else if (pending.far) {
         /* Let go over nothing, having actually dragged somewhere. The card you
-           meant to connect to is very likely one of the ninety that are not
-           drawn -- that is the whole reason the picker exists -- so offer it
-           rather than throwing the gesture away. Whatever is picked lands
-           where the arrow was dropped and is connected in the same step. */
+           meant is very likely one of the ones not drawn -- that is the whole
+           reason the picker exists -- so offer it rather than throwing the
+           gesture away. Whatever is chosen lands where the arrow was dropped
+           and is connected in the same step. */
         openPicker({ from: pending.node, side: pending.side, at: pending.to });
       }
       return;
     }
     if (!drag) return;
-    const { node, far } = drag;
+    const finished = drag;
     drag = null;
-    if (node && far) {
-      save({ [node.id]: moved[node.id] });
+
+    if (finished.kind === "marquee") {
+      const caught = marquee ? inMarquee() : [];
+      marquee = null;
+      if (finished.far) {
+        pickNodes(
+          caught.map((n) => n.id),
+          finished.shift,
+        );
+        if (caught.length) toast(`${caught.length} selected`);
+      } else {
+        /* A click on nothing: take the arrow under it, or let the selection
+           go. */
+        const p = pointer(event);
+        const edge = nearEdge(p.x, p.y);
+        picked = edge
+          ? { nodes: [], edge: { src: edge.src, dst: edge.dst } }
+          : { nodes: [], edge: null };
+      }
+      draw();
       return;
     }
-    if (far) return; /* a pan */
-    /* A click. It selects, and never navigates: opening a card on a single
-       click meant the gesture that picks something out of the picture was also
-       the gesture that left it. Double-click opens, and so does Enter. */
-    const p = pointer(event);
-    /* Named fields rather than a spread: an `Edge` carries its own `kind`
-       ("requires"), so `{kind: "edge", ...edge}` put that back and every test
-       of `selected.kind === "edge"` was false. The arrow drew unselected and
-       Delete quietly did nothing. */
-    const edge = node ? null : nearEdge(p.x, p.y);
-    selected = node
-      ? { kind: "node", id: node.id }
-      : edge && { kind: "edge", src: edge.src, dst: edge.dst };
-    if (!selected) selected = null;
+    if (finished.kind === "pan") return;
+    if (finished.far) {
+      /* Every box that moved, in one write. Six separate ones would be six
+         merges racing each other, and five of them would lose the mtime. */
+      const places = Object.fromEntries(
+        picked.nodes.filter((id) => moved[id]).map((id) => [id, moved[id]]),
+      );
+      if (Object.keys(places).length) save(places);
+    }
     draw();
   });
 
-  /* Open what is selected. Safe to hang off `dblclick` now that the first
-     click only selects: the two gestures no longer fight, which is why the
-     put-a-box-back action had to be a key before. */
+  /* Open what is under the pointer. Safe on `dblclick` now that the first
+     click only selects: the two gestures no longer fight, which is why
+     putting a box back had to be a key before. */
   canvas.addEventListener("dblclick", (event) => {
     if (!data) return;
-    const p = pointer(event);
-    const node = nodeAt(p.x, p.y);
+    const node = nodeAt(pointer(event).x, pointer(event).y);
     if (node && node.href) location.href = node.href;
   });
+
+  /* Plain wheel pans, ctrl or meta zooms. That is what a trackpad already
+     sends -- a pinch arrives as a wheel event with `ctrlKey` set -- so pinch
+     to zoom and two-finger scroll to pan both work with no setting. */
+  canvas.addEventListener(
+    "wheel",
+    (event) => {
+      if (!data) return;
+      event.preventDefault();
+      const box = canvas.getBoundingClientRect();
+      if (event.ctrlKey || event.metaKey) {
+        zoomTo(
+          scale * Math.pow(ZOOM.step, -event.deltaY / 60),
+          event.clientX - box.left,
+          event.clientY - box.top,
+        );
+        return;
+      }
+      pan = { x: pan.x - event.deltaX, y: pan.y - event.deltaY };
+      draw();
+    },
+    { passive: false },
+  );
 
   canvas.addEventListener("pointercancel", () => {
     drag = null;
     link = null;
+    marquee = null;
     moved = {};
     draw();
   });
@@ -960,8 +1148,8 @@ document.addEventListener("keydown", (event) => {
     link = null;
     canvas.title = "";
     draw();
-  } else if (selected) {
-    selected = null;
+  } else if (picked.nodes.length || picked.edge) {
+    picked = { nodes: [], edge: null };
     draw();
   }
 });
@@ -976,40 +1164,57 @@ document.getElementById("add-card").addEventListener("close", () => {
    off, because an arrow is why it is drawn -- so that says so rather than
    doing nothing. */
 async function removeSelected() {
-  if (!selected) {
-    toast("nothing selected. Click an arrow or a card first");
+  if (picked.edge) {
+    await disconnect(picked.edge);
     return;
   }
-  if (selected.kind === "edge") {
-    await disconnect(selected);
+  const boxes = pickedBoxes();
+  if (!boxes.length) {
+    toast("nothing selected. Drag a box round some cards, or click an arrow");
     return;
   }
-  const node = data.nodes.find((n) => n.id === selected.id);
-  if (!node) return;
-  if (data.edges.some((e) => e.src === node.id || e.dst === node.id)) {
-    toast("that card has an arrow. Remove the arrow first", "bad");
-    return;
+  /* One write for the lot, and the ones that cannot come off reported once
+     rather than as a toast each. */
+  const stuck = boxes.filter((n) =>
+    data.edges.some((e) => e.src === n.id || e.dst === n.id),
+  );
+  const free = boxes.filter((n) => !stuck.includes(n));
+  if (free.length) {
+    picked = { nodes: [], edge: null };
+    if (await save(Object.fromEntries(free.map((n) => [n.id, null])))) {
+      await load({ recentre: false });
+    }
   }
-  selected = null;
-  await putBack(node);
+  if (stuck.length) {
+    toast(
+      `${stuck.length} of those ${stuck.length === 1 ? "has an arrow" : "have arrows"}. ` +
+        "Remove the arrow first",
+      "bad",
+    );
+  } else if (free.length) {
+    toast(`${free.length} taken off the canvas`);
+  }
 }
 
 bindKeys({
   "every-card": () => document.getElementById("graph-all").click(),
   "add-card": () => openPicker(),
   recentre,
-  "forget-position": () => putBack(hover || (selected && selected.kind === "node"
-    ? data.nodes.find((n) => n.id === selected.id)
-    : null)),
+  "forget-position": () => putBack(hover || pickedBoxes()[0]),
   undo,
   "remove-selected": removeSelected,
   "remove-selected-alt": removeSelected,
   "open-card": () => {
-    const node = selected && selected.kind === "node"
-      ? data.nodes.find((n) => n.id === selected.id)
-      : hover;
+    const node = hover || pickedBoxes()[0];
     if (node && node.href) location.href = node.href;
     else toast("no card selected");
+  },
+  "zoom-in": () => zoomBy(ZOOM.step),
+  "zoom-out": () => zoomBy(1 / ZOOM.step),
+  "select-all": () => {
+    pickNodes(data.nodes.map((n) => n.id));
+    toast(`${picked.nodes.length} selected`);
+    draw();
   },
   /* The one shared key this view can honour beyond undo. `filters` here is
      the only filter the canvas has, and `guide` has no guide to open. */

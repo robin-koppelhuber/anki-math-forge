@@ -24,7 +24,7 @@ def boxes(pg):  # type: ignore[no-untyped-def]
         """() => data.nodes.map(n => {
       const b = canvas.getBoundingClientRect();
       const p = at(n.id);
-      const to = (x, y) => ({x: b.left + pan.x + x, y: b.top + pan.y + y});
+      const to = (x, y) => ({x: b.left + pan.x + x * scale, y: b.top + pan.y + y * scale});
       return {
         id: n.id,
         centre: to(p.x + NODE_W / 2, p.y + NODE_H / 2),
@@ -38,7 +38,7 @@ def boxes(pg):  # type: ignore[no-untyped-def]
 def open_graph(pg, live):  # type: ignore[no-untyped-def]
     pg.goto(live + GRAPH)
     pg.wait_for_function("typeof data !== 'undefined' && data !== null")
-    pg.wait_for_timeout(200)
+    pg.wait_for_timeout(250)
     return boxes(pg)
 
 
@@ -53,7 +53,7 @@ def test_a_click_selects_and_does_not_navigate(page, live) -> None:  # type: ign
     nodes = open_graph(page, live)
     page.mouse.click(nodes[0]["centre"]["x"], nodes[0]["centre"]["y"])
     page.wait_for_timeout(150)
-    assert page.evaluate("selected") == {"kind": "node", "id": nodes[0]["id"]}
+    assert page.evaluate("picked.nodes") == [nodes[0]["id"]]
     assert "/graph" in page.url
 
 
@@ -121,12 +121,12 @@ def test_a_selected_arrow_can_be_deleted(page, live) -> None:  # type: ignore[no
       const e = data.edges[0];
       const m = along(port(e.src, 'right'), port(e.dst, 'left'))[10];
       const b = canvas.getBoundingClientRect();
-      return {x: b.left + pan.x + m.x, y: b.top + pan.y + m.y};
+      return {x: b.left + pan.x + m.x * scale, y: b.top + pan.y + m.y * scale};
     }"""
     )
     page.mouse.click(spot["x"], spot["y"])
     page.wait_for_timeout(150)
-    assert page.evaluate("selected && selected.kind") == "edge"
+    assert page.evaluate("picked.edge && picked.edge.src") is not None
     page.keyboard.press("Delete")
     page.wait_for_timeout(900)
     assert page.evaluate("data.edges.length") == 0
@@ -263,3 +263,134 @@ def test_the_canvas_has_a_button_back(page, live) -> None:  # type: ignore[no-un
     with page.expect_navigation():
         page.click('#topbar a[aria-label="review"]')
     assert "/review" in page.url
+
+
+# -- zoom and the marquee ---------------------------------------------------
+
+
+def test_ctrl_wheel_zooms_about_the_pointer(page, live) -> None:  # type: ignore[no-untyped-def]
+    """The thing under the pointer stays under the pointer. Zooming about the
+    origin instead sends whatever you were looking at off the edge, which is
+    the version that feels broken."""
+    nodes = open_graph(page, live)
+    spot = nodes[0]["centre"]
+    before = page.evaluate("scale")
+    page.mouse.move(spot["x"], spot["y"])
+    page.mouse.wheel(0, -240)  # a wheel event without ctrl pans
+    page.wait_for_timeout(150)
+    assert page.evaluate("scale") == before, "a plain wheel pans, it does not zoom"
+
+    # After the pan, not before it: the pan moved the world under the pointer,
+    # so an anchor read earlier is an anchor for a different picture.
+    under = page.evaluate(
+        "([x, y]) => { const b = canvas.getBoundingClientRect();"
+        " return toWorld(x - b.left, y - b.top); }",
+        [spot["x"], spot["y"]],
+    )
+    page.keyboard.down("Control")
+    page.mouse.wheel(0, -240)
+    page.keyboard.up("Control")
+    page.wait_for_timeout(200)
+    after = page.evaluate("scale")
+    assert after > before
+    still = page.evaluate(
+        "([x, y]) => { const b = canvas.getBoundingClientRect();"
+        " return toWorld(x - b.left, y - b.top); }",
+        [spot["x"], spot["y"]],
+    )
+    assert abs(still["x"] - under["x"]) < 1.5
+    assert abs(still["y"] - under["y"]) < 1.5
+
+
+def test_the_zoom_keys_and_fit(page, live) -> None:  # type: ignore[no-untyped-def]
+    open_graph(page, live)
+    page.keyboard.press(".")
+    page.wait_for_timeout(150)
+    zoomed = page.evaluate("scale")
+    page.keyboard.press(",")
+    page.wait_for_timeout(150)
+    assert page.evaluate("scale") < zoomed
+    # `0` puts the whole picture back on screen whatever the pan and zoom.
+    page.evaluate("pan = {x: -9000, y: -9000}; scale = 2.4; draw();")
+    page.keyboard.press("0")
+    page.wait_for_timeout(200)
+    on_screen = page.evaluate(
+        """() => {
+      const b = canvas.getBoundingClientRect();
+      return data.nodes.every(n => {
+        const p = at(n.id);
+        const x = pan.x + p.x * scale;
+        const y = pan.y + p.y * scale;
+        return x > -1 && y > -1 && x < b.width && y < b.height;
+      });
+    }"""
+    )
+    assert on_screen, "fit on screen should put every box in the window"
+
+
+def test_dragging_the_background_selects_a_group(page, live) -> None:  # type: ignore[no-untyped-def]
+    """The requested gesture: a box round some cards picks all of them, so they
+    can be moved together."""
+    open_graph(page, live)
+    page.keyboard.press("f")  # every card, so there are four to catch
+    page.wait_for_timeout(700)
+    corners = page.evaluate(
+        """() => {
+      const b = canvas.getBoundingClientRect();
+      const spots = data.nodes.map(n => at(n.id));
+      const to = (x, y) => ({x: b.left + pan.x + x * scale, y: b.top + pan.y + y * scale});
+      return {
+        from: to(Math.min(...spots.map(p => p.x)) - 20, Math.min(...spots.map(p => p.y)) - 20),
+        to: to(Math.max(...spots.map(p => p.x)) + NODE_W + 20,
+               Math.max(...spots.map(p => p.y)) + NODE_H + 20),
+      };
+    }"""
+    )
+    page.mouse.move(corners["from"]["x"], corners["from"]["y"])
+    page.mouse.down()
+    page.mouse.move(corners["to"]["x"], corners["to"]["y"], steps=10)
+    page.mouse.up()
+    page.wait_for_timeout(200)
+    assert page.evaluate("picked.nodes.length") == page.evaluate("data.nodes.length")
+
+
+def test_moving_a_selection_moves_all_of_it_in_one_write(page, live) -> None:  # type: ignore[no-untyped-def]
+    """Six separate writes would be six merges racing each other, and five of
+    them would lose the mtime."""
+    open_graph(page, live)
+    page.keyboard.press("A")
+    page.wait_for_timeout(200)
+    count = page.evaluate("picked.nodes.length")
+    assert count > 1
+    before = page.evaluate("Object.fromEntries(data.nodes.map(n => [n.id, at(n.id)]))")
+    grab = boxes(page)[0]["centre"]
+    page.mouse.move(grab["x"], grab["y"])
+    page.mouse.down()
+    page.mouse.move(grab["x"] + 90, grab["y"] + 60, steps=8)
+    page.mouse.up()
+    page.wait_for_timeout(900)
+    after = page.evaluate("data.positions")
+    assert len(after) == count, "every selected box was written"
+    shifts = {round(spot[0] - before[node_id]["x"]) for node_id, spot in after.items()}
+    assert len(shifts) == 1, f"they should all have moved by the same amount: {shifts}"
+
+
+def test_space_drag_pans_rather_than_selecting(page, live) -> None:  # type: ignore[no-untyped-def]
+    """The marquee took over the gesture that used to pan, so panning needs
+    somewhere to go."""
+    open_graph(page, live)
+    before = page.evaluate("({...pan})")
+    empty = page.evaluate(
+        "() => { const b = canvas.getBoundingClientRect();"
+        " return {x: b.left + b.width - 30, y: b.top + b.height - 30}; }"
+    )
+    page.keyboard.down(" ")
+    page.mouse.move(empty["x"], empty["y"])
+    page.mouse.down()
+    page.mouse.move(empty["x"] - 120, empty["y"] - 80, steps=6)
+    page.mouse.up()
+    page.keyboard.up(" ")
+    page.wait_for_timeout(200)
+    after = page.evaluate("({...pan})")
+    assert (after["x"], after["y"]) != (before["x"], before["y"])
+    assert page.evaluate("picked.nodes.length") == 0

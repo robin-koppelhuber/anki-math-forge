@@ -27,6 +27,15 @@ exactly like a good one, and gets reviewed for years.
    reading order. Conditions are usually printed *around* an identity rather
    than inside it, so the crop cannot carry them.
 
+   **If it says the text layer is unusable, believe it and say so.** A scan
+   has no text layer and a broken font encoding produces a page of nothing;
+   either way the prose is absent rather than silent, and the difference
+   matters. A missing condition on a page you could read is a condition the
+   source did not state, which is a fact about the source. A missing condition
+   on a page you could not read is a page you could not read. Write the card
+   from the crop and record in `## notes` as `@me` that you had nothing else,
+   so a reviewer knows which of the two they are looking at.
+
 2. **Decide the boundary before the content.** A display equation the
    segmenter cut into three lines is three units and one identity. Card it
    whole:

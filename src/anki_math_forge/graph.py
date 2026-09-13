@@ -28,8 +28,12 @@ from .model import Card, StaleFileError, write_atomic
 # CSS pixels between layers and between rows within one. Only a starting
 # arrangement: the point of the canvas is that you drag it into the shape the
 # material has, and `graph.json` then outranks everything here.
-COLUMN = 280.0
-ROW = 96.0
+# `Node` boxes draw 240 by 60, so these are the box plus the gap. A column of
+# 280 left forty pixels between one box and the next, which is a seam rather
+# than a gap: two captions ran together and the arrows between them had nowhere
+# to bend. Wide enough that an arrow's curve is visible as a curve.
+COLUMN = 380.0
+ROW = 128.0
 
 POSITIONS_FILE = "graph.json"
 POSITIONS_VERSION = 1

@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .config import Config
-from .extract import source_text_path
+from .extract import source_text_path, source_text_quality
 from .ledger import open_ledgers
 
 
@@ -28,6 +28,10 @@ class UnitContext:
     conventions: str
     page_text: str
     page_units: list[dict[str, Any]]
+    # Whether the prose above is worth reading, or is a scan's worth of
+    # nothing. Mechanical: see `extract.text_quality`.
+    text_quality: str = "ok"
+    text_trouble: str = ""
     marks: list[dict[str, Any]] = field(default_factory=list)
     # `[conventions]` from the source's own file: the keyed half of what is
     # ambient here, beside the prose half above.
@@ -48,6 +52,8 @@ class UnitContext:
             "web": self.web,
             "web_from": self.web_from,
             "page_text": self.page_text,
+            "text_quality": self.text_quality,
+            "text_trouble": self.text_trouble,
             "page_units": self.page_units,
             "marks": self.marks,
         }
@@ -94,7 +100,22 @@ class UnitContext:
                 flag = "*" if entry["own"] else " "
                 label = entry["meaning"] or f"{entry['kind']}/{entry['colour']}"
                 out.append(f" {flag} {label:<34} {entry['text'][:76]}")
-        out.append(f"\n## the page it was printed on\n{self.page_text or '(no text layer)'}")
+        if self.text_quality != "ok":
+            # Before the text rather than after it: by the time you have read a
+            # page of noise you have already formed an impression of what this
+            # source says.
+            out.append(
+                "\n## the page it was printed on\n"
+                f"**The text layer here is unusable ({self.text_trouble}).** "
+                "Read the crop and write the card from that. Do not take the "
+                "absence of a condition below as the source not stating one, "
+                "and say in `## notes` if you had nothing but the crop."
+            )
+        out.append(
+            f"\n## the page it was printed on\n{self.page_text or '(no text layer)'}"
+            if self.text_quality == "ok"
+            else self.page_text
+        )
         if self.page_units:
             out.append(
                 "\n## every unit on this page, in reading order\n"
@@ -127,6 +148,7 @@ def assemble(
     path = source_text_path(config, source, unit.locator.document)
     if path.exists():
         text = path.read_text(encoding="utf-8")
+    quality = source_text_quality(config, source, unit.locator.document)
 
     spec = config.sources.get(source)
     web_from = (
@@ -141,6 +163,8 @@ def assemble(
         web=config.web_for(source, unit.web),
         web_from=web_from,
         page_text=_page(text, unit.locator.page, spread),
+        text_quality=quality.verdict,
+        text_trouble=quality.describe() if quality.verdict != "ok" else "",
         page_units=_page_units(ledger, unit.locator.page),
         marks=[
             {

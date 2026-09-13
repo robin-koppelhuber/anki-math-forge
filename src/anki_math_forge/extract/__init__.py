@@ -24,8 +24,10 @@ snippets.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from .. import latex
 from ..config import Config, ConfigError
@@ -33,7 +35,17 @@ from ..ledger import Ledger, Unit
 from ..model import write_atomic
 from . import pdf, render, tex, transcribe
 
-__all__ = ["ExtractReport", "pdf", "render", "run", "tex", "transcribe"]
+__all__ = [
+    "ExtractReport",
+    "TextQuality",
+    "pdf",
+    "render",
+    "run",
+    "source_text_quality",
+    "tex",
+    "text_quality",
+    "transcribe",
+]
 
 
 @dataclass
@@ -99,6 +111,105 @@ def run(
     with Ledger.edit(ledger_path) as ledger:
         report.added, report.refreshed = ledger.upsert(units)
     return report
+
+
+# -- is the text layer worth reading? ---------------------------------------
+
+# Measured across the four layers in this repo, which are all healthy: letters
+# are 57--75% of the characters, and the Matrix Cookbook is the low end because
+# it is dense mathematics and half its tokens are single symbols. So these sit
+# well below anything a real book produces, and what they catch is the other
+# thing entirely -- a scan with no text layer, or one whose font encoding never
+# resolved.
+BLANK_PAGE = 40  # characters; below this a page has nothing on it
+POOR_BLANK = 0.25  # proportion of blank pages that means "this is a scan"
+POOR_LETTERS = 0.35  # proportion of characters that are letters
+POOR_DAMAGED = 0.001  # proportion that are U+FFFD
+
+
+@dataclass(frozen=True)
+class TextQuality:
+    """What a source's cached text layer looks like, mechanically.
+
+    A PDF's text layer is the *prose* a card writer is handed: the paragraph
+    that states the conditions, the notation section, the sentence before the
+    equation. The mathematics in it is mangled by design and that is fine --
+    the crop is authoritative (invariant 4) and every file says so in its own
+    header.
+
+    What is **not** fine is a layer that is missing or garbled, because then
+    the context is noise and nothing says so. A scanned book has no text layer
+    at all; one with a broken font encoding produces pages of replacement
+    characters or of single letters spaced out. Both read, to whoever is
+    writing the card, as "this source just does not say much", which is the
+    wrong conclusion to draw silently.
+
+    Mechanical on purpose, like every other check here: it counts characters.
+    It cannot tell a bad transcription from a terse one, and does not try.
+    """
+
+    verdict: str  # "ok" | "poor" | "missing"
+    pages: int
+    blank_pages: int
+    letters: float
+    damaged: float
+    reasons: tuple[str, ...] = ()
+
+    @property
+    def usable(self) -> bool:
+        return self.verdict == "ok"
+
+    def describe(self) -> str:
+        if self.verdict == "missing":
+            return "no text layer at all: this is a scan, or the PDF is not here"
+        if self.usable:
+            return f"{self.pages} pages of text"
+        return "; ".join(self.reasons)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "verdict": self.verdict,
+            "pages": self.pages,
+            "blank_pages": self.blank_pages,
+            "letters": round(self.letters, 3),
+            "damaged": round(self.damaged, 4),
+            "reasons": list(self.reasons),
+        }
+
+
+def text_quality(text: str) -> TextQuality:
+    """Read a cached text layer and say whether it is worth handing over."""
+    body = text.split("-->", 1)[-1] if text.lstrip().startswith("<!--") else text
+    if not body.strip():
+        return TextQuality("missing", 0, 0, 0.0, 0.0, ("nothing was extracted",))
+
+    pages = re.split(r"^## page \d+", body, flags=re.M)[1:] or [body]
+    blank = sum(1 for page in pages if len(page.strip()) < BLANK_PAGE)
+    letters = sum(character.isalpha() for character in body) / len(body)
+    damaged = body.count("�") / len(body)
+
+    reasons: list[str] = []
+    if blank / len(pages) > POOR_BLANK:
+        reasons.append(f"{blank} of {len(pages)} pages have no text on them")
+    if letters < POOR_LETTERS:
+        reasons.append(f"only {letters:.0%} of it is letters")
+    if damaged > POOR_DAMAGED:
+        reasons.append(f"{damaged:.1%} of it is replacement characters")
+    return TextQuality(
+        "poor" if reasons else "ok",
+        len(pages),
+        blank,
+        letters,
+        damaged,
+        tuple(reasons),
+    )
+
+
+def source_text_quality(config: Config, source_name: str, document: str = "") -> TextQuality:
+    path = source_text_path(config, source_name, document)
+    if not path.exists():
+        return TextQuality("missing", 0, 0, 0.0, 0.0, ("no text layer has been cached",))
+    return text_quality(path.read_text(encoding="utf-8", errors="replace"))
 
 
 def source_text_path(config: Config, source_name: str, document: str = "") -> Path:

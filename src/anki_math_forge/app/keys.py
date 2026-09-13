@@ -109,7 +109,13 @@ GRAPH: tuple[Key, ...] = (
     # Clears what is under the pointer, which is what `x` does on the review
     # view: an annotation there, a hand-placed position here.
     Key("forget-position", "x", "put a box back"),
-    Key("recentre", "0", "recentre", sep=True),
+    Key("select-all", "A", "select every box"),
+    # `.` and `,` rather than `+`/`-`: `+` adds a card, and on a German
+    # keyboard `=` is a shifted key while these two are not, so a pair that
+    # works on one layout and not the other is not a pair worth having.
+    Key("zoom-in", ".", "zoom in", sep=True),
+    Key("zoom-out", ",", "zoom out"),
+    Key("recentre", "0", "fit on screen"),
     Key("sources", "g", "sources"),
 )
 
