@@ -92,6 +92,21 @@ function paintAnnotations(item, card) {
    never in. */
 const undoStack = loadUndo("review");
 
+/* One write at a time, as on the units view. Two quick clicks on a grading
+   chip raced each other: the second posted the mtime the first had already
+   moved, took a 409, and `post` reloaded the page out from under you. */
+let busy = false;
+
+async function oneAtATime(work) {
+  if (busy) return;
+  busy = true;
+  try {
+    await work();
+  } finally {
+    busy = false;
+  }
+}
+
 async function undo() {
   const step = undoStack.pop();
   saveUndo("review", undoStack);
@@ -247,11 +262,13 @@ function paintGrades(item, card) {
 document.addEventListener("click", (event) => {
   const grade = event.target.closest("[data-grade]");
   if (grade) {
-    cycleGrade(grade.closest(".item"), grade.dataset.grade).catch(() => {});
+    oneAtATime(() => cycleGrade(grade.closest(".item"), grade.dataset.grade)).catch(
+      () => {},
+    );
     return;
   }
   const web = event.target.closest("[data-card-web]");
-  if (web) cycleCardWeb(web.closest(".item")).catch(() => {});
+  if (web) oneAtATime(() => cycleCardWeb(web.closest(".item"))).catch(() => {});
 });
 
 async function openEditor() {
@@ -261,15 +278,17 @@ async function openEditor() {
   toast("opened in " + result.opened);
 }
 
+/* Every key that writes waits for the one before it; moving and toggling do
+   not. See `oneAtATime`. */
 bindKeys({
-  approve: () => act("approve"),
-  reject: () => act("reject"),
-  "back-to-draft": () => act("unapprove"),
-  undo,
+  approve: () => oneAtATime(() => act("approve")),
+  reject: () => oneAtATime(() => act("reject")),
+  "back-to-draft": () => oneAtATime(() => act("unapprove")),
+  undo: () => oneAtATime(undo),
   editor: openEditor,
-  "note-claude": () => annotate("claude"),
-  "note-me": () => annotate("me"),
-  "resolve-note": () => resolveAnnotation(0),
+  "note-claude": () => oneAtATime(() => annotate("claude")),
+  "note-me": () => oneAtATime(() => annotate("me")),
+  "resolve-note": () => oneAtATime(() => resolveAnnotation(0)),
   next: () => deck.nextPending(),
   prev: () => deck.prev(),
   "next-alt": () => deck.nextPending(),

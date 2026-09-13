@@ -93,20 +93,12 @@ cannot be the end of an equation.** Every continuation line in §6.2 and
 
 Most of this shipped. What has not:
 
-- **Rename the repository.** The README badge points at
-  `robin-koppelhuber/anki-math-forge`; the remote is `robin-koppelhuber/Anki`.
-  The badge is broken until they agree.
 - **The demo recording.** `assets/make_assets.py` carries the shot list in its
   docstring. Not scriptable: the interesting part is the pace of triage and no
   script knows how long to pause.
 - **The marked-up screenshot.** `make_assets.py` will take it as soon as one
   Zotero source tags itself `demo`, and refuses until then, because that shot
   is a legible page of whatever you were reading.
-- **The Cookbook's licence.** Its front matter states none at all: a
-  disclaimer, an errata address, acknowledgements, nothing granting
-  redistribution or derivative rights. Freely downloadable is not licensed, and
-  `cards/matrix-cookbook/` is 108 derived cards. Worth two minutes on
-  matrixcookbook.com before anyone points at the deck.
 - **There is no `.mcp.json`**, though `.env.example` tells you to configure
   one. Anybody following the Zotero path has nothing to copy.
 

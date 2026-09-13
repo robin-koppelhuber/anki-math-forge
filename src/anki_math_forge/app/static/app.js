@@ -199,6 +199,10 @@ class Deck {
       this.show(this.index + 1); // nothing pending ahead: still let it move
       return;
     }
+    /* Repaint before bailing. Settling the last item left `4 / 4` on screen
+       while three were still unsettled, because the only thing that writes the
+       counter is `show`. */
+    this.show(this.index);
     toast("end of the list");
   }
 

@@ -13,10 +13,45 @@ const activeState = new URLSearchParams(location.search).get("state") || "new";
    which is the point of a keyboard-driven triage view. */
 const undoStack = loadUndo("units");
 
+/* One write at a time.
+
+   Keys arrive faster than a round trip, and two in flight against one ledger
+   is how `q` `q` settled the wrong unit and how `q` `z` either popped an empty
+   stack -- the `q` had not recorded yet, and its toast overwrote the "nothing
+   to undo" -- or posted the pre-`q` mtime and took a 409 and a forced reload.
+   Neither is a race worth winning: a triage key is one keystroke and the
+   answer is to make the second one wait. */
+let busy = false;
+
+async function oneAtATime(work) {
+  if (busy) return;
+  busy = true;
+  try {
+    await work();
+  } finally {
+    busy = false;
+  }
+}
+
 function recordUndo(item, result, what) {
   if (!result || !result.before) return;
   undoStack.push({ id: item.dataset.id, before: result.before, what });
   saveUndo("units", undoStack);
+}
+
+/* Reload, and land back on this unit. The deck is rebuilt from the file on
+   every request, so the only thing carried across is which one you were
+   reading -- through the hash, which `followHash` already knows how to use. */
+function reloadHere(item) {
+  /* The hash first, then a real reload.
+
+     `location.replace(url)` with a URL that differs only in its fragment does
+     not re-fetch the document -- it moves the fragment and fires `hashchange`.
+     So the page did not reload at all: the note was on disk, the toast said so,
+     and the panel still showed what it had before the write. `reload()` after
+     setting the hash is a fetch, and `followHash` puts you back on the unit. */
+  if (item) location.hash = item.dataset.id;
+  location.reload();
 }
 
 function paintState(item, unit) {
@@ -47,6 +82,16 @@ async function undo() {
     delete item.dataset.settled;
     const banner = item.querySelector(".settled");
     if (banner) banner.remove();
+    /* The suggestion block is removed from the DOM when you accept or dismiss
+       one, and the undo put it back in the *file* and not on the screen: the
+       rail said two suggestions and the unit in front of you showed none.
+       Reloading is the honest repaint -- the block carries the proposal, its
+       reason and its buttons, and rebuilding that from the payload is a second
+       renderer of the same thing. */
+    if (result.unit.suggestion && !item.querySelector(".suggestion")) {
+      reloadHere(item);
+      return;
+    }
     deck.show(deck.items.indexOf(item));
   }
   toast(`undone: ${step.what} → back to ${result.unit.state}`);
@@ -198,8 +243,10 @@ function repaintNotes(item, unit) {
   });
   if (unit.annotations.length !== item.querySelectorAll("[data-note-index]").length) {
     // A note was added, or the split no longer matches. The file is the truth
-    // and rebuilding one panel by hand is how the two drift, so reload.
-    setTimeout(() => location.reload(), 400);
+    // and rebuilding one panel by hand is how the two drift, so reload --
+    // *onto the unit you were on*. It used to come back at the top of the
+    // deck, so writing a brief at unit forty cost you the scroll back.
+    setTimeout(() => reloadHere(item), 400);
   }
 }
 
@@ -215,7 +262,7 @@ function cycleContext() {
   const steps = Array.from(item.querySelectorAll("[data-context-step]"));
   const at = steps.findIndex((b) => b.classList.contains("on"));
   const next = steps[(at + 1) % steps.length];
-  if (next) setContext(item, Number(next.dataset.contextStep));
+  return next ? setContext(item, Number(next.dataset.contextStep)) : undefined;
 }
 
 async function setContext(item, pages) {
@@ -224,9 +271,13 @@ async function setContext(item, pages) {
     { pages, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
+  /* Recorded, like every other write. A key that changes a unit and leaves the
+     undo stack alone is a key `z` silently steps over -- and it then acts on
+     an older step, which is very likely a different unit. */
+  recordUndo(item, result, "context size");
   item.dataset.contextPages = String(pages);
   paintContext(item, result.unit);
-  toast(`card writers get ${contextLabel(pages)}`);
+  toast(`card writers get ${contextLabel(pages)} · ${undoKeyName()} undoes`);
 }
 
 /* Repaint from what the server sent back rather than from what was clicked.
@@ -265,7 +316,7 @@ function cycleWeb() {
   const item = currentOf(deck);
   if (!item) return;
   const now = item.dataset.webOwn === "1" ? item.dataset.web === "1" : null;
-  setWeb(item, WEB_STEPS[(WEB_STEPS.indexOf(now) + 1) % WEB_STEPS.length]);
+  return setWeb(item, WEB_STEPS[(WEB_STEPS.indexOf(now) + 1) % WEB_STEPS.length]);
 }
 
 async function setWeb(item, web) {
@@ -274,11 +325,16 @@ async function setWeb(item, web) {
     { web, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
+  recordUndo(item, result, "web lookups");
   paintWeb(item, result.unit);
   toast(
-    result.unit.web
-      ? "web research allowed for this unit"
-      : "no lookups: the card says what the source says",
+    `${
+      result.unit.web
+        ? "web research allowed for this unit"
+        : result.unit.web_own
+          ? "no lookups here, whatever the source says"
+          : "no lookups: inherited from the source"
+    } · ${undoKeyName()} undoes`,
   );
 }
 
@@ -449,6 +505,9 @@ const PDF_VIEW_SAID = {
   document: "the whole document, scrolling",
 };
 
+/* A key that does nothing and says nothing reads as a broken keyboard, which
+   is the sentence `currentOf` was written for. This source has no crops --
+   a `tex` source has geometry for nothing -- so there is no picture to cycle. */
 function cyclePdfView() {
   const item = currentOf(deck);
   if (!item) return;
@@ -610,26 +669,31 @@ document.addEventListener("click", (event) => {
   }
 });
 
+/* Every key that writes goes through `oneAtATime`; the ones that only move or
+   toggle a panel do not. Guarding at the key rather than inside the write
+   functions is deliberate: `Q` is a state change *and* a note, and a guard one
+   level down would have the second half wait for the first forever. */
 bindKeys({
-  queue: () => setState("queued"),
-  "queue-with-brief": queueWithABrief,
+  queue: () => oneAtATime(() => setState("queued")),
+  "queue-with-brief": () => oneAtATime(queueWithABrief),
   /* No prompt. A skip is the commonest action in triage, and stopping to type
      a word turned one keystroke into a dialogue. `skip-with-reason` still
      asks, for the times the reason is worth recording. */
-  skip: () => setState("skipped"),
-  "skip-with-reason": async () => {
-    const reason = await ask("skip reason (optional)");
-    if (reason === null) return;
-    setState("skipped", reason);
-  },
-  "accept-suggestion": () => decideOnSuggestion("accept"),
-  "dismiss-suggestion": () => decideOnSuggestion("dismiss"),
-  "back-to-new": () => setState("new"),
-  undo,
-  "note-claude": () => annotate("claude"),
-  "note-me": () => annotate("me"),
-  "context-size": cycleContext,
-  "web-lookups": cycleWeb,
+  skip: () => oneAtATime(() => setState("skipped")),
+  "skip-with-reason": () =>
+    oneAtATime(async () => {
+      const reason = await ask("skip reason (optional)");
+      if (reason === null) return;
+      await setState("skipped", reason);
+    }),
+  "accept-suggestion": () => oneAtATime(() => decideOnSuggestion("accept")),
+  "dismiss-suggestion": () => oneAtATime(() => decideOnSuggestion("dismiss")),
+  "back-to-new": () => oneAtATime(() => setState("new")),
+  undo: () => oneAtATime(undo),
+  "note-claude": () => oneAtATime(() => annotate("claude")),
+  "note-me": () => oneAtATime(() => annotate("me")),
+  "context-size": () => oneAtATime(cycleContext),
+  "web-lookups": () => oneAtATime(cycleWeb),
   "pdf-view": cyclePdfView,
   next: () => deck.nextPending(),
   prev: () => deck.prev(),

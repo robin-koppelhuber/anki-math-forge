@@ -128,15 +128,15 @@ def test_the_note_key_writes_the_audience_it_names(page, live) -> None:  # type:
     page.goto(live + "/units?state=new")
     page.wait_for_timeout(500)
     page.keyboard.press("N")
-    page.wait_for_timeout(250)
+    page.wait_for_selector("#prompt[open]")
     page.keyboard.type("decide whether this is two cards")
     page.keyboard.press("Enter")
-    page.wait_for_timeout(700)
-    notes = page.eval_on_selector_all(
-        ".note-list .at, .notes .at", "e => e.map(x => x.textContent.trim())"
-    )
+    # Writing a note reloads, onto the unit you were on. Wait for that to land
+    # rather than reading the page it is replacing.
+    page.wait_for_timeout(2500)
     body = page.content()
-    assert "@me" in body and "decide whether this is two cards" in body, notes
+    assert "decide whether this is two cards" in body, "the note was written"
+    assert "@me" in body, "and filed for you, not for claude" 
 
 
 def test_an_untouched_prompt_writes_nothing(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -146,7 +146,7 @@ def test_an_untouched_prompt_writes_nothing(page, live) -> None:  # type: ignore
     page.wait_for_timeout(500)
     page.evaluate("document.getElementById('toast').textContent = ''")
     page.keyboard.press("n")
-    page.wait_for_timeout(250)
+    page.wait_for_selector("#prompt[open]")
     page.keyboard.press("Enter")
     page.wait_for_timeout(600)
     assert "annotated" not in page.inner_text("#toast"), (

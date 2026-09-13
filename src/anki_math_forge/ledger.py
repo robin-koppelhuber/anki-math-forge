@@ -496,10 +496,25 @@ class Ledger:
         unit.reason = str(snapshot.get("reason", ""))
         proposed = snapshot.get("suggestion")
         unit.suggestion = Suggestion(**proposed) if proposed else None
+        # Absent keys leave the field alone, so an older snapshot -- one taken
+        # before these three joined -- still restores what it does carry.
+        if "notes" in snapshot:
+            unit.notes = list(snapshot["notes"] or [])
+        if "context_pages" in snapshot:
+            unit.context_pages = snapshot["context_pages"]
+        if "web" in snapshot:
+            unit.web = snapshot["web"]
         return unit
 
     def snapshot(self, unit_id: str) -> dict[str, Any]:
-        """What `restore` needs to undo whatever happens next."""
+        """What `restore` needs to undo whatever happens next.
+
+        Everything a key on the units view can change, not only the three a
+        state change touches. `Q` writes a state *and* a brief, and with notes
+        outside the snapshot undo put the state back and left the brief on a
+        unit it had just returned to `new`. `c` and `w` were outside it too, so
+        undo after either popped an older step and acted on a different unit.
+        """
         unit = self.get(unit_id)
         if unit is None:
             return {}
@@ -507,6 +522,9 @@ class Ledger:
             "state": unit.state,
             "reason": unit.reason,
             "suggestion": asdict(unit.suggestion) if unit.suggestion else None,
+            "notes": list(unit.notes),
+            "context_pages": unit.context_pages,
+            "web": unit.web,
         }
 
     def mark_carded(self, unit_id: str, uids: list[str]) -> Unit:

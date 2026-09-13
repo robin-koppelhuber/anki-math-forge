@@ -45,6 +45,10 @@ let scale = 1;
 /* A box drags smaller than this and the labels stop being labels; bigger and
    four cards fill the window. */
 const ZOOM = { min: 0.25, max: 2.5, step: 1.15 };
+/* `0` may go below the interactive floor. A hundred cards in one chain is
+   wider than 0.25 fits, and a "fit on screen" that leaves most of the graph
+   off the left edge is the one gesture that has to work when you are lost. */
+const FIT_MIN = 0.06;
 let marquee = null;
 let drag = null;
 let hover = null;
@@ -585,7 +589,7 @@ function recentre() {
     (box.width - MARGIN * 2) / Math.max(1, x2 - x1),
     (box.height - MARGIN * 2) / Math.max(1, y2 - y1),
   );
-  scale = Math.min(1, Math.max(ZOOM.min, room));
+  scale = Math.min(1, Math.max(FIT_MIN, room));
   pan = {
     x: (box.width - (x2 - x1) * scale) / 2 - x1 * scale,
     y: (box.height - (y2 - y1) * scale) / 2 - y1 * scale,

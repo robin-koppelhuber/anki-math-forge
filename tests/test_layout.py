@@ -341,7 +341,7 @@ def test_queueing_can_record_what_the_card_is_about() -> None:
     records the sentence that makes the decision useful later."""
     view_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
     units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
-    assert '"queue-with-brief": queueWithABrief,' in view_js
+    assert '"queue-with-brief": () => oneAtATime(queueWithABrief),' in view_js
     # The footer renders from `app/keys.py` now, so the label lives there and
     # the template is one include.
     from anki_math_forge.app import keys as keymod

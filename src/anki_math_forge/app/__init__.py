@@ -514,6 +514,8 @@ def create_app(config: Config) -> FastAPI:
             },
         )
 
+    OFF = "the dependency canvas is off: `[app] graph` in forge.toml"
+
     def graph_enabled() -> None:
         """`[app] graph = false` takes the canvas off.
 
@@ -522,7 +524,7 @@ def create_app(config: Config) -> FastAPI:
         is off in the only sense that does not matter.
         """
         if not config.graph:
-            raise HTTPException(404, "the dependency canvas is off: `[app] graph` in forge.toml")
+            raise HTTPException(404, OFF)
 
     @app.get("/graph", response_class=HTMLResponse)
     def graph_view(request: Request, source: str = "") -> Any:
@@ -537,7 +539,25 @@ def create_app(config: Config) -> FastAPI:
         `/api/graph/{source}`, which is also what the `every card` toggle
         re-fetches, so there is one code path that decides what is drawn.
         """
-        graph_enabled()
+        # A page rather than the JSON body FastAPI would send. Every other
+        # dead end in this app is a screen with a way off it, and a bookmark
+        # landing on a bare `{"detail": ...}` has none.
+        if not config.graph:
+            return templates.TemplateResponse(
+                request,
+                "empty.html",
+                {
+                    "what": "dependency canvas",
+                    "hint": OFF,
+                    "view": "review",
+                    **key_context(config, "review", EMPTY_VIEW_KEYS),
+                    "config": config,
+                    "source": resolve_source(config, source),
+                    "sources": source_names(config),
+                    "pipeline": pipeline_counts(config, resolve_source(config, source)),
+                },
+                status_code=404,
+            )
         name = resolve_source(config, source)
         return templates.TemplateResponse(
             request,
@@ -710,7 +730,11 @@ def create_app(config: Config) -> FastAPI:
             unit.context_pages = pages
             return unit
 
-        return _mutate_ledger(config, source, body, apply)
+        # `unit_id`, so the write captures a `before` and undo has something
+        # to pop. Without it the server returned an empty snapshot, nothing
+        # was recorded, and the next `z` reached past to an older action --
+        # on a different unit.
+        return _mutate_ledger(config, source, body, apply, unit_id)
 
     @app.post("/api/units/{source}/{unit_id:path}/web")
     def set_unit_web(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -731,7 +755,11 @@ def create_app(config: Config) -> FastAPI:
             unit.web = allow
             return unit
 
-        return _mutate_ledger(config, source, body, apply)
+        # `unit_id`, so the write captures a `before` and undo has something
+        # to pop. Without it the server returned an empty snapshot, nothing
+        # was recorded, and the next `z` reached past to an older action --
+        # on a different unit.
+        return _mutate_ledger(config, source, body, apply, unit_id)
 
     # -- card actions -----------------------------------------------------
 
@@ -1526,10 +1554,15 @@ def mark_toggle(mark: str, key: str, matrix: dict[str, Any]) -> str | None:
         chosen = chosen | {key}
     if not chosen:
         return None
-    # Every cell selected is the same deck as no filter, and the shorter URL
-    # is the one that survives being pasted somewhere.
+    # Every cell selected is the same deck as no filter *only when every unit
+    # carries a mark*. On a source where some do not -- which is most of them,
+    # since a mark makes a unit and the pages around it come along -- selecting
+    # everything still excludes the unmarked ones, and returning `None` made the
+    # one live cell a button that did nothing. Compare against the units, not
+    # against the cells.
     live = {c["key"] for row in matrix.get("rows", ()) for c in row["cells"] if c["count"]}
-    if chosen >= live:
+    marked = sum(c["count"] for row in matrix.get("rows", ()) for c in row["cells"])
+    if chosen >= live and marked >= int(matrix.get("total", marked)):
         return None
     return ",".join(sorted(chosen))
 
@@ -1650,6 +1683,10 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     return {
         "colours": [{"colour": c, "count": colour_total.get(c, 0)} for c in colours],
         "rows": rows,
+        # How many units the grid is *about*, not how many carry a mark. The
+        # difference is what makes "every cell selected" mean something: with
+        # unmarked units in the deck, selecting every mark is still a filter.
+        "total": len(units),
     }
 
 

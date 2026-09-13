@@ -27,10 +27,14 @@
        and rows link across views, so a card status is reachable from the unit
        view and back. Only the shared filters travel across that jump: a
        section means the same thing on both sides, a `state` does not. #}
-    {% set shared = {'source': src, 'section': f.get('section', ''),
-                     'chapter': f.get('chapter', ''),
-                     'annotated': f.get('annotated', ''),
-                     'counts_scope': f.get('counts_scope', '')} %}
+    {# Only the source and the display preference. A lane carries a *count*,
+       and that count is the whole source's -- so carrying a section or an
+       annotation filter across the jump made the number a promise the link
+       did not keep: `new 6` landed on a deck of one, or of none, which reads
+       as a broken import rather than as a filter still being on. Either the
+       number follows the filters or the link drops them, and the number is
+       what the rail is for. #}
+    {% set shared = {'source': src, 'counts_scope': f.get('counts_scope', '')} %}
     <details class="filter-group" open>
       <summary>units</summary>
       <ul class="filter-list flow">
