@@ -3,334 +3,162 @@
 [![checks](https://github.com/robin-koppelhuber/anki-math-forge/actions/workflows/checks.yml/badge.svg)](https://github.com/robin-koppelhuber/anki-math-forge/actions/workflows/checks.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![python 3.13+](https://img.shields.io/badge/python-3.13%2B-blue.svg)](pyproject.toml)
+[![anki 26.8.1](https://img.shields.io/badge/anki-26.8.1-blue.svg)](https://apps.ankiweb.net/)
+[![zotero 9.0.6](https://img.shields.io/badge/zotero-9.0.6-blue.svg)](https://www.zotero.org/)
 
-Turns mathematical source material into reviewed Anki cards: a formula
-reference like [The Matrix Cookbook](sources/matrix-cookbook/), a statistics
-text, or a paper you marked up in Zotero.
 
-![triage](assets/triage.png)
+Turn math-heavy texts into Anki cards with a human in the loop.
 
-Two rules explain most of the design:
+1. Import standalone PDFs or entries from your Zotero collection.
+2. Decide which parts of the text are worth putting into a card.
+3. Generate cards and iterate until they are perfect.
 
-1. **Nothing reaches Anki without human approval.** `sync` only touches cards
-   you have marked `approved`, and editing an approved card un-approves it
-   automatically. That is enforced by a hash, not promised.
-2. **Files are the source of truth.** The web app is a view over them. Anything
-   it does, you can do by editing a file.
+## Features
+- Local website to build cards and iterate together with AI.
+- Import standalone PDFs or entries from your Zotero collection.
+- Use Zotero annotations as the starting point for your cards, and map
+  annotation types to different meanings for the agent.
+- Augment equations with proof outlines, intuition and use cases.
+- Optimized study order: let AI classify the usefulness, hardness and dependency between cards and explore them in a graph view, for the optimal initial study order in Anki.
+- Sync cards to Anki and update safely if something changes.
+- Write card feedback directly in Anki, sync it back into the website and improve your cards.
+- Supported models: currently only works with a Claude Code subscription, no
+  API key needed. The website gives you Claude skill commands to run instead
+  of triggering API calls from code.
 
-### What this is not
 
-**Not a generate-my-cards tool.** It will not write a deck for you, and it
-refuses to put anything in front of you that you have not read. What it does is
-make the reading fast. Every card traces to a page and a bounding box, the crop
-is rendered beside the text so a bad transcription is visible rather than
-inherited, and `verify` can check numerically that the identity on the card is
-true.
-
-The Python contains no LLM API code at all: no keys, no cost model, no vendor
-in the dependency tree. The passes that read pages are Claude Code skills in
-[.claude/](.claude/), which you run and watch.
-
-## Install
+## Quickstart
 
 ```
-uv sync --extra pdf     # --extra pdf pulls PyMuPDF (AGPL), needed to read PDFs
-npm install             # optional: gives `check` the real KaTeX parser
+git clone https://github.com/robin-koppelhuber/anki-math-forge
+cd anki-math-forge
+uv sync --extra pdf      # PyMuPDF (AGPL), needed to read PDFs
+npm install              # optional: gives `check` the real KaTeX parser
 ```
 
-Python 3.13+. The tool is MIT. `--extra pdf` is what pulls AGPL code into your
-environment, which is a choice you make rather than a licence you inherit.
-
-## First card in five lines
-
-```
-uv run forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
-uv run forge serve                     # q to queue one, in the browser
-/extract-cards                         # queued units -> a stub card
-uv run forge serve                     # a to approve it, in the browser
-uv run forge sync --dry-run            # then without --dry-run
+```toml
+# sources/<name>/source.toml, for a PDF source
+title = "The Matrix Cookbook"
+citation = "Matrix Cookbook"
+pdf = "sources/<name>/the-file.pdf"
+deck = "Mathematics::Matrix Calculus"   # optional; falls back to [anki] deck
 ```
 
-Everything below is detail.
+For a Zotero source instead: run Zotero (version 7+) with its local API enabled
+(*Settings > Advanced*), tag the item `anki`, and skip the `source.toml`.
 
-## The pipeline
+```
+uv run forge extract <name>            # or: uv run forge zotero --tag anki
+uv run forge serve                     # http://127.0.0.1:8000, press ? for the guide
+```
 
+Anki, once:
+
+1. Install AnkiConnect: *Tools > Add-ons > Get Add-ons*, code `2055492159`,
+   restart Anki.
+2. Leave Anki running while you sync. `sync` talks to
+   `http://127.0.0.1:8765`; `ANKI_CONNECT_URL` or `[anki] url` changes it.
+3. The deck and the note type are created on the first sync.
+
+## Workflow
+Creating cards is a two stage process
+1. Create and select **Units**: These are candidate parts of a page in a source for becoming a card. They are cheap to create and change
+2. Create and refine **Cards**: Once you've selected which units should become cards, a thourough agent can create a card draft for you to iterate on
 ```
 extract  ->  units  ->  triage  ->  cards  ->  review  ->  sync
              (you)                  (Claude)   (you)
 ```
 
 ```
-uv run forge extract matrix-cookbook   # PDF -> units. Never reads the maths.
-uv run forge zotero --list             # what Zotero has, and what is already here
-uv run forge zotero --tag anki         # or: what you marked up in Zotero -> units
-/transcribe --source <name>            # crops -> tex_auto, via subagents
-/classify --source <name>              # propose which units aren't worth carding
-uv run forge serve                     # triage units, then review cards
-/extract-cards --source <name>         # queued units -> stub cards
-/augment --source <name>               # fill in conditions, proof, prose
-uv run forge sync --dry-run            # then without --dry-run
+# route 1: a PDF
+uv run forge extract <source>         # PDF -> units. Never reads the maths
+/transcribe --source <source>         # crops -> LaTeX, via subagents
+/classify --source <source>           # propose skips; applies nothing
+
+# route 2: a marked-up paper in Zotero (needs Zotero running, local API on)
+uv run forge zotero --list            # what Zotero has, and what is already a source
+uv run forge zotero --tag anki        # every item tagged `anki` -> units
+
+# both routes
+uv run forge serve                    # triage units, then review cards
+/extract-cards --source <source>      # queued units -> draft cards
+/augment --source <source>            # conditions, proof, prose, tags
+uv run forge sync --dry-run           # then without --dry-run
 ```
 
-Every unit arrives `new` and nothing leaves that state without you, whichever
-door it came in by. Marking a paper up while reading says "this mattered".
-Triage answers a different question: "is this worth a card on its own". It is
-the only gate between an import and a full card queue.
 
-The triage view writes these command lines for you, scoped to whatever you had
-filtered to. Press `f` for the rail and copy from the panel at the bottom of
-it. Nothing is launched from the browser.
-
-The slash commands are Claude Code skills in [.claude/](.claude/). `serve` runs
-at http://127.0.0.1:8000; press `?` there for the state machine.
-
-Every verb that prints for a human also takes `--json`.
 
 ![the state machine](assets/states.png)
 
-## Sync to Anki
+![triage](assets/triage.png)
 
-Three things, once:
+![review](assets/review.png)
 
-1. **Install the AnkiConnect add-on.** In Anki: *Tools > Add-ons > Get
-   Add-ons*, code `2055492159`, then restart Anki.
-2. **Leave Anki running.** `sync` talks to `http://127.0.0.1:8765`, and a
-   closed Anki is the whole of "cannot reach AnkiConnect".
-3. **Nothing else.** The deck and the note type are created on the first sync
-   if they are missing. Set `ANKI_CONNECT_URL` to override the address.
+![the dependency canvas](assets/graph.png)
 
-```
-uv run forge sync --dry-run    # says exactly what it would add or update
-uv run forge sync
-```
+## Commands
 
-`sync` refuses to run while `check` reports an error, only ever touches
-`status: approved` cards, and upserts by `uid`, so running it twice adds
-nothing the second time. It never deletes. A card you un-approve is reported,
-not removed: your review history is not this tool's to throw away.
+Every session:
 
-### The note type's name
-
-`[anki] note_type_name` sets it, and nothing derives it from this project's
-name. The name is written into every note you own, so it has to survive the
-tool being renamed.
-
-```toml
-[anki]
-note_type_name = "Math Card"    # -> "Math Card v1"
-note_type_version = 1
-```
-
-Change the stem and `sync` refuses rather than creating a second note type. It
-finds the old one still in your collection, and a new one would leave every
-existing note on the old type, invisible to `sync` and re-added as new.
-Renaming it in Anki (*Tools > Manage Note Types > Rename*) keeps every note and
-its review history.
-
-### Changing the card layout
-
-`sync` does not push the card template. It is yours to edit in Anki too, and a
-content sync silently overwriting it would be a bad trade. It does say when the
-live layout has drifted from `notetype.py`, and `--templates` pushes it.
-
-```
-uv run forge sync --templates
-```
-
-### Two kinds of card
-
-`identity` states a fact; `intuition` explains one. An identity has a definite
-answer and `verify` can check it. An intuition is what a passage you marked in
-a prose source becomes. Both reach Anki as a `type::` tag, and a source can
-send each to its own subdeck:
-
-```toml
-# sources/<name>/source.toml
-deck = "Statistics::Wainwright"
-
-[decks]
-identity  = "Statistics::Wainwright::Statements"
-intuition = "Statistics::Wainwright::Intuition"
-```
-
-Subdecks rather than tags, because what you want is a different **new-card
-rate**. Five mechanical restatements a day is comfortable and five pieces of
-intuition a day is not, and a per-deck limit is the only way Anki lets you say
-that. Studying the parent still sees both.
-
-### Choosing the deck
-
-Per source, so two books do not land in one pile. `[anki] deck` is the default
-and each source may name its own; `::` makes subdecks:
-
-```toml
-# forge.toml
-[anki]
-deck = "Mathematics"                    # the fallback
-```
-
-```toml
-# sources/matrix-cookbook/source.toml
-deck = "Mathematics::Matrix Calculus"
-```
-
-Anki creates the whole chain, so these cards land in *Matrix Calculus* nested
-under *Mathematics*, and a second source with no `deck` of its own goes to
-*Mathematics*. A card is filed by the source its `unit:` names.
-
-Change a deck and the next sync writes *new* notes there. It does not move the
-ones already filed: moving somebody's cards between decks is a scheduling
-decision, not a lint fix. Move those in Anki.
-
-Every synced note also carries `[anki] tag_prefix` plus the card's own tags and
-its `freq::` / `derive::` annotations, so you can build filtered decks without
-splitting the deck itself.
-
-### Taking the deck out again
-
-```
-uv run forge export matrix-cookbook --out cookbook.apkg
-```
-
-Your review history is left out unless you ask for it. A deck you hand to
-somebody else should arrive unstudied, and your intervals say more about you
-than about the cards.
-
-**One thing to set first, once.** Anki keeps a note's sort field in a column
-that takes a number or text, and the sort field is `uid`. A uid shaped `4e6166`
-is a valid float literal, 4 × 10^6166, which overflows a double and lands as
-NULL. A single such note takes the whole deck's export down with
-`NOT NULL constraint failed: notes.sfld`.
-
-In Anki: *Tools > Manage Note Types > Fields > `Front` > "Sort by this field in
-the browser"*. The uid stays the first field, so duplicate detection and `sync`
-are unaffected, and the browser starts sorting by the question. AnkiConnect
-cannot set this, so it is a one-time click.
-
-`check` warns about any uid with this shape, and new ones never have it.
-
-### Feeding an idea back from review
-
-You are mid-review, you spot how a card should be better, and there is no
-obvious way to say so. Two ways, both pulled in by one command:
-
-```
-uv run forge feedback --dry-run   # what is waiting
-uv run forge feedback             # ...and pull it
-```
-
-**A comment**, when you have the words. Press `E` in Anki and type into the
-**Feedback** field. It is on the note type but on no template, so it never
-appears during review and always appears in the editor.
-
-**A flag**, when you do not. `Ctrl+1`-`4`, one keystroke, and it works on a
-phone. What each colour means is yours to set:
-
-```toml
-[anki.flags]
-1 = "wrong: the maths does not check out"
-2 = "unclear: I could not tell what was being asked"
-```
-
-A flag with no entry here is reported rather than guessed at, and left set so
-nothing is lost.
-
-Either becomes a `@claude` line in the card's `## notes`, which is where
-`/triage claude` looks. Open the comment, or the flag's meaning, with `@me` and
-it stays a decision parked for you instead. Fixing it changes `content_hash`, so the card drops to
-draft and comes back through review before it reaches Anki again.
-
-`feedback` erases what it takes. Without that, every run would re-import the
-same comment and a note you had already resolved would come back on the next
-pull. It is also the only reason this does not break rule 2 above: Anki holds
-that text until you pull it and never longer, and `sync` never writes the field
-back.
-
-### The order new cards are introduced in
-
-Anki numbers a new card by when it arrives and, with the default new-card
-order, introduces them in that order. `sync` adds in **study order**, on three
-keys and a graph:
-
-1. `frequency`, core to rare.
-2. `derivation`, definitional to long.
-3. **The order the source prints it in.** A text that builds up introduces
-   things in a usable order, and following it costs nothing. This key used to
-   be the uid, a hash, so the order inside a large group was noise and a result
-   could arrive well before what it is built from. Whether a source's order
-   means anything is a fact about that source: set `order = "none"` in the
-   source's own file for a table with no meaningful order, and its cards fall
-   back to an arbitrary but stable tiebreak instead of a misleading one.
-4. **`requires`**, a list of uids in a card's frontmatter, which overrides all
-   of the above. Only for a real dependency: this card's proof or notation
-   rests on that one. Two cards on a theme are not a dependency.
-
-A card with no `frequency` or `derivation` sorts last in its group. Unannotated
-is unjudged, not easy.
-
-`requires` pulls the prerequisite forward rather than pushing the result back.
-Demoting a `core` card to sit behind the `rare` one it needs would honour the
-graph and make the deck worse, so a prerequisite inherits the priority of the
-most important card that needs it.
-
-It is outside `content_hash`: approving a card is not approving its position in
-the queue, and hashing it would re-review the whole deck every time the graph
-was refined. `check` refuses a cycle, a self-reference, or a uid naming no
-card. The ordering ignores what it cannot resolve, so a typo would otherwise
-look like a graph that quietly had no effect.
-
-Cards already in Anki keep whatever position they were first given. To bring
-them into line:
-
-```
-uv run forge sync --dry-run --reposition    # says how many would move
-uv run forge sync --reposition
-```
-
-Only cards you have never studied are moved. Past the new queue a card's
-position field means a date, so anything you have started is left where it is
-and reported. Positions count up from where the deck already sits, so it keeps
-its place relative to every other deck's new cards.
-
-This assumes the deck's new-card order is the default, by position. If you set
-it to random in Anki's deck options, Anki wins.
-
-## Layout
-
-| | |
+| `forge` | |
 |---|---|
-| [sources/](sources/) | one folder per source: `source.toml`, `conventions.md`, the document, and `units.jsonl` (the ledger) |
-| [cards/](cards/) | one markdown file per card, `<source>/<uid>-<slug>.md` |
-| [src/anki_math_forge/](src/anki_math_forge/) | the tool |
-| [forge.toml](forge.toml) | what is genuinely repo-wide |
-| [assets/](assets/) | the images above, and the script that regenerates them |
+| `serve` | the web app: triage, review, dependency canvas |
+| `check` | lint; blocks sync on error |
+| `sync` | approved cards -> Anki, upsert by uid. `--dry-run`, `--templates`, `--reposition` |
+| `feedback` | Anki comments and flags -> `@claude` notes |
+| `todo` | open `@claude` annotations |
 
-A **source** describes itself in two files. `sources/<name>/source.toml` holds
-the keys the tool acts on; `sources/<name>/conventions.md` holds the prose a
-card writer needs, which no key can express. A folder with neither
-`source.toml` nor the older `source.md` is not a source.
+Once per source:
 
-A **unit** is a located region of the source: page, bbox, section, equation
-number. Geometry, never an image file. Crops render from the PDF on demand.
+| `forge` | |
+|---|---|
+| `extract [source]` | PDF -> units; never writes cards |
+| `zotero [item]` | Zotero marks -> units. `--list`, `--tag`, `--dry-run` |
+| `export [source]` | a deck as `.apkg`; `--scheduling` includes review history |
+| `audit` | is the ledger trustworthy: 1..N, no gaps |
 
-A **card** is a markdown file with `## front` and `## back`. Editing an
-approved one un-approves it, because `content_hash` stops matching.
+In the order the pipeline runs them:
 
-## Development
+| Claude Code | |
+|---|---|
+| `/transcribe --source NAME` | crops -> LaTeX, via subagents |
+| `/classify --source NAME` | propose which units are not worth a card |
+| `/gist --source NAME` | one line per unit on what its card would be about |
+| `/extract-cards --source NAME` | queued units -> draft cards |
+| `/augment --source NAME` | conditions, proof, prose, tags on drafts. Run before approving |
+| `/triage claude` | work the open `@claude` annotations |
 
-```
-uv run pytest
-uv run ruff check .
-uv run mypy
-```
+Mostly called by the skills, or from a script:
 
-## Further reading
+| `forge` | |
+|---|---|
+| `units` | view or change the ledger: state, gist, notes, transcription |
+| `context <unit-id>` | the page a unit was printed on, plus the source's conventions |
+| `source-text <source>` | the document's cached text layer |
+| `crops` | render unit crops to a directory |
+| `classify` | propose skips; applies nothing |
+| `new` | scaffold a draft card from a queued unit |
+| `verify` | opt-in numeric check of identities |
 
-- [CLAUDE.md](CLAUDE.md) — the rules, in one line each, for a working session
-- [docs/CONTRACT.md](docs/CONTRACT.md) — the same rules with the reasoning, plus
-  the card format and how a source declares its conventions
-- [docs/STYLE.md](docs/STYLE.md) — how prose here is written, and what each
-  object is called
-- [docs/DESIGN.md](docs/DESIGN.md) — the design doc
-- [docs/ROADMAP.md](docs/ROADMAP.md) — what is left, what the Cookbook taught
-  us about its own extraction, and what was rejected
+| Keys | units | review | graph |
+|---|---|---|---|
+| decide | `q` queue, `Q` queue + brief, `s` skip, `S` skip + reason, `a` accept a suggestion, `d` dismiss it | `a` approve, `r` reject | `+` add a card, `Delete` remove selection, `Enter` open card |
+| repair | `u` back to new, `z` undo, `n` note for claude, `N` note for me, `c` context size, `w` web lookups, `p` crop/page/doc | `u` back to draft, `z` undo, `e` `$EDITOR`, `n`, `N`, `x` resolve first note | `z` undo, `x` put boxes back, `A` select all |
+| move | `j` `k` next/prev, `f` filters, `g` sources, `?` guide | same | `.` `,` zoom, `0` fit, `g` sources |
+
+> [claude] `[app.keys]` in `forge.toml` remaps any key by action name.
+
+## Debugging
+- "cannot reach AnkiConnect" means Anki is closed.
+- `sync` does not push the card template; `sync --templates` does.
+- Changing a source's deck sends new notes there, does not move old ones.
+- `[decks]` in `source.toml` splits `identity` and `intuition` into subdecks, so each gets its own new-card limit.
+- Study order: `frequency`, then `derivation`, then printed order;
+ `requires` overrides. `sync --reposition` moves cards you have not
+ studied yet.
+- Feedback: `E` in Anki writes the `Feedback` field, `Ctrl+1..4` sets a flag.
+
+## Contributing & License
+Happy for any contributions, open a PR.
+
+License: MIT. `--extra pdf` pulls PyMuPDF, which is AGPL.
