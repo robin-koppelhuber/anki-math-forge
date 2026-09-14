@@ -84,7 +84,12 @@ data_dir = "~/Zotero"
 # not tell a green highlight from a green underline. Everything else you
 # marked is shown beside the nearest unit. A source may override this list in
 # its own file, and an override replaces rather than adds to it.
-units_from = ["highlight/green", "note/yellow", "image/yellow"]
+units_from = ["highlight/green", "note/yellow", "image/yellow", "underline/orange"]
+# `units_from = "declared"` instead takes every pair the meanings below name.
+# For a document you mark sparingly, where writing a colour down at all means
+# you expect a card out of it. Not the default: on a document marked up the
+# usual way, "a term to know" and "a citation to follow up" are meanings worth
+# having for marks that are context rather than cards.
 
 # What you meant by each mark. **A key names both halves: `"kind/colour"`**,
 # quoted, because a bare TOML key cannot contain a slash. Both halves always: a

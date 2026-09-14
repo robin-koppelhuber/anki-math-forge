@@ -234,6 +234,69 @@ def test_the_pair_that_makes_a_unit_is_the_pair_that_carries_a_meaning() -> None
     assert zotero.means("highlight", "green") == "a claim"
 
 
+def test_declared_takes_every_pair_the_meanings_name(repo: Path) -> None:
+    """For a document you mark sparingly, where writing a colour down at all
+    means you expect a card out of it."""
+    add_toml(
+        repo,
+        '[zotero]\nunits_from = "declared"\n\n'
+        '[zotero.meanings]\n"highlight/green" = "a claim"\n"note/yellow" = "a thought"\n',
+    )
+    zotero = config_mod.load(repo).zotero
+
+    assert zotero.unit_pairs == frozenset({"highlight/green", "note/yellow"})
+    assert zotero.makes_a_unit("note", "yellow")
+    assert not zotero.makes_a_unit("highlight", "magenta"), "no meaning, no unit"
+
+
+def test_declared_follows_the_meanings_actually_in_force(repo: Path) -> None:
+    """The marker is kept rather than expanded at load, so a source that reads
+    its own colours and inherits the marker reads its own scheme."""
+    add_toml(
+        repo,
+        '[zotero]\nunits_from = "declared"\n\n'
+        '[zotero.meanings]\n"highlight/green" = "a claim"\n',
+    )
+    write_source(
+        repo,
+        "book",
+        'title = "A Book"\n\n[meanings]\n"highlight/magenta" = "a result"',
+    )
+
+    mine = config_mod.load(repo).zotero_for("book")
+    assert mine.unit_pairs == frozenset({"highlight/magenta"})
+    assert not mine.makes_a_unit("highlight", "green"), "the shelf's scheme is replaced"
+
+
+def test_a_source_may_opt_in_where_the_repo_lists_pairs(repo: Path) -> None:
+    add_toml(repo, REPO_ZOTERO)
+    write_source(
+        repo,
+        "book",
+        'title = "A Book"\nunits_from = "declared"\n\n'
+        '[meanings]\n"highlight/magenta" = "a result"\n"note/yellow" = "a thought"',
+    )
+
+    config = config_mod.load(repo)
+    assert config.zotero_for("book").unit_pairs == frozenset(
+        {"highlight/magenta", "note/yellow"}
+    )
+    assert config.zotero.unit_pairs == frozenset({"highlight/green"}), "not the default"
+
+
+def test_declared_is_the_only_word_the_key_takes(repo: Path) -> None:
+    add_toml(repo, '[zotero]\nunits_from = "everything"\n')
+    with pytest.raises(config_mod.ConfigError, match="declared"):
+        config_mod.load(repo)
+
+
+def test_declaring_nothing_makes_no_units(repo: Path) -> None:
+    """The same empty answer an empty list gives, and the importer reports it
+    rather than importing a paper with nothing in it."""
+    add_toml(repo, '[zotero]\nunits_from = "declared"\n')
+    assert config_mod.load(repo).zotero.unit_pairs == frozenset()
+
+
 def test_a_kind_with_nothing_to_colour_is_the_pair() -> None:
     """`ink` has no colour to pair with, so the kind *is* the whole of it.
     Demanding `ink/red` would be demanding a mark nobody can make."""

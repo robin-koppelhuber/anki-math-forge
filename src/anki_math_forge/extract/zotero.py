@@ -299,10 +299,11 @@ def build(
     config and nothing else has to exist for a test to call it.
     """
     report = ImportReport(item=item.key)
-    if not zotero.units_from:
+    if not zotero.unit_pairs:
         report.skipped.append(
-            "`[zotero] units_from` is empty, so nothing you marked would become a "
-            "unit. Name the colours or kinds that mean 'this is worth a card'."
+            "`[zotero] units_from` names no mark, so nothing you marked would become "
+            "a unit. Name the kind/colour pairs that mean 'this is worth a card', or "
+            '`units_from = "declared"` to take every pair the meanings table names.'
         )
         return report
 

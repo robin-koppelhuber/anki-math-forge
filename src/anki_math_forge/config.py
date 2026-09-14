@@ -153,6 +153,21 @@ DEFAULT_MEANINGS: Mapping[str, str] = {
 # cannot have made.
 COLOURLESS_KINDS = frozenset({"ink"})
 
+# `units_from = "declared"`: every pair `[zotero.meanings]` names, rather than
+# a list you keep in step with it by hand. For a document you mark sparingly,
+# where writing a colour down at all means you expect a card out of it.
+#
+# Not the default, and it should not become one. The two keys answer different
+# questions -- what a mark means, and whether it is worth a card -- and on a
+# document marked up the usual way the answers differ: "a term to know" and "a
+# citation to follow up" are meanings worth declaring for marks that are
+# context, not cards. Tying them together also makes writing down what a colour
+# means change what the importer does, which is a surprise nobody asked for.
+#
+# It cannot collide with a real entry: `_pair` refuses any bare word that is
+# not a colourless kind, so `declared` is not a name a list can hold.
+DECLARED = "declared"
+
 
 @dataclass(frozen=True)
 class ZoteroConfig:
@@ -179,8 +194,24 @@ class ZoteroConfig:
     """
 
     data_dir: Path
+    #: The pairs that start a unit, or the single marker `DECLARED`. Read it
+    #: through `unit_pairs`, which resolves the marker; the marker is kept
+    #: rather than expanded at load because the meanings in force are not
+    #: known until a source's override has been applied over the repo's.
     units_from: frozenset[str] = frozenset()
     meanings: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def unit_pairs(self) -> frozenset[str]:
+        """Which marks start a unit, as pairs, whatever the setting said.
+
+        `"declared"` resolves against the meanings that ended up in force, so
+        a source that declares its own colours and inherits the marker reads
+        its own scheme rather than the shelf's.
+        """
+        if DECLARED in self.units_from:
+            return frozenset(self.meanings)
+        return self.units_from
 
     def makes_a_unit(self, kind: str, colour: str) -> bool:
         """Whether a mark of this exact kind and colour is worth its own card.
@@ -189,7 +220,7 @@ class ZoteroConfig:
         has a declared meaning and a mark that starts a unit are looked up by
         one name and cannot drift apart.
         """
-        return self.pair(kind, colour) in self.units_from
+        return self.pair(kind, colour) in self.unit_pairs
 
     @staticmethod
     def pair(kind: str, colour: str) -> str:
@@ -697,12 +728,25 @@ def _pair(name: str, where: str) -> str:
 
 
 def _units_from(raw: Any, where: str) -> frozenset[str]:
-    """Which marks start a unit, as pairs.
+    """Which marks start a unit: a list of pairs, or the word `declared`.
 
     Validated here rather than at the first import, because the failure it
     prevents is silent: a list that names nothing your PDF actually carries
     imports zero units and looks exactly like a paper you never marked up.
+
+    The word is a string and not a list entry on purpose. A list stays a list
+    of pairs with no exceptions in it, which is the rule the whole key exists
+    to keep; a keyword allowed inside one would be the loose spelling coming
+    back through a side door.
     """
+    if isinstance(raw, str):
+        if raw != DECLARED:
+            raise ConfigError(
+                f"{where} {raw!r} is not a list of marks. Name them as "
+                f'`["highlight/green", ...]`, or write {DECLARED!r} to take '
+                "every pair the meanings table declares."
+            )
+        return frozenset({DECLARED})
     return frozenset(_pair(str(x).strip(), where) for x in raw or ())
 
 

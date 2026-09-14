@@ -38,7 +38,7 @@ from markupsafe import Markup
 
 from .. import check, latex, model, study
 from .. import graph as graph_mod
-from ..config import DEFAULT_MEANINGS, Config, save_study_order
+from ..config import DECLARED, DEFAULT_MEANINGS, Config, save_study_order
 from ..ledger import Ledger, Unit, open_ledgers
 from ..model import Card, StaleFileError
 from ..sync import (
@@ -1897,7 +1897,7 @@ def source_facts(config: Config, source: str, *, from_marks: bool = False) -> di
         # Which marks become units, and *only* for a source that came from
         # Zotero: a segmented book has no marks and no scheme, and showing it
         # one would be the rail describing machinery that is not running.
-        "units_from": sorted(scheme.units_from) if origin == "zotero" else [],
+        "units_from": sorted(scheme.unit_pairs) if origin == "zotero" else [],
         "name": source,
         "configured": spec is not None,
         "title": spec.title if spec else source,
@@ -2254,7 +2254,13 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         "forge.toml",
     )
     add("zotero", "data dir", str(config.zotero.data_dir), "forge.toml")
-    add("zotero", "units from", ", ".join(sorted(config.zotero.units_from)), "forge.toml")
+    add(
+        "zotero",
+        "units from",
+        ", ".join(sorted(config.zotero.unit_pairs)),
+        "forge.toml"
+        + (" · every declared mark" if DECLARED in config.zotero.units_from else ""),
+    )
 
     for name, spec in config.sources.items():
         where = f"source: {name}"
@@ -2297,12 +2303,13 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         for card_type, deck in sorted(spec.decks.items()):
             add(where, f"deck [{card_type}]", deck, origin)
         scheme = config.zotero_for(name)
-        if scheme.units_from:
+        if scheme.unit_pairs:
             add(
                 where,
                 "units from",
-                ", ".join(sorted(scheme.units_from)),
-                origin if spec.units_from else inherited,
+                ", ".join(sorted(scheme.unit_pairs)),
+                (origin if spec.units_from else inherited)
+                + (" · every declared mark" if DECLARED in scheme.units_from else ""),
             )
         # The whole colour scheme, **here** rather than in the rail. The rail
         # is 240px and shows only the marks that become units, because a
