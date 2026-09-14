@@ -93,6 +93,8 @@ uv run forge sync --dry-run           # then without --dry-run
 
 ![triage](assets/triage.png)
 
+![zotero](assets/zotero.png)
+
 ![review](assets/review.png)
 
 ![the dependency canvas](assets/graph.png)
@@ -147,7 +149,7 @@ Mostly called by the skills, or from a script:
 | repair | `u` back to new, `z` undo, `n` note for claude, `N` note for me, `c` context size, `w` web lookups, `p` crop/page/doc | `u` back to draft, `z` undo, `e` `$EDITOR`, `n`, `N`, `x` resolve first note | `z` undo, `x` put boxes back, `A` select all |
 | move | `j` `k` next/prev, `f` filters, `g` sources, `?` guide | same | `.` `,` zoom, `0` fit, `g` sources |
 
-> [claude] `[app.keys]` in `forge.toml` remaps any key by action name.
+> `[app.keys]` in `forge.toml` remaps any key by action name.
 
 ## Debugging
 - "cannot reach AnkiConnect" means Anki is closed.
