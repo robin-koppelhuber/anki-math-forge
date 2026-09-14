@@ -106,8 +106,8 @@ Every session:
 | `serve` | the web app: triage, review, dependency canvas |
 | `check` | lint; blocks sync on error |
 | `sync` | approved cards -> Anki, upsert by uid. `--dry-run`, `--templates`, `--reposition` |
-| `feedback` | Anki comments and flags -> `@claude` notes |
-| `todo` | open `@claude` annotations |
+| `feedback` | Anki comments and flags -> notes on the card |
+| `todo` | open annotations, `@claude` and `@me` |
 
 Once per source:
 
