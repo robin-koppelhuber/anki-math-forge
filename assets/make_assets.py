@@ -94,6 +94,13 @@ CHROME_CANDIDATES = (
 SCALE = 2
 
 VIEW = (1600, 1000)
+# The marked-up shot is taller, and only that one. Its filter rail carries a
+# section the others have no marks for -- the grid of colour against annotation
+# kind, which is how this document was read -- and that grid is the subject of
+# the screenshot as much as the page beside it is. At 1000 it sits just under
+# the fold, and a rail photographed with its point cut off is a worse picture
+# than an unusual aspect ratio.
+VIEWS = {"zotero": (1600, 1320)}
 
 
 def find_chrome() -> str:
@@ -417,7 +424,8 @@ def main() -> int:
         print("app screenshots:")
         with Serving() as server:
             for name in todo:
-                shoot(server.base + live[name], HERE / f"{name}.png", *VIEW, scale=args.scale)
+                size = VIEWS.get(name, VIEW)
+                shoot(server.base + live[name], HERE / f"{name}.png", *size, scale=args.scale)
     return 0
 
 
