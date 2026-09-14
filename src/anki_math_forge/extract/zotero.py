@@ -1,7 +1,8 @@
 """Zotero annotations into units.
 
 **What each mark means is yours to declare, and the tool has no opinion.**
-`[zotero] units_from` names the colours and kinds worth a card of their own;
+`[zotero] units_from` names the marks worth a card of their own, by kind and
+colour together;
 `[zotero.meanings]` says what any of them mean, and a source can read its own
 scheme differently. Nothing here knows what a colour stands for, and nothing
 should: a scheme is a fact about how one person read one document. What is

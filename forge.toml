@@ -8,7 +8,7 @@
 #
 #   [anki] deck            which deck in *your* collection new cards land in
 #   [anki.flags]           what you meant when you flagged a card mid-review
-#   [zotero] units_from    which of your highlight colours start a unit
+#   [zotero] units_from    which of your marks start a unit, kind and colour
 #   [zotero.meanings]      what your colour scheme means
 #
 # Every key below is documented in `src/anki_math_forge/config.py`, next to the
@@ -79,9 +79,12 @@ graph = true             # the dependency canvas at `/graph`
 # API enabled (Settings > Advanced), the way `sync` needs AnkiConnect.
 [zotero]
 data_dir = "~/Zotero"
-# Which marks become units. Everything else you marked is shown beside the
-# nearest one. A source may override this in its own file.
-units_from = ["green", "note", "image"]
+# Which marks become units, by the same `"kind/colour"` name the meanings
+# below use: a mark is both halves, and a rule that said only `"green"` could
+# not tell a green highlight from a green underline. Everything else you
+# marked is shown beside the nearest unit. A source may override this list in
+# its own file, and an override replaces rather than adds to it.
+units_from = ["highlight/green", "note/yellow", "image/yellow"]
 
 # What you meant by each mark. **A key names both halves: `"kind/colour"`**,
 # quoted, because a bare TOML key cannot contain a slash. Both halves always: a
@@ -96,13 +99,14 @@ units_from = ["green", "note", "image"]
 # Its kinds: highlight, underline, note, image, ink, text. A source overrides
 # all of it under `[meanings]` in its own `source.toml`.
 [zotero.meanings]
-"highlight/green" = "a claim or result worth a card"
+"highlight/green" = "a claim or result"
 "highlight/purple" = "a term to know"
 "highlight/magenta" = "an observation from the text"
 "highlight/blue" = "a named object or method"
 "highlight/orange" = "a definition or named algorithm"
 "highlight/grey" = "minor, in passing"
 "highlight/yellow" = "a citation to follow up"
+"underline/orange" = "generic create card annotation"
 "note/yellow" = "something I thought while reading"
 "image/yellow" = "a figure or table worth a card"
 

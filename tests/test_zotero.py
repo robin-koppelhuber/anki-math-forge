@@ -113,25 +113,25 @@ def on_pdf() -> list[Annotation]:
 HEIGHTS = {p: 841.89 for p in range(1, 40)}
 
 
-def test_only_the_colours_you_named_make_units() -> None:
+def test_only_the_marks_you_named_make_units() -> None:
     """The tool has no opinion about what a colour means. It reads the ones you
     declared and leaves the rest as context."""
     marks = on_pdf()
     kinds = {a.kind for a in marks}
     assert "note" in kinds and "highlight" in kinds
 
-    units = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note"))
+    units = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note/yellow"))
 
     assert len(units) == 1, "one note among them"
     assert units[0].id.endswith(units[0].marks[0].key), "named after its own mark"
 
 
-def test_any_colour_can_be_the_one_that_counts() -> None:
+def test_any_mark_can_be_the_one_that_counts() -> None:
     """Nothing privileges a particular colour. Declaring a different one moves
     which marks are units and changes nothing else."""
     marks = on_pdf()
-    notes = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note"))
-    magenta = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("magenta"))
+    notes = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note/yellow"))
+    magenta = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("highlight/magenta"))
 
     assert {u.id for u in notes} & {u.id for u in magenta} == set()
     assert notes and magenta
@@ -146,7 +146,7 @@ def test_the_unit_is_named_after_its_mark_not_its_place() -> None:
     """Zotero's key is permanent and never derived from a position, which is
     what makes marking up more of a document renumber nothing."""
     marks = on_pdf()
-    before = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note"))
+    before = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note/yellow"))
     extra = Annotation(
         key="NEWKEY00",
         document="ZIETASLD",
@@ -156,7 +156,7 @@ def test_the_unit_is_named_after_its_mark_not_its_place() -> None:
         rects=[[100.0, 500.0, 200.0, 515.0]],
         sort_index="00007|000100|00100",  # sorts first, mid-document
     )
-    after = units_for("wegel", attachment(), [*marks, extra], HEIGHTS, zcfg("note"))
+    after = units_for("wegel", attachment(), [*marks, extra], HEIGHTS, zcfg("note/yellow"))
 
     assert [u.id for u in before] == [u.id for u in after], "no id moved"
 
@@ -172,7 +172,7 @@ def test_context_is_the_pages_around_it() -> None:
         key="FARAWAY1", document="ZIETASLD", kind="highlight", colour="#a28ae5",
         page_index=30, rects=[[10.0, 10.0, 20.0, 20.0]], sort_index="00030|000001|00001",
     )
-    unit = units_for("wegel", attachment(), [*on_pdf(), near, far], HEIGHTS, zcfg("note"))[0]
+    unit = units_for("wegel", attachment(), [*on_pdf(), near, far], HEIGHTS, zcfg("note/yellow"))[0]
 
     keys = {m.key for m in unit.marks}
     assert "NEARBY01" in keys, "the next page comes along"
@@ -183,7 +183,8 @@ def test_a_mark_can_sit_beside_two_units() -> None:
     """Context is a view, not content. Owning it exclusively would mean the
     tool deciding which unit a term belongs to."""
     marks = on_pdf()
-    units = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note", "magenta"))
+    scheme = zcfg("note/yellow", "highlight/magenta")
+    units = units_for("wegel", attachment(), marks, HEIGHTS, scheme)
     assert len(units) > 1
 
     seen = [m.key for u in units for m in u.marks]
@@ -197,15 +198,15 @@ def test_the_window_is_adjustable() -> None:
         page_index=10, rects=[[10.0, 10.0, 20.0, 20.0]], sort_index="00010|000001|00001",
     )
     rows = [*on_pdf(), far]
-    tight = units_for("w", attachment(), rows, HEIGHTS, zcfg("note"), neighbourhood=1)[0]
-    wide = units_for("w", attachment(), rows, HEIGHTS, zcfg("note"), neighbourhood=5)[0]
+    tight = units_for("w", attachment(), rows, HEIGHTS, zcfg("note/yellow"), neighbourhood=1)[0]
+    wide = units_for("w", attachment(), rows, HEIGHTS, zcfg("note/yellow"), neighbourhood=5)[0]
 
     assert "FARAWAY1" not in {m.key for m in tight.marks}
     assert "FARAWAY1" in {m.key for m in wide.marks}
 
 
 def test_marks_are_in_reading_order() -> None:
-    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note"))[0]
+    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note/yellow"))[0]
     rest = [m.order for m in unit.marks[1:]]
     assert rest == sorted(rest)
 
@@ -215,8 +216,8 @@ def test_naming_another_colour_splits_without_renaming_anything() -> None:
     one more and another unit appears, called after its own mark, with the
     first left exactly as it was."""
     marks = on_pdf()
-    one = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note"))
-    two = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note", "magenta"))
+    one = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note/yellow"))
+    two = units_for("wegel", attachment(), marks, HEIGHTS, zcfg("note/yellow", "highlight/magenta"))
 
     assert len(two) > len(one)
     assert {u.id for u in one} <= {u.id for u in two}, "the first survives unchanged"
@@ -225,7 +226,7 @@ def test_naming_another_colour_splits_without_renaming_anything() -> None:
 def test_the_unit_box_is_its_own_mark_not_the_whole_page() -> None:
     """What is around it is shown by rendering with context, not by widening
     the unit to cover things the card is not about."""
-    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note"))[0]
+    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note/yellow"))[0]
     assert unit.locator.bbox == unit.marks[0].bbox
 
 
@@ -234,7 +235,7 @@ def test_a_marked_page_arrives_new() -> None:
     worth a card on its own". They are different questions, and arriving
     `queued` answered the second one on the reader's behalf -- which let an
     import fill the card queue with no gate in between."""
-    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note"))[0]
+    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note/yellow"))[0]
     assert unit.state == "new"
 
 
@@ -243,7 +244,7 @@ def test_the_document_is_on_the_locator_not_in_the_name() -> None:
     chapter is not page 17 of its third. A unit that gets re-filed should not
     have to be renamed, so the document lives on the locator."""
     assert unit_id("wain", "LLWYVJPR") == "wain:LLWYVJPR"
-    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note"))[0]
+    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note/yellow"))[0]
     assert unit.locator.document == "ZIETASLD"
 
 
@@ -251,7 +252,7 @@ def test_a_mark_records_zotero_not_your_scheme() -> None:
     """What a colour means is resolved wherever a mark is displayed, never
     frozen into the ledger. Editing your scheme has to change every unit at
     once, not only the ones imported since."""
-    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note"))[0]
+    unit = units_for("wegel", attachment(), on_pdf(), HEIGHTS, zcfg("note/yellow"))[0]
     assert not hasattr(unit.marks[0], "meaning")
     assert {m.colour for m in unit.marks} <= set(COLOURS.values()) | {""}
 
@@ -281,7 +282,8 @@ def test_unmapped_colours_are_reported_not_guessed() -> None:
         }
     )
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
-    report = build(client, item, source="wegel", zotero=zcfg("note", meanings={"note": "mine"}))
+    scheme = zcfg("note/yellow", meanings={"note/yellow": "mine"})
+    report = build(client, item, source="wegel", zotero=scheme)
     assert any(name.startswith("highlight/") for name in report.unmapped)
 
 
@@ -296,7 +298,7 @@ def test_a_missing_pdf_is_reported_not_invented() -> None:
         }
     )
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
-    report = build(client, item, source="wegel", zotero=zcfg("note"))
+    report = build(client, item, source="wegel", zotero=zcfg("note/yellow"))
 
     assert not report.ok
     assert report.units == []
@@ -305,7 +307,8 @@ def test_a_missing_pdf_is_reported_not_invented() -> None:
 
 def test_an_item_with_no_pdf_is_skipped_with_a_reason() -> None:
     client = FakeZotero({"/api/users/0/items/X/children": []})
-    report = build(client, Item(key="X", title="A Web Page"), source="x", zotero=zcfg("note"))
+    item = Item(key="X", title="A Web Page")
+    report = build(client, item, source="x", zotero=zcfg("note/yellow"))
     assert not report.ok
     assert "no PDF attachments" in report.skipped[0]
 
@@ -363,7 +366,7 @@ def test_every_pdf_on_the_item_is_reported_every_run() -> None:
     item carries the paper twice -- `PDF` and `MOL_appendix.pdf` -- and reading
     both silently imported every mark against the wrong page numbers."""
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
-    report = build(wegel_client(), item, source="wegel", zotero=zcfg("note"))
+    report = build(wegel_client(), item, source="wegel", zotero=zcfg("note/yellow"))
     assert {title for _, title, _ in report.attachments} == {"PDF", "MOL_appendix.pdf"}
     assert all(taken for _, _, taken in report.attachments), "empty `documents` is all of them"
 
@@ -371,7 +374,7 @@ def test_every_pdf_on_the_item_is_reported_every_run() -> None:
 def test_documents_selects_by_title() -> None:
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
     report = build(
-        wegel_client(), item, source="wegel", zotero=zcfg("note"), documents=("PDF",)
+        wegel_client(), item, source="wegel", zotero=zcfg("note/yellow"), documents=("PDF",)
     )
     taken = {title for _, title, keep in report.attachments if keep}
     assert taken == {"PDF"}
@@ -383,7 +386,7 @@ def test_documents_selects_by_key_too() -> None:
     is what the ledger records."""
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
     report = build(
-        wegel_client(), item, source="wegel", zotero=zcfg("note"), documents=("ZIETASLD",)
+        wegel_client(), item, source="wegel", zotero=zcfg("note/yellow"), documents=("ZIETASLD",)
     )
     assert {title for _, title, keep in report.attachments if keep} == {"PDF"}
 
@@ -393,7 +396,7 @@ def test_naming_an_attachment_that_is_not_there_is_refused_loudly() -> None:
     in it, which is a real state and not this one."""
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
     report = build(
-        wegel_client(), item, source="wegel", zotero=zcfg("note"), documents=("appendix",)
+        wegel_client(), item, source="wegel", zotero=zcfg("note/yellow"), documents=("appendix",)
     )
     assert not report.ok
     assert "matches none of its attachments" in report.skipped[0]

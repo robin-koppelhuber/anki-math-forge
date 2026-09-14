@@ -65,7 +65,10 @@ def test_the_folder_wins_over_the_root_file(repo: Path) -> None:
 def test_a_block_copies_between_the_two_files_unchanged(repo: Path) -> None:
     """The whole argument for TOML over YAML frontmatter: the same text means
     the same thing in the root file and in a source's own."""
-    block = 'units_from = ["green"]\n\n[meanings]\n"highlight/green" = "a claim"\n'
+    block = (
+        'units_from = ["highlight/green"]\n\n'
+        '[meanings]\n"highlight/green" = "a claim"\n'
+    )
     add_toml(repo, "[zotero]\n" + block.replace("[meanings]", "[zotero.meanings]"))
     write_source(repo, "book", 'title = "A Book"\n' + block)
 
@@ -118,10 +121,11 @@ def test_a_layout_typo_is_still_refused_from_a_source_file(repo: Path) -> None:
 
 # -- a source reads its own marks -------------------------------------------
 
-# `units_from` still takes a bare colour -- which marks become units is a
-# different question from what they mean -- but a *meaning* needs the pair.
+# Both keys name a mark the same way, by kind and colour together: which
+# marks become units is a different question from what they mean, but it is
+# a question about the same marks.
 REPO_ZOTERO = (
-    '[zotero]\nunits_from = ["green"]\n\n'
+    '[zotero]\nunits_from = ["highlight/green"]\n\n'
     '[zotero.meanings]\n"highlight/green" = "a claim"\n'
 )
 
@@ -131,7 +135,7 @@ def test_zotero_settings_fall_back_to_the_repo(repo: Path) -> None:
     write_source(repo, "book", 'title = "A Book"')
 
     zotero = config_mod.load(repo).zotero_for("book")
-    assert zotero.units_from == frozenset({"green"})
+    assert zotero.units_from == frozenset({"highlight/green"})
     assert zotero.means("highlight", "green") == "a claim"
 
 
@@ -142,16 +146,18 @@ def test_a_source_may_read_its_colours_differently(repo: Path) -> None:
     write_source(
         repo,
         "book",
-        'title = "A Book"\nunits_from = ["magenta"]\n\n'
+        'title = "A Book"\nunits_from = ["highlight/magenta"]\n\n'
         '[meanings]\n"highlight/magenta" = "a result"',
     )
 
     config = config_mod.load(repo)
     mine = config.zotero_for("book")
-    assert mine.units_from == frozenset({"magenta"})
+    assert mine.units_from == frozenset({"highlight/magenta"})
     assert mine.means("highlight", "magenta") == "a result"
     assert mine.reading("highlight", "green")[1] == "default", "replaced, not merged"
-    assert config.zotero.units_from == frozenset({"green"}), "the repo default is untouched"
+    assert config.zotero.units_from == frozenset(
+        {"highlight/green"}
+    ), "the repo default is untouched"
 
 
 def test_only_the_pair_decides_a_meaning() -> None:
@@ -188,6 +194,44 @@ def test_half_a_mark_is_refused_rather_than_read_loosely(repo: Path) -> None:
     add_toml(repo, '[zotero]\n\n[zotero.meanings]\ngreen = "a claim"\n')
     with pytest.raises(config_mod.ConfigError, match="highlight/green"):
         config_mod.load(repo)
+
+
+def test_half_a_mark_is_refused_in_units_from_too(repo: Path) -> None:
+    """The two keys name the same thing, so they take the same name. A bare
+    `green` could only mean "green, however it was drawn", which is the
+    distinction a second annotation kind exists to draw."""
+    add_toml(repo, '[zotero]\nunits_from = ["green"]\n')
+    with pytest.raises(config_mod.ConfigError, match="highlight/green"):
+        config_mod.load(repo)
+
+
+def test_a_bare_kind_is_refused_in_units_from(repo: Path) -> None:
+    """`note` covered every colour of note, which is the shadowing the
+    meanings table already refuses."""
+    add_toml(repo, '[zotero]\nunits_from = ["note"]\n')
+    with pytest.raises(config_mod.ConfigError, match="note/green"):
+        config_mod.load(repo)
+
+
+def test_a_source_naming_half_a_mark_is_refused(repo: Path) -> None:
+    add_toml(repo, REPO_ZOTERO)
+    write_source(repo, "book", 'title = "A Book"\nunits_from = ["magenta"]')
+    with pytest.raises(config_mod.ConfigError, match=r"sources\.book"):
+        config_mod.load(repo)
+
+
+def test_the_pair_that_makes_a_unit_is_the_pair_that_carries_a_meaning() -> None:
+    """One name, looked up one way. Two spellings is how a mark that starts a
+    unit ends up with no declared meaning and nothing saying why."""
+    zotero = config_mod.ZoteroConfig(
+        data_dir=Path("/nowhere"),
+        units_from=frozenset({"highlight/green"}),
+        meanings={"highlight/green": "a claim"},
+    )
+    assert zotero.makes_a_unit("highlight", "green")
+    assert not zotero.makes_a_unit("underline", "green"), "a different mark"
+    assert not zotero.makes_a_unit("highlight", "blue")
+    assert zotero.means("highlight", "green") == "a claim"
 
 
 def test_a_kind_with_nothing_to_colour_is_the_pair() -> None:

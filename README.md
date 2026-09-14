@@ -22,6 +22,7 @@ Turn math-heavy texts into Anki cards with a human in the loop.
 - Optimized study order: let AI classify the usefulness, hardness and dependency between cards and explore them in a graph view, for the optimal initial study order in Anki.
 - Sync cards to Anki and update safely if something changes.
 - Write card feedback directly in Anki, sync it back into the website and improve your cards.
+---
 - Supported models: currently only works with a Claude Code subscription, no
   API key needed. The website gives you Claude skill commands to run instead
   of triggering API calls from code.

@@ -159,17 +159,23 @@ class ZoteroConfig:
     """Reading a marked-up PDF out of Zotero.
 
     `units_from` is the point of the whole section: a mark of one of these
-    colours or kinds becomes a unit, and everything else you marked on the
-    pages around it comes with it. A two-word term is not a card, but it is
-    worth reading next to the claim it belongs to.
+    kinds becomes a unit, and everything else you marked on the pages around
+    it comes with it. A two-word term is not a card, but it is worth reading
+    next to the claim it belongs to.
 
-    `meanings` maps a **kind and colour together** to what you meant by it,
-    the way `[anki.flags]` maps a flag number. Both halves, always: a green
-    highlight and a green underline are two marks a reader made deliberately
-    differently, and a scheme that cannot tell them apart is not the scheme
-    they were using. An unmapped pair is reported rather than guessed at, for
-    the same reason a flag with no entry is: a guess about what your own
-    colours mean would be invisible by the time it reached a card.
+    **A mark is a kind and a colour together**, and both of these keys say so.
+    `meanings` maps a pair to what you meant by it, the way `[anki.flags]` maps
+    a flag number, and `units_from` names the pairs worth a card of their own.
+    A green highlight and a green underline are two marks a reader made
+    deliberately differently, so a rule that cannot tell them apart is not the
+    rule they were reading by: `units_from` once took a bare `green` or a bare
+    `note`, which made "every note, whatever colour" and "green, however
+    drawn" the only two things it could say, and neither of them was what
+    anybody meant.
+
+    An unmapped pair is reported rather than guessed at, for the same reason a
+    flag with no entry is: a guess about what your own colours mean would be
+    invisible by the time it reached a card.
     """
 
     data_dir: Path
@@ -177,8 +183,20 @@ class ZoteroConfig:
     meanings: Mapping[str, str] = field(default_factory=dict)
 
     def makes_a_unit(self, kind: str, colour: str) -> bool:
-        """Whether a mark of this kind or colour is worth a card of its own."""
-        return kind in self.units_from or colour in self.units_from
+        """Whether a mark of this exact kind and colour is worth its own card.
+
+        The same pair `reading` is keyed on, built the same way, so a mark that
+        has a declared meaning and a mark that starts a unit are looked up by
+        one name and cannot drift apart.
+        """
+        return self.pair(kind, colour) in self.units_from
+
+    @staticmethod
+    def pair(kind: str, colour: str) -> str:
+        """`kind/colour`, or the kind alone where there is no colour to pair
+        with. One place, because two spellings of a mark's name is how a
+        declared meaning stops matching the rule that made the unit."""
+        return f"{kind}/{colour}" if colour else kind
 
     def means(self, kind: str, colour: str) -> str:
         """The most specific meaning in force, defaults included."""
@@ -204,7 +222,7 @@ class ZoteroConfig:
         comes back so a view can tell the two apart -- "you have not decided
         about this combination yet" is worth seeing. `means` throws it away.
         """
-        pair = f"{kind}/{colour}" if colour else kind
+        pair = self.pair(kind, colour)
         if self.meanings.get(pair):
             return self.meanings[pair], "declared"
         fallback = DEFAULT_MEANINGS.get(kind, "")
@@ -506,7 +524,9 @@ def load(root: Path | None = None) -> Config:
             decks={str(k): str(v) for k, v in (spec.get("decks") or {}).items()},
             tags=tuple(str(x) for x in spec.get("tags", ())),
             documents=tuple(str(x) for x in spec.get("documents", ())),
-            units_from=frozenset(str(x) for x in spec.get("units_from", ())),
+            units_from=_units_from(
+                spec.get("units_from", ()), f"[sources.{name}] units_from"
+            ),
             meanings=_meanings(spec.get("meanings") or {}, f"[sources.{name}.meanings]"),
         )
 
@@ -645,6 +665,47 @@ def discover_sources(sources_dir: Path) -> dict[str, dict[str, Any]]:
     return found
 
 
+def _pair(name: str, where: str) -> str:
+    """One `kind/colour`, refused if it names only half of a mark.
+
+    Shared by `[zotero.meanings]` and `units_from`, because they name the same
+    thing and a rule that accepted a looser spelling than the meanings table
+    would let a source declare what `highlight/green` means and then make units
+    of something else.
+
+    A colourless kind is the one exception, and it is not an abbreviation: an
+    `ink` mark has no colour to pair with, so `ink` *is* the pair.
+    """
+    kind, slash, colour = name.partition("/")
+    if not slash and name not in COLOURLESS_KINDS:
+        from .zotero import HEX_BY_NAME
+
+        hint = (
+            f"a colour needs the kind it was drawn with, e.g. highlight/{name}"
+            if name in HEX_BY_NAME
+            else f"a kind needs the colour, e.g. {name}/green"
+        )
+        raise ConfigError(
+            f"{where} {name!r} names only half of a mark; {hint}. "
+            "The pair decides: a bare kind covers every colour under it, and a "
+            "bare colour claims that green means the same highlighted as "
+            "underlined."
+        )
+    if slash and not (kind and colour):
+        raise ConfigError(f"{where} {name!r} is not a kind/colour pair")
+    return name
+
+
+def _units_from(raw: Any, where: str) -> frozenset[str]:
+    """Which marks start a unit, as pairs.
+
+    Validated here rather than at the first import, because the failure it
+    prevents is silent: a list that names nothing your PDF actually carries
+    imports zero units and looks exactly like a paper you never marked up.
+    """
+    return frozenset(_pair(str(x).strip(), where) for x in raw or ())
+
+
 def _meanings(raw: Any, where: str) -> dict[str, str]:
     """`kind/colour = "..."`, and nothing shorter.
 
@@ -667,24 +728,7 @@ def _meanings(raw: Any, where: str) -> dict[str, str]:
         text = str(value or "").strip()
         if not text:
             continue
-        kind, slash, colour = name.partition("/")
-        if not slash and name not in COLOURLESS_KINDS:
-            from .zotero import HEX_BY_NAME
-
-            hint = (
-                f"a colour needs the kind it was drawn with, e.g. highlight/{name}"
-                if name in HEX_BY_NAME
-                else f"a kind needs the colour, e.g. {name}/green"
-            )
-            raise ConfigError(
-                f"{where} {name!r} names only half of a mark; {hint}. "
-                "The pair decides what a mark means: a bare kind used to shadow "
-                "every colour under it, and a bare colour claimed that green "
-                "means the same highlighted as underlined."
-            )
-        if slash and not (kind and colour):
-            raise ConfigError(f"{where} {name!r} is not a kind/colour pair")
-        out[name] = text
+        out[_pair(name, where)] = text
     return out
 
 
@@ -693,7 +737,7 @@ def _zotero(raw: Any) -> ZoteroConfig:
     data_dir = str(section.get("data_dir", "") or "~/Zotero")
     return ZoteroConfig(
         data_dir=Path(data_dir).expanduser(),
-        units_from=frozenset(str(t) for t in section.get("units_from", ())),
+        units_from=_units_from(section.get("units_from", ()), "[zotero] units_from"),
         meanings=_meanings(section.get("meanings", {}), "[zotero.meanings]"),
     )
 

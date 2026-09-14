@@ -141,7 +141,9 @@
                                 L319.0,35.3 L318.9,35.6 L313.0,42.9 L318.9,43.0
                                 L319.0,44.4 Z"/>
     <text x="332" y="42">forge zotero</text>
-    <text class="sub" x="332" y="58">{{ sf.units_from | join(', ') if sf.units_from else 'green, note, image' }} marks you made while reading</text>
+    <text class="sub" x="332" y="58">the marks you made while reading:</text>
+    <text class="sub" x="332" y="72">{{ sf.units_from | join(', ') if sf.units_from
+        else 'highlight/green, note/yellow, image/yellow' }}</text>
   </g>
   <path class="edge" d="M27,56 V78 H112 V90" marker-end="url(#ar)"/>
   <path class="edge" d="M313,56 V78 H150 V90" marker-end="url(#ar)"/>

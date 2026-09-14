@@ -21,7 +21,7 @@
      labelling both "units" and leaving it there hides which machine is
      running. #}
   {% set sf = source_facts | default({}, true) %}
-  <text class="lane" x="6" y="14">UNITS{% if sf.units_from %} &#183; {{ sf.units_from | join(', ') }}{% endif %}</text>
+  <text class="lane" x="6" y="14">UNITS{% if sf.units_from %} &#183; {{ sf.units_from | length }} kinds of mark{% endif %}</text>
 
   <g class="state"><rect x="6" y="24" width="108" height="40" rx="6"/>
     <text class="name" x="16" y="41">new</text>
