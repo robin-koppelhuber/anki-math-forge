@@ -400,11 +400,19 @@ def test_naming_an_attachment_that_is_not_there_is_refused_loudly() -> None:
     assert "MOL_appendix.pdf" in report.skipped[0], "and says what there was to choose from"
 
 
-def test_the_stub_invents_no_tags(tmp_path: Path) -> None:
-    """A label the tool made up means whatever the tool guessed, and you would
-    be filtering a shelf by it without ever having decided what it says."""
+def test_the_stub_carries_your_tags_and_invents_none(tmp_path: Path) -> None:
+    """A label the tool made up would mean whatever the tool guessed. A tag on
+    the Zotero item is one you put there, so it comes across: `demo`, the one
+    tag this repo reads, is then set where you would think to set it."""
     path = tmp_path / "wegel" / "source.md"
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
     write_source_stub(path, item)
+    text = path.read_text(encoding="utf-8")
+    assert '"anki"' in text and '"Statistics - Machine Learning"' in text
+    assert "documents = []" in text
+
+
+def test_the_stub_has_no_tags_when_the_item_has_none(tmp_path: Path) -> None:
+    path = tmp_path / "bare" / "source.toml"
+    write_source_stub(path, Item(key="X", title="Bare"))
     assert "tags = []" in path.read_text(encoding="utf-8")
-    assert "documents = []" in path.read_text(encoding="utf-8")

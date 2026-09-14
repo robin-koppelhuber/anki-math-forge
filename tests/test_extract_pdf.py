@@ -316,7 +316,7 @@ def test_a_tight_crop_has_no_outline(pdf_source: Config) -> None:
 
 # -- the deprecation contract ----------------------------------------------
 #
-# `pdf.py` is marked for deletion (ROADMAP.md §4). These pin the only promises
+# `pdf.py` is frozen (ROADMAP.md §9). These pin the only promises
 # the rest of the system relies on, so a replacement -- a layout model, or
 # Claude reading pages -- can be checked against them rather than against 700
 # lines of heuristics.

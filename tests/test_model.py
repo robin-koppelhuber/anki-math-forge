@@ -352,6 +352,31 @@ def test_add_annotation_keeps_an_existing_audience(card_path: Path) -> None:
     assert [model.annotation_audience(n) for n in notes] == ["me", "claude"]
 
 
+def test_a_prefix_has_to_end_where_it_ends(card_path: Path) -> None:
+    """`@metric space` opens like `@me` and is not a note addressed to anyone,
+    which a bare `startswith` could not tell."""
+    assert model.annotation_audience("@metric space bound is wrong") == ""
+    assert model.annotation_audience("@me, on reflection") == "me"
+    assert model.annotation_audience("@claude: check the sign") == "claude"
+
+    card = model.load(card_path)
+    card.add_annotation("@metric space bound is wrong")
+    assert card.annotations() == ["@claude @metric space bound is wrong"]
+
+
+def test_annotation_line_is_what_gets_written_and_is_idempotent(card_path: Path) -> None:
+    """`feedback` builds the line to compare against `annotations()` and then
+    hands the same line back to `add_annotation`."""
+    once = model.annotation_line("  two   spaces  ")
+    assert once == "@claude two spaces"
+    assert model.annotation_line(once) == once
+    assert model.annotation_line("   ") == ""
+
+    card = model.load(card_path)
+    card.add_annotation(once)
+    assert card.annotations() == [once]
+
+
 def test_resolve_annotation_deletes_the_line_and_leaves_the_prose(card_path: Path) -> None:
     """Resolving *is* deleting: a note still in the file still blocks sync, so
     anything short of a delete leaves the card exactly as stuck."""

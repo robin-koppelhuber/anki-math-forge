@@ -6,15 +6,10 @@ deck = "Mathe::Matrix-Calculus"
 order = "printed"
 tags = []
 
-# What is ambient in this book. Free-form: any key here is handed to whoever
-# writes a card, through `forge context`, so a convention the tool has never
-# heard of still reaches the person who needs it. Prose that wants a paragraph
-# belongs in conventions.md; this is for the one-liners worth stating as a
-# value.
-#
-# `layout` is the one key anything *acts* on -- `verify`'s numerical gradient
-# computes denominator layout, the two conventions agree on every square
-# matrix, and a mismatch would pass review and first bite on a rectangular one.
+# What is ambient in this book, as one-liners. Free-form: every key reaches
+# whoever writes a card, through `forge context`. Prose that wants a paragraph
+# belongs in conventions.md. `layout` is the only key anything acts on, in
+# `verify`.
 [conventions]
 layout = "denominator"
 entries = "real unless the card says otherwise"

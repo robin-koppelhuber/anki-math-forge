@@ -13,8 +13,9 @@ Tests cite these by number.
 `sync` only touches cards marked `status: approved`.
 
 Traffic is one-way, with one exception. `feedback` pulls review comments and
-flags out of Anki, writes them into the card's `## notes` as `@claude` lines,
-and erases them from Anki in the same pass. The erase is not tidiness: without
+flags out of Anki, writes them into the card's `## notes` as annotations, and
+erases them from Anki in the same pass. An imported note is addressed like any
+other, `@claude` unless the comment or the flag's meaning opens `@me`. The erase is not tidiness: without
 it, every run re-imports the same comment, and a note you had already resolved
 comes back on the next pull. It is also what keeps invariant 2 true. Anki holds
 that text until you pull it and never longer.
@@ -197,7 +198,11 @@ decides the order `sync` adds new cards in. Only for a real dependency: this
 card's proof or notation rests on that one. It is outside `content_hash`.
 
 Within the graph, order is `frequency`, then `derivation`, then the order the
-source prints it in.
+source prints it in. Which of those outranks which is a setting,
+`[cards] study_order`, and the panel on the canvas at `/graph` is the other way
+to change it; `src/anki_math_forge/study.py` declares the criteria and the
+reasoning for each. `requires` is not in that list and cannot be ranked among
+them, and the uid stays last so two machines build the same deck.
 
 ---
 

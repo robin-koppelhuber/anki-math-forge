@@ -16,7 +16,8 @@ display:
     zotero.png   a unit from a marked-up paper: the highlights painted back
                  onto the page, and what each one says beside it
     review.png   an approved card, with the notes that decided it
-    graph.png    the dependency canvas: what each card rests on, arranged
+    graph.png    the dependency canvas: what each card rests on, arranged,
+                 beside the study order the two of them produce
     states.png   the state machine, units above and cards below
 
 Two ways of taking a picture, because the subjects differ. The **state
@@ -67,7 +68,12 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Iterable
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # the package is imported lazily, inside the functions
+    from anki_math_forge.ledger import Unit
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -174,15 +180,19 @@ PAGE = """<!doctype html>
 def render_states(out: Path, width: int, scale: int) -> None:
     from jinja2 import Environment, FileSystemLoader
 
-    from anki_math_forge.app import TEMPLATES, source_facts
-    from anki_math_forge.config import load
+    from anki_math_forge.app import TEMPLATES
 
-    config = load(ROOT)
-    source = next(iter(config.sources), "")
-    facts = source_facts(config, source) if source else {"origin": "", "units_from": []}
-
+    # Deliberately no source. In the app this diagram lights the door the
+    # source in front of you came in by; in the README it is a picture of the
+    # machine, and lighting one half would say this tool is for PDFs.
+    #
+    # The keyword has to be `source_facts`: the template resolves `sf` from it
+    # itself, so the old `sf=facts` was silently discarded and every rendered
+    # asset has been the no-source one anyway.
     env = Environment(loader=FileSystemLoader(str(TEMPLATES)), autoescape=True)
-    body = env.get_template("_fsm.html").render(sf=facts)
+    body = env.get_template("_fsm.html").render(
+        source_facts={"origin": "", "units_from": []}
+    )
 
     # Chrome needs the stylesheet on disk beside the page; a file:// URL will
     # not reach the running app's /static.
@@ -250,6 +260,44 @@ TRIAGE_STATES = ("queued", "new", "carded", "skipped")
 SHOTS = ("triage", "zotero", "review", "graph", "states")
 
 
+# What a transcription has to be to make a picture. Under the floor the two
+# panes are a symbol each and the screenshot shows an empty app; over the
+# ceiling the LaTeX wraps to six lines and pushes the decision off the bottom.
+SHOOTABLE = (80, 160)
+
+
+def interesting(units: Iterable[Unit]) -> str:
+    """A fragment naming the unit to photograph, or nothing.
+
+    The deck opens on its first item, and the first queued equation in a book
+    is `(AB)^-1 = B^-1 A^-1` with nothing said about it: a true picture of
+    triage and a dull one. What triage looks like is a unit with a *proposal*
+    on it, because that is when the screen has something to decide.
+
+    So: the first queued unit that carries a suggestion, is numbered by the
+    book (a numbered equation is a result rather than a fragment lifted out of
+    a paragraph) and is the size of a thing worth photographing. Worked out
+    rather than written down, for the same reason the source is: a unit id in
+    this file goes stale the first time the ledger is rebuilt.
+
+    Which unit that is remains an aesthetic call, and `FORGE_ASSET_UNIT` is how
+    a human makes it. The committed `triage.png` was taken with
+
+        FORGE_ASSET_UNIT=matrix-cookbook:2.4:86 uv run python assets/make_assets.py triage
+    """
+    named = os.environ.get("FORGE_ASSET_UNIT", "")
+    if named:
+        return "#" + urllib.parse.quote(named)
+    low, high = SHOOTABLE
+    proposed = [u for u in units if u.state == "queued" and u.suggestion]
+    numbered = [u for u in proposed if u.locator.equation is not None]
+    pick = next(
+        (u for u in numbered if low <= len(u.tex_auto or "") <= high),
+        next(iter(numbered), None) or next(iter(proposed), None),
+    )
+    return "#" + urllib.parse.quote(pick.id) if pick else ""
+
+
 def urls() -> dict[str, str]:
     """One URL per screenshot, resolved against whatever sources exist.
 
@@ -287,7 +335,7 @@ def urls() -> dict[str, str]:
     out: dict[str, str] = {}
     segmented = os.environ.get("FORGE_ASSET_SOURCE", "") or next(iter(candidates(False)), "")
     if segmented:
-        out["triage"] = units(segmented)
+        out["triage"] = units(segmented) + interesting(ledgers.get(segmented, ()))
         # A repo that has approved nothing yet still gets a picture rather than
         # an empty column.
         approved = any(
@@ -304,7 +352,13 @@ def urls() -> dict[str, str]:
             "requires:" in c.read_text(encoding="utf-8")
             for c in (config.cards_dir / segmented).glob("*.md")
         ):
-            out["graph"] = "/graph?" + urllib.parse.urlencode({"source": segmented})
+            # `order=1` opens the study-order panel. The canvas draws
+            # `requires`, which is half of what decides the queue; the panel is
+            # the other half and the queue itself, and a picture of the view
+            # with it shut shows neither.
+            out["graph"] = "/graph?" + urllib.parse.urlencode(
+                {"source": segmented, "order": "1"}
+            )
     # The marked-up shot is opt-in, and that is the whole point of it. This
     # screenshot is a legible page of whatever you were reading, so taking it
     # of the first Zotero source to hand republishes a page of somebody's book

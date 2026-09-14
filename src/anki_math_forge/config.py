@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import os
 import tomllib
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from . import study
 
 CONFIG_NAME = "forge.toml"
 # What the file used to be called. Still read, so a repo does not have to
@@ -237,6 +239,15 @@ class Config:
     # decides the study order exactly as before. It changes what the app shows
     # and nothing about what any file means.
     graph: bool = True
+    # `[cards] study_order`: which criterion outranks which when Anki decides
+    # what new card you meet next. `study.py` holds the list and the reasoning;
+    # this is the sequence, already completed and validated, so nothing
+    # downstream has to cope with a partial or a misspelled one.
+    #
+    # The one setting in this file the app writes back (the panel on the
+    # canvas), because it is the one whose effect you can only judge by looking
+    # at the resulting order, and the order is a hundred cards long.
+    study_order: tuple[str, ...] = study.DEFAULT
     # `[app.keys]`: action name -> the key that runs it. Empty means every
     # shortcut is its default. `app/keys.py` owns the list and the reasoning;
     # this is only the override table, validated at load so a typo'd action
@@ -509,6 +520,7 @@ def load(root: Path | None = None) -> Config:
         crop_context=float(cards.get("crop_context", 0.0)),
         crop_width=_crop_width(cards.get("crop_width", ""), "[cards]"),
         context_pages=int(cards.get("context_pages", 1)),
+        study_order=_study_order(cards.get("study_order"), "[cards]"),
         web=bool(cards.get("web", False)),
         anki_url=os.environ.get("ANKI_CONNECT_URL", anki.get("url", "http://127.0.0.1:8765")),
         deck=anki.get("deck", "Default"),
@@ -525,6 +537,32 @@ def load(root: Path | None = None) -> Config:
         sources=sources,
         zotero=_zotero(raw.get("zotero", {})),
     )
+
+
+def _study_order(raw: Any, where: str) -> tuple[str, ...]:
+    """`[cards] study_order`: which criterion outranks which.
+
+    Refused at load rather than at the sort, for the same reason an unknown
+    key action is: a criterion nobody recognises reads exactly like the
+    setting having no effect, and the effect here is the order a deck of a
+    thousand cards arrives in.
+
+    Absent means the declared default. A partial list is completed rather than
+    refused, because the list grows: naming two of three criteria is a
+    statement about those two, not a claim that the third does not exist.
+    """
+    if raw is None:
+        return study.DEFAULT
+    if isinstance(raw, str):
+        raw = [part.strip() for part in raw.split(",")]
+    if not isinstance(raw, (list, tuple)):
+        raise ConfigError(f"{where} study_order must be a list of criterion names")
+    names = [str(x).strip() for x in raw if str(x).strip()]
+    try:
+        study.validate(names)
+    except study.StudyOrderError as exc:
+        raise ConfigError(f"{where} study_order: {exc}") from exc
+    return tuple(c.name for c in study.resolve(names))
 
 
 def _keys(raw: Any) -> dict[str, str]:
@@ -762,3 +800,93 @@ def _opt_path(root: Path, value: str | None) -> Path | None:
         return None
     p = Path(value)
     return p if p.is_absolute() else root / p
+
+
+# -- writing one setting back ------------------------------------------------
+
+#: The comment written above `study_order` when this creates the line. Only
+#: then: an edit of an existing line leaves whatever is written around it
+#: alone, because that prose may have been written by hand.
+STUDY_ORDER_NOTE = (
+    "# Which criterion outranks which when Anki decides what new card you meet\n"
+    "# next. `requires` comes before all of them and the uid settles a tie;\n"
+    "# `src/anki_math_forge/study.py` has the list and the reasoning. The panel\n"
+    "# on the canvas at /graph writes this line.\n"
+)
+
+
+def config_path(root: Path) -> Path:
+    """The config file this root is configured by, existing or not."""
+    return next(
+        (root / name for name in CONFIG_NAMES if (root / name).is_file()),
+        root / CONFIG_NAME,
+    )
+
+
+def save_study_order(root: Path, order: Sequence[str]) -> Path:
+    """Write `[cards] study_order` into `forge.toml`, leaving the rest alone.
+
+    A line edit rather than a dump of the parsed document. This config is
+    mostly commentary: it explains the four values that are decisions rather
+    than defaults, and re-serialising it from `tomllib` would delete every word
+    of that to change three items in a list. So the table is found, the one
+    line is replaced or inserted, and every other byte in the file survives.
+
+    The only setting written from the app, and that is deliberate. The
+    keyboard map and the source list are edits you make once with an editor
+    open; this one is judged by looking at the order it produces, which is why
+    there is a panel for it at all.
+    """
+    order = tuple(c.name for c in study.resolve(list(order)))
+    path = config_path(root)
+    text = path.read_text(encoding="utf-8") if path.is_file() else ""
+    line = "study_order = [" + ", ".join(f'"{name}"' for name in order) + "]\n"
+    lines = text.splitlines(keepends=True)
+
+    start = next(
+        (i for i, raw in enumerate(lines) if raw.strip() == "[cards]"),
+        None,
+    )
+    if start is None:
+        # No `[cards]` table at all. Appending one is valid wherever the file
+        # ends: a table header closes whatever table preceded it.
+        joined = text if text.endswith("\n") or not text else text + "\n"
+        new = f"{joined}\n[cards]\n{STUDY_ORDER_NOTE}{line}"
+    else:
+        end = next(
+            (i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")),
+            len(lines),
+        )
+        at = next(
+            (
+                i
+                for i in range(start + 1, end)
+                if lines[i].lstrip().startswith("study_order")
+                and "=" in lines[i]
+            ),
+            None,
+        )
+        if at is None:
+            new = (
+                "".join(lines[: start + 1])
+                + STUDY_ORDER_NOTE
+                + line
+                + "".join(lines[start + 1 :])
+            )
+        else:
+            # The value may have been written across more than one line by
+            # hand, so the replacement consumes until the array closes rather
+            # than assuming one line and leaving a stray `]` behind.
+            stop = at
+            depth = 0
+            for i in range(at, end):
+                depth += lines[i].count("[") - lines[i].count("]")
+                stop = i
+                if depth <= 0:
+                    break
+            new = "".join(lines[:at]) + line + "".join(lines[stop + 1 :])
+
+    from .model import write_atomic
+
+    write_atomic(path, new)
+    return path

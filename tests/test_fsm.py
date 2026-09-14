@@ -25,6 +25,8 @@ FONTS = {
     "lane": (11.0, "start"),
     "state": (13.0, "middle"),
     "source": (12.0, "start"),
+    # The lit door, when the diagram is rendered for a source.
+    "source on": (12.0, "start"),
     "lbl": (10.5, "middle"),
     "lbl you": (12.0, "middle"),
     "lbl cycle": (10.5, "middle"),
@@ -44,6 +46,8 @@ FONTS = {
     "lbl twin": (10.5, "start"),
     "step twin": (9.0, "start"),
     "prop": (11.0, "start"),
+    # A statement about an object rather than a pass over it.
+    "carries": (11.0, "start"),
     "overlay": (11.0, "start"),
     "overlay warn": (11.0, "start"),
 }

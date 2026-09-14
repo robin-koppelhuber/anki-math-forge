@@ -115,6 +115,60 @@ def test_a_flag_becomes_an_annotation_naming_what_you_meant(repo: Path) -> None:
     assert anki.cards_by_uid("aaa111")["flags"] == 0, "cleared, or it returns for ever"
 
 
+def test_a_comment_addressed_to_me_stays_addressed_to_me(config: Config) -> None:
+    """The prefix was hard-coded here, so `@me ...` came back as
+    `@claude @me ...`: a decision of yours, queued as work for the agent."""
+    anki = synced(config, "aaa111")
+    anki.set_feedback("aaa111", "@me decide whether this is worth keeping")
+
+    feedback.run(config, client=anki)
+
+    notes = model.find(config.cards_dir, "aaa111").annotations()
+    assert notes == ["@me decide whether this is worth keeping"]
+    assert model.annotation_audience(notes[0]) == "me"
+
+
+def test_a_comment_that_only_starts_like_a_prefix_is_not_addressed_by_it(
+    config: Config,
+) -> None:
+    """`@metric` is not `@me`, and the maths makes that a plausible opening."""
+    anki = synced(config, "aaa111")
+    anki.set_feedback("aaa111", "@metric here means the induced one")
+
+    feedback.run(config, client=anki)
+
+    notes = model.find(config.cards_dir, "aaa111").annotations()
+    assert notes == ["@claude @metric here means the induced one"]
+
+
+def test_a_flag_meaning_may_park_the_decision_with_you(repo: Path) -> None:
+    """One keystroke during review, and the config is the only place to say
+    who it was for."""
+    config = with_flags(repo, f2="@me consider dropping this one")
+    anki = synced(config, "aaa111")
+    anki.set_flag("aaa111", 2)
+
+    feedback.run(config, client=anki)
+
+    assert model.find(config.cards_dir, "aaa111").annotations() == [
+        "@me flagged 2: consider dropping this one"
+    ]
+
+
+def test_an_imported_note_is_not_imported_twice(config: Config) -> None:
+    """The dedup compares the line as it is written, so it has to be built the
+    same way both times."""
+    anki = synced(config, "aaa111")
+    anki.set_feedback("aaa111", "@me decide this")
+    feedback.run(config, client=anki)
+    anki.set_feedback("aaa111", "@me decide this")
+
+    report = feedback.run(config, client=anki)
+
+    assert model.find(config.cards_dir, "aaa111").annotations() == ["@me decide this"]
+    assert any("already recorded" in reason for _, reason in report.skipped)
+
+
 def test_a_flag_with_no_configured_meaning_is_reported_not_guessed(repo: Path) -> None:
     config = with_flags(repo, f1="wrong")
     anki = synced(config, "aaa111")

@@ -196,6 +196,34 @@
     <code>forge.toml</code> or <code>sources/&lt;name&gt;/source.toml</code>.
   </p>
 </dialog>
+
+{# The whole machine, for the same reason the settings table is a dialog: the
+   guide rail tops out at 38rem and the diagram needs about 50 to be read at
+   the size it is drawn. It was included in the rail twice, once per view, and
+   both copies came out clipped at the right edge with the pass boxes cut in
+   half, so the guide links here instead.
+
+   Here rather than in the guide so the two views share one copy. #}
+<dialog class="gallery machine" id="machine" aria-label="the whole machine">
+  <header class="gallery-head">
+    <div class="gallery-title">
+      <h2>the whole machine</h2>
+      <p class="gallery-totals">
+        every state a unit and its card can be in, and what moves between them
+      </p>
+    </div>
+    <button type="button" class="gallery-close" id="machine-close"
+            title="close (esc)">&times;</button>
+  </header>
+  <div class="machine-body">{% include "_fsm.html" %}</div>
+  <p class="rail-more settings-foot">
+    The states you move through run down the middle; everything to the right
+    is optional and moves nothing. Anything in <b class="you-key">accent</b> is
+    a decision only you make. <b>carded</b> and <b>draft</b> are one moment:
+    the card file is written and the unit marked in the same call, so from
+    there on there are two things to track.
+  </p>
+</dialog>
 {% endif %}
 {% block scripts %}{% endblock %}
 </body>

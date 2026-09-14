@@ -1,44 +1,74 @@
 {# The complete state machine, derived from the code rather than from memory.
 
-   Five things it is easy to get wrong here, all of them checked against the
-   source:
+   Laid out the way the sketch asks for it: the states you move through run
+   down the middle, and everything optional (the assistive passes, what an
+   object carries, the annotations) sits in a column to the right. Nothing in
+   that column moves anything, which is the whole reason it is a column rather
+   than a row of boxes in the spine.
 
-   * `carded` and `draft` are **one moment**, not two steps. `/extract-cards`
-     writes the card file and marks the unit carded in the same breath; there
-     is no state where one has happened and the other has not. The diagram used
-     to run them as a long arrow from the top-right of one lane to the
-     bottom-left of the other, which reads as a journey. It is a *split*: from
-     here on there are two objects, and the rest of the machine is about the
-     second one.
+   What is easy to get wrong here, all of it checked against the source:
+
+   * `carded` and `draft` are one moment, not two steps. `/extract-cards`
+     writes the card file and marks the unit carded in the same call; there is
+     no state where one has happened and the other has not. It is a split:
+     from here on there are two objects, and the rest of the machine is about
+     the second one.
+   * `/transcribe` and `/classify` do nothing for a source whose units came
+     from marks. A highlighted paragraph already carries its text, and the two
+     classifier rules are about a page of formulas. Both skills say so and
+     stop. `/gist` is the one unit pass that runs on either, because the
+     gist-writer reads the mark's own sentence where there is one.
+   * `/classify` reads the transcription in preference to the PDF text layer,
+     so it wants `/transcribe` first. Not a hard dependency: it still works on
+     an untranscribed book, from the worse of the two readings. That is why
+     the arrow between them is dashed like the rest and not a state edge.
+   * A card is not one card per unit, in either direction, which is why
+     `queued` to `carded` is drawn as a fan and not a line. `Card.units` reads
+     `unit:` as a list, so several units merge into one card, which is what a
+     multi-line display cut into pieces by a segmenter wants. `Unit.uids` is a
+     list and `Ledger.mark_carded` appends to it, so one unit splits into
+     several cards. Both are properties of the format, so both are drawn; how
+     often either happens is a fact about somebody's deck and belongs nowhere
+     near a diagram of the machine.
    * `Ledger.set_state` permits any unit state to any other and the triage view
-     binds q/s/u unconditionally, so `u` is not "undo a skip" -- it returns
-     *any* unit to new, a carded one included.
-   * `Ledger.suggest` accepts any member of STATES and `accept()` applies
-     whatever was proposed. A suggestion is not a proposed *skip*; skipping is
-     merely what `classify` happens to propose today.
-   * Only an *approved* card is demoted by an edit (`Card.effective_status`).
-     A draft edited stays a draft, so a card can be revised any number of times
+     binds q/s/u unconditionally, so `u` is not "undo a skip": it returns any
+     unit to new, a carded one included.
+   * Only an approved card is demoted by an edit (`Card.effective_status`). A
+     draft edited stays a draft, so a card can be revised any number of times
      before anyone approves it.
    * An annotation is not a state and does not attach to a particular box. It
      can sit on any unit or any card, from either side, and it blocks sync
-     wherever it sits -- which is why the only arrow it gets is the one to the
-     sync gate. Arrows to individual boxes would claim something untrue.
+     from any of them, which is why its one outgoing arrow points at the sync
+     gate. Arrows to individual boxes would claim something untrue.
+   * Traffic to Anki is one-way with a single exception, and the exception is
+     an arrow: `feedback` takes a comment or a flag out of Anki and writes it
+     as an annotation, erasing it there in the same pass. It arrives at the
+     annotations box because that is what it becomes, not at a state.
 
-   The assistive passes are drawn the same way as each other, each under the
-   state it acts on: `/transcribe` fills in what a unit says, `/gist` what a
-   card from it would be about, `/augment` what a card is missing. None of
-   them moves anything, which is why all three are boxes hanging off a state
-   rather than arrows between states. `/gist` especially: nothing downstream
-   even reads it, so an arrow out of it would claim something untrue.
+   There is one `new` box and not two. A unit is `new` in the ledger whatever
+   door it came in by, so drawing the state twice would say there are two of
+   them in the diagram people read to find out what the states are. The branch
+   is real, but it is a branch in which passes you can run, so it is drawn
+   where it happens: on the passes.
+
+   No caption. The picture was carrying eight lines of prose under it, which
+   is a second explanation of the same thing in the one place a reader is
+   already being shown it. What is worth saying in words is said where the
+   diagram is opened from, and the rest is up here where the person editing
+   the SVG is the one who needs it.
+
+   Two of the boxes in that column are not passes. `on a unit` and `on a card`
+   say what an object carries, and drawn like the rest they read as a fourth
+   and fifth thing to run. They have no border, a rule down the left instead,
+   and a plain line back to the state rather than an arrow: an arrowhead is
+   for something that acts.
 
    Geometry is checked by tests/test_fsm.py: no overlapping boxes, no edge
-   through a box, no overlapping labels. Hand-authored SVG does not stay
-   correct on its own. #}
+   through a box, no overlapping labels, no edge through a label. Hand-authored
+   SVG does not stay correct on its own. #}
 <figure class="fsm">
-{# 1000 rather than 960: the `blocks sync` label starts at x=796 and runs
-   about 185px, so at 960 its last two words were clipped by the viewBox.
-   Widening adds right-hand margin and leaves every coordinate alone. #}
-<svg viewBox="0 0 1000 640" role="img" aria-labelledby="fsm-title">
+{% set sf = source_facts | default({}, true) %}
+<svg viewBox="0 0 800 740" role="img" aria-labelledby="fsm-title">
   <title id="fsm-title">The life of a unit and the card it becomes</title>
   <defs>
     <marker id="ar" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7"
@@ -47,126 +77,233 @@
     </marker>
   </defs>
 
-  <text class="lane" x="8" y="20">UNIT: a located region of the source</text>
-  <line class="lane-rule" x1="0" y1="330" x2="960" y2="330"/>
-  <text class="lane" x="8" y="354">CARD: a file in cards/</text>
+  <text class="lane" x="10" y="18">UNIT: a located region of the source</text>
+  <line class="lane-rule" x1="0" y1="432" x2="790" y2="432"/>
+  <text class="lane" x="10" y="452">CARD: a file in cards/</text>
 
-  <!-- unit lane -->
-  {# What actually makes a unit here. It said `extract` for every source,
-     which is a segmenter reading a PDF -- and for a document you marked up in
-     Zotero nothing segments anything: the marks you declared are the units.
-     A diagram that names the wrong producer is worse than one that names
-     none, because it is read as an answer. #}
-  {% set sf = source_facts | default({}, true) %}
-  <g class="source"><text x="60" y="46">{{ 'forge zotero' if sf.origin == 'zotero' else 'forge extract' }}</text>
-  {%- if sf.units_from %}<text class="sub" x="60" y="60">{{ sf.units_from | join(', ') }} marks</text>{% endif %}</g>
-  <path class="edge" d="M115,64 V66" marker-end="url(#ar)"/>
+  <!-- Two doors in, drawn side by side, because which one a source came
+       through is what decides the passes below. The active one is lit.
 
-  <g class="state"><rect x="90" y="70" width="96" height="38" rx="6"/>
-    <text x="138" y="94">new</text></g>
-  <path class="edge you" d="M186,89 H260" marker-end="url(#ar)"/>
-  <text class="lbl you" x="223" y="80">q</text>
+       Each gets a mark, and each is traced from the real icon rather than
+       drawn from memory. Both apps are installed, and neither ships loose
+       artwork: the 256px icons come out of `zotero.exe` and `anki.exe` by
+       walking the PE resource table. Each was thresholded into the shapes it
+       is made of, every contour walked and simplified, and the result scaled
+       into these coordinates. The numbers below are measured, not chosen.
 
-  <g class="state"><rect x="264" y="70" width="96" height="38" rx="6"/>
-    <text x="312" y="94">queued</text></g>
-  <path class="edge" d="M360,89 H468" marker-end="url(#ar)"/>
-  <text class="lbl" x="414" y="80">/extract-cards</text>
+       Zotero is a rounded page, a bold Z with chamfered terminals, the
+       bottom-right corner folded, and three sticky notes showing behind it.
+       Three masks got there: the page is "not a coloured note" rather than
+       "nearly white", since its border and the turned-up flap are grey and a
+       white-only mask traced the *interior*, leaving the outline inset and
+       the fold a chamfer across a third of the shape. The fold is a line
+       fitted to the flap's shaded edge and run out to the page's own right
+       and bottom edges, because tracing the flap directly picks up the drop
+       shadow and comes back as a 37-point tangle.
 
-  <g class="state twin"><rect x="472" y="70" width="96" height="38" rx="6"/>
-    <text x="520" y="94">carded</text></g>
-  <path class="edge you" d="M568,88 H696" marker-end="url(#ar)"/>
-  <text class="lbl you" x="632" y="79">s</text>
+       The Z is masked as red with its green and blue about equal. Without
+       that last clause the orange note on the left matched too, and since
+       only the largest contour of a mask is kept, it was pulled out of the
+       notes and then dropped on the floor: a note missing from the picture
+       with nothing to say it had gone.
 
-  <g class="state out"><rect x="700" y="70" width="96" height="36" rx="6"/>
-    <text x="748" y="93">skipped</text></g>
+       Anki is a rounded tile with two five-pointed stars, the small one up
+       and to the right. A star is masked as "not grey" so its white border
+       comes with it; masking the blue alone ate the border and gave a
+       lopsided shape. Its points are round because the real ones are.
 
-  <path class="edge you back" d="M748,70 V30 H160 V68" marker-end="url(#ar)"/>
-  <text class="lbl you" x="452" y="24">u returns any unit to new, a carded one included</text>
+       The document is the page silhouette from the PDF icon that ships
+       beside Zotero's, which is a designed shape rather than my rectangle.
 
-  <!-- what a unit gains: a reading of what it says, one of what it is about,
-       and a proposed decision. None of the three moves it. -->
-  <g class="prop">
-    <rect x="90" y="128" width="300" height="46" rx="6"/>
-    <text x="102" y="146">transcription · /transcribe</text>
-    <text class="sub" x="102" y="164">none → ok · the crop, read into tex_auto</text>
+       Line art in `currentColor`, because this one file renders on a light
+       page, a dark page and a PNG, and a coloured logo is the one thing in it
+       that would not. It also lets the lit door's mark go accent with its
+       label. -->
+  <g class="source{{ ' on' if sf.origin and sf.origin != 'zotero' else '' }}">
+    <path class="mark" d="M36.3,52.1 L17.9,52.0 L18.0,27.9 L31.2,27.9 L36.1,32.7 Z"/>
+    <path class="mark thin" d="M31.2,27.9 L31.2,32.7 L36.1,32.7"/>
+    <path class="mark thin" d="M22,39 h9 M22,43 h11 M22,47 h7"/>
+    <text x="44" y="42">forge extract</text>
+    <text class="sub" x="44" y="58">a PDF, segmented into numbered statements</text>
   </g>
-  <path class="edge dash" d="M138,108 V126" marker-end="url(#ar)"/>
-
-  <g class="prop">
-    <rect x="90" y="182" width="300" height="46" rx="6"/>
-    <text x="102" y="200">gist · /gist</text>
-    <text class="sub" x="102" y="218">one line: what a card here would be about</text>
+  <g class="source{{ ' on' if sf.origin == 'zotero' else '' }}">
+    <path class="mark thin" d="M325.2,43.5 L324.1,43.4 L324.1,33.9 L326.0,34.0
+                               L326.0,40.2 L325.3,40.3 Z"/>
+    <path class="mark thin" d="M313.9,29.9 L307.6,29.9 L307.5,28.0 L313.9,28.0 Z"/>
+    <path class="mark thin" d="M303.5,45.5 L302.0,45.4 L302.0,39.1 L303.5,39.2 Z"/>
+    <path class="mark" d="M322.7,50.5 L304.9,50.5 L304.3,50.3 L303.7,49.7 L303.5,49.1
+                          L303.5,31.3 L303.7,30.7 L304.3,30.1 L304.9,29.9 L322.7,29.9
+                          L323.3,30.1 L323.9,30.7 L324.1,31.3 L324.1,49.1 L323.9,49.7
+                          L323.3,50.3 Z"/>
+    <path class="mark thin" d="M324.0,42.8 L315.3,50.4"/>
+    <path class="mark solid" d="M318.4,45.5 L309.2,45.4 L308.6,43.9 L314.7,36.5
+                                L314.6,36.3 L309.4,36.3 L309.4,33.9 L318.4,34.0
+                                L319.0,35.3 L318.9,35.6 L313.0,42.9 L318.9,43.0
+                                L319.0,44.4 Z"/>
+    <text x="332" y="42">forge zotero</text>
+    <text class="sub" x="332" y="58">{{ sf.units_from | join(', ') if sf.units_from else 'green, note, image' }} marks you made while reading</text>
   </g>
-  <path class="edge dash" d="M138,174 V180" marker-end="url(#ar)"/>
+  <path class="edge" d="M27,56 V78 H112 V90" marker-end="url(#ar)"/>
+  <path class="edge" d="M313,56 V78 H150 V90" marker-end="url(#ar)"/>
 
-  <g class="overlay">
-    <rect x="90" y="236" width="300" height="48" rx="6"/>
-    <text x="102" y="254">suggestion · /classify</text>
-    <text class="sub" x="102" y="272">proposed, never applied · a accept · d dismiss</text>
-  </g>
-  <path class="edge dash" d="M240,228 V234" marker-end="url(#ar)"/>
+  <!-- the spine -->
+  <g class="state"><rect x="70" y="92" width="120" height="38" rx="6"/>
+    <text x="130" y="116">new</text></g>
 
-  <path class="edge dash" d="M90,260 H40 V95 H86" marker-end="url(#ar)"/>
-  <text class="lbl" x="240" y="304">a applies whatever state it proposed, usually skipped but not only skipped</text>
+  <path class="edge you" d="M190,111 H234" marker-end="url(#ar)"/>
+  <text class="lbl you" x="212" y="103">s</text>
+  <g class="state out"><rect x="238" y="92" width="104" height="36" rx="6"/>
+    <text x="290" y="115">skipped</text></g>
+
+  <path class="edge you" d="M130,130 V208" marker-end="url(#ar)"/>
+  <text class="lbl you" x="142" y="172">q</text>
+
+  <g class="state"><rect x="70" y="210" width="120" height="38" rx="6"/>
+    <text x="130" y="234">queued</text></g>
+
+  {# Drawn as a fan rather than a line, because this is the one transition
+     that is not one-to-one: several units merge into one card, and one unit
+     splits into several. Converging then diverging says both at once, which
+     is the whole reason it is a fan and the whole reason it needs no caption
+     under it saying so again. #}
+  <path class="edge" d="M106,248 L130,285"/>
+  <path class="edge" d="M130,248 L130,285"/>
+  <path class="edge" d="M154,248 L130,285"/>
+  <path class="edge" d="M130,289 L106,322" marker-end="url(#ar)"/>
+  <path class="edge" d="M130,289 L130,322" marker-end="url(#ar)"/>
+  <path class="edge" d="M130,289 L154,322" marker-end="url(#ar)"/>
+  <text class="lbl" x="205" y="290">/extract-cards</text>
+
+  <g class="state twin"><rect x="70" y="326" width="120" height="38" rx="6"/>
+    <text x="130" y="350">carded</text></g>
+
+  <!-- u: any unit back to new, a carded one included -->
+  <path class="edge you back" d="M70,345 H30 V111 H66" marker-end="url(#ar)"/>
+  <text class="lbl you" x="44" y="228">u</text>
 
   <!-- the split: one moment, two objects from here on -->
-  <path class="edge twin" d="M520,108 V370" marker-end="url(#ar)"/>
-  <text class="lbl twin" x="534" y="196">the same moment:</text>
-  <text class="lbl twin" x="534" y="212">the unit is carded</text>
-  <text class="lbl twin" x="534" y="228">and the card exists</text>
+  {# No caption. The line runs straight from one box to the other across the
+     lane rule, and the lanes are already labelled unit and card, so two lines
+     of prose saying they are one moment told the reader what they had just
+     been shown. The claim is worth making in words where there is room for
+     the argument, which is the dialog this opens from. #}
+  <path class="edge twin" d="M150,364 V460" marker-end="url(#ar)"/>
 
-  <!-- card lane -->
-  <g class="state twin"><rect x="472" y="372" width="96" height="38" rx="6"/>
-    <text x="520" y="396">draft</text></g>
+  <g class="state twin"><rect x="70" y="462" width="120" height="38" rx="6"/>
+    <text x="130" y="486">draft</text></g>
 
-  <path class="edge you" d="M568,391 H656" marker-end="url(#ar)"/>
-  <text class="lbl you" x="612" y="382">a</text>
+  <path class="edge you" d="M190,481 H234" marker-end="url(#ar)"/>
+  <text class="lbl you" x="212" y="473">r</text>
+  <g class="state out"><rect x="238" y="462" width="104" height="36" rx="6"/>
+    <text x="290" y="485">rejected</text></g>
 
-  <g class="state ok"><rect x="660" y="372" width="96" height="38" rx="6"/>
-    <text x="708" y="396">approved</text></g>
-  <path class="edge" d="M756,391 H818" marker-end="url(#ar)"/>
-  <text class="lbl" x="786" y="366">sync</text>
-  <g class="source"><text x="824" y="396">Anki</text></g>
-  <path class="gate" d="M788,383 V399"/>
+  <path class="edge you" d="M130,500 V588" marker-end="url(#ar)"/>
+  <text class="lbl you" x="142" y="544">a</text>
 
-  <path class="edge cycle" d="M708,410 V440 H580 V412" marker-end="url(#ar)"/>
-  <text class="lbl cycle" x="644" y="456">u, or any edit, goes back to draft</text>
+  <g class="state ok"><rect x="70" y="590" width="120" height="38" rx="6"/>
+    <text x="130" y="614">approved</text></g>
 
-  <!-- what a card gains: drawn like the unit's, under the state it acts on -->
-  <g class="prop">
-    <rect x="240" y="452" width="300" height="52" rx="6"/>
-    <text x="252" y="472">the optional sections · /augment</text>
-    <text class="sub" x="252" y="492">conditions, proof, prose · still a draft after</text>
+  <path class="edge cycle" d="M70,609 H48 V494 H66" marker-end="url(#ar)"/>
+  <text class="lbl cycle" x="48" y="640">u, or any edit</text>
+
+  <path class="edge" d="M130,628 V686" marker-end="url(#ar)"/>
+  <path class="gate" d="M114,660 H146"/>
+  <text class="lbl" x="176" y="644">sync</text>
+  {# Anki, traced the same way: the rounded tile and its two stars. #}
+  <g class="source">
+    <path class="mark" d="M134.1,712.1 L122.3,712.1 L120.6,711.4 L119.6,710.4
+                          L118.9,708.7 L118.9,691.2 L119.6,689.6 L120.6,688.6
+                          L122.3,687.9 L134.1,687.9 L135.8,688.6 L136.8,689.6
+                          L137.4,691.3 L137.4,708.7 L136.8,710.4 L135.8,711.4 Z"/>
+    <path class="mark solid" d="M124.4,709.8 L123.7,709.7 L123.3,709.0 L123.5,706.0
+                                L121.1,704.3 L120.7,703.7 L120.7,703.2 L121.5,702.4
+                                L124.1,701.8 L125.2,698.7 L125.6,698.3 L126.2,698.3
+                                L127.0,698.9 L128.4,701.2 L131.3,701.1 L131.9,701.3
+                                L132.3,702.2 L132.0,702.9 L130.2,705.0 L131.2,707.8
+                                L131.1,708.6 L130.7,708.9 L129.6,708.9 L127.0,707.9 Z"/>
+    <path class="mark solid" d="M132.6,697.5 L132.1,697.5 L130.8,696.0 L129.4,696.2
+                                L128.8,695.8 L128.8,695.1 L129.7,694.0 L129.1,692.2
+                                L129.4,691.7 L131.5,692.1 L132.5,691.2 L133.1,691.0
+                                L133.6,691.4 L133.6,693.1 L135.1,694.1 L135.2,694.6
+                                L135.0,695.0 L133.2,695.7 L133.0,696.9 Z"/>
+    <text x="143" y="706">Anki</text>
   </g>
-  <path class="edge dash" d="M500,410 V450" marker-end="url(#ar)"/>
 
-  <path class="edge you" d="M472,400 H138 V450" marker-end="url(#ar)"/>
-  <text class="lbl you" x="300" y="394">r</text>
-  <g class="state out"><rect x="90" y="452" width="96" height="36" rx="6"/>
-    <text x="138" y="475">rejected</text></g>
+  <!-- the right-hand column: everything optional, nothing that moves a unit -->
+  <text class="lane" x="396" y="152">ASSISTIVE PASSES, NONE OF WHICH MOVES ANYTHING</text>
+
+  <path class="edge dash" d="M160,130 V146 H386 V187 H392" marker-end="url(#ar)"/>
+  <g class="prop">
+    <rect x="396" y="164" width="368" height="58" rx="6"/>
+    <text x="408" y="182">/transcribe · a PDF you segmented</text>
+    <text class="sub" x="408" y="200">the crop, read into tex_auto. Nothing to do for a</text>
+    <text class="sub" x="408" y="214">marked-up source: a mark carries its own text</text>
+  </g>
+
+  <path class="edge dash" d="M420,222 V238" marker-end="url(#ar)"/>
+  <text class="lbl" x="560" y="234">reads it if it is there</text>
+  <g class="overlay">
+    <rect x="396" y="240" width="368" height="58" rx="6"/>
+    <text x="408" y="258">/classify · a PDF you segmented</text>
+    <text class="sub" x="408" y="276">proposes a state, never applies it. Its two rules</text>
+    <text class="sub" x="408" y="290">are about formulas, so a marked-up source has none</text>
+  </g>
+  <path class="edge dash" d="M764,250 H778 V104 H346" marker-end="url(#ar)"/>
+  <text class="lbl" x="560" y="120">a applies what it proposed</text>
+
+  <path class="edge dash" d="M172,130 V156 H378 V338 H392" marker-end="url(#ar)"/>
+  <g class="prop">
+    <rect x="396" y="316" width="368" height="44" rx="6"/>
+    <text x="408" y="334">/gist · either source</text>
+    <text class="sub" x="408" y="352">one line: what a card from here would be about</text>
+  </g>
+
+  <path class="edge tie" d="M190,229 H368 V394 H392"/>
+  <g class="carries">
+    <rect x="396" y="372" width="368" height="44" rx="6"/>
+    <path class="rule" d="M397,376 V412"/>
+    <text x="408" y="390">on a unit</text>
+    <text class="sub" x="408" y="408">gist · context pages, c · web lookups, w</text>
+  </g>
+
+  <path class="edge dash" d="M160,500 V511 H392" marker-end="url(#ar)"/>
+  <g class="prop">
+    <rect x="396" y="488" width="368" height="44" rx="6"/>
+    <text x="408" y="506">/augment · either source</text>
+    <text class="sub" x="408" y="524">conditions, proof, prose · still a draft after</text>
+  </g>
+
+  <path class="edge tie" d="M190,600 H372 V565 H392"/>
+  <g class="carries">
+    <rect x="396" y="542" width="368" height="58" rx="6"/>
+    <path class="rule" d="M397,546 V596"/>
+    <text x="408" y="560">on a card</text>
+    <text class="sub" x="408" y="578">frequency · derivation · requires, which are the</text>
+    <text class="sub" x="408" y="592">study order · gist · verify · tags</text>
+  </g>
 
   <!-- annotations: everywhere, so pointed nowhere in particular -->
   <g class="overlay warn">
-    <rect x="580" y="480" width="360" height="130" rx="6"/>
-    <text x="592" y="502">@claude / @me annotation · n</text>
-    <text class="sub" x="592" y="522">on any unit or any card, at any state</text>
-    <text class="sub" x="592" y="542">@claude is the brief for whoever writes</text>
-    <text class="sub" x="592" y="562">the card · @me parks a decision</text>
-    <text class="sub" x="592" y="582">an open note holds an approved card in the</text>
-    <text class="sub" x="592" y="602">draft pile; resolving it restores approval</text>
+    <rect x="396" y="612" width="368" height="106" rx="6"/>
+    <text x="408" y="630">@claude / @me · n and N, on either side</text>
+    <text class="sub" x="408" y="648">on any unit and on any card</text>
+    <text class="sub" x="408" y="666">@claude is the brief for whoever writes the card;</text>
+    <text class="sub" x="408" y="680">@me parks a decision for you</text>
+    <text class="sub" x="408" y="698">an open one holds an approved card in the draft</text>
+    <text class="sub" x="408" y="712">pile, and resolving it restores the approval</text>
   </g>
-  <path class="edge dash warn" d="M788,478 V402" marker-end="url(#ar)"/>
-  <text class="lbl warn" x="796" y="440">blocks sync, wherever it sits</text>
+  <path class="edge dash warn" d="M396,660 H150" marker-end="url(#ar)"/>
+  <text class="lbl warn" x="200" y="652">blocks sync</text>
+
+  {# The one flow back out of Anki, and the only arrow in the diagram that
+     runs the other way. `feedback` takes a comment from the Feedback field or
+     a flag you set during review, writes it here as an annotation, and erases
+     it in Anki in the same pass -- so it lands in the box where every other
+     annotation lives rather than in a state of its own. Without it the
+     picture said traffic was one-way, which is the one thing CONTRACT.md
+     names an exception to. #}
+  <path class="edge dash" d="M190,700 H392" marker-end="url(#ar)"/>
+  <text class="lbl" x="290" y="692">feedback</text>
+  <text class="sub" x="206" y="716">a comment or a flag, erased there</text>
 </svg>
-<figcaption>
-  Two objects, two gates. Everything in <b class="you-key">accent</b> is a
-  decision only you make; everything else is mechanical or a command.
-  <b>carded and draft are one moment</b>: the card file is written and the
-  unit marked in the same call, so from here on there are two things to
-  track. <b>Transcription</b>, the <b>gist</b> and <b>augmentation</b>
-  are the assistive passes. Each hangs off the state it acts on and none of
-  them moves anything. A <b>suggestion</b> proposes a state and never applies
-  it. An <b>annotation</b> attaches anywhere, which is why it has no arrow to
-  any one box, and it <b>stops sync</b> until it is resolved.
-</figcaption>
 </figure>

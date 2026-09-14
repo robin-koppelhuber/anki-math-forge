@@ -7,15 +7,34 @@
    is about what is drawn, the header is where the source picker already lives,
    and a floating panel would cover the part of the picture it describes. #}
 {% block filters %}
-<button type="button" class="chip" id="graph-all"
-        title="draw every card, including the ones nothing needs and that need nothing ({{ key('every-card') }})">every card</button>
-<button type="button" class="chip" id="graph-add"
-        title="put a card with no dependencies on the canvas, so you can connect it ({{ key('add-card') }})">add a card</button>
+{# The same vocabulary as the context chip on the triage view: a small
+   uppercase label naming what is being decided, then the options with the one
+   in force filled in.
+
+   It was four grey pills of equal weight, which said nothing about which of
+   them were toggles and which were actions. Worse, `every card` as a lone
+   pill never named its own alternative: off, it left you to work out from the
+   counts line that what you were being shown was the linked ones. #}
+<span class="badge tool-group">
+  <i class="chip-what">drawn</i>
+  <button type="button" class="ctx-step" id="graph-linked"
+          title="only the cards that need another one or are needed by one ({{ key('every-card') }})">linked</button>
+  <button type="button" class="ctx-step" id="graph-all"
+          title="every card in the source, including the ones with no dependency either way ({{ key('every-card') }})">every card</button>
+</span>
+<button type="button" class="tool" id="graph-add"
+        title="put a card with no dependencies on the canvas, so you can connect it ({{ key('add-card') }})">
+  <b class="tool-sign" aria-hidden="true">+</b>add a card</button>
+{# The canvas draws `requires`, which is one of the two things deciding the
+   study order. The other is a sort key, and this opens the panel that shows
+   both of them acting on this source. #}
+<button type="button" class="tool" id="graph-order" aria-expanded="false"
+        title="the queue this picture is half of: every card in the source, in the order Anki will introduce it ({{ key('study-order') }})">study order</button>
 <span class="graph-counts" id="graph-counts"></span>
 {# Last, and pushed to the far end. It undoes every arrangement in the source
-   and is reached perhaps once; beside the two you press constantly it read as
-   a third thing of the same weight. #}
-<button type="button" class="chip quiet" id="graph-reset"
+   and is reached perhaps once; beside the ones you press constantly it read as
+   another thing of the same weight. #}
+<button type="button" class="tool quiet" id="graph-reset"
         title="every box back to its computed place. For one box, point at it and press {{ key('forget-position') }}.">reset arrangement</button>
 {% endblock %}
 
@@ -27,6 +46,64 @@
   <canvas id="graph-canvas"></canvas>
   <p class="graph-note" id="graph-note" hidden></p>
 </div>
+
+{# The study order, down the right.
+
+   Here rather than on the review view because this is the view about the deck
+   as a whole: everywhere else in the app you are looking at one item at a
+   time, and an order is not a thing you can see one item at a time. The canvas
+   already draws half of the rule (`requires`); this is the other half and the
+   result of the two together.
+
+   Collapsed by default. It is a second thing on a screen whose whole point is
+   the picture, and somebody who has not asked for it should get the canvas at
+   full width. #}
+{# The way back to it, on the edge it lives on.
+
+   The chip in the toolbar opens it too, but a panel that closed itself into a
+   header button leaves nothing where the panel was: the gesture that shut it
+   was on the right and the only way back was on the far left. A tab on the
+   edge is where a hand goes looking. #}
+<button type="button" class="order-tab" id="order-tab"
+        title="the study order for this source ({{ key('study-order') }})">
+  <span class="order-tab-word">study order</span>
+  <span class="order-tab-sign" aria-hidden="true">&lsaquo;</span>
+</button>
+
+<aside class="order-rail" id="order-rail" hidden>
+  <header class="order-head">
+    <div>
+      <h2>study order</h2>
+      <p class="order-sub" id="order-sub"></p>
+    </div>
+    <button type="button" class="gallery-close" id="order-close"
+            title="close ({{ key('study-order') }})">&times;</button>
+  </header>
+
+  {# The rule, as the three lines it actually is. Drag to reorder: the first
+     one decides, the next breaks its ties, and so on. #}
+  <section class="order-rules">
+    <p class="order-fixed">
+      <b>requires</b>
+      <span>absolute. A prerequisite is introduced first whatever the rest of
+        this says, and it is what the arrows on the canvas are.</span>
+    </p>
+    <ol class="order-criteria" id="order-criteria"
+        aria-label="sort criteria, most significant first"></ol>
+    <p class="order-hint">Drag one, or focus it and press the up and down
+      arrows. Point at one for what it decides. The order below is what they
+      produce, and it is written to <code>forge.toml</code>.</p>
+    <p class="order-fixed">
+      <b>uid</b>
+      <span>settles a tie, so two machines build the same deck. Not a
+        criterion: there is nothing to prefer about one hash over another.</span>
+    </p>
+    <p class="order-saved" id="order-saved" hidden></p>
+  </section>
+
+  <ol class="order-cards" id="order-cards"></ol>
+  <p class="order-empty" id="order-empty" hidden></p>
+</aside>
 
 {# Which card to put on the canvas. Listed by caption: a card with no
    dependency either way is not drawn, and picking one out of ninety rows of
@@ -60,6 +137,7 @@
 <span class="key-group"><b>wheel</b> pans · <b>ctrl-wheel</b> zooms</span>
 <span class="key-group"><b>click</b> selects · <b>shift-click</b> adds</span>
 <span class="key-group"><b>double-click</b> opens the card</span>
+<span class="key-group"><b>drag a rule</b> to change what outranks what</span>
 {% include "_keys.html" %}
 <span class="muted">an arrow writes <code>requires</code> into the card that needs the other</span>
 {% endblock %}

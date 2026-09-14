@@ -975,12 +975,29 @@ async function openSettings() {
   });
 }
 
-(function wireSettings() {
-  const dialog = document.getElementById("settings");
-  if (!dialog) return;
-  document.getElementById("settings-close").addEventListener("click", () => dialog.close());
+/* The state machine, full width. It is static markup already on the page, so
+   unlike the settings table there is nothing to fetch: the diagram is drawn at
+   about 50rem and the guide rail stops at 38, which is the whole reason it is
+   not simply in the rail. */
+function openMachine() {
+  const dialog = document.getElementById("machine");
+  if (dialog) dialog.showModal();
+}
+
+(function wirePanels() {
+  /* Guarded one at a time. Both dialogs come from the same block in
+     `base.html`, but a missing element used to take the *other* one's wiring
+     down with it, which is the kind of coupling that only shows up on the one
+     page that lacks it. */
+  const closes = { settings: "settings-close", machine: "machine-close" };
+  Object.entries(closes).forEach(([id, button]) => {
+    const dialog = document.getElementById(id);
+    const close = document.getElementById(button);
+    if (dialog && close) close.addEventListener("click", () => dialog.close());
+  });
   document.addEventListener("click", (event) => {
     if (event.target.closest("#config-open, [data-settings]")) openSettings();
+    if (event.target.closest("[data-machine]")) openMachine();
   });
 })();
 

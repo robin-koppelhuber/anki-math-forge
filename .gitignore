@@ -16,7 +16,7 @@ node_modules/
 # the configured work_dir: crops, page renders, scratch LaTeX
 .forge/
 
-# local secrets for MCP servers; .env.example is the template
+# a local `.env`, if your shell loads one; .env.example lists what it may set
 .env
 
 # Cached text layers of the source documents themselves, written by `extract`

@@ -244,10 +244,13 @@ def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ())
     """
     if path.exists():
         return False
-    # Tags are left empty on purpose. A label invented here means whatever the
-    # tool guessed it means, and you would be filtering a shelf by it without
-    # ever having decided what it says.
-    quoted = [f'"{t}"' for t in tags]
+    # The item's own tags, and nothing this tool made up. The difference is the
+    # whole rule: a label invented here would mean whatever the tool guessed it
+    # means, while a tag on a Zotero item is one you put there and already
+    # know the meaning of. They are also the labels you would narrow a shelf of
+    # fifty papers by, which is what `tags` is for -- and `demo`, the one tag
+    # this repo reads, is then set the way you would expect to set it.
+    quoted = [f'"{t}"' for t in tags or tuple(item.tags)]
     lines = [
         f'title = "{item.title}"',
         f'citation = "{item.citation}"',

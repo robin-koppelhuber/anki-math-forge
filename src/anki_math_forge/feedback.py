@@ -2,9 +2,14 @@
 
 This is the one place anything is *read* from Anki, and the invariant survives
 only because the read is a hand-off rather than a source of truth. A comment
-is imported, written into the card's `## notes` as a `@claude` line, and then
+is imported, written into the card's `## notes` as an annotation, and then
 **erased from Anki in the same pass**. Nothing consults Anki about that text
 again, and nothing in Anki ever wins over a file.
+
+An imported note is addressed like any other: `@claude` unless it says
+otherwise, and a comment that opens `@me` stays a decision parked for you
+rather than a brief for the card writer. `model.annotation_line` decides that
+for every writer, here included.
 
 Erasing is not tidiness. Without it every run would re-import the same
 comment, and a note you had already resolved through `/triage` would come back
@@ -17,7 +22,8 @@ Two ways in, because they suit different moments:
   the editor.
 * a **flag**, for when you do not. One keystroke, and `[anki.flags]` in
   `forge.toml` says what each colour means, so the meaning is yours to
-  set rather than baked in here.
+  set rather than baked in here. A meaning may open `@me`, which is how one
+  colour comes back as a decision for you.
 """
 
 from __future__ import annotations
@@ -133,9 +139,24 @@ def collect(config: Config, client: AnkiConnect) -> tuple[list[Comment], list[tu
                 )
                 continue
             comments.append(
-                Comment(uid, f"flagged {number}: {meaning}", "flag", note_id, (card_id,))
+                Comment(uid, flag_note(number, meaning), "flag", note_id, (card_id,))
             )
     return comments, skipped
+
+
+def flag_note(number: int, meaning: str) -> str:
+    """What a flag becomes, addressed to whoever its meaning names.
+
+    A flag is one keystroke, so `[anki.flags]` is the only place there is to
+    say what it meant -- and therefore the only place to say who it is for. A
+    meaning written `@me consider dropping this` parks the decision with you;
+    anything else is work for whoever writes the card, like every other
+    annotation with no prefix of its own.
+    """
+    head, _, rest = meaning.partition(" ")
+    if model.annotation_audience(head):
+        return f"{head} flagged {number}: {rest.strip()}"
+    return f"flagged {number}: {meaning}"
 
 
 def run(
@@ -156,7 +177,7 @@ def run(
         if card is None or card.path is None:
             report.skipped.append((comment.uid, "card file disappeared mid-run"))
             continue
-        line = f"@claude {comment.text}"
+        line = model.annotation_line(comment.text)
         if line in card.annotations():
             # Already recorded and not yet resolved. Clear the source anyway,
             # so it does not queue up behind itself.

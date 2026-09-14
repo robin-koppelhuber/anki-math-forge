@@ -44,11 +44,16 @@ def spare_port() -> int:
 
 # The deck every test starts from: one edge, `aaa111 -> bbb222`, and two cards
 # with none so the picker has something in it.
+#
+# Graded, and deliberately not all the same way. The study-order panel is about
+# which grading outranks which, and a deck where every card is `core` and
+# `short` cannot show a reordering doing anything. `ddd444` carries no grading
+# at all, which is the case the panel calls `ungraded`.
 DECK = (
-    ("aaa111", "the determinant of a 2 by 2 matrix", ()),
-    ("bbb222", "the inverse of a 2 by 2 matrix", ("aaa111",)),
-    ("ccc333", "the trace as the sum of the diagonal", ()),
-    ("ddd444", "the adjugate as the transposed cofactor matrix", ()),
+    ("aaa111", "the determinant of a 2 by 2 matrix", (), "rare", "definitional"),
+    ("bbb222", "the inverse of a 2 by 2 matrix", ("aaa111",), "core", "long"),
+    ("ccc333", "the trace as the sum of the diagonal", (), "common", "short"),
+    ("ddd444", "the adjugate as the transposed cofactor matrix", (), "", ""),
 )
 
 
@@ -72,23 +77,41 @@ The identity everyone forgets.
 """
 
 
+# Rewritten on every reset, not only at startup: the study-order panel writes
+# `[cards] study_order` into this file, so a test that reorders the criteria
+# would otherwise hand the next test a deck in a different order.
+CONFIG = (
+    '[repo]\ncards_dir = "cards"\nsources_dir = "sources"\n\n'
+    "[cards]\n\n"
+    '[sources.demo]\ntitle = "Demo"\ncitation = "Demo"\n'
+    'tex = "sources/demo/demo.tex"\n'
+)
+
+
 def lay_out(repo: Path) -> None:
-    """Write the deck and the ledger, replacing what the last test left.
+    """Write the config, the deck and the ledger, replacing what the last test
+    left.
 
     Units as well as cards, because the triage view is half of what these
     tests drive and an empty ledger renders the "nothing here yet" page.
     """
+    (repo / "forge.toml").write_text(CONFIG, encoding="utf-8")
     cards = repo / "cards" / "demo"
     cards.mkdir(parents=True, exist_ok=True)
     (repo / "sources" / "demo").mkdir(parents=True, exist_ok=True)
     (repo / "sources" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
     (repo / "sources" / "demo" / "units.jsonl").unlink(missing_ok=True)
     (repo / "sources" / "demo" / "graph.json").unlink(missing_ok=True)
-    for uid, gist, needs in DECK:
+    for uid, gist, needs, frequency, derivation in DECK:
+        graded = ""
+        if frequency:
+            graded += f"frequency: {frequency}\n"
+        if derivation:
+            graded += f"derivation: {derivation}\n"
         requires = f"requires: [{', '.join(needs)}]\n" if needs else ""
         (cards / f"{uid}-x.md").write_text(
             f"---\nuid: {uid}\ntype: identity\nstatus: draft\n"
-            f'source: "Demo"\nunit: "demo:1:1"\ngist: {gist}\n{requires}---\n\n'
+            f'source: "Demo"\nunit: "demo:1:1"\ngist: {gist}\n{graded}{requires}---\n\n'
             "## front\n\n$a$\n\n## back\n\n$b$\n",
             encoding="utf-8",
         )
@@ -119,12 +142,6 @@ def served(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[str, Path
     so rewriting the card files *is* resetting the fixture.
     """
     repo = tmp_path_factory.mktemp("served")
-    (repo / "forge.toml").write_text(
-        '[repo]\ncards_dir = "cards"\nsources_dir = "sources"\n\n'
-        '[sources.demo]\ntitle = "Demo"\ncitation = "Demo"\n'
-        'tex = "sources/demo/demo.tex"\n',
-        encoding="utf-8",
-    )
     lay_out(repo)
 
     port = spare_port()

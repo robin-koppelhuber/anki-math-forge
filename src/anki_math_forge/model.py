@@ -166,12 +166,33 @@ ANNOTATION_PREFIXES = ("@claude", "@me")
 
 
 def annotation_audience(line: str) -> str:
-    """`claude`, `me`, or "" if this line is not an annotation at all."""
+    """`claude`, `me`, or "" if this line is not an annotation at all.
+
+    The prefix has to end where it ends: a bare `startswith` read `@metric
+    space bound is wrong` as an `@me` note, which is a plausible enough
+    opening for a note about mathematics to be worth ruling out.
+    """
     head = line.strip().lower()
     for prefix in ANNOTATION_PREFIXES:
-        if head.startswith(prefix):
+        if head.startswith(prefix) and not head[len(prefix) : len(prefix) + 1].isalnum():
             return prefix[1:]
     return ""
+
+
+def annotation_line(text: str) -> str:
+    """One annotation as it is written to a file: collapsed, and addressed.
+
+    The default prefix goes on only when the text does not already carry one,
+    so text that names its own audience keeps it. Every writer goes through
+    here rather than building the line itself: `feedback` built `"@claude " +
+    text` by hand, which turned a comment typed into Anki as `@me decide
+    whether to keep this` into `@claude @me decide ...` -- audience `claude`,
+    a decision of yours queued as work for the agent.
+    """
+    text = " ".join(text.split()).strip()
+    if text and not annotation_audience(text):
+        text = f"{ANNOTATION_PREFIX} {text}"
+    return text
 
 
 UID_RE = re.compile(r"^[0-9a-f]{6}$")
@@ -383,18 +404,17 @@ class Card:
         return [line.strip() for line in body.split(chr(10)) if annotation_audience(line)]
 
     def add_annotation(self, text: str) -> None:
-        """Append an annotation, byte-identical to one typed by hand."""
-        text = " ".join(text.split()).strip()
-        if not text:
+        """Append an annotation, byte-identical to one typed by hand.
+
+        `annotation_line` decides what is written, and it is idempotent, so a
+        caller that has already built the line to compare against
+        `annotations()` can pass that.
+        """
+        line = annotation_line(text)
+        if not line:
             return
-        # Any known prefix, not just `@claude`. Guarding on one of the two
-        # turned an `@me` note into `@claude @me ...`, which reads back as
-        # audience `claude` -- a decision parked for the human, queued as work
-        # for the agent, which is the one mix-up the split exists to prevent.
-        if not annotation_audience(text):
-            text = f"{ANNOTATION_PREFIX} {text}"
         body = self.section("notes")
-        self.set_section("notes", f"{body}\n{text}" if body else text)
+        self.set_section("notes", f"{body}\n{line}" if body else line)
 
     def resolve_annotation(self, index: int) -> str:
         """Drop the `index`-th annotation from `## notes` and return it.

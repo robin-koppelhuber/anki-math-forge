@@ -462,7 +462,10 @@ function drawNode(node) {
   const p = at(node.id);
   const edge = colours[STATE_COLOUR[node.state] || "line"];
   const chosen = isPicked(node.id);
-  const lit = (hover && hover.id === node.id) || (link && link.target === node);
+  const lit =
+    (hover && hover.id === node.id) ||
+    (link && link.target === node) ||
+    spotlight === node.id;
 
   ctx.save();
   /* While an arrow is being dragged, a box it cannot land on is dimmed. The
@@ -518,6 +521,7 @@ function drawNode(node) {
 }
 
 function draw() {
+  markSelected();
   if (!data) return;
   const dpr = window.devicePixelRatio || 1;
   const box = stage.getBoundingClientRect();
@@ -639,7 +643,11 @@ async function load({ recentre: centre = true } = {}) {
   picked = { nodes: picked.nodes.filter((id) => data.nodes.some((n) => n.id === id)), edge: null };
   hoverEdge = null;
   document.getElementById("graph-all").classList.toggle("on", everything);
+  document.getElementById("graph-linked").classList.toggle("on", !everything);
   describe();
+  /* The panel is a second reading of the same payload, so it is repainted
+     from the same place rather than by each caller that happens to reload. */
+  paintOrder();
   if (centre) recentre();
   else draw();
 }
@@ -1155,10 +1163,17 @@ if (canvas) {
 
 window.addEventListener("resize", draw);
 
-document.getElementById("graph-all").addEventListener("click", () => {
-  everything = !everything;
+/* Two buttons, one state. Clicking the option already in force does nothing
+   rather than toggling off it: a segment where pressing the lit half flips you
+   to the other is a segment you cannot press to confirm where you are. */
+function showDrawn(all) {
+  if (all === everything) return;
+  everything = all;
   load();
-});
+}
+
+document.getElementById("graph-all").addEventListener("click", () => showDrawn(true));
+document.getElementById("graph-linked").addEventListener("click", () => showDrawn(false));
 
 document.getElementById("graph-reset").addEventListener("click", async () => {
   if (!data) return;
@@ -1289,6 +1304,354 @@ function selectAll() {
   draw();
 }
 
+// -- the study order --------------------------------------------------------
+
+/* The queue this picture is half of.
+
+   `requires` is drawn on the canvas and it is one of two things deciding what
+   Anki hands you next; the other is a sort key a few values long, and until
+   now it was stated in a template and acted on in Python and visible in
+   neither. A card could say "order 4 of 108" and nothing could say why, or
+   what the deck would look like if easiest-first outranked most-useful-first.
+
+   So this panel: the rule as rows you can drag into a different sequence, and
+   under it the order it produces over every card in the source. Not only the
+   drawn ones: what the canvas leaves out is exactly the cards that depend on
+   nothing, and those are in the queue like any other. */
+
+const rail = document.getElementById("order-rail");
+const RAIL_KEPT = "forge:graph:study-order";
+
+/* A box lit from the panel rather than by the pointer. Separate from `hover`
+   on purpose: `hover` is what `x` and Enter act on, and pointing at a row in a
+   list is not pointing at a box on the canvas. */
+let spotlight = null;
+/* What `markSelected` last painted, so `draw` can skip the DOM work on the
+   hundred rows it is not changing. `draw` runs on every pointermove. */
+let markedAs = null;
+
+function railIsOpen() {
+  return Boolean(rail) && !rail.hidden;
+}
+
+/* `remember` is off for a panel opened by a URL: arriving somewhere by a link
+   somebody sent you is not a decision about how the view should open
+   tomorrow. */
+function toggleOrder(open, { remember = true } = {}) {
+  if (!rail) return;
+  const next = open === undefined ? rail.hidden : open;
+  /* What the stage loses or gains, split between the two sides, so the middle
+     of the picture stays in the middle. Opening a panel that shoved the graph
+     sideways would mean re-finding whatever you were looking at. */
+  const before = stage.getBoundingClientRect().width;
+  rail.hidden = !next;
+  document.body.classList.toggle("with-order-rail", next);
+  const chip = document.getElementById("graph-order");
+  chip.classList.toggle("on", next);
+  chip.setAttribute("aria-expanded", next ? "true" : "false");
+  /* Hidden while the panel is open: it is the way *back* to it, and a tab
+     sitting on the seam between the canvas and the open panel is a control
+     pointing at what is already in front of you. */
+  document.getElementById("order-tab").hidden = next;
+  try {
+    if (remember) localStorage.setItem(RAIL_KEPT, next ? "1" : "");
+  } catch (e) {
+    /* A private window refuses storage. The panel still opens. */
+  }
+  pan.x += (stage.getBoundingClientRect().width - before) / 2;
+  if (next) paintOrder();
+  else spotlight = null;
+  draw();
+}
+
+function orderData() {
+  return (data && data.order) || { criteria: [], cards: [], names: [] };
+}
+
+function paintOrder() {
+  if (!railIsOpen() || !data) return;
+  paintCriteria();
+  paintOrderCards();
+}
+
+// -- the rule ---------------------------------------------------------------
+
+function paintCriteria() {
+  const list = document.getElementById("order-criteria");
+  list.textContent = "";
+  orderData().criteria.forEach((criterion, i) => {
+    const row = document.createElement("li");
+    row.className = "criterion";
+    row.dataset.name = criterion.name;
+    row.tabIndex = 0;
+    row.title = "drag, or press the up and down arrows, to change what outranks what";
+
+    const grip = document.createElement("span");
+    grip.className = "grip";
+    grip.setAttribute("aria-hidden", "true");
+    grip.textContent = "⠿";
+
+    const rank = document.createElement("span");
+    rank.className = "rank";
+    rank.textContent = String(i + 1);
+
+    const body = document.createElement("div");
+    const name = document.createElement("b");
+    name.textContent = criterion.label;
+    const sense = document.createElement("span");
+    sense.className = "sense";
+    sense.textContent = criterion.sense;
+    const detail = document.createElement("p");
+    detail.className = "detail";
+    detail.textContent = criterion.detail;
+    body.append(name, sense, detail);
+
+    row.append(grip, rank, body);
+    row.addEventListener("pointerdown", (event) => startRuleDrag(event, row));
+    row.addEventListener("keydown", (event) => nudgeRule(event, row));
+    list.appendChild(row);
+  });
+}
+
+function ruleNames() {
+  return Array.from(document.querySelectorAll("#order-criteria .criterion")).map(
+    (row) => row.dataset.name,
+  );
+}
+
+/* Reorder by moving the row in the DOM as the pointer passes each neighbour's
+   midpoint, rather than by animating a floating copy. Three rows, and the list
+   under the pointer is the answer being previewed. */
+let ruleDrag = null;
+
+function startRuleDrag(event, row) {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  ruleDrag = { row, was: ruleNames() };
+  row.classList.add("dragging");
+  row.setPointerCapture(event.pointerId);
+}
+
+function slotFor(list, y) {
+  const others = Array.from(list.querySelectorAll(".criterion:not(.dragging)"));
+  let best = null;
+  let nearest = Number.NEGATIVE_INFINITY;
+  others.forEach((other) => {
+    const box = other.getBoundingClientRect();
+    const above = y - box.top - box.height / 2;
+    if (above < 0 && above > nearest) {
+      nearest = above;
+      best = other;
+    }
+  });
+  return best;
+}
+
+document.addEventListener("pointermove", (event) => {
+  if (!ruleDrag) return;
+  const list = document.getElementById("order-criteria");
+  const before = slotFor(list, event.clientY);
+  if (before) list.insertBefore(ruleDrag.row, before);
+  else list.appendChild(ruleDrag.row);
+  renumberRules();
+});
+
+document.addEventListener("pointerup", () => {
+  if (!ruleDrag) return;
+  const { row, was } = ruleDrag;
+  ruleDrag = null;
+  row.classList.remove("dragging");
+  const now = ruleNames();
+  if (now.join() !== was.join()) saveRule(now);
+});
+
+function renumberRules() {
+  document.querySelectorAll("#order-criteria .criterion").forEach((row, i) => {
+    row.querySelector(".rank").textContent = String(i + 1);
+  });
+}
+
+/* The same reorder from the keyboard. A drag is the gesture this was asked
+   for, and a control that only answers to a drag is one somebody cannot use. */
+function nudgeRule(event, row) {
+  const step = event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+  if (!step) return;
+  event.preventDefault();
+  const list = row.parentElement;
+  const rows = Array.from(list.children);
+  const to = rows.indexOf(row) + step;
+  if (to < 0 || to >= rows.length) return;
+  const was = ruleNames();
+  if (step < 0) list.insertBefore(row, rows[to]);
+  else list.insertBefore(rows[to], row);
+  renumberRules();
+  row.focus();
+  saveRule(ruleNames(), was);
+}
+
+async function saveRule(names, was) {
+  const said = document.getElementById("order-saved");
+  try {
+    const payload = await post("/api/study-order", { order: names });
+    said.hidden = false;
+    said.textContent = `${payload.sentence} · written to ${payload.path}`;
+    /* Refetch rather than re-sort here. The criteria also decide the y order
+       inside a layer of the layout, so the picture moves too, and computing
+       that in two places is how the two come to disagree. */
+    await load({ recentre: false });
+    toast(`study order: ${names.join(", then ")}`);
+  } catch (e) {
+    /* `post` has already said what happened. Put the rows back where they
+       were, so the panel is not showing an order the file does not have. */
+    if (was) paintCriteria();
+    else paintOrder();
+  }
+}
+
+// -- the order it produces --------------------------------------------------
+
+function gradeRow(row) {
+  const chips = document.createElement("span");
+  chips.className = "grades";
+  orderData().criteria.forEach((criterion) => {
+    const value = row.values[criterion.name];
+    const chip = document.createElement("span");
+    chip.className = `grade${value ? "" : " none"}`;
+    chip.title = value
+      ? `${criterion.label}: ${value}`
+      : `${criterion.label}: ${criterion.unset}. It sorts last within its group`;
+    /* The printed position is a number and reads as one; a grading is a word.
+       Both are the value of one criterion, so both are one chip. */
+    chip.textContent = value
+      ? criterion.name === "printed"
+        ? `#${value}`
+        : value
+      : criterion.unset;
+    chips.appendChild(chip);
+  });
+  return chips;
+}
+
+/* What `requires` did to this card's place, in words. The number alone is not
+   actionable: the question it raises is "should it have been?", and the answer
+   is the card at the other end of the arrow. */
+function shiftNote(row) {
+  if (!row.shift) return null;
+  const places = Math.abs(row.shift);
+  const word = `${places} ${places === 1 ? "place" : "places"}`;
+  const note = document.createElement("span");
+  note.className = `shift ${row.shift > 0 ? "up" : "down"}`;
+  /* A word rather than an arrow glyph. `↑27` beside `#173` read as the number
+     127: a thin arrow at 10px is not a symbol, it is a stroke. */
+  note.textContent = `${places} ${row.shift > 0 ? "earlier" : "later"}`;
+  note.title =
+    row.shift > 0
+      ? row.owes
+        ? `${word} earlier than the rule alone: ${row.owes_label || row.owes} needs it, ` +
+          "and a prerequisite is at least as important as the thing that needs it"
+        : `${word} earlier than the rule alone, because something needs it`
+      : `${word} later than the rule alone: cards were pulled in front of it by ` +
+        "what depends on them";
+  return note;
+}
+
+function paintOrderCards() {
+  const list = document.getElementById("order-cards");
+  const empty = document.getElementById("order-empty");
+  const sub = document.getElementById("order-sub");
+  const rows = orderData().cards;
+  list.textContent = "";
+  empty.hidden = rows.length > 0;
+  empty.textContent = "No cards in this source yet.";
+  const drawn = rows.filter((r) => r.drawn).length;
+  sub.textContent = rows.length
+    ? `${rows.length} ${rows.length === 1 ? "card" : "cards"} · ${drawn} on the canvas`
+    : "";
+
+  rows.forEach((row) => {
+    const item = document.createElement("li");
+    item.className = `order-card${row.drawn ? "" : " off"}`;
+    item.dataset.id = row.id;
+
+    const place = document.createElement("span");
+    place.className = "place";
+    place.textContent = String(row.place);
+
+    const body = document.createElement("button");
+    body.type = "button";
+    body.className = "order-open";
+    body.title = row.drawn
+      ? "find it on the canvas"
+      : "not on the canvas: click to put it there";
+    const name = document.createElement("span");
+    name.className = `order-name${row.label ? "" : " unnamed"}`;
+    name.textContent = row.label || "no caption yet";
+    const line = document.createElement("span");
+    line.className = "order-meta";
+    line.append(gradeRow(row));
+    const moved = shiftNote(row);
+    if (moved) line.append(moved);
+    body.append(name, line);
+    body.addEventListener("click", () => reachCard(row));
+    body.addEventListener("pointerenter", () => {
+      spotlight = row.id;
+      draw();
+    });
+    body.addEventListener("pointerleave", () => {
+      spotlight = null;
+      draw();
+    });
+
+    const open = document.createElement("a");
+    open.className = "order-review";
+    open.href = row.href;
+    open.textContent = "→";
+    open.title = "open the card for review";
+
+    item.append(place, body, open);
+    list.appendChild(item);
+  });
+  markedAs = null;
+  markSelected();
+}
+
+/* Selection, one way and the other. Clicking a row finds the box; selecting a
+   box marks the row, because the panel is only worth having open if it says
+   where the thing in front of you sits. */
+function markSelected() {
+  if (!railIsOpen()) return;
+  const now = picked.nodes.join();
+  if (now === markedAs) return;
+  markedAs = now;
+  document.querySelectorAll("#order-cards .order-card").forEach((item) => {
+    const on = isPicked(item.dataset.id);
+    item.classList.toggle("on", on);
+    if (on) item.scrollIntoView({ block: "nearest" });
+  });
+}
+
+async function reachCard(row) {
+  /* A card the canvas is not drawing has no box to find, and the reason it is
+     not drawn is that nothing depends on it. Putting it there is the step you
+     were about to take anyway, and `x` takes it back off. */
+  if (!row.drawn) {
+    await addToCanvas({ id: row.id, label: row.label, detail: "" });
+    return;
+  }
+  pickNodes([row.id]);
+  const spot = at(row.id);
+  const box = stage.getBoundingClientRect();
+  pan = {
+    x: box.width / 2 - (spot.x + NODE_W / 2) * scale,
+    y: box.height / 2 - (spot.y + NODE_H / 2) * scale,
+  };
+  draw();
+}
+
+document.getElementById("graph-order").addEventListener("click", () => toggleOrder());
+document.getElementById("order-close").addEventListener("click", () => toggleOrder(false));
+document.getElementById("order-tab").addEventListener("click", () => toggleOrder(true));
+
 function mid(handler) {
   return () => {
     if (link || drag) {
@@ -1300,8 +1663,9 @@ function mid(handler) {
 }
 
 bindKeys({
-  "every-card": mid(() => document.getElementById("graph-all").click()),
+  "every-card": mid(() => showDrawn(!everything)),
   "add-card": mid(() => openPicker()),
+  "study-order": () => toggleOrder(),
   recentre,
   "forget-position": forgetPositions,
   undo,
@@ -1315,5 +1679,27 @@ bindKeys({
      the only filter the canvas has, and `guide` has no guide to open. */
   sources: openGallery,
 });
+
+/* Reopened where you left it, unless the link says otherwise.
+
+   `?order=1` opens it and `?order=0` shuts it, which makes the panel part of
+   what a URL can say: a link to "this source, with its queue" is a different
+   thing to send somebody than a link to the picture. It is also the only way
+   to photograph it, since `assets/make_assets.py` points a fresh browser at a
+   URL and a fresh browser has no stored preference.
+
+   The link does not overwrite the preference. Arriving somewhere by a link
+   somebody sent you is not a decision about how you want the view to open
+   tomorrow. */
+const asked = new URLSearchParams(location.search).get("order");
+if (asked !== null) {
+  toggleOrder(asked !== "0", { remember: false });
+} else {
+  try {
+    if (localStorage.getItem(RAIL_KEPT)) toggleOrder(true);
+  } catch (e) {
+    /* No storage: it starts closed, which is the default anyway. */
+  }
+}
 
 load();

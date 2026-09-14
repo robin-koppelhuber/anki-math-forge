@@ -47,18 +47,24 @@
         {# The order Anki introduces new cards in, stated rather than drawn:
            the rule is four keys long and a picture of four keys is worse than
            the four keys. The *graph* the last one makes is a picture worth
-           having, and it has its own view. #}
+           having, and it has its own view.
+
+           Rendered from the declaration rather than typed out, because
+           `[cards] study_order` can reorder these three. Typed out, it went on
+           describing the default while the deck was built to something else. #}
         <p class="order-key" title="what decides which new card you meet next">
           <b>study order</b>
-          <span>frequency</span><span>derivation</span><span>source order</span>
+          {% for criterion in study_criteria() %}
+          <span title="{{ criterion.detail }}">{{ criterion.label }}</span>
+          {% endfor %}
           <em>requires wins</em>
         </p>
         {% if graph_href is defined and graph_href %}
         <p class="order-note">
-          <code>requires</code> outranks the other three, and it is the only
-          one that is a shape rather than a value.
-          <a class="to-graph" href="{{ graph_href }}">see it on a canvas
-            &rarr;</a>
+          <code>requires</code> outranks all of them, and it is the only one
+          that is a shape rather than a value.
+          <a class="to-graph" href="{{ graph_href }}">see it on a canvas, with
+            the order it produces &rarr;</a>
         </p>
         {% endif %}
       </div>
@@ -136,8 +142,13 @@
         it costs throughput and buys nothing.</p>
     </section>
 
+    {# A link and not the picture. The rail is 38rem at its widest and the
+       diagram wants about 50, so both copies of it in here were clipped down
+       the right-hand side with the pass boxes cut in half. It opens
+       full-width, the way the settings table does and for the same reason. #}
     <h3>the whole machine</h3>
-    {% include "_fsm.html" %}
+    <p class="rail-more"><button type="button" class="link-button" data-machine>every
+      state, and what moves between them &rarr;</button></p>
 
     <h3>the unit</h3>
     <dl>
@@ -318,8 +329,13 @@
         irreversible, and it is yours alone.</b></p>
     </section>
 
+    {# A link and not the picture. The rail is 38rem at its widest and the
+       diagram wants about 50, so both copies of it in here were clipped down
+       the right-hand side with the pass boxes cut in half. It opens
+       full-width, the way the settings table does and for the same reason. #}
     <h3>the whole machine</h3>
-    {% include "_fsm.html" %}
+    <p class="rail-more"><button type="button" class="link-button" data-machine>every
+      state, and what moves between them &rarr;</button></p>
 
     <h3>what each key does</h3>
     <dl>
@@ -371,7 +387,11 @@
           the decision it was holding open. The edit is to
           <code>## notes</code>, which is outside <code>content_hash</code>,
           so resolving does <em>not</em> send an approved card back to
-          draft.</dd>
+          draft. <b>{{ key('undo') }}</b> puts a resolved note back, which
+          matters most for one you did not write:
+          <code>forge feedback</code> turns a comment or flag from Anki into
+          an annotation and erases it there as it takes it, so the line here
+          is the only copy of it.</dd>
       <dt><b>{{ key('next') }}</b> / <b>{{ key('prev') }}</b></dt>
       <dd>Next / previous. Approving or rejecting moves you on to the next
           card still awaiting a decision; the one you just acted on stays in

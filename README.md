@@ -236,7 +236,8 @@ A flag with no entry here is reported rather than guessed at, and left set so
 nothing is lost.
 
 Either becomes a `@claude` line in the card's `## notes`, which is where
-`/triage claude` looks. Fixing it changes `content_hash`, so the card drops to
+`/triage claude` looks. Open the comment, or the flag's meaning, with `@me` and
+it stays a decision parked for you instead. Fixing it changes `content_hash`, so the card drops to
 draft and comes back through review before it reaches Anki again.
 
 `feedback` erases what it takes. Without that, every run would re-import the

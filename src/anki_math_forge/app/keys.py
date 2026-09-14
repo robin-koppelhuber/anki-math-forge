@@ -102,6 +102,10 @@ GRAPH: tuple[Key, ...] = (
     # `f` rather than `a`, which approves on one view and accepts on the other.
     # This is the only filter the canvas has, so `f` is what it is elsewhere.
     Key("every-card", "f", "every card"),
+    # The panel down the right: the study order this picture is half of. `o`
+    # is free on every view and is the first letter of the only word for it.
+    # Beside `f` because both answer "what am I being shown".
+    Key("study-order", "o", "study order"),
     Key("remove-selected", "Delete", "remove what is selected"),
     Key("remove-selected-alt", "Backspace", ""),
     Key("open-card", "Enter", "open the selected card"),

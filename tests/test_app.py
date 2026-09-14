@@ -1454,6 +1454,43 @@ def test_resolve_route_removes_one_annotation(pdf_source: Config) -> None:
     assert response.json()["pipeline"]["annotated_me"] == 0
 
 
+def test_resolve_hands_back_the_line_so_undo_can_put_it_there_again(
+    pdf_source: Config,
+) -> None:
+    """A note imported from Anki has no second copy: `feedback` erases the
+    comment as it takes it, so resolving was the one action that destroyed
+    something outright."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@claude flagged 1: check the sign")
+    path = next(pdf_source.cards_dir.rglob("aaa111-*.md"))
+    client = TestClient(create_app(pdf_source))
+
+    gone = client.post("/api/cards/aaa111/resolve", json={"mtime": mtime(path), "index": 0})
+    before = gone.json()["before"]
+    assert before["note"] == "@claude flagged 1: check the sign"
+    assert model.load(path).annotations() == []
+
+    back = client.post(
+        "/api/cards/aaa111/restore",
+        json={"snapshot": before, "mtime": gone.json()["card"]["mtime"]},
+    )
+
+    assert back.status_code == 200
+    assert model.load(path).annotations() == ["@claude flagged 1: check the sign"]
+
+
+def test_restoring_a_note_twice_leaves_one(pdf_source: Config) -> None:
+    """Undo is idempotent against a note that is already back, which is what a
+    second press after a reload would be."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    path = next(pdf_source.cards_dir.rglob("aaa111-*.md"))
+    client = TestClient(create_app(pdf_source))
+    snapshot = {"status": "draft", "content_hash": "", "note": "@me a decision"}
+
+    client.post("/api/cards/aaa111/restore", json={"snapshot": snapshot})
+
+    assert model.load(path).annotations() == ["@me a decision"]
+
+
 def test_resolve_refuses_a_stale_write(pdf_source: Config) -> None:
     """The app is a view over files, so a note added in an editor meanwhile
     must not be clobbered by a resolve aimed at the old list."""

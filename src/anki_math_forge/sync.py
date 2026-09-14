@@ -16,13 +16,19 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import check, latex, model, notetype
+from . import check, latex, model, notetype, study
 from .anki import AnkiConnect, AnkiError
 from .config import Config
 from .model import Card
+
+#: A sort key: one integer per criterion, then the uid. The uid is always last
+#: and is not a criterion (`study.py` says why), so the tuple is only ever
+#: compared against another built from the same declared order.
+StudyKey = tuple[int | str, ...]
 
 OPTIONAL_FIELD_SECTIONS = {
     "Conditions": "conditions",
@@ -216,40 +222,57 @@ def source_positions(config: Config) -> dict[str, int]:
     return positions
 
 
-def study_key(card: Card, positions: dict[str, int] | None = None) -> tuple[int, int, int, str]:
-    """Where a card belongs in the new-card queue, dependencies aside.
+def study_values(card: Card, positions: dict[str, int] | None = None) -> dict[str, int]:
+    """Each criterion's rank for one card, before any of them is ranked.
 
-    Most useful first, then easiest first, then in the order the source
-    introduces it: `frequency` core before common before rare, `derivation`
-    definitional before short before long, and within that the printed order.
-
-    That third key used to be `uid`, a hash, so inside a large bucket the
-    order was noise and a result could arrive well before what it is built
-    from. A source's own order costs nothing to follow and is usually better
-    than a hash; where it is not, `requires` overrides it and the source can
-    turn it off entirely.
-
-    A card missing either grading sorts last within its group: unannotated is
-    unjudged, not easy.
+    Split out from `study_key` so that reordering the criteria is a reordering
+    of this dictionary's keys and nothing else. A card missing a grading sorts
+    last within its group: unannotated is unjudged, not easy.
     """
     positions = positions or {}
-    frequency = (
-        model.FREQUENCIES.index(card.frequency)
-        if card.frequency
-        else len(model.FREQUENCIES)
-    )
-    derivation = (
-        model.DERIVATIONS.index(card.derivation)
-        if card.derivation
-        else len(model.DERIVATIONS)
-    )
-    where = min((positions[u] for u in card.units if u in positions), default=len(positions))
-    return (frequency, derivation, where, card.uid)
+    return {
+        "frequency": (
+            model.FREQUENCIES.index(card.frequency)
+            if card.frequency
+            else len(model.FREQUENCIES)
+        ),
+        "derivation": (
+            model.DERIVATIONS.index(card.derivation)
+            if card.derivation
+            else len(model.DERIVATIONS)
+        ),
+        "printed": min(
+            (positions[u] for u in card.units if u in positions), default=len(positions)
+        ),
+    }
+
+
+def study_key(
+    card: Card,
+    positions: dict[str, int] | None = None,
+    order: Sequence[str] = (),
+) -> StudyKey:
+    """Where a card belongs in the new-card queue, dependencies aside.
+
+    The criteria in the sequence `order` names, most significant first, and
+    `study.py` holds both the list and the reasoning for each. The default is
+    most useful first, then easiest first, then in the order the source
+    introduces it.
+
+    The last key is the uid, and it is not one of the criteria. Before it
+    existed, a large bucket sorted by hash and a result could arrive well
+    before what it is built from; now it only settles a tie, so that two
+    machines produce the same deck.
+    """
+    values = study_values(card, positions)
+    return (*(values[c.name] for c in study.resolve(order)), card.uid)
 
 
 def effective_keys(
-    cards: list[Card], positions: dict[str, int] | None = None
-) -> dict[str, tuple[int, int, int, str]]:
+    cards: list[Card],
+    positions: dict[str, int] | None = None,
+    order: Sequence[str] = (),
+) -> dict[str, StudyKey]:
     """Each card's sort key, after prerequisites inherit from their dependents.
 
     A prerequisite is at least as important as the most important thing that
@@ -259,17 +282,17 @@ def effective_keys(
     useful card early.
     """
     by_uid = {card.uid: card for card in cards}
-    own = {uid: study_key(card, positions) for uid, card in by_uid.items()}
+    own = {uid: study_key(card, positions, order) for uid, card in by_uid.items()}
     dependents: dict[str, list[str]] = {uid: [] for uid in by_uid}
     for card in cards:
         for need in card.requires:
             if need in by_uid and need != card.uid:
                 dependents[need].append(card.uid)
 
-    effective: dict[str, tuple[int, int, int, str]] = {}
+    effective: dict[str, StudyKey] = {}
     walking: set[str] = set()
 
-    def resolve(uid: str) -> tuple[int, int, int, str]:
+    def resolve(uid: str) -> StudyKey:
         if uid in effective:
             return effective[uid]
         if uid in walking:  # a cycle; `check` refuses one, so just stop here
@@ -285,7 +308,35 @@ def effective_keys(
     return effective
 
 
-def in_study_order(cards: list[Card], positions: dict[str, int] | None = None) -> list[Card]:
+def inherited_from(
+    cards: list[Card],
+    positions: dict[str, int] | None = None,
+    order: Sequence[str] = (),
+) -> dict[str, str]:
+    """For each card a dependent pulled forward, the card whose place it took.
+
+    `effective_keys` says *that* a prerequisite was promoted; this says whose
+    doing it was. Only the panel on the canvas needs it, and it needs it
+    because "moved 12 places earlier" with nothing named is a fact you cannot
+    act on: the answer to "should it have been?" is the card at the other end.
+
+    An own key ends in the uid and so is unique, which is what makes the
+    lookup exact rather than a search for a card with a matching grading.
+    """
+    own = {card.uid: study_key(card, positions, order) for card in cards}
+    whose = {key: uid for uid, key in own.items()}
+    return {
+        uid: whose[key]
+        for uid, key in effective_keys(cards, positions, order).items()
+        if key != own[uid] and key in whose
+    }
+
+
+def in_study_order(
+    cards: list[Card],
+    positions: dict[str, int] | None = None,
+    order: Sequence[str] = (),
+) -> list[Card]:
     """Study order, with `requires` respected absolutely.
 
     A topological sort whose priority is `effective_keys`: of everything whose
@@ -301,7 +352,7 @@ def in_study_order(cards: list[Card], positions: dict[str, int] | None = None) -
     import heapq
 
     by_uid = {card.uid: card for card in cards}
-    keys = effective_keys(cards, positions)
+    keys = effective_keys(cards, positions, order)
     blocking = {
         card.uid: {u for u in card.requires if u in by_uid and u != card.uid} for card in cards
     }
@@ -310,7 +361,9 @@ def in_study_order(cards: list[Card], positions: dict[str, int] | None = None) -
         for need in needs:
             unblocks[need].append(uid)
 
-    ready = [(keys[uid], uid) for uid, needs in blocking.items() if not needs]
+    ready: list[tuple[StudyKey, str]] = [
+        (keys[uid], uid) for uid, needs in blocking.items() if not needs
+    ]
     heapq.heapify(ready)
 
     out: list[Card] = []
@@ -483,7 +536,7 @@ def reposition(
     """
     outcomes: list[CardOutcome] = []
     by_uid = {card.uid: card for card in cards}
-    wanted = [c.uid for c in in_study_order(cards, source_positions(config))]
+    wanted = [c.uid for c in in_study_order(cards, source_positions(config), config.study_order)]
 
     positions: dict[str, tuple[int, int]] = {}
     studied: list[str] = []
@@ -568,7 +621,7 @@ def run(
         # Added in study order: Anki numbers a new card by when it arrives,
         # and its default new-card order is that position. Getting the order
         # right at insertion costs nothing and needs no repositioning later.
-        for card in in_study_order(ready, source_positions(config)):
+        for card in in_study_order(ready, source_positions(config), config.study_order):
             try:
                 report.outcomes.append(_upsert(client, config, card, dry_run=dry_run))
             except AnkiError as exc:

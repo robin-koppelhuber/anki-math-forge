@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
+import tomllib
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -35,12 +36,18 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 from markupsafe import Markup
 
-from .. import check, latex, model
+from .. import check, latex, model, study
 from .. import graph as graph_mod
-from ..config import DEFAULT_MEANINGS, Config
+from ..config import DEFAULT_MEANINGS, Config, save_study_order
 from ..ledger import Ledger, Unit, open_ledgers
 from ..model import Card, StaleFileError
-from ..sync import in_study_order, source_positions
+from ..sync import (
+    in_study_order,
+    inherited_from,
+    source_positions,
+    study_key,
+    study_values,
+)
 from . import keys as keymod
 
 HERE = Path(__file__).parent
@@ -151,6 +158,10 @@ def create_app(config: Config) -> FastAPI:
     # `app.js` can tell. `_STARTED_AT` is enough -- what matters is that the
     # attribute is *there*, not what it says.
     templates.env.globals["app_build"] = str(int(_STARTED_AT))
+    # The guide states the study-order rule in a line of three words. It was
+    # three words typed into the template, so `[cards] study_order` could
+    # reorder the deck while the guide went on describing the default.
+    templates.env.globals["study_criteria"] = lambda: study.resolve(study_order(config))
     templates.env.globals["mark_selection"] = mark_selection
     templates.env.globals["mark_toggle"] = mark_toggle
 
@@ -435,7 +446,7 @@ def create_app(config: Config) -> FastAPI:
         # and what put it there. The reverse edges are only computable here:
         # a card's file says what it needs, never what needs it.
         by_uid_card = {c.uid: c for c in in_source}
-        ordered = in_study_order(in_source, source_positions(config))
+        ordered = in_study_order(in_source, source_positions(config), study_order(config))
         places: dict[str, dict[str, Any]] = {
             c.uid: {"position": i + 1, "total": len(ordered), "required_by": []}
             for i, c in enumerate(ordered)
@@ -607,6 +618,34 @@ def create_app(config: Config) -> FastAPI:
         return {
             "positions": {k: list(v) for k, v in positions.items()},
             "mtime": _mtime(path),
+            "path": str(path.relative_to(config.root)),
+        }
+
+    @app.post("/api/study-order")
+    def study_order_api(body: dict[str, Any] = Body(default={})) -> Any:
+        """Reorder the criteria, by writing `[cards] study_order`.
+
+        The one write in this app that lands in `forge.toml`, and the one that
+        changes nothing about any card: it decides which approved card Anki
+        hands you first, which is a judgement about the deck rather than about
+        a card in it. Nothing is re-hashed and nothing is demoted, for the same
+        reason drawing an arrow demotes nothing.
+
+        Whether it takes effect straight away is the whole reason `study_order`
+        re-reads the file: a control that needs a restart to do anything reads
+        as a control that does not work.
+        """
+        graph_enabled()
+        wanted = [str(name).strip() for name in (body.get("order") or []) if str(name).strip()]
+        try:
+            study.validate(wanted)
+        except study.StudyOrderError as exc:
+            return JSONResponse({"error": str(exc)}, status_code=400)
+        path = save_study_order(config.root, wanted)
+        order = study_order(config)
+        return {
+            "order": list(order),
+            "sentence": study.sentence(order),
             "path": str(path.relative_to(config.root)),
         }
 
@@ -870,11 +909,19 @@ def create_app(config: Config) -> FastAPI:
 
     @app.post("/api/cards/{uid}/restore")
     def restore_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
-        """Undo: put a card's status back, with the hash that went with it."""
+        """Undo: put a card's status back, with the hash that went with it.
+
+        A `note` in the snapshot is an annotation the undo is putting back,
+        which is the one thing resolving deletes and nothing else records. It
+        returns to the end of `## notes` rather than to the line it was on:
+        the position of a note carries nothing, and reconstructing it would
+        mean remembering the whole section to restore one line of it.
+        """
         snapshot = body.get("snapshot") or {}
         status = str(snapshot.get("status", ""))
         if status not in model.STATUSES:
             raise HTTPException(400, f"unknown status {status!r}")
+        note = str(snapshot.get("note", "")).strip()
 
         def act(card: Card) -> None:
             card.frontmatter["status"] = status
@@ -883,6 +930,8 @@ def create_app(config: Config) -> FastAPI:
                 card.frontmatter["content_hash"] = digest
             else:
                 card.frontmatter.pop("content_hash", None)
+            if note and note not in card.annotations():
+                card.add_annotation(note)
 
         return _mutate_card(config, uid, body, act)
 
@@ -890,9 +939,21 @@ def create_app(config: Config) -> FastAPI:
     def resolve_card_annotation(uid: str, body: dict[str, Any] = Body(...)) -> Any:
         """Delete one annotation. The app could add a note but never remove
         one, so the only way to finish with a `@me` decision was to open the
-        file."""
+        file.
+
+        The line goes back in the response, because for a note that came from
+        Anki this file is the only copy there is: `feedback` erases the
+        comment as it imports it, by design. Resolving without that was the
+        one unrecoverable action in the app.
+        """
         index = int(body.get("index", 0))
-        return _mutate_card(config, uid, body, lambda card: card.resolve_annotation(index))
+        return _mutate_card(
+            config,
+            uid,
+            body,
+            lambda card: card.resolve_annotation(index),
+            remember=lambda card: {"note": _nth_annotation(card, index)},
+        )
 
     @app.post("/api/cards/{uid}/annotate")
     def annotate_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -1999,7 +2060,9 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
         href=href,
         here=source,
     )
-    order = [c.uid for c in in_study_order(here, source_positions(config))]
+    declared = study_order(config)
+    ordered = in_study_order(here, source_positions(config), declared)
+    order = [c.uid for c in ordered]
     path = graph_mod.positions_path(config.sources_dir, source)
     positions = graph_mod.load_positions(path)
     # A card with no edges is on the canvas because somebody put it somewhere.
@@ -2035,6 +2098,78 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
         # opens, because it is the same walk over the same cards and the list
         # has to agree with what is on screen.
         "absent": [n.as_dict() for n in whole.nodes if n.id not in drawn],
+        # The queue the picture is a picture of. Every card in the source, not
+        # only the drawn ones, because what the canvas leaves out is exactly
+        # the cards that depend on nothing.
+        "order": study_reading(config, here, ordered, declared, drawn, href),
+    }
+
+
+def study_reading(
+    config: Config,
+    cards: list[Card],
+    ordered: list[Card],
+    declared: tuple[str, ...],
+    drawn: set[str],
+    href: Any,
+) -> dict[str, Any]:
+    """The study order for one source, with what put each card where.
+
+    The canvas draws `requires`, which is one of the two things deciding this
+    order and the only one with a shape. The other is a sort key three values
+    long, and it was written down in three places and visible in none of them:
+    you could see that a card was 4th of 108 and not why, and you could not see
+    what would happen if easiest-first outranked most-useful-first.
+
+    So: the order, each card's values for each criterion, and the places
+    `requires` moved it. `shift` is against the order the criteria alone would
+    give, positive for earlier, and `owes` names the card that pulled it there.
+    Reading those two together is reading the rule work on this deck, which is
+    the only way to judge a sort key that has a hundred cards under it.
+    """
+    positions = source_positions(config)
+    criteria = study.resolve(declared)
+    # What the criteria alone would do, which is the baseline `shift` is
+    # measured against. Not "the order before you last dragged something":
+    # the question is what `requires` is contributing, not what changed.
+    flat = sorted(cards, key=lambda c: study_key(c, positions, declared))
+    without = {card.uid: i for i, card in enumerate(flat)}
+    owed = inherited_from(cards, positions, declared)
+    labels = {c.uid: card_gist(c, config) for c in cards}
+    rows = []
+    for place, card in enumerate(ordered):
+        ranks = study_values(card, positions)
+        shown = {
+            "frequency": card.frequency,
+            "derivation": card.derivation,
+            # A number rather than a word, because that is what it is: how far
+            # into the book the unit sits. Empty when the source opted out of
+            # its own order, or when this card came from no unit at all.
+            "printed": "" if ranks["printed"] >= len(positions) else str(ranks["printed"] + 1),
+        }
+        values = {c.name: shown.get(c.name, "") for c in criteria}
+        rows.append(
+            {
+                "id": card.uid,
+                "label": labels[card.uid],
+                "state": card.effective_status,
+                "place": place + 1,
+                "values": values,
+                "shift": without[card.uid] - place,
+                "owes": owed.get(card.uid, ""),
+                "owes_label": labels.get(owed.get(card.uid, ""), ""),
+                "needs": [n for n in card.requires if n in labels],
+                # The panel's only filter on itself: a card the canvas is not
+                # drawing can be clicked to put it there.
+                "drawn": card.uid in drawn,
+                "href": href(card),
+            }
+        )
+    return {
+        "names": list(declared),
+        "criteria": [c.as_dict() for c in criteria],
+        "sentence": study.sentence(declared),
+        "cards": rows,
     }
 
 
@@ -2083,6 +2218,10 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
 
     add("repo", "language", config.language, "forge.toml")
     add("repo", "front_char_cap", config.front_char_cap, "forge.toml")
+    # The one row here the app can also write, from the panel on the canvas.
+    # Read live rather than off `config`, so the table does not contradict the
+    # panel between here and the next restart.
+    add("repo", "study_order", ", ".join(study_order(config)), "forge.toml")
     add("repo", "crop_context", config.crop_context_for(""), "forge.toml")
     add(
         "repo",
@@ -2102,6 +2241,18 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     add("anki", "note type", config.note_type, "forge.toml")
     add("anki", "tag prefix", config.tag_prefix, "forge.toml")
     add("anki", "url", config.anki_url, "ANKI_CONNECT_URL or forge.toml")
+    # Which colours mean something. A flag with no entry is reported by
+    # `feedback` and imported by nothing, so "what did I map?" is a question
+    # with a consequence, and the answer was only in the file.
+    add(
+        "anki",
+        "flags",
+        (
+            ", ".join(f"{n} {text}" for n, text in sorted(config.flags.items()))
+            or "none declared; a flag set in Anki comes back as a skip"
+        ),
+        "forge.toml",
+    )
     add("zotero", "data dir", str(config.zotero.data_dir), "forge.toml")
     add("zotero", "units from", ", ".join(sorted(config.zotero.units_from)), "forge.toml")
 
@@ -2379,6 +2530,49 @@ def _cached(key: str, paths: Any, build: Any) -> Any:
     value = build()
     _CACHE[key] = (signature, value)
     return value
+
+
+def study_order(config: Config) -> tuple[str, ...]:
+    """The declared study order, as `forge.toml` says it right now.
+
+    The rest of the config is read once at startup and stays read: a server
+    holding a `Config` from three minutes ago is a server that agrees with
+    itself, and the stale banner covers the case where that is wrong.
+
+    This one value is different because **this app writes it**. The panel on
+    the canvas reorders the criteria, the write lands in `forge.toml`, and a
+    reordering that does not reorder anything until the next restart is a
+    control that appears not to work. So it is re-read, keyed on the file's
+    mtime, which costs one `stat` on the requests that ask.
+
+    A config that will not parse falls back to the loaded value rather than
+    raising. The setting being edited under the server is exactly when the
+    file is half-written, and taking the view down for it would be reporting
+    somebody's editor rather than their config.
+    """
+    from ..config import config_path
+
+    path = config_path(config.root)
+    try:
+        stamp = path.stat().st_mtime_ns
+    except OSError:
+        return config.study_order
+    hit = _ORDER.get(path)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    try:
+        with path.open("rb") as fh:
+            raw = tomllib.load(fh)
+        order = tuple(
+            c.name for c in study.resolve(list(raw.get("cards", {}).get("study_order") or ()))
+        )
+    except (OSError, tomllib.TOMLDecodeError, study.StudyOrderError, TypeError):
+        order = config.study_order
+    _ORDER[path] = (stamp, order)
+    return order
+
+
+_ORDER: dict[Path, tuple[int, tuple[str, ...]]] = {}
 
 
 def _ledgers(config: Config) -> dict[str, Ledger]:
@@ -2668,18 +2862,38 @@ def _unit_image(card: Card, config: Config) -> str:
 # -- writes ----------------------------------------------------------------
 
 
-def _mutate_card(config: Config, uid: str, body: dict[str, Any], action: Any) -> Any:
+def _nth_annotation(card: Card, index: int) -> str:
+    """The line `resolve_annotation(index)` is about to delete, or "".
+
+    Out of range rather than raising: the write itself reports that, and this
+    runs before it.
+    """
+    notes = card.annotations()
+    return notes[index] if 0 <= index < len(notes) else ""
+
+
+def _mutate_card(
+    config: Config,
+    uid: str,
+    body: dict[str, Any],
+    action: Any,
+    remember: Any = None,
+) -> Any:
     card = _find_card(config, uid)
     if card is None or card.path is None:
         raise HTTPException(404, f"no card {uid}")
     expected = _expected_mtime(body)
     # What undo needs: approving stamps `content_hash` and rejecting drops it,
     # so restoring the status alone would leave the card in a state it was
-    # never actually in.
+    # never actually in. `remember` adds whatever else this particular write
+    # destroys, read before it happens and sent back under `before` with the
+    # rest -- which is what lets `restore` stay the single undo endpoint.
     before = {
         "status": card.status,
         "content_hash": card.frontmatter.get("content_hash", ""),
     }
+    if remember is not None:
+        before.update(remember(card))
     action(card)
     try:
         card.save(expect_mtime_ns=expected)

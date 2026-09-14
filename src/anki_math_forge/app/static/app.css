@@ -464,6 +464,12 @@ main {
 .fsm figcaption b { color: var(--ink); }
 .fsm figcaption b.you-key { color: var(--accent); }
 
+/* A `.sub` line that is not inside one of the boxed groups. Every rule for it
+   was scoped to a container (`.prop .sub`, `.overlay .sub`, `.source .sub`),
+   so four lines added beside the /extract-cards arrow came out at the
+   browser's default size in black. A class that only works inside a container
+   is a trap; this is the base the others refine. */
+.fsm .sub { font-size: 10px; fill: var(--muted); }
 .fsm .lane { font-size: 11px; letter-spacing: 0.09em; fill: var(--muted); opacity: 0.8; }
 .fsm .lane-rule { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 4; }
 
@@ -475,10 +481,35 @@ main {
 .fsm .state.out text { fill: var(--muted); font-weight: 400; }
 
 .fsm .source text { font-size: 12px; fill: var(--muted); font-style: italic; }
+/* Both doors into the machine are drawn; this is the one the source in
+   front of you came through. Lit rather than hidden, because which passes
+   you have depends on it and the answer is easier to read against the
+   other one than on its own. */
+.fsm .source.on text { fill: var(--accent); font-style: normal; }
+/* The two doors' marks. Line art in `currentColor`, so the same file renders
+   on a light page, a dark page and a PNG, and so the lit door's mark goes
+   accent with its label. */
+.fsm .mark { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+.fsm .mark.thin { stroke-width: 1.2; stroke-linecap: round; }
+/* The Z is a solid letterform in the real mark, not an outline. */
+.fsm .mark.solid { fill: currentColor; stroke: none; }
+.fsm .source .mark { color: var(--muted); }
+.fsm .source.on .mark { color: var(--accent); }
+
+/* What an object carries, which is a statement and not a pass. No border and
+   a rule down the left: given the panel treatment it read as another command
+   to run, beside four that are. */
+.fsm .carries rect { fill: none; stroke: none; }
+.fsm .carries text { font-size: 11px; fill: var(--ink); }
+.fsm .carries .sub { font-size: 10px; fill: var(--muted); }
+.fsm .rule { stroke: var(--line); stroke-width: 2; fill: none; }
+/* The line from a state to one of those. No arrowhead, because an arrowhead
+   is for something that acts on what it points at. */
+.fsm .edge.tie { stroke-dasharray: 2 3; opacity: 0.5; }
 
 .fsm .edge { stroke: var(--line); stroke-width: 1.5; fill: none; color: var(--line); }
 .fsm .edge.you { stroke: var(--accent); color: var(--accent); }
-.fsm .edge.dash { stroke-dasharray: 3 3; }
+.fsm .edge.dash { stroke: var(--muted); color: var(--muted); stroke-dasharray: 3 3; }
 .fsm .edge.back { stroke-dasharray: 4 3; }
 .fsm .edge.cycle { stroke: var(--warn); color: var(--warn); stroke-dasharray: 5 3; }
 .fsm .edge.warn { stroke: var(--warn); color: var(--warn); }
@@ -1880,9 +1911,13 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
    outline, and the line between them is the only one in either diagram that is
    not a transition -- so it is drawn as a tie rather than as an arrow of the
    usual kind. */
+/* The pairing is the shared fill, not a brighter border. A 2px `--ink` stroke
+   against every other state's 1.5px `--line` made these two read as the
+   important ones rather than as two halves of one event, and the tie between
+   them now carries a label saying what they are. */
 .fsm .state.twin rect {
-  stroke: var(--ink);
-  stroke-width: 2;
+  stroke: var(--line);
+  stroke-width: 1.5;
   fill: color-mix(in srgb, var(--ink) 7%, var(--bg));
 }
 .fsm .edge.twin {
@@ -2414,3 +2449,303 @@ a.icon-button {
   justify-content: center;
   text-decoration: none;
 }
+
+/* The canvas toolbar. Not `.chip`, which is a link-shaped pill used on the
+   filter rail and in the gallery; these are controls on a working surface, and
+   a row of identical pills said nothing about which were toggles and which
+   were actions. Same metrics as the context chip on the triage view instead,
+   so the two headers read as the same application. */
+.badge.tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.1rem 0.35rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.badge.tool-group .chip-what {
+  font-style: normal;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.55;
+  margin-right: 0.15rem;
+}
+
+.tool {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+.tool:hover { color: var(--ink); border-color: var(--accent); }
+.tool.on {
+  color: var(--ink);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* The `+` carries the meaning the word repeats, so it is the part that is
+   allowed to be loud. */
+.tool .tool-sign {
+  font-weight: 600;
+  margin-right: 0.3rem;
+  color: var(--accent);
+}
+/* The rare one. Pushed to the far end and given no border until you are on
+   it, so it does not read as another thing of the same weight as the two you
+   press constantly. */
+.tool.quiet { margin-left: auto; border-color: transparent; }
+.tool.quiet:hover { border-color: var(--line); color: var(--ink); }
+
+/* -- the study order, beside the canvas ---------------------------------- */
+
+/* The queue the canvas is a picture of half of. Fixed between the two bars
+   like the stage itself, and the stage gives up the width rather than being
+   covered: a panel over the picture would hide the boxes it is describing,
+   and the two are meant to be read against each other. */
+:root { --order-rail-w: 23rem; }
+
+body.with-order-rail .graph-stage { right: var(--order-rail-w); }
+
+/* The way back to the panel, on the edge the panel lives on. Vertical, so it
+   costs the canvas 22px rather than a corner of it, and hidden while the panel
+   is open: a tab on the seam between the two is a control pointing at what is
+   already in front of you. */
+.order-tab {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.7rem 0.25rem;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 5px 0 0 5px;
+  cursor: pointer;
+}
+.order-tab:hover { color: var(--ink); border-color: var(--accent); }
+.order-tab[hidden] { display: none; }
+.order-tab-word { writing-mode: vertical-rl; }
+.order-tab-sign { font-size: 13px; line-height: 1; }
+
+.order-rail {
+  position: fixed;
+  top: var(--header-h, 44px);
+  bottom: var(--footer-h, 38px);
+  right: 0;
+  width: var(--order-rail-w);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+}
+.order-rail[hidden] { display: none; }
+
+.order-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.order-head h2 { margin: 0; font-size: 14px; }
+.order-sub {
+  margin: 0.15rem 0 0;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.order-head .gallery-close { margin-left: auto; }
+
+/* The rule itself. Three draggable rows between two that cannot move, so what
+   is negotiable and what is not read as different kinds of thing. */
+.order-rules {
+  padding: 0.6rem 0.9rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.order-fixed {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.35rem 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.order-fixed b { color: var(--ink); white-space: nowrap; }
+
+.order-criteria {
+  list-style: none;
+  margin: 0.3rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.criterion {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  cursor: grab;
+  touch-action: none;
+}
+.criterion:hover,
+.criterion:focus-visible { border-color: var(--accent); outline: none; }
+.criterion.dragging { opacity: 0.55; cursor: grabbing; }
+.criterion .grip { color: var(--muted); font-size: 13px; line-height: 1; }
+.criterion .rank {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+.criterion b { font-size: 12px; }
+.criterion .sense { color: var(--muted); font-size: 11px; margin-left: 0.4rem; }
+/* The full sentence, on the row you are pointing at. Shown on all three at
+   once it was 200px of documentation above a list of a hundred cards, and the
+   list is the thing you came to read. The label and its `sense` stay, so the
+   rule is three legible rows whether or not you ask why. */
+.criterion .detail {
+  display: none;
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.criterion:hover .detail,
+.criterion:focus-within .detail,
+.criterion.dragging .detail { display: block; }
+.order-hint {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.order-saved {
+  margin: 0.5rem 0 0;
+  font-size: 11px;
+  color: var(--accent);
+  line-height: 1.45;
+}
+
+/* The order it produces. Scrolls on its own, because the rule above it is the
+   thing you are changing and it should not leave the screen while you do. */
+.order-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0.5rem 1rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.order-card {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 0.1rem 0.25rem;
+}
+.order-card:hover { border-color: var(--line); background: var(--bg); }
+.order-card.on { border-color: var(--accent); background: var(--bg); }
+/* Not on the canvas. The panel covers the whole source and the picture covers
+   what depends on something, so this is every card with no dependency either
+   way. Dimmed rather than hidden, because clicking one is how it gets there. */
+.order-card.off .place { opacity: 0.55; }
+.order-card .place {
+  width: 2.1rem;
+  flex: none;
+  text-align: right;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.order-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0.3rem 0.2rem;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.order-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.order-name.unnamed { color: var(--muted); font-style: italic; }
+.order-meta { display: flex; align-items: baseline; gap: 0.35rem; flex-wrap: wrap; }
+.grades { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+.grade {
+  color: var(--muted);
+  font-size: 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 0 0.25rem;
+  white-space: nowrap;
+}
+/* Ungraded is a gap worth seeing: it sorts last within its group, so a deck
+   nobody has graded is a deck ordered by the source and the uid alone. */
+.grade.none { border-style: dashed; font-style: italic; }
+.shift { font-size: 10px; font-variant-numeric: tabular-nums; }
+.shift.up { color: var(--accent); }
+.shift.down { color: var(--warn); }
+
+.order-review {
+  flex: none;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 13px;
+  padding: 0 0.2rem;
+}
+.order-review:hover { color: var(--accent); }
+
+.order-empty { padding: 0.8rem 0.9rem; color: var(--muted); font-size: 12px; }
+
+/* Under a narrow window the panel would leave no canvas at all. It takes the
+   whole stage instead: at that size you are reading one or the other. */
+@media (max-width: 52rem) {
+  :root { --order-rail-w: 100%; }
+  body.with-order-rail .graph-stage { right: 0; }
+}
+
+/* The whole machine, opened from the guide. Wide, because that is the point:
+   the diagram is drawn at about 50rem and the rail it used to sit in stops at
+   38, so both copies came out clipped down the right-hand side. */
+.gallery.machine[open] {
+  display: flex;
+  flex-direction: column;
+}
+.gallery.machine {
+  max-width: 62rem;
+  height: auto;
+  max-height: min(92vh, 60rem);
+}
+.machine-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.2rem 1.1rem 0.4rem;
+}
+.machine-body .fsm { margin: 0; }

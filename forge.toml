@@ -1,90 +1,53 @@
 # anki-math-forge configuration. One file, all knobs (DESIGN.md ss11).
 #
-# This is a working repo's config, not a template. It is tracked deliberately:
-# `cards/` and every `units.jsonl` are committed too, and they only mean
-# anything against the settings that produced them. A clone with no config
-# renders the committed deck against defaults that are not the ones it was
-# built with, and CI's `forge check` would be linting a different repo.
+# Tracked deliberately: `cards/` and every `units.jsonl` are committed too, and
+# they only mean anything against the settings that produced them.
 #
-# Four values here are decisions of the person whose deck this is, not defaults
-# anybody should inherit. Change these first and leave the rest alone:
+# Four values here are yours, not defaults anybody should inherit. Change these
+# and leave the rest alone:
 #
 #   [anki] deck            which deck in *your* collection new cards land in
 #   [anki.flags]           what you meant when you flagged a card mid-review
 #   [zotero] units_from    which of your highlight colours start a unit
 #   [zotero.meanings]      what your colour scheme means
 #
-# There is no `forge.example.toml`, because secrets and decisions are not the
-# same thing. `.env` holds credentials and is untracked with a template beside
-# it; everything below is a record of how this deck was built, which is the
-# same reason `sources/<name>/source.toml` is committed.
+# Every key below is documented in `src/anki_math_forge/config.py`, next to the
+# code that reads it. `.env.example` lists the few environment overrides.
 
 [repo]
 cards_dir = "cards"
 sources_dir = "sources"
-# Intermediate files: crops, page renders, scratch LaTeX. Disposable,
-# gitignored, and the one place a pass is allowed to write working files.
-work_dir = ".forge"
+work_dir = ".forge"      # crops, page renders, scratch LaTeX. Disposable.
 
 [cards]
-# DESIGN.md ss15.1 / ss15.2: declared once, mixing is the failure mode.
 language = "en"          # prose sections are written in English
 front_char_cap = 160     # rendered `## front` length cap, enforced by `check`
-# Points of surrounding page shown around a crop. Generous on purpose: a crop
-# too tight to judge costs a review, and one with too much around it costs
-# nothing. A source may override it, since how much context a unit needs is a
-# fact about how the book is set. 0 falls back to the built-in default.
-crop_context = 0
-# How wide a crop is cut: `box` for the unit's own bounding box, `page` for the
-# full width of the page with `crop_context` still deciding the height. Empty
-# lets the geometry decide, which is almost always what you want: a segmenter
-# that found a display equation stopped where the equation stopped, while a
-# mark's box is the union of the lines a sentence happened to span and its
-# edges are wherever that sentence ran out mid-column. So marks get the page,
-# everything else gets the box. Set it here or per source to overrule that.
-crop_width = ""
-# Pages either side of a unit handed to whoever writes its card. A source may
-# override it, and a single unit may override that from triage (`c`), which is
-# where you can see that a theorem's hypotheses are two pages back. A large
-# number means the whole document.
-context_pages = 1
-# Whether whoever writes a card may look things up on the web. Off, and the
-# default is the point: a card is supposed to say what *this source* says,
-# hypotheses and notation included, and the web is where a cleaner statement of
-# the general theorem comes from to quietly replace the one on the page. A
-# source may turn it on, and a single unit may turn it on from triage (`w`),
-# which is where you can see that this one needs it.
-web = false
+crop_context = 0         # points of page shown around a crop; 0 is the default
+crop_width = ""          # `box`, `page`, or empty to let the geometry decide
+context_pages = 1        # pages either side handed to whoever writes a card
+web = false              # may a card writer look things up? A card should say
+                         # what *this source* says.
+# Which criterion outranks which when Anki decides what new card you meet next.
+# `requires` comes before all of them and the uid settles a tie. The panel
+# beside the canvas at `/graph` writes this line.
+study_order = ["frequency", "derivation", "printed"]
 
-# There is no `layout` key here any more, and no conventions section either.
-# A convention is a fact about one book -- which matrix-derivative layout it
-# writes, whether entries are real -- so it lives in that book's own
-# `sources/<name>/source.toml`, under `[conventions]`. A repo-wide default for
-# one is a claim about every book in the deck including the ones nobody has
-# read yet, and naming `denominator` here once told a statistics paper that it
-# writes matrix calculus. A value left here now raises at load rather than
-# being ignored.
+# No `layout` key here, and no conventions section: a convention is a fact
+# about one book, so it lives in that book's `sources/<name>/source.toml`. A
+# value left here raises at load rather than being ignored.
 
 [anki]
 url = "http://127.0.0.1:8765"
-# The default deck. A source may name its own; two books are two subjects far
-# more often than they are one.
-deck = "Mathe"                    # DESIGN.md ss15.5
-# The note type's name in Anki, and its version. Neither is derived from this
-# project's name, on purpose: the name is written into every note in your
-# collection, so it has to survive the tool being renamed. Change the stem and
-# `sync` will tell you to rename the note type in Anki rather than quietly
-# creating a second one and orphaning your review history.
-note_type_name = "Math Card"      # -> "Math Card v1"
-note_type_version = 1
-# Namespaces this tool's tags in your collection. Short and stable for the same
-# reason as the note type name.
+deck = "Mathe"                    # the default; a source may name its own
+note_type_name = "Math Card"      # -> "Math Card v1". Change the stem and
+note_type_version = 1             # `sync` tells you to rename it in Anki
+                                  # rather than orphan your review history.
 tag_prefix = "forge"
 
 # What you meant by each flag, so `feedback` can turn one keystroke during
-# review into a `@claude` note. Anki numbers its flags 1-7 (red, orange,
-# green, blue, pink, turquoise, purple); a flag with no entry here is
-# reported rather than guessed at. Delete a line to stop importing that flag.
+# review into a note. Anki numbers its flags 1-7; a flag with no entry here is
+# reported rather than guessed at. Open a meaning with `@me` to have that
+# colour come back as a decision for you instead of work for Claude.
 [anki.flags]
 1 = "want proof or more detail in existing proof"
 2 = "unclear: I could not tell what was being asked"
@@ -92,68 +55,46 @@ tag_prefix = "forge"
 4 = "wants a proof, an example, or a where-this-turns-up line"
 
 [check]
-# Extra macros the builtin LaTeX validator should accept beyond its allowlist.
-extra_macros = []
+extra_macros = []        # beyond the LaTeX validator's allowlist
 
 [app]
 host = "127.0.0.1"
 port = 8000
-# KaTeX assets. Leave empty and the app serves them from node_modules when
-# `npm install katex` has been run, falling back to a CDN. Set a URL or path
-# to override.
-katex_base = ""
-# The dependency canvas at `/graph`: the `requires` of one source, drawn, and
-# arrows you make by dragging between two boxes. Set it to false and the route
-# stops answering and the review view stops linking to it. `requires` still
-# decides the order Anki introduces cards in either way; this is about whether
-# the app shows you a picture of it.
-graph = true
+katex_base = ""          # empty serves KaTeX from node_modules, else a CDN
+graph = true             # the dependency canvas at `/graph`
 
-# Keyboard shortcuts, by action. The defaults are in
-# `src/anki_math_forge/app/keys.py`, which is also where the reasoning for
-# each one is; naming an action here moves it in the bindings, the footer
-# legend and the guide at once. An action that does not exist is an error at
-# load, because a typo'd one reads exactly like the feature not working.
+# Keyboard shortcuts, by action. Defaults and reasoning: `app/keys.py`. Naming
+# an action here moves it in the bindings, the footer legend and the guide at
+# once; an action that does not exist is an error at load.
 #
-# A TOML sub-table swallows every bare key below it, so this goes *after*
-# the ones above.
+# A TOML sub-table swallows every bare key below it, so this goes *after* the
+# ones above.
 #
 # [app.keys]
-# units: queue = 'q', queue-with-brief = 'Q', skip = 's', accept-suggestion = 'a', ...
+# units:  queue = 'q', queue-with-brief = 'Q', skip = 's', ...
 # review: approve = 'a', reject = 'r', back-to-draft = 'u', undo = 'z', ...
-# graph: add-card = '+', every-card = 'f', drop-edge = 'Delete', undo = 'z', ...
-# approve = "y"
-
+# graph:  add-card = '+', every-card = 'f', study-order = 'o', ...
 
 # Reading a marked-up PDF out of Zotero. Needs Zotero running with its local
-# API enabled (Settings > Advanced), the way `sync` needs Anki running with
-# AnkiConnect.
+# API enabled (Settings > Advanced), the way `sync` needs AnkiConnect.
 [zotero]
 data_dir = "~/Zotero"
 # Which marks become units. Everything else you marked is shown beside the
-# nearest one, because a two-word term is not a card but is worth reading next
-# to the claim it belongs to. A source may override this in its own file.
+# nearest one. A source may override this in its own file.
 units_from = ["green", "note", "image"]
-# What you meant by each mark, the way `[anki.flags]` maps a flag number.
-#
-# **A key names both halves: `"kind/colour"`.** Quoted, because a bare TOML key
-# cannot contain a slash. Both halves always, because a green highlight and a
-# green underline are two marks you made deliberately differently, and a scheme
-# that cannot tell them apart is not the scheme you were using. The older loose
-# forms are refused at load rather than read generously: a bare `green` claimed
-# green means one thing however it was drawn, and a bare `highlight` was worse
-# -- it shadowed every colour under it, so writing down what a highlight
-# generally is quietly undid the scheme built out of colours.
+
+# What you meant by each mark. **A key names both halves: `"kind/colour"`**,
+# quoted, because a bare TOML key cannot contain a slash. Both halves always: a
+# green highlight and a green underline are two marks you made deliberately
+# differently. The looser forms are refused at load rather than read generously.
 #
 # Under whatever you put here sits a built-in reading of Zotero's annotation
-# *kinds*. That set is closed and the same in every library, so the tool can
-# state it; a colour is a scheme you invented and it cannot. So a mark always
-# reads as something, and the views say which of the two it was: "not declared
-# here" is a decision outstanding, not a gap.
+# *kinds*, which are the same in every library. So a mark always means
+# something, and the views say which of the two it came from.
 #
-# Zotero's palette is yellow, red, green, blue, purple, magenta, orange, grey;
-# the kinds are highlight, underline, note, image, ink, text. A source
-# overrides all of it in its own `source.toml`, under `[meanings]`.
+# Zotero's palette: yellow, red, green, blue, purple, magenta, orange, grey.
+# Its kinds: highlight, underline, note, image, ink, text. A source overrides
+# all of it under `[meanings]` in its own `source.toml`.
 [zotero.meanings]
 "highlight/green" = "a claim or result worth a card"
 "highlight/purple" = "a term to know"
@@ -167,5 +108,4 @@ units_from = ["green", "note", "image"]
 
 # Sources describe themselves, in `sources/<name>/`: `source.toml` for the keys
 # this tool acts on, `conventions.md` for the prose a card writer needs. A
-# `[sources.<name>]` block here still works and is read first, but a repo with
-# fifty papers in it wants a folder each.
+# `[sources.<name>]` block here still works and is read first.

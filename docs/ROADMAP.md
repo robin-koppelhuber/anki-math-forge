@@ -4,16 +4,12 @@ What is left, what the Cookbook taught us about its own extraction, and what
 was rejected and why.
 
 The milestones in [DESIGN.md](DESIGN.md) §13 (M0–M6) are built, and so is
-everything the 2026-09-11 planning round scheduled: Zotero as a source, the
-`identity` / `intuition` split, per-source configuration, crop context and the
-whole-page view, the triage and review surface, the rename, and publishing.
-Those sections are gone from this file. Git history has them.
+everything the 2026-09-11 planning round scheduled. Those sections are gone
+from this file; git history has them.
 
-Two things about the shape of what remains. **The dependency canvas is
-built**, so §1 is now what it deliberately stopped short of rather than a plan
-to build it. And **the largest unbuilt section, the model page extractor, has
-been demoted to an idea**: §5 says why, and it is worth reading before anyone
-picks it up out of habit.
+**The numbers are names, not an order.** Code cites them (`ROADMAP.md §1`,
+`§9`), so a section keeps its number wherever it moves to and a new one takes
+the next free number rather than the next position.
 
 ---
 
@@ -22,48 +18,42 @@ picks it up out of habit.
 ## 1. The dependency canvas: what it does not do yet
 
 Built, at `/graph`, per source, and `[app] graph = false` turns it off.
-`src/anki_math_forge/graph.py` is the graph and its layout with no app in it,
-`app/static/graph.js` draws it, and `sources/<name>/graph.json` holds whatever
-you dragged. Arrows are drawn by dragging between the dots on two boxes, which
-writes `requires` into the card that needs the other. The design notes it was
-built from are gone: what survived them is in comments at the seams they
-describe, and the rest is here.
+`graph.py` is the graph and its layout with no app in it, `app/static/graph.js`
+draws it, and `sources/<name>/graph.json` holds whatever you dragged. Dragging
+between the dots on two boxes writes `requires` into the card that needs the
+other.
 
 What it stops short of, and the trigger for each.
 
 - **A second edge kind.** `requires` is the only one, and `Edge.kind` is
   already carried through the payload and the canvas for the next one. Nothing
-  proposes a second yet; two cards from one unit and two cards in one section
+  proposes a second yet: two cards from one unit and two cards in one section
   have both been considered and neither is a dependency.
-- **Concept nodes.** The open question from the old plan, still open. A node is
-  a card, and "the adjugate" is one idea carried by three cards, so a concept
-  graph would be smaller and more honest about the material. It is a second
-  builder function beside `card_graph` and a `?graph=concepts` on the route;
-  the layout, the position file and the canvas are untouched, which is what
-  that seam is for. Worth building when one idea is carried by enough cards
-  that the card graph reads as duplication.
+- **Concept nodes.** A node is a card, and "the adjugate" is one idea carried
+  by three cards, so a concept graph would be smaller and more honest about the
+  material. It is a second builder beside `card_graph` and a `?graph=concepts`
+  on the route; the layout, the position file and the canvas are untouched,
+  which is what that seam is for. Build it when one idea is carried by enough
+  cards that the card graph reads as duplication.
 - **Zoom.** Pan is enough and the browser zooms. Revisit when a real source
   does not fit.
 - **Quadtree hit-testing.** Linear over every node on `pointermove` is
   microseconds at 108 and fine at 700. Revisit past a few thousand.
 - **Browser tests for the other two views.** `tests/browser/` covers the
-  canvas, because a `<canvas>` and a pointer are the one thing the rest of
-  the suite cannot reach. The units and review views are markup and are
-  covered as markup; the case for driving them is the same one that found
-  a closed dialog still painted over the canvas, so it is a matter of when
-  rather than whether.
+  canvas, because a `<canvas>` and a pointer are the one thing the rest of the
+  suite cannot reach. The units and review views are markup and are covered as
+  markup; the case for driving them anyway is the same one that found a closed
+  dialog still painted over the canvas.
 
-What it taught about the deck, which is the answer to the density objection
-this item used to carry: 18 of the Cookbook's 108 cards touch an edge. All 108
-now carry a caption, which is what makes a picker of the other 90 usable: a
-list of six-hex uids is not something anyone chooses from, and the canvas is
-where you go to connect a card that nothing yet points at.
+18 of the Cookbook's 108 cards touch an edge, and all 108 carry a caption,
+which is what makes a picker of the other 90 usable: the canvas is where you go
+to connect a card that nothing yet points at.
 
 ## 2. Two audit checks that would have caught dropped content
 
-Small, mechanical, and independent of everything else. These belong in
-`audit.py`, which is not frozen, and they catch failures the existing oracles
-are blind to. The evidence for both is in "What the Cookbook taught us" below.
+Small, mechanical, independent of everything else. They belong in `audit.py`,
+which is not frozen, and they catch failures the existing oracles are blind to.
+The evidence for both is in "What the Cookbook taught us" below.
 
 - **`fragment-suspected`:** an unnumbered unit sitting directly above or below
   a numbered one, in the same horizontal band, with a gap smaller than a line
@@ -74,10 +64,9 @@ are blind to. The evidence for both is in "What the Cookbook taught us" below.
   have caught `matrix-cookbook:3.2:178`, which contains nothing but the number
   `(178)`.
 
-There is a third signal, free and mechanical, that belongs to whatever segments
-next rather than to the audit: **a line ending in a trailing binary operator
-cannot be the end of an equation.** Every continuation line in §6.2 and
-§7.7–7.9 ends in `×` or `+`.
+A third signal belongs to whatever segments next rather than to the audit: **a
+line ending in a trailing binary operator cannot be the end of an equation.**
+Every continuation line in §6.2 and §7.7–7.9 ends in `×` or `+`.
 
 ## 3. Small and named
 
@@ -89,18 +78,43 @@ cannot be the end of an equation.** Every continuation line in §6.2 and
   identities throughout. Teaching it the second kind is guidance, not code, and
   it belongs with the first prose source that has marks worth explaining.
 
+## 10. A card that carries a picture
+
+A card can only say things in text. Anki fields take an `<img>` and AnkiConnect
+takes `storeMediaFile`; neither is used, so a figure, a plot or a diagram
+cannot be carded at all.
+
+The material is already there. Zotero's image and area annotations arrive as
+units with a box and no text, and `extract/render.py` renders a crop from any
+unit's geometry. What is missing is the last hop.
+
+The design that fits the invariants:
+
+- **No image files in the repo.** Invariant 3: extraction produces geometry,
+  never image files, and crops were taken out of git deliberately. A card names
+  a unit and the crop is rendered from the source document at sync time, so the
+  picture is reproducible rather than a binary somebody has to carry.
+- **The reference lives in `## front` or `## back`**, which puts it inside
+  `content_hash` for free. A picture is content: swapping it must un-approve
+  the card the way swapping a formula does.
+- **`sync` renders, uploads and rewrites.** One deterministic media name per
+  card and slot, so a re-sync overwrites rather than accumulating a collection
+  full of orphans, and `sync` stays the only thing that talks to Anki.
+- **`check` gates it:** the unit exists, it has geometry, and the document is
+  present. A card whose picture cannot be rendered is refused rather than
+  pushed with a broken image in it, which is invariant 1 applied to media.
+
+Open: whether an image may be the whole front, which is really a question about
+the card-writing skill rather than about code.
+
+**Trigger:** the first figure you actually want to card, which is the first
+marked-up paper where an area annotation is the point rather than a note on it.
+
 ## 4. Publishing, what is left
 
-Most of this shipped. What has not:
-
-- **The demo recording.** `assets/make_assets.py` carries the shot list in its
-  docstring. Not scriptable: the interesting part is the pace of triage and no
-  script knows how long to pause.
-- **The marked-up screenshot.** `make_assets.py` will take it as soon as one
-  Zotero source tags itself `demo`, and refuses until then, because that shot
-  is a legible page of whatever you were reading.
-- **There is no `.mcp.json`**, though `.env.example` tells you to configure
-  one. Anybody following the Zotero path has nothing to copy.
+One thing: **the demo recording.** `assets/make_assets.py` carries the shot
+list in its docstring. It is not scriptable, because the interesting part is
+the pace of triage and no script knows how long to pause.
 
 **Half of this does not run without Claude Code**, which is the flip side of
 having no LLM code in the tool. The committed ledger and the `.apkg` export are
@@ -113,75 +127,63 @@ cannot.
 
 ## 5. The model page extractor, and why it stopped being the plan
 
-This was item 2 of three in the old plan, described as "the risky half" that
-everything else was buying time for. **The argument for it has been overtaken
-by what got built.**
+This was "the risky half" that everything else was buying time for. **The
+argument for it has been overtaken by what got built.**
 
 The case was: `extract/pdf.py` is a heuristic specialised to one book (§9
-measures exactly how specialised), so a second source needs a general extractor
-that reads page images and reports `(kind, label, page, bbox)` per statement.
+measures how specialised), so a second source needs a general extractor that
+reads page images and reports `(kind, label, page, bbox)` per statement.
 
-Two things happened.
+Two things happened. **Zotero arrived, and it brings its own geometry:** an
+annotation carries rects, a page index and a sort index, so a marked-up source
+is crop-backed with no segmenter at all, and two of the three sources here came
+in that way. And **prose stopped being segmented:** only mechanically
+identified things become units, and a unit from free-form text must be
+triggered by an annotation. That removed the two hardest pieces, a prose
+segmenter and the triage bottleneck several thousand paragraph-level candidates
+would have created.
 
-**Zotero arrived, and it brings its own geometry.** An annotation carries
-rects, a page index and a sort index, so a marked-up source is crop-backed with
-no segmenter at all. Two of the three sources here came in that way.
+What is left is narrow: **a second formula-reference-shaped PDF that is not the
+Matrix Cookbook and that you do not want to read through Zotero.**
 
-**Prose stopped being segmented.** The planning round settled that only
-mechanically identified things become units, and that a unit from free-form
-text must be triggered by an annotation. That removed the two hardest pieces of
-the original extractor: a prose segmenter, and the triage bottleneck several
-thousand paragraph-level candidates would have created.
-
-What is left for a general extractor is a narrow case: **a second
-formula-reference-shaped PDF that is not the Matrix Cookbook and that you do
-not want to read through Zotero.** That is a real case and it is not this
-month's.
-
-If it is built, the design still holds and is worth keeping:
+If it is built, the design still holds:
 
 - `equation: int` on the locator becomes `kind: str` (`"equation"`,
   `"theorem"`, `"lemma"`) plus `label: str` (`"2.4"`, `"61"`). `pdf.py` keeps
   emitting `equation: int` untouched and a shim maps across, so generalising
   the locator never means editing a frozen module.
-- **The contiguity oracle survives**, which is the good news. `audit` checking
-  1..N with no gaps sounds like an equation-number trick and is not: theorems
-  are numbered contiguously within a chapter, so the same oracle runs per label
-  family.
+- **The contiguity oracle survives.** `audit` checking 1..N with no gaps sounds
+  like an equation-number trick and is not: theorems are numbered contiguously
+  within a chapter, so the same oracle runs per label family.
 - **Judgement stays where it is.** Extraction produces units, never cards
   (invariant 3). No new stage, no new state machine.
 - **Run it in subagents.** `/transcribe` already dispatches one per section,
-  because seven hundred crops would fill the main session's context. Any pass
-  that reads pages has the same problem. There is no fork primitive, so the two
-  savings that are real are the ones `/transcribe` uses: give each agent a
-  disjoint slice, and have the parent pass a short brief rather than each agent
-  re-deriving the shared setting.
+  because seven hundred crops would fill the main session's context. The two
+  savings that are real are the ones it uses: give each agent a disjoint slice,
+  and have the parent pass a short brief rather than each agent re-deriving the
+  shared setting.
 
-**Trigger:** a source you want to card that is neither the Cookbook nor
-marked up in Zotero.
+**Trigger:** a source you want to card that is neither the Cookbook nor marked
+up in Zotero.
 
 ## 6. Figures, and everything that is not a text block
 
-`page_blocks()` skips every block whose `type != 0`, so embedded rasters are
-invisible, and vector drawings (`page.get_drawings()`) are never consulted.
-Three consequences, worst last: a diagram worth carding never enters the ledger
-and so cannot be triaged; equations set as images return nothing and say so in
-no way at all; vector-drawn math is lost the same way, and that includes
-fraction rules, which TeX draws as thin filled rectangles and which are a
-font-independent "there is math here" signal.
-
-The Cookbook has zero image blocks and no heavy vector art, which is why this
-has never bitten.
+`page_blocks()` skips every block whose `type != 0` and never consults
+`page.get_drawings()`. So a diagram worth carding never enters the ledger;
+equations set as images return nothing and say so in no way at all; and
+vector-drawn math is lost the same way, fraction rules included, which TeX
+draws as thin filled rectangles and which are a font-independent "there is math
+here" signal. The Cookbook has neither, which is why this has never bitten.
 
 **Two of the three blockers dissolved.** Zotero's image and area annotations
-are figure units already: a box, no text, crop authoritative. And "a figure
-card needs a `type` beyond `identity`" stopped being a blocker when the
-`intuition` type landed. What is left is segmenter work, and the segmenter is
-frozen, which is why this sits here rather than above.
+are figure units already, and "a figure card needs a `type` beyond `identity`"
+stopped being one when `intuition` landed. What is left is segmenter work, and
+the segmenter is frozen. §10 is the other half: a figure unit is no use until a
+card can carry one.
 
-A cheap piece worth doing on its own if the fallback segmenter is ever touched:
-use fraction rules from the vector layer as a math signal in `score_line`,
-which would make it far less dependent on Computer Modern font names.
+Worth doing on its own if the fallback segmenter is ever touched: fraction
+rules from the vector layer as a math signal in `score_line`, which would make
+it far less dependent on Computer Modern font names.
 
 ## 7. The cross-check between two extractions
 
@@ -202,23 +204,19 @@ but it is one extractor, so it reconciles nothing.
   transcription trades a detectable failure (a gap in the numbering) for an
   undetectable one (confident wrong LaTeX).
 
-**This needs §5 to exist.** A second extractor is the whole idea, and §9's
-frozen heuristic plus a model is the cheapest pair. Until then there is one
-extractor and nothing to reconcile.
+**This needs §5 to exist.** A second extractor is the whole idea.
 
 ### The coverage oracle
 
-Extraction knows every text block on the page. A block that ends up inside no
-unit's bbox was dropped, and measuring that is cheap and exact. Contiguity
-asks "is every equation number present"; coverage asks "is every mark on the
-page inside some unit". Neither the audit nor the KaTeX gate asks the second.
+A text block inside no unit's bbox was dropped, and measuring that is cheap and
+exact. Contiguity asks "is every equation number present"; coverage asks "is
+every mark on the page inside some unit".
 
-**Narrowed by the decision not to segment prose.** Most of a prose page is now
-meant to be outside every box, so a literal coverage check would scream on
-every page. What survives is "is every *named statement* inside a unit", which
-is weaker and closer to contiguity. It is still the only thing that could say
-whether a new extractor is better or merely differently wrong, so it belongs
-with §5 rather than before it.
+**Narrowed by the decision not to segment prose**, since most of a prose page
+is now meant to be outside every box. What survives is "is every *named
+statement* inside a unit", which is closer to contiguity. It is still the only
+thing that could say whether a new extractor is better or merely differently
+wrong, so it belongs with §5 rather than before it.
 
 ## 8. A "daily proof" challenge
 
@@ -226,31 +224,29 @@ One theorem a day, presented as something to reconstruct rather than recall.
 
 This is a **different object from a card**, which is why it is not another
 `type` and why adding `intuition` did not change that. A card asks for one
-answer and is graded in a second. A proof is a structure: you either
-reconstruct the argument or you do not, the answer is a paragraph, and grading
-it against a stored back is not what makes it useful. Forcing it into the card
-format would produce a front too broad to have one answer, which the
-card-writing skill exists to prevent.
+answer and is graded in a second; a proof is a structure, the answer is a
+paragraph, and grading it against a stored back is not what makes it useful.
+Forcing it into the card format would produce a front too broad to have one
+answer, which the card-writing skill exists to prevent.
 
 Two shapes, not equivalent. **As Anki**, a `proof` card type: cheap, reuses the
 pipeline, inherits the wrong grading model. **As a standalone page**, one
-theorem a day with the steps revealed on demand: escapes that model entirely,
-but is a second product with its own state.
+theorem a day with the steps revealed on demand: escapes that model, but is a
+second product with its own state.
 
-Open first: what is the source (the Cookbook has no proofs, so this needs its
-own corpus and the pipeline may not apply), what is being reviewed (the
-statement, the key idea, the full argument), and whether spaced repetition is
-even the right schedule for something you work through rather than recall.
+Open first: what the source is (the Cookbook has no proofs), what is being
+reviewed (the statement, the key idea, the full argument), and whether spaced
+repetition is even the right schedule for something you work through rather
+than recall.
 
 ---
 
 # What the Cookbook taught us
 
-Not work items. This is measured evidence about the committed ledger, kept
-because it says which units not to trust and why the checks in §2 are worth
-building. Every fix is a change to `extract/pdf.py`, which is
-[frozen](#13-extractpdfpy-is-frozen-not-deleted), so these are closed as "use a
-different extractor for that source" rather than repaired.
+Not work items. Measured evidence about the committed ledger, kept because it
+says which units not to trust and why the checks in §2 are worth building.
+Every fix would be a change to `extract/pdf.py`, which is [frozen](#9-extractpdfpy-is-frozen-not-deleted),
+so these are closed as "use a different extractor for that source".
 
 ## Multi-line displays get split
 
@@ -275,10 +271,9 @@ defect, and it is concentrated rather than a long tail:
 | §2.4, §2.5 | number on the *last* line, continuations orphaned above it |
 
 The number attaches to whichever line carries it, so orphans appear both above
-and below the numbered unit. Any fix handles both directions.
-
-Not everything unnumbered is a bug: §11.1 and §11.2 have a high unnumbered rate
-because the book genuinely states long runs of unnumbered moment identities.
+and below the numbered unit; any fix handles both directions. Not everything
+unnumbered is a bug: §11.1 and §11.2 genuinely state long runs of unnumbered
+moment identities.
 
 **Partly mitigated already.** The triage view renders each crop with
 `crop_context` points of surrounding page and the unit's own box drawn on it,
@@ -304,11 +299,10 @@ split, because the crop still looks complete.
 **Content in no unit at all.** Equation 27 is a three-line display; two lines
 survive across `1.2:p7y169` and `1.2:27`, and the third is in no unit anywhere.
 It recurs by two further mechanisms. In §6.2, `p36y310` has a bbox whose left
-edge starts after the `=`, so the entire left-hand side appears in no crop.
-And on the page-5 notation table, a two-column layout, some bboxes cover only
-the description column, so the symbol — the point of the row — is in no unit.
+edge starts after the `=`, so the entire left-hand side appears in no crop. And
+on the page-5 notation table, a two-column layout, some bboxes cover only the
+description column, so the symbol — the point of the row — is in no unit.
 `anchored_regions` reasons about vertical bands and has no notion of a column.
-Two confirmed cases in the first 355 units read.
 
 **One outright bug.** `matrix-cookbook:3.2:178` contains nothing but the number
 `(178)`; the equation's content is in its unnumbered sibling `3.2:p20y147`.
@@ -328,12 +322,11 @@ extracted.
 
 ## 9. `extract/pdf.py` is frozen, not deleted
 
-It is the only PDF segmenter there is, and it is frozen anyway. Those two
-facts sit together because the reason to freeze it is not that something
-replaced it: it is that every heuristic in it is specialised to one book and
-documented as such, so extending it means teaching one book's habits to the
-next one. The seam is a single function pinned by contract tests, which is what
-keeps a second implementation cheap whenever there is a reason to write one.
+It is the only PDF segmenter there is, and it is frozen anyway. The reason to
+freeze it is not that something replaced it: it is that every heuristic in it
+is specialised to one book and documented as such, so extending it means
+teaching one book's habits to the next one. The seam is a single function
+pinned by contract tests, which is what keeps a second implementation cheap.
 
 How specialised, measured by ablation:
 
@@ -345,8 +338,7 @@ How specialised, measured by ablation:
 | without either | **9** |
 
 Two producer-specific signals carry everything: a right-margin `(61)` and
-Computer Modern font names. It is a specialisation, and the Cookbook happens to
-be exactly the specialisation.
+Computer Modern font names.
 
 **Frozen means frozen.** Do not fix its heuristics. When a shared type changes
 under it, give it a shim. What it owes is one function, `segment()`, returning
@@ -367,23 +359,20 @@ behind a shim, or a second book where it is chosen and then found to mislead.
 The reason is the part worth having later.
 
 **A database.** The files *are* the product: a card is a markdown file you can
-read in a diff, the ledger is JSONL so a re-segmentation shows as reviewable
-lines, and crops were removed from git for exactly this reason. A database is
-either a second copy that drifts or a replacement that throws the property
-away. What scale actually wants is an **index, not a store**: sqlite under
-`.forge/`, gitignored, rebuilt when stale, deletable without consequence. Build
-it when a units page render passes ~300 ms, which at 751 units and 108 cards is
-several books away. Measure, do not guess.
+read in a diff, and the ledger is JSONL so a re-segmentation shows as reviewable
+lines. A database is either a second copy that drifts or a replacement that
+throws that away. What scale wants is an **index, not a store**: sqlite under
+`.forge/`, gitignored, rebuilt when stale. Build it when a units page render
+passes ~300 ms, which at 751 units is several books away.
 
 **Triggering Claude from the website.** No supported way to push a prompt into
-a running session. Shelling out to `claude -p` is a separate headless run, and
-a button that writes cards with nobody watching is what invariant 1 exists to
-prevent. Superseded by copyable commands, which keep a human at the point of
-execution.
+a running session, and a button that writes cards with nobody watching is what
+invariant 1 exists to prevent. Superseded by copyable commands, which keep a
+human at the point of execution.
 
 **A collection of documents inside one source, and `locator.document`.** Each
 paper is a first-level source instead, so the field would exist for zero
-instances. Revisit only if a source genuinely needs many documents.
+instances.
 
 **A subdeck per paper.** Fifty three-card decks and fifty deck configurations,
 to express something a tag expresses better. Subdecks are for a different
@@ -399,16 +388,16 @@ it answers the same question in one glance and adds no dependency. Reconsider
 when you want to drag a box in the browser to create a unit.
 
 **BYOK and LLM calls in the tool.** "No LLM API code in the Python" is why
-there is no torch, no key handling, no cost model, no injection surface inside
-the tool and no vendor in the dependency tree. That is a position, and it is
-more interesting than the feature. If it ever happens it belongs in a separate
-package implementing the same contracts the slash commands do. It is also the
-real fix for "half of it needs Claude Code".
+there is no torch, no key handling, no cost model, no injection surface and no
+vendor in the dependency tree. That is a position, and it is more interesting
+than the feature. If it ever happens it belongs in a separate package
+implementing the same contracts the slash commands do, and it is the real fix
+for "half of it needs Claude Code".
 
 **A hosted live demo.** The app writes to the local filesystem, so a public
 instance is either read-only, and therefore not the thing, or a vandalism
-target, and it would need the source documents hosted. A recording gets the
-same point across for an hour's work.
+target, and it would need the documents hosted. A recording gets the same point
+across for an hour's work.
 
 **Docling** (and marker, MinerU). Measured on this book: 19.7 s/page against
 0.18, five regions where we find twenty on the packed page, and no LaTeX
@@ -426,6 +415,6 @@ is indistinguishable from a real one to everything that reads it, and would
 silence the warning it should raise.
 
 **An htmx or SPA rewrite.** FastAPI plus Jinja2 is already the simple
-framework, and an auto-updating counts strip is about twenty lines of fetch and
-swap. Trigger for revisiting: if the same fetch-and-replace-a-fragment code
-gets written a third time, adopt htmx then.
+framework, and an auto-updating counts strip is twenty lines of fetch and swap.
+Adopt htmx if the same fetch-and-replace-a-fragment code gets written a third
+time.

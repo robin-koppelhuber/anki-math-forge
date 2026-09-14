@@ -79,7 +79,7 @@ function paintAnnotations(item, card) {
     drop.type = "button";
     drop.className = "resolve";
     drop.dataset.resolve = String(index);
-    drop.title = "resolve: deletes the line, which is the only thing that unblocks sync";
+    drop.title = "resolve: deletes the line, which is the only thing that unblocks sync. Undo puts it back";
     drop.textContent = "resolve";
     row.append(who, what, drop);
     list.appendChild(row);
@@ -136,7 +136,13 @@ async function undo() {
     if (banner) banner.remove();
     deck.show(deck.items.indexOf(item));
   }
-  toast(`undone: ${step.what} → back to ${result.card.status}`);
+  /* A resolve does not change the status, so saying what it went back to
+     would name a state that never moved. What came back is the note. */
+  toast(
+    step.what === "resolve"
+      ? "undone: the note is back on the card"
+      : `undone: ${step.what} → back to ${result.card.status}`,
+  );
 }
 
 async function act(verb) {
@@ -300,7 +306,13 @@ bindKeys({
 
 /* Resolving an annotation is deleting it. There is no reply and no done-flag:
    a note that is still in the file still blocks sync, so anything short of a
-   delete would leave the card exactly as stuck as before. */
+   delete would leave the card exactly as stuck as before.
+
+   Which is why it goes on the undo stack. A note imported from Anki has no
+   second copy anywhere: `feedback` erases the comment as it takes it, so the
+   line in `## notes` is the only one there is, and this was the one action in
+   the app that destroyed something outright. The server sends the line back
+   under `before`, and `restore` puts it where any annotation goes. */
 async function resolveAnnotation(index) {
   const item = currentOf(deck);
   if (!item) return;
@@ -314,9 +326,18 @@ async function resolveAnnotation(index) {
     index,
   });
   item.dataset.mtime = result.card ? result.card.mtime : item.dataset.mtime;
+  if (result.before && result.before.note) {
+    undoStack.push({
+      uid: item.dataset.uid,
+      before: result.before,
+      what: "resolve",
+      mtime: result.card ? result.card.mtime : "",
+    });
+    saveUndo("review", undoStack);
+  }
   repaintCounts(result.pipeline);
   if (result.card) refresh(item, result.card);
-  toast("resolved. The line is gone from ## notes");
+  toast(`resolved. The line is gone from ## notes · ${undoKeyName()} undoes`);
 }
 
 document.addEventListener("click", (event) => {
