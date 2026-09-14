@@ -13,8 +13,8 @@ display:
 
     triage.png   a queued unit from a segmented source: the crop with its box
                  drawn on the page, the transcription beside it, the brief
-    zotero.png   a unit from a marked-up paper: the highlights painted back
-                 onto the page, and what each one says beside it
+    zotero.png   a unit from a marked-up paper: the mark on the page it was
+                 made on, and every other mark around it, with what each says
     review.png   an approved card, with the notes that decided it
     graph.png    the dependency canvas: what each card rests on, arranged,
                  beside the study order the two of them produce
@@ -298,6 +298,23 @@ def interesting(units: Iterable[Unit]) -> str:
     return "#" + urllib.parse.quote(pick.id) if pick else ""
 
 
+def marked_unit() -> str:
+    """A fragment naming the marked-up unit to photograph, or nothing.
+
+    The same aesthetic call as `interesting`, and the same answer: a human
+    makes it. There is no rule to derive one here, because a mark carries no
+    equation number and no proposal to rank it by, so the deck would otherwise
+    open on whatever you happened to mark first.
+
+    The committed `zotero.png` was taken with
+
+        FORGE_ASSET_ZOTERO_UNIT=ermonDirectPreferenceOptimization2023:2P8A8NGA \
+            uv run python assets/make_assets.py zotero
+    """
+    named = os.environ.get("FORGE_ASSET_ZOTERO_UNIT", "")
+    return "#" + urllib.parse.quote(named) if named else ""
+
+
 def urls() -> dict[str, str]:
     """One URL per screenshot, resolved against whatever sources exist.
 
@@ -368,7 +385,7 @@ def urls() -> dict[str, str]:
         (name for name in candidates(True) if tagged_demo(name)), ""
     )
     if marked:
-        out["zotero"] = units(marked)
+        out["zotero"] = units(marked) + marked_unit()
     return out
 
 
