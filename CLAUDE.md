@@ -95,7 +95,11 @@ load.
 ## Commands
 
 ```
-uv run forge extract [source]   # source -> units; never reads the maths
+uv run forge extract [project]  # document -> units; never reads the maths
+uv run forge project <name>     # start one with no document, for a subject
+uv run forge units --project <p> --add 'a subject' --gist '...' --preview '...'
+                                #   the third door in, for `/propose`: a unit
+                                #   where there was nothing to segment
 uv run forge zotero --list      # what Zotero has, and what is already a source
 uv run forge zotero --tag anki  # what you marked up in Zotero -> units
 uv run forge classify           # *propose* skips; applies nothing

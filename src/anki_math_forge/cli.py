@@ -146,6 +146,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.set_defaults(run=cmd_export)
 
+    p = subs.add_parser(
+        "project",
+        help="start a project with no document, for a subject rather than a book",
+    )
+    p.add_argument("name", help="the folder under projects/, and the id units carry")
+    p.add_argument("--title", default="", help="what it is called (default: the name)")
+    p.add_argument("--deck", default="", help="which Anki deck its cards land in")
+    p.add_argument(
+        "--citation",
+        default="",
+        help="what a card's `source` line says when nothing more specific does",
+    )
+    p.set_defaults(run=cmd_project)
+
     p = subs.add_parser("serve", help="the companion app: units triage + card review")
     p.add_argument("--host", default=None)
     p.add_argument("--port", type=int, default=None)
@@ -761,6 +775,67 @@ def cmd_export(args: argparse.Namespace, config: Config) -> int:
     size = out.stat().st_size // 1024 if out.exists() else 0
     history = "with your review history" if args.scheduling else "no review history"
     print(f"{deck} -> {out} ({size}k, {history})")
+    return OK
+
+
+def cmd_project(args: argparse.Namespace, config: Config) -> int:
+    """Scaffold a project that reads nothing.
+
+    A project with a book behind it is created by importing the book, and
+    `forge zotero` writes its file. One on a subject has nothing to import,
+    so without this the only way to start is to write the TOML by hand and
+    guess at the key names.
+
+    It declares no `[[sources]]`, and that absence is what says the project
+    has no authoritative source: there is no kind key to set. Add a table
+    later if you find a work worth reading against, or leave it and keep the
+    reference material in `references.md`.
+
+    Never overwrites: everything written here is a starting point you will
+    edit, and re-running the command must not undo that.
+    """
+    name = model.slugify(args.name)
+    if not re.search(r"[a-zA-Z0-9]", args.name):
+        print(f"{args.name!r} has nothing to make a name from", file=sys.stderr)
+        return MISUSE
+
+    folder = config.projects_dir / name
+    path = folder / PROJECT_TOML
+    if path.exists():
+        print(f"{path} is already there, left alone", file=sys.stderr)
+        return FAILED
+
+    title = args.title or args.name
+    lines = [
+        f'title = "{title}"',
+        f'citation = "{args.citation or title}"',
+    ]
+    if args.deck:
+        lines.append(f'deck = "{args.deck}"')
+    lines += [
+        "",
+        "# No `[[sources]]` table: this project reads no document, and that",
+        "# absence is the whole of what that means. Add one when you have a",
+        "# work to read against:",
+        "#",
+        "# [[sources]]",
+        '# url = "https://example.org/the-reference"',
+        "",
+        "# Reference material goes in `references.md` beside this file, as",
+        "# prose. It is a shelf to check a card against, never a set of things",
+        "# to card, and `forge context` hands it to whoever writes one.",
+        "",
+        "# What is ambient here goes in `conventions.md`. With no book to read",
+        "# it off, this file *decides* it rather than describing it: which",
+        "# language version, how an example is written, what is assumed. Write",
+        "# it before the first proposal, not after the first batch reads",
+        "# inconsistent.",
+        "",
+    ]
+    folder.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    print(f"{path}")
+    print(f"  propose into it with: forge units --project {name} --add '<subject>'")
     return OK
 
 
