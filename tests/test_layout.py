@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 
 from anki_math_forge.app import create_app
 from anki_math_forge.config import Config
+from anki_math_forge.ledger import Ledger, Locator, Mark, Unit
 
 APP = Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
 CSS = (APP / "static" / "app.css").read_text(encoding="utf-8")
@@ -450,14 +451,30 @@ def test_queueing_can_record_what_the_card_is_about() -> None:
     assert body.index('setState("queued")') < body.index("noteOn(item, text)")
 
 
-def test_a_marked_unit_is_not_asked_for_a_transcription() -> None:
+def test_a_marked_unit_is_not_asked_for_a_transcription(zotero_config: Config) -> None:
     """You do not have to be able to transcribe a unit to triage it. A marked
     passage carries the sentence it covers and nothing will ever read a picture
     of it, so the pane is absent rather than empty -- and the badge says what
-    the unit *is* instead of accusing it of missing something it cannot have."""
-    units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
-    assert "{% set reads = unit.tex or not unit.marks %}" in units
-    assert "marked while reading" in units
+    the unit *is* instead of accusing it of missing something it cannot have.
+
+    Asserted against the rendered page rather than against the template line
+    that produces it: the line has been reworded twice, and both times this
+    test failed while the behaviour it is named for was intact."""
+    led = Ledger(zotero_config.units_path("paper"))
+    led.units.append(
+        Unit(
+            id="paper:AAA",
+            locator=Locator(section="PDF", kind="highlight", page=1),
+            marks=[Mark(key="AAA", kind="highlight", colour="green", text="a claim")],
+        )
+    )
+    led.save()
+
+    page = TestClient(create_app(zotero_config)).get("/units?project=paper").text
+
+    assert "no transcription; read the crop" not in page, "not accused of missing one"
+    assert "nothing to read here" not in page
+    assert "marked while reading" in page, "the badge says what it is"
 
 
 def test_the_control_stays_on_the_picture_in_every_view() -> None:

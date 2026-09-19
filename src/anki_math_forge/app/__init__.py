@@ -2903,6 +2903,7 @@ def _unit_payload(
     unit: Unit, config: Config, known: set[str] | None = None
 ) -> dict[str, Any]:
     image = crop_url(unit, context=pdf_context(config, unit.project))
+    sample, lang = unit.scannable
     return {
         # What the reader marked here and on the pages around it: the text
         # each one covers and whatever they wrote about it. The crop shows
@@ -2924,6 +2925,14 @@ def _unit_payload(
         "reason": unit.reason,
         "image": image,
         "tex": unit.tex,
+        # What triage shows instead of making you read a picture, and what it
+        # is written in. A unit with no document has no crop *and* no
+        # transcription, so without this the view would offer nothing to
+        # decide on, which is the one thing every frontend owes.
+        "sample": sample,
+        "lang": lang,
+        "tags": list(unit.tags),
+        "refs": list(unit.refs),
         "transcription": unit.transcription,
         "authoritative": unit.authoritative,
         "context": unit.context,

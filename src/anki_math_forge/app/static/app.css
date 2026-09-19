@@ -262,6 +262,13 @@ main {
   overflow-x: auto;
 }
 .raw { white-space: pre-wrap; word-break: break-word; font-size: 13px; color: var(--bad); margin: 0; }
+/* A code sample at triage. `.raw` is the *failure* style, red because a
+   transcription shown that way did not parse; a snippet is the normal thing
+   to read here and should not look like an error. */
+pre.code {
+  white-space: pre; overflow-x: auto; margin: 0; font-size: 13px; line-height: 1.45;
+  padding: 8px 10px; border-radius: 5px; background: var(--panel); color: var(--ink);
+}
 
 .context {
   margin-top: 1.1rem;

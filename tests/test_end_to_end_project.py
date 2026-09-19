@@ -178,6 +178,26 @@ def test_the_project_is_visible_in_the_app(repo: Path) -> None:
     )
 
 
+def test_triage_shows_the_sample_rather_than_nothing(repo: Path) -> None:
+    """Every frontend owes something scannable, and a proposed unit has no
+    crop and no transcription. Without the sample the view offered nothing to
+    decide on, which is the one thing triage is for."""
+    from fastapi.testclient import TestClient
+
+    from anki_math_forge.app import create_app
+
+    a_project(repo)
+    run(
+        repo, "units", "--project", "cpp", "--add", "span", "--gist", "a view over a range",
+        "--preview", "std::span<int> s{v};", "--lang", "cpp",
+    )
+    page = TestClient(create_app(config_mod.load(repo))).get("/units?project=cpp")
+
+    assert '<pre class="code">' in page.text, "code is shown as code"
+    assert "std::span" in page.text
+    assert "$$std::span" not in page.text, "and never handed to KaTeX as a formula"
+
+
 def test_nothing_about_this_needed_a_kind(repo: Path) -> None:
     """The rule the design rests on: no stage asks what sort of project it is
     looking at. There is no kind to ask about, so the only way a stage could

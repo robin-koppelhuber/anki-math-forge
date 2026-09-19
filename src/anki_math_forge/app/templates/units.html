@@ -80,7 +80,7 @@
        never an empty panel. A unit from a mark has no transcription and never
        will, and "no transcription; read the crop" took half the width from the
        crop it was telling you to read. #}
-    {% set reads = unit.tex or not unit.marks %}
+    {% set reads = unit.sample or not unit.marks %}
     {% set aside = reads or unit.marks %}
     <div class="side-by-side {{ 'one-column' if not aside }}">
       {% if unit.image %}
@@ -117,13 +117,20 @@
       <div class="beside">
       {% if reads %}
       <div class="transcription">
-        {% if unit.tex and unit.transcription == 'ok' %}
+        {# A sample that is not maths is code: rendered as code, never handed
+           to KaTeX, which would report a correct snippet as a broken
+           formula. A unit proposed rather than segmented has only this. #}
+        {% if unit.sample and unit.lang != 'latex' %}
+        <pre class="code">{{ unit.sample }}</pre>
+        {% elif unit.tex and unit.transcription == 'ok' %}
         <div class="math">$${{ unit.tex }}$$</div>
         {% elif unit.tex %}
         <pre class="raw">{{ unit.tex }}</pre>
         <p class="muted">does not parse under KaTeX. Trust the crop</p>
-        {% else %}
+        {% elif unit.image %}
         <p class="muted">no transcription; read the crop</p>
+        {% else %}
+        <p class="muted">nothing to read here but the gist</p>
         {% endif %}
       </div>
       {% endif %}
