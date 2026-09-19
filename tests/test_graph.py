@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 
 from anki_math_forge import graph as graph_mod
 from anki_math_forge import model
-from anki_math_forge.app import create_app, source_graph
+from anki_math_forge.app import create_app, project_graph
 from anki_math_forge.config import Config
 from anki_math_forge.graph import Edge, Graph, Node, card_graph, layered
 from anki_math_forge.model import Card, StaleFileError
@@ -31,9 +31,9 @@ def write(
     requires: list[str] | None = None,
     gist: str = "",
     status: str = "draft",
-    source: str = "demo",
+    project: str = "demo",
 ) -> Card:
-    path = config.cards_dir / source / f"{uid}-x.md"
+    path = config.cards_dir / project / f"{uid}-x.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     keys = ""
     if requires:
@@ -42,7 +42,7 @@ def write(
         keys += f"gist: {gist}\n"
     path.write_text(
         f"---\nuid: {uid}\ntype: identity\nstatus: {status}\n"
-        f'unit: "{source}:2.4:61"\n{keys}---\n\n## front\n\n$a$\n\n## back\n\n$b$\n',
+        f'unit: "{project}:2.4:61"\n{keys}---\n\n## front\n\n$a$\n\n## back\n\n$b$\n',
         encoding="utf-8",
     )
     return model.load(path)
@@ -93,7 +93,7 @@ def test_a_card_from_another_source_is_present_but_marked(config: Config) -> Non
     whose foundation is elsewhere as a foundation itself, which is the one
     thing the picture is read for."""
     here = write(config, "aaa111", requires=["ccc333"])
-    there = write(config, "ccc333", source="paper")
+    there = write(config, "ccc333", project="paper")
     kinds = {n.id: n.kind for n in card_graph([here, there], here="demo").nodes}
     assert kinds == {"aaa111": "card", "ccc333": "elsewhere"}
 
@@ -257,9 +257,9 @@ def test_the_payload_carries_every_field_the_canvas_reads(config: Config) -> Non
     screen: the canvas has no markup, so nothing else would notice."""
     write(config, "aaa111", gist="the product of the eigenvalues")
     write(config, "bbb222", requires=["aaa111"])
-    payload = source_graph(config, "demo")
+    payload = project_graph(config, "demo")
     assert set(payload) >= {
-        "source",
+        "project",
         "nodes",
         "edges",
         "layout",
@@ -281,8 +281,8 @@ def test_the_view_says_what_it_left_out(config: Config) -> None:
     write(config, "aaa111")
     write(config, "bbb222", requires=["aaa111"])
     write(config, "ccc333")
-    assert source_graph(config, "demo")["hidden"] == 1
-    assert source_graph(config, "demo", everything=True)["hidden"] == 0
+    assert project_graph(config, "demo")["hidden"] == 1
+    assert project_graph(config, "demo", everything=True)["hidden"] == 0
 
 
 def test_a_node_is_labelled_with_the_caption_the_review_view_shows(
@@ -292,7 +292,7 @@ def test_a_node_is_labelled_with_the_caption_the_review_view_shows(
     it was written from, exactly as it is everywhere else."""
     write(config, "aaa111", gist="the adjugate in terms of the inverse")
     write(config, "bbb222", requires=["aaa111"])
-    nodes = {n["id"]: n for n in source_graph(config, "demo")["nodes"]}
+    nodes = {n["id"]: n for n in project_graph(config, "demo")["nodes"]}
     assert nodes["aaa111"]["label"] == "the adjugate in terms of the inverse"
     assert nodes["aaa111"]["href"].endswith("#aaa111")
 
@@ -301,7 +301,7 @@ def test_the_api_serves_it(config: Config) -> None:
     write(config, "aaa111")
     write(config, "bbb222", requires=["aaa111"])
     client = TestClient(create_app(config))
-    assert client.get("/graph?source=demo").status_code == 200
+    assert client.get("/graph?project=demo").status_code == 200
     assert len(client.get("/api/graph/demo").json()["edges"]) == 1
 
 
@@ -427,7 +427,7 @@ def test_the_canvas_can_be_turned_off(repo: Path) -> None:
     client = two(off)
     client_on = TestClient(create_app(config_mod.load(repo)))
 
-    assert client.get("/graph?source=demo").status_code == 404
+    assert client.get("/graph?project=demo").status_code == 404
     assert client.get("/api/graph/demo").status_code == 404
     assert client_on.post("/api/cards/bbb222/requires", json={"add": "aaa111"}).status_code == 404
     assert "to-graph" not in client.get("/review?status=all").text
@@ -443,7 +443,7 @@ def test_the_page_carries_every_element_the_canvas_reaches_for(config: Config) -
     """A canvas has no markup, so a renamed id is not a broken layout, it is a
     null dereference at load and a blank window with nothing in the page to
     say why. These are every id `graph.js` looks up at the top level."""
-    body = two(config).get("/graph?source=demo").text
+    body = two(config).get("/graph?project=demo").text
     for element in (
         "graph-stage",
         "graph-canvas",
@@ -497,5 +497,5 @@ def test_there_is_a_way_off_the_canvas(config: Config) -> None:
     rail: measured on the real deck, the page carried no link to anywhere at
     all. With an empty canvas that is a dead end, since the only other way out
     is clicking a box."""
-    body = two(config).get("/graph?source=demo").text
-    assert "/review?source=demo" in body
+    body = two(config).get("/graph?project=demo").text
+    assert "/review?project=demo" in body

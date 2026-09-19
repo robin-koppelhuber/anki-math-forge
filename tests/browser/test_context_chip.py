@@ -160,7 +160,7 @@ def test_the_chip_repaints_from_what_the_server_sent(page, live, served) -> None
     rather than with the ledger."""
     _, repo = served
     open_triage(page, live)
-    assert whose(page, FIRST) == "source"
+    assert whose(page, FIRST) == "project"
 
     pick(page, FIRST, "chapter")
     assert written(page, repo, FIRST, "chapter") == "chapter"
@@ -241,4 +241,4 @@ def test_the_size_survives_a_reload(page, live, served) -> None:  # type: ignore
     assert chip_labels(page, SECOND)[4] == CHOSEN["chapter"]
     assert chip_labels(page, SECOND)[3] == BARE[10]
     assert whose(page, SECOND) == "this unit"
-    assert whose(page, FIRST) == "source", "the neighbour still inherits"
+    assert whose(page, FIRST) == "project", "the neighbour still inherits"

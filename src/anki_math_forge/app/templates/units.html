@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% set view = "units" %}
 {% set status = "" %}
-{% block title %}units · {{ source }} · forge{% endblock %}
+{% block title %}units · {{ project }} · forge{% endblock %}
 
 {% block main %}
-<div id="deck" data-source="{{ source }}" data-mtime="{{ mtime }}">
+<div id="deck" data-project="{{ project }}" data-mtime="{{ mtime }}">
   {% for unit in units %}
   <article class="unit item" data-id="{{ unit.id }}" data-state="{{ unit.state }}"
            data-context-pages="{{ unit.context_pages }}"
@@ -55,7 +55,7 @@
         <button type="button" class="ctx-step{{ ' on' if step.on }}"
                 data-context-step="{{ step.pages }}">{{ step.label }}</button>
         {% endfor %}
-        <i class="chip-whose">{{ 'this unit' if unit.context_own else 'source' }}</i>
+        <i class="chip-whose">{{ 'this unit' if unit.context_own else 'project' }}</i>
       </span>
 
       {# Whether whoever writes this card may look anything up. Same shape as
@@ -67,7 +67,7 @@
         <i class="chip-what">web</i>
         <button type="button" class="ctx-step{{ ' on' if unit.web }}" data-web-set="1">allowed</button>
         <button type="button" class="ctx-step{{ ' on' if not unit.web }}" data-web-set="0">no</button>
-        <i class="chip-whose">{{ 'this unit' if unit.web_own else 'source' }}</i>
+        <i class="chip-whose">{{ 'this unit' if unit.web_own else 'project' }}</i>
       </span>
     </div>
 

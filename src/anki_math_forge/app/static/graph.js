@@ -1,6 +1,6 @@
-/* The dependency canvas: one source's `requires`, drawn and arranged by hand.
+/* The dependency canvas: one project's `requires`, drawn and arranged by hand.
 
-   Everything on screen comes from `/api/graph/<source>`. The server decides
+   Everything on screen comes from `/api/graph/<project>`. The server decides
    what is drawn and where it starts; this file draws it, moves boxes, and
    posts the ones that moved. It knows nothing about cards -- a node is an id,
    a label and a link -- so a second kind of graph is a second builder in
@@ -480,7 +480,7 @@ function drawNode(node) {
   ctx.fill();
   ctx.strokeStyle = chosen || lit ? colours.accent : edge;
   ctx.lineWidth = chosen ? 3 : lit ? 2 : 1.25;
-  /* A card from another source is a real node: `requires` may cross them, and
+  /* A card from another project is a real node: `requires` may cross them, and
      hiding the target would draw a card whose foundation is elsewhere as a
      foundation itself. Dashed, because it is not yours to arrange here. */
   if (node.kind === "elsewhere") ctx.setLineDash([5, 4]);
@@ -622,16 +622,16 @@ function describe() {
      reads them rather than naming the defaults it was written against. */
   const keys = keymap();
   note.textContent = data.total
-    ? `No card in ${data.source} needs another one yet. ` +
+    ? `No card in ${data.project} needs another one yet. ` +
       `Press ${keys["add-card"] || "+"} to put a card on the canvas, then drag ` +
       "from a dot on its edge to another card to say which comes first."
-    : `No cards in ${data.source} yet. Card some units first.`;
+    : `No cards in ${data.project} yet. Card some units first.`;
 }
 
 async function load({ recentre: centre = true } = {}) {
-  const source = stage.dataset.source;
+  const project = stage.dataset.project;
   const query = everything ? "?all=1" : "";
-  const response = await fetch(`/api/graph/${encodeURIComponent(source)}${query}`);
+  const response = await fetch(`/api/graph/${encodeURIComponent(project)}${query}`);
   if (!response.ok) {
     toast(`could not load the graph: ${response.status}`, "bad");
     return;
@@ -654,7 +654,7 @@ async function load({ recentre: centre = true } = {}) {
 
 async function save(positions) {
   try {
-    const payload = await post(`/api/graph/${encodeURIComponent(stage.dataset.source)}/positions`, {
+    const payload = await post(`/api/graph/${encodeURIComponent(stage.dataset.project)}/positions`, {
       positions,
       mtime: data.mtime,
     });
@@ -795,7 +795,7 @@ function paintPicker() {
   empty.hidden = rows.length > 0;
   empty.textContent = (data.absent || []).length
     ? "nothing matches that."
-    : "every card in this source is already on the canvas.";
+    : "every card in this project is already on the canvas.";
   const left = (data.absent || []).length;
   document.getElementById("add-count").textContent = picker.connect
     ? `connect ${labelOf(picker.connect.from.id)} to one of ${left}`
@@ -1315,7 +1315,7 @@ function selectAll() {
    what the deck would look like if easiest-first outranked most-useful-first.
 
    So this panel: the rule as rows you can drag into a different sequence, and
-   under it the order it produces over every card in the source. Not only the
+   under it the order it produces over every card in the project. Not only the
    drawn ones: what the canvas leaves out is exactly the cards that depend on
    nothing, and those are in the queue like any other. */
 
@@ -1562,7 +1562,7 @@ function paintOrderCards() {
   const rows = orderData().cards;
   list.textContent = "";
   empty.hidden = rows.length > 0;
-  empty.textContent = "No cards in this source yet.";
+  empty.textContent = "No cards in this project yet.";
   const drawn = rows.filter((r) => r.drawn).length;
   sub.textContent = rows.length
     ? `${rows.length} ${rows.length === 1 ? "card" : "cards"} · ${drawn} on the canvas`
@@ -1683,7 +1683,7 @@ bindKeys({
 /* Reopened where you left it, unless the link says otherwise.
 
    `?order=1` opens it and `?order=0` shuts it, which makes the panel part of
-   what a URL can say: a link to "this source, with its queue" is a different
+   what a URL can say: a link to "this project, with its queue" is a different
    thing to send somebody than a link to the picture. It is also the only way
    to photograph it, since `assets/make_assets.py` points a fresh browser at a
    URL and a fresh browser has no stored preference.

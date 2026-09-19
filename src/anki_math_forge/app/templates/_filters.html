@@ -10,7 +10,7 @@
    `@me` dropped `suggested`.
 
    Toggled with `f`. #}
-{% set src = source | default('', true) %}
+{% set src = project | default('', true) %}
 {% set here = '/review' if view == 'review' else '/units' %}
 {% set f = filters | default({}, true) %}
 <aside class="filter-rail" id="filter-rail" aria-label="filters and actions">
@@ -40,7 +40,7 @@
        as a broken import rather than as a filter still being on. Either the
        number follows the filters or the link drops them, and the number is
        what the rail is for. #}
-    {% set shared = {'source': src, 'counts_scope': f.get('counts_scope', '')} %}
+    {% set shared = {'project': src, 'counts_scope': f.get('counts_scope', '')} %}
     <details class="filter-group" open>
       <summary>units</summary>
       <ul class="filter-list flow">

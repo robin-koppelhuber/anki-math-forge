@@ -44,7 +44,7 @@ def test_approving_the_last_card_leaves_the_layout_alone(page, live, served) -> 
     """The banner goes above the card, not into the column the body was in."""
     _, repo = served
     uid = a_draft(repo, "fee101")
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
     before = box(page, f'[data-uid="{uid}"] .card-body')
 
@@ -66,7 +66,7 @@ def test_the_banner_sits_above_the_card_and_spans_it(page, live, served) -> None
     than as a caption on one column of it."""
     _, repo = served
     uid = a_draft(repo, "fee102")
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
 
     page.keyboard.press("a")
@@ -86,7 +86,7 @@ def test_the_card_is_still_readable_after_it_settles(page, live, served) -> None
     check before deciding whether to undo."""
     _, repo = served
     uid = a_draft(repo, "fee103")
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
 
     page.keyboard.press("a")

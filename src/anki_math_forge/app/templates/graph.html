@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set view = "graph" %}
 
-{% block title %}graph · {{ source | default('', true) }} · forge{% endblock %}
+{% block title %}graph · {{ project | default('', true) }} · forge{% endblock %}
 
 {# The toolbar goes in the header rather than over the canvas. Everything here
    is about what is drawn, the header is where the source picker already lives,
@@ -42,7 +42,7 @@
 {# Fixed between the two bars, so the canvas is the window and the page never
    scrolls: panning is the scroll here, and two ways to move the same picture
    fight each other. #}
-<div class="graph-stage" id="graph-stage" data-source="{{ source }}">
+<div class="graph-stage" id="graph-stage" data-project="{{ project }}">
   <canvas id="graph-canvas"></canvas>
   <p class="graph-note" id="graph-note" hidden></p>
 </div>

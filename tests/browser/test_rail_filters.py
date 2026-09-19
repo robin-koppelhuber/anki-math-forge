@@ -21,8 +21,8 @@ import pytest
 
 pytest.importorskip("playwright.sync_api")
 
-UNITS = "/units?source=demo&state=all"
-REVIEW = "/review?source=demo&status=all"
+UNITS = "/units?project=demo&state=all"
+REVIEW = "/review?project=demo&status=all"
 
 # Every state, not the default lane. The properties counts are taken over the
 # whole source, so on a view filtered to `new` units or `draft` cards a row

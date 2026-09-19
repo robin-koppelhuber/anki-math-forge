@@ -83,7 +83,7 @@ footer.bar { border-bottom: 0; border-top: 1px solid var(--line); margin-top: au
 .views a.on { color: var(--ink); border-bottom: 2px solid var(--accent); }
 
 .filters { display: flex; gap: 0.35rem; align-items: center; flex-wrap: wrap; }
-.source-pick {
+.project-pick {
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -98,9 +98,9 @@ footer.bar { border-bottom: 0; border-top: 1px solid var(--line); margin-top: au
   align-items: center;
   gap: 0.4rem;
 }
-.source-pick:hover { border-color: var(--accent); }
-.source-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source-pick-caret { color: var(--muted); font-size: 10px; }
+.project-pick:hover { border-color: var(--accent); }
+.project-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-pick-caret { color: var(--muted); font-size: 10px; }
 
 .chip {
   color: var(--muted);

@@ -427,7 +427,7 @@ def test_the_crop_route_renders_from_the_source_document(
 
 
 def test_the_units_view_points_at_the_crop_route(pdf_client: TestClient, pdf_units: Config) -> None:
-    body = pdf_client.get("/units?source=book&state=new").text
+    body = pdf_client.get("/units?project=book&state=new").text
     assert "/crop/book/" in body
     assert "/projects/" not in body, "nothing is served off disk any more"
 
@@ -909,7 +909,7 @@ def test_the_crop_in_review_opens_full_size(
     view you could see and not read."""
     unit = Ledger.load(pdf_units.units_path("book")).units[0]
     write_card(pdf_units, "aaa111", unit.id)
-    page = pdf_client.get("/review?source=book&status=all").text
+    page = pdf_client.get("/review?project=book&status=all").text
 
     assert 'class="crop-open"' in page, "the thumbnail is the control"
     assert 'id="crop-view"' in page, "and there is somewhere for it to open"
@@ -1284,7 +1284,7 @@ def test_source_picker_is_on_both_views(client: TestClient, card_path: Path) -> 
     view look like it was showing every book at once."""
     for url in ("/units", "/review"):
         body = client.get(url).text
-        assert 'id="source-pick"' in body, url
+        assert 'id="project-pick"' in body, url
         assert "demo" in body, url
         assert 'id="gallery"' in body, url
 
@@ -1326,11 +1326,11 @@ def test_review_scopes_to_the_selected_source(pdf_source: Config) -> None:
     write_card(pdf_source, "bbb222", "book:1.1:1")
     client = TestClient(create_app(pdf_source))
 
-    only_demo = client.get("/review?source=demo").text
+    only_demo = client.get("/review?project=demo").text
     assert "aaa111" in only_demo
     assert "bbb222" not in only_demo
 
-    only_book = client.get("/review?source=book").text
+    only_book = client.get("/review?project=book").text
     assert "bbb222" in only_book
     assert "aaa111" not in only_book
 
@@ -1340,15 +1340,15 @@ def test_a_card_naming_no_unit_shows_under_every_source(pdf_source: Config) -> N
     shows it twice, because nothing else would ever surface it."""
     write_card(pdf_source, "ccc333", "")
     client = TestClient(create_app(pdf_source))
-    assert "ccc333" in client.get("/review?source=demo").text
-    assert "ccc333" in client.get("/review?source=book").text
+    assert "ccc333" in client.get("/review?project=demo").text
+    assert "ccc333" in client.get("/review?project=book").text
 
 
 def test_unknown_source_falls_back_rather_than_emptying(
     client: TestClient, card_path: Path
 ) -> None:
     """A stale link should land somewhere real."""
-    response = client.get("/review?source=no-such-book")
+    response = client.get("/review?project=no-such-book")
     assert response.status_code == 200
     assert "7f3a2b" in response.text
 
@@ -1372,16 +1372,16 @@ def test_crossing_between_the_two_lanes_carries_the_source(pdf_source: Config) -
     them.
     """
     write_card(pdf_source, "bbb222", "book:1.1:1")
-    body = TestClient(create_app(pdf_source)).get("/review?source=book").text
-    assert "/units?source=book" in body, "the unit counts lead back to the same book"
-    assert "/review?source=book" in body
+    body = TestClient(create_app(pdf_source)).get("/review?project=book").text
+    assert "/units?project=book" in body, "the unit counts lead back to the same book"
+    assert "/review?project=book" in body
 
 
 def test_rail_card_links_carry_the_source(pdf_source: Config) -> None:
     write_card(pdf_source, "bbb222", "book:1.1:1")
-    body = TestClient(create_app(pdf_source)).get("/review?source=book").text
+    body = TestClient(create_app(pdf_source)).get("/review?project=book").text
     # `&` is escaped in an href now that the URL comes through a variable.
-    assert "/review?source=book&amp;status=draft" in body
+    assert "/review?project=book&amp;status=draft" in body
 
 
 def test_source_name_comes_off_the_unit_id() -> None:
@@ -1397,17 +1397,17 @@ def test_api_counts_take_a_source(pdf_source: Config) -> None:
     write_card(pdf_source, "aaa111", "demo:2.4:61")
     write_card(pdf_source, "bbb222", "book:1.1:1")
     client = TestClient(create_app(pdf_source))
-    assert client.get("/api/counts?source=demo").json()["pipeline"]["draft"] == 1
-    assert client.get("/api/counts?source=book").json()["pipeline"]["draft"] == 1
+    assert client.get("/api/counts?project=demo").json()["pipeline"]["draft"] == 1
+    assert client.get("/api/counts?project=book").json()["pipeline"]["draft"] == 1
 
 
 def test_the_default_source_is_the_first_in_the_toml(pdf_source: Config) -> None:
     """Not alphabetical: which book you land on is a decision you make by
     editing the config, not a consequence of its name."""
-    from anki_math_forge.app import project_names, resolve_source
+    from anki_math_forge.app import project_names, resolve_project
 
     assert project_names(pdf_source) == ["demo", "book"]
-    assert resolve_source(pdf_source, "") == "demo"
+    assert resolve_project(pdf_source, "") == "demo"
 
 
 # -- annotations: filtering, and the only way to finish with one ----------
@@ -1659,9 +1659,9 @@ def test_units_filter_by_annotation_audience(pdf_client: TestClient, pdf_units: 
         first = led.units[0].id
         led.annotate(first, "@me a decision on a unit")
 
-    mine = pdf_client.get("/units?source=book&state=all&annotated=me").text
+    mine = pdf_client.get("/units?project=book&state=all&annotated=me").text
     assert first in mine
-    theirs = pdf_client.get("/units?source=book&state=all&annotated=claude").text
+    theirs = pdf_client.get("/units?project=book&state=all&annotated=claude").text
     assert first not in theirs
 
 
@@ -1675,7 +1675,7 @@ def test_a_filter_matching_nothing_is_not_an_empty_repo(pdf_source: Config) -> N
     for url in (
         "/review?status=rejected",
         "/review?status=draft&annotated=claude",
-        "/review?source=book",
+        "/review?project=book",
     ):
         body = client.get(url).text
         assert "no cards here yet" not in body, url
@@ -1752,7 +1752,7 @@ def test_the_annotation_count_matches_the_view_it_links_to(pdf_source: Config) -
     )
     unit_count = re.search(
         r'data-count="annotated_me_unit">(\d+)<',
-        client.get("/units?source=book&state=all").text,
+        client.get("/units?project=book&state=all").text,
     )
     assert card_count.group(1) == "1"
     assert unit_count.group(1) == str(len(annotated_units))
@@ -1781,12 +1781,12 @@ def test_filter_url_changes_one_key_and_keeps_the_rest() -> None:
     a different parameter."""
     from anki_math_forge.app import filter_url
 
-    current = {"source": "mc", "status": "draft", "section": "2.4", "annotated": "me"}
+    current = {"project": "mc", "status": "draft", "section": "2.4", "annotated": "me"}
     assert filter_url("/review", current, status="approved") == (
-        "/review?source=mc&status=approved&section=2.4&annotated=me"
+        "/review?project=mc&status=approved&section=2.4&annotated=me"
     )
     assert filter_url("/review", current, annotated=None) == (
-        "/review?source=mc&status=draft&section=2.4"
+        "/review?project=mc&status=draft&section=2.4"
     )
     assert filter_url("/review", {}) == "/review"
 
@@ -2051,10 +2051,10 @@ def test_a_dependency_links_to_its_own_source_not_the_current_one(pdf_source: Co
     dependent.frontmatter["requires"] = ["aaa111"]
     dependent.save()
 
-    body = TestClient(create_app(pdf_source)).get("/review?status=draft&source=demo").text
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft&project=demo").text
     href = dict(re.findall(r'data-goto="(\w+)" href="([^"]+)"', body))["aaa111"]
 
-    assert "source=book" in href.replace("&amp;", "&"), "the target's source, not the page's"
+    assert "project=book" in href.replace("&amp;", "&"), "the target's project, not the page's"
 
 
 def test_a_requires_naming_no_card_is_not_offered_as_a_link(pdf_source: Config) -> None:

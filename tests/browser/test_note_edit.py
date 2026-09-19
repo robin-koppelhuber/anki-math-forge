@@ -29,7 +29,7 @@ def with_a_note(repo: Path, text: str = "@claude chekc the sign") -> str:
 def test_editing_a_note_rewrites_the_line_and_keeps_it(page, live, served) -> None:  # type: ignore[no-untyped-def]
     _, repo = served
     uid = with_a_note(repo)
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
 
     page.locator(f'[data-uid="{uid}"] [data-edit-note]').click()
@@ -58,7 +58,7 @@ def test_the_edit_button_survives_a_repaint(page, live, served) -> None:  # type
     make anywhere else on the card."""
     _, repo = served
     uid = with_a_note(repo, "@me decide whether this is two cards")
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
 
     # Any write that comes back with a card payload repaints the rows.

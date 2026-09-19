@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set view = "review" %}
 {% set state = "" %}
-{% block title %}review · {{ source | default('', true) }} · forge{% endblock %}
+{% block title %}review · {{ project | default('', true) }} · forge{% endblock %}
 
 {% block filters %}{% endblock %}
 
@@ -10,7 +10,7 @@
    Empty here is a real answer -- the review view may legitimately be showing
    every source -- and that is exactly why the browser has to say it rather
    than the server guessing from the card that was clicked. #}
-<div id="deck" data-source="{{ source | default('', true) }}">
+<div id="deck" data-project="{{ project | default('', true) }}">
   {% for card in cards %}
   <article class="card item" data-uid="{{ card.uid }}" data-mtime="{{ card.mtime }}" hidden>
     <div class="card-body">

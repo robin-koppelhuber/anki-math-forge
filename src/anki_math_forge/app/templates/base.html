@@ -38,7 +38,7 @@
 <body data-app="{{ app_build | default('', true) }}">
 {# The source in force, carried on every in-header link so switching
    view does not silently switch book. #}
-{% set src = source | default('', true) %}
+{% set src = project | default('', true) %}
 {# Sticky and above both rails. The rails are fixed panels that start below
    it: they used to start at y=0 with a higher stacking order, which put the
    filter panel on top of the view links -- the one row that is supposed to be
@@ -52,10 +52,10 @@
      dropping down from here, and what opens is the gallery -- every source at
      once, with where each came from and how far along it is. A dropdown
      answers "which one am I on" and nothing else. #}
-  <button type="button" class="source-pick" id="source-pick"
+  <button type="button" class="project-pick" id="project-pick"
           title="all projects, with their counts (g)">
     <span class="pick-icon" aria-hidden="true">▦</span>
-    <span class="source-pick-name">{{ src or 'no source' }}</span>
+    <span class="project-pick-name">{{ src or 'no project' }}</span>
   </button>
   {# The dependency canvas, from anywhere. It was reachable only from the
      `needs` block of a card in the review view, which is the right place to
@@ -65,10 +65,10 @@
      canvas itself it points back rather than at the page you are on. #}
   {% if config.graph %}
   {% if view | default('') == 'graph' %}
-  <a class="icon-button" href="{{ filter_url('/review', {}, source=src, status='all') }}"
+  <a class="icon-button" href="{{ filter_url('/review', {}, project=src, status='all') }}"
      title="back to the cards" aria-label="review">&larr;</a>
   {% else %}
-  <a class="icon-button" href="{{ filter_url('/graph', {}, source=src) }}"
+  <a class="icon-button" href="{{ filter_url('/graph', {}, project=src) }}"
      title="the dependency canvas: what each card rests on" aria-label="graph">
     <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
       <circle cx="3" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>

@@ -1,6 +1,6 @@
 title = "The Matrix Cookbook"
 citation = "Matrix Cookbook"
-pdf = "sources/matrix-cookbook/matrixcookbook.pdf"
+pdf = "projects/matrix-cookbook/matrixcookbook.pdf"
 tex = ""
 deck = "Mathe::Matrix-Calculus"
 order = "printed"

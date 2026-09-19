@@ -118,6 +118,6 @@ def test_the_source_in_force_comes_first(pdf_source: Config) -> None:
     from anki_math_forge.app import create_app
 
     client = TestClient(create_app(pdf_source))
-    payload = client.get("/api/config?source=book").json()
+    payload = client.get("/api/config?project=book").json()
     assert payload["groups"][0]["where"] == "source: book"
     assert payload["groups"][0]["focused"]

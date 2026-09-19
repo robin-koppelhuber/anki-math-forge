@@ -49,7 +49,7 @@ def test_clicking_the_crop_opens_it_full_size(page, live, served) -> None:  # ty
     uid = a_crop(repo)
     # The deck shows one card at a time, and the fragment is how a link
     # from elsewhere lands on a particular one.
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
 
     opener = page.locator(f'[data-uid="{uid}"] .crop-open')
@@ -71,7 +71,7 @@ def test_what_opens_is_the_picture_already_on_screen(page, live, served) -> None
     finished growing, and there is no 4ms render on a click."""
     _, repo = served
     uid = a_crop(repo)
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
     opener = page.locator(f'[data-uid="{uid}"] .crop-open')
     thumbnail = opener.locator("img").get_attribute("src")
@@ -94,7 +94,7 @@ def test_it_opens_on_an_approved_card_too(page, live, served) -> None:  # type: 
         card.read_text(encoding="utf-8").replace("status: draft", "status: approved"),
         encoding="utf-8",
     )
-    page.goto(f"{live}/review?source=demo&status=all#{uid}")
+    page.goto(f"{live}/review?project=demo&status=all#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
 
     page.locator(f'[data-uid="{uid}"] .crop-open').click()
@@ -113,7 +113,7 @@ def test_escape_closes_it(page, live, served) -> None:  # type: ignore[no-untype
     the keyboard here, and `esc` used to reach the deck underneath."""
     _, repo = served
     uid = a_crop(repo)
-    page.goto(f"{live}/review?source=demo&status=draft#{uid}")
+    page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
     page.locator(f'[data-uid="{uid}"] .crop-open').click()
 

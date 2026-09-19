@@ -145,7 +145,7 @@ def _with_images(chunk: str, unit: str) -> str:
             # Nothing to point at. `check` reports it; the view shows the line
             # as written rather than an image element with no source.
             return str(match.group(0))
-        source = named.split(":", 1)[0]
+        project = named.split(":", 1)[0]
         # Rendered exactly as `sync` will render it: no `width`, so the same
         # resolution the crop beside the card uses; `marks=false`, because the
         # mark an image unit came from *is* its boundary and painting it back
@@ -154,7 +154,7 @@ def _with_images(chunk: str, unit: str) -> str:
         #
         # A picture you approved on screen has to be the picture Anki gets.
         url = (
-            f"/crop/{quote(source)}/{quote(named, safe='')}.png"
+            f"/crop/{quote(project)}/{quote(named, safe='')}.png"
             f"?context=-{CARD_INSET:g}&marks=false"
         )
         return (
@@ -223,7 +223,7 @@ def create_app(config: Config) -> FastAPI:
         return RedirectResponse("/review")
 
     @app.get("/api/config")
-    def config_api(source: str = "") -> Any:
+    def config_api(project: str = "") -> Any:
         """Every resolved setting, and where it came from. Read-only.
 
         A panel over the view you were on rather than a page of its own: it
@@ -234,7 +234,7 @@ def create_app(config: Config) -> FastAPI:
         The source in force comes first. With fifty of them, landing at the top
         of an alphabetical list and scrolling is not an answer.
         """
-        name = resolve_source(config, source)
+        name = resolve_project(config, project)
         focus = f"source: {name}"
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in effective_config(config):
@@ -248,7 +248,7 @@ def create_app(config: Config) -> FastAPI:
             grouped.setdefault(where, []).append(row)
         order = [focus, *(g for g in grouped if g != focus)]
         return {
-            "source": name,
+            "project": name,
             "focus": focus,
             "groups": [
                 {"where": where, "rows": grouped[where], "focused": where == focus}
@@ -260,7 +260,7 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/units", response_class=HTMLResponse)
     def units_view(
         request: Request,
-        source: str = "",
+        project: str = "",
         state: str = "new",
         section: str = "",
         chapter: str = "",
@@ -282,12 +282,12 @@ def create_app(config: Config) -> FastAPI:
                     "view": "units",
                     **key_context(config, "units", EMPTY_VIEW_KEYS),
                     "config": config,
-                    "source": resolve_source(config, source),
+                    "project": resolve_project(config, project),
                     "projects": project_names(config),
-                    "pipeline": pipeline_counts(config, resolve_source(config, source)),
+                    "pipeline": pipeline_counts(config, resolve_project(config, project)),
                 },
             )
-        name = resolve_source(config, source)
+        name = resolve_project(config, project)
         # Asked for, or landed on: the two want opposite things.
         #
         # A source named in the URL is honoured even with nothing extracted,
@@ -298,7 +298,7 @@ def create_app(config: Config) -> FastAPI:
         # Nothing named is a default, and a default that lands you on an empty
         # view reads as a broken import. So that one steps past a source with
         # no ledger to one that has units.
-        if not source and name not in ledgers:
+        if not project and name not in ledgers:
             name = next(iter(ledgers))
         ledger = ledgers.get(name) or Ledger(config.units_path(name))
         # The section rows must show what clicking one would give, so they
@@ -349,7 +349,7 @@ def create_app(config: Config) -> FastAPI:
         from_marks = any(u.marks for u in everything)
         pipeline = pipeline_counts(config, name)
         filters = {
-            "source": name,
+            "project": name,
             "state": state,
             "section": section,
             "chapter": chapter,
@@ -371,7 +371,7 @@ def create_app(config: Config) -> FastAPI:
                 **filters,
                 **key_context(config, "units"),
                 "config": config,
-                "source": name,
+                "project": name,
                 "projects": project_names(config),
                 "units": [_unit_payload(u, config, known) for u in units],
                 "counts": ledger.counts(),
@@ -430,14 +430,14 @@ def create_app(config: Config) -> FastAPI:
     def review_view(
         request: Request,
         status: str = "draft",
-        source: str = "",
+        project: str = "",
         annotated: str = "",
         augmented: str = "",
         section: str = "",
         chapter: str = "",
         counts_scope: str = "",
     ) -> Any:
-        name = resolve_source(config, source)
+        name = resolve_project(config, project)
         cards, findings = _checked(config)
         everywhere = cards  # kept: the filters below rebind `cards`
         # The emptiness test is against the repo, before any filter. A filter
@@ -453,13 +453,13 @@ def create_app(config: Config) -> FastAPI:
                     "view": "review",
                     **key_context(config, "review", EMPTY_VIEW_KEYS),
                     "config": config,
-                    "source": name,
+                    "project": name,
                     "projects": project_names(config),
                     "pipeline": pipeline_counts(config, name),
                 },
             )
-        in_source = [c for c in cards if card_in_source(c, name)]
-        cards = in_source
+        in_project = [c for c in cards if card_in_source(c, name)]
+        cards = in_project
         if section:
             cards = [c for c in cards if card_section(c, config) == section]
         if chapter:
@@ -474,7 +474,7 @@ def create_app(config: Config) -> FastAPI:
             cards = [c for c in cards if c.augmented == (augmented == "yes")]
         # Everything the other filters leave, ignoring the section: what each
         # section row would show if you clicked it.
-        unsectioned = in_source
+        unsectioned = in_project
         if annotated:
             unsectioned = [c for c in unsectioned if has_annotation(c.annotations(), annotated)]
         if augmented in ("yes", "no"):
@@ -503,19 +503,19 @@ def create_app(config: Config) -> FastAPI:
                 "gist": card_gist(target, config) if target else "",
                 # `status=all` and no annotation filter, so following a link
                 # never lands on a deck that excludes what you asked for.
-                "href": filter_url("/review", {}, source=where, status="all") + f"#{uid}",
+                "href": filter_url("/review", {}, project=where, status="all") + f"#{uid}",
             }
 
         # One ordering for the whole source, so a card can say where it sits
         # and what put it there. The reverse edges are only computable here:
         # a card's file says what it needs, never what needs it.
-        by_uid_card = {c.uid: c for c in in_source}
-        ordered = in_study_order(in_source, source_positions(config), study_order(config))
+        by_uid_card = {c.uid: c for c in in_project}
+        ordered = in_study_order(in_project, source_positions(config), study_order(config))
         places: dict[str, dict[str, Any]] = {
             c.uid: {"position": i + 1, "total": len(ordered), "required_by": []}
             for i, c in enumerate(ordered)
         }
-        for c in in_source:
+        for c in in_project:
             for need in c.requires:
                 if need in places:
                     places[need]["required_by"].append(link(c.uid))
@@ -531,14 +531,14 @@ def create_app(config: Config) -> FastAPI:
         # you want it, and the old rule made the canvas unreachable from 90 of
         # this deck's 108 cards and from a new source altogether. Two cards is
         # the real floor: one card cannot depend on anything.
-        linked = config.graph and len(in_source) > 1
+        linked = config.graph and len(in_project) > 1
         # Which way round to word it. "See the whole graph" promises something
         # to look at, and a source that has recorded no dependencies has none.
         any_edges = any(p["required_by"] or p["requires"] for p in places.values())
 
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         filters = {
-            "source": name,
+            "project": name,
             "status": status,
             "section": section,
             "chapter": chapter,
@@ -567,7 +567,7 @@ def create_app(config: Config) -> FastAPI:
                 "pipeline": pipeline,
                 "total": len(cards),
                 "status": status,
-                "source": name,
+                "project": name,
                 "projects": project_names(config),
                 "annotated": annotated,
                 "section": section,
@@ -576,7 +576,7 @@ def create_app(config: Config) -> FastAPI:
                 "scheme": scheme_legend(scheme_rows(units_here, config, name)),
                 "project_facts": project_facts(config, name, from_marks=from_marks),
                 "section_tree": section_rows(
-                    in_source,
+                    in_project,
                     {c.uid for c in unsectioned},
                     lambda c: card_section(c, config),
                     lambda c: c.effective_status,
@@ -584,7 +584,7 @@ def create_app(config: Config) -> FastAPI:
                     CARD_STATES,
                 ),
                 "counts_scope": counts_scope,
-                "graph_href": filter_url("/graph", {}, source=name) if linked else "",
+                "graph_href": filter_url("/graph", {}, project=name) if linked else "",
                 "graph_empty": not any_edges,
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
@@ -607,7 +607,7 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(404, OFF)
 
     @app.get("/graph", response_class=HTMLResponse)
-    def graph_view(request: Request, source: str = "") -> Any:
+    def graph_view(request: Request, project: str = "") -> Any:
         """The dependency canvas, one source at a time (ROADMAP.md §1).
 
         A view of its own rather than a panel, because it wants the whole
@@ -616,7 +616,7 @@ def create_app(config: Config) -> FastAPI:
         in the header is the only scoping the canvas has any use for.
 
         The page carries no data. Everything is fetched from
-        `/api/graph/{source}`, which is also what the `every card` toggle
+        `/api/graph/{project}`, which is also what the `every card` toggle
         re-fetches, so there is one code path that decides what is drawn.
         """
         # A page rather than the JSON body FastAPI would send. Every other
@@ -632,31 +632,31 @@ def create_app(config: Config) -> FastAPI:
                     "view": "review",
                     **key_context(config, "review", EMPTY_VIEW_KEYS),
                     "config": config,
-                    "source": resolve_source(config, source),
+                    "project": resolve_project(config, project),
                     "projects": project_names(config),
-                    "pipeline": pipeline_counts(config, resolve_source(config, source)),
+                    "pipeline": pipeline_counts(config, resolve_project(config, project)),
                 },
                 status_code=404,
             )
-        name = resolve_source(config, source)
+        name = resolve_project(config, project)
         return templates.TemplateResponse(
             request,
             "graph.html",
             {
                 **key_context(config, "graph"),
                 "config": config,
-                "source": name,
+                "project": name,
                 "projects": project_names(config),
             },
         )
 
-    @app.get("/api/graph/{source}")
-    def graph_api(source: str, all: str = "") -> Any:
+    @app.get("/api/graph/{project}")
+    def graph_api(project: str, all: str = "") -> Any:
         graph_enabled()
-        return source_graph(config, resolve_source(config, source), everything=bool(all))
+        return project_graph(config, resolve_project(config, project), everything=bool(all))
 
-    @app.post("/api/graph/{source}/positions")
-    def graph_positions_api(source: str, body: dict[str, Any] = Body(default={})) -> Any:
+    @app.post("/api/graph/{project}/positions")
+    def graph_positions_api(project: str, body: dict[str, Any] = Body(default={})) -> Any:
         """Where the boxes have been dragged to.
 
         Positions are a view preference: wrong ones cost a drag, which is why
@@ -665,7 +665,7 @@ def create_app(config: Config) -> FastAPI:
         write to a card file and is checked like one.
         """
         graph_enabled()
-        name = resolve_source(config, source)
+        name = resolve_project(config, project)
         raw = body.get("positions") or {}
         # `null` is "put this one back": the entry goes away and the node
         # returns to wherever the layout puts it.
@@ -719,7 +719,7 @@ def create_app(config: Config) -> FastAPI:
         }
 
     @app.get("/api/projects")
-    def sources_api() -> Any:
+    def projects_api() -> Any:
         """Every source with its counts, for the picker.
 
         On demand rather than on every page, because it walks every ledger and
@@ -730,7 +730,7 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/api/counts")
     def counts(
-        source: str = "",
+        project: str = "",
         section: str = "",
         status: str = "",
         state: str = "",
@@ -744,7 +744,7 @@ def create_app(config: Config) -> FastAPI:
         Every mutating route returns these too; this exists for the first
         paint after an in-page navigation, when nothing has been decided yet.
         """
-        name = resolve_source(config, source)
+        name = resolve_project(config, project)
         whole = pipeline_counts(config, name)
         if counts_scope != "filtered":
             return {"pipeline": whole, "fsm": whole, "stale": code_is_newer_than_this_process()}
@@ -767,43 +767,43 @@ def create_app(config: Config) -> FastAPI:
 
     # -- unit actions -----------------------------------------------------
 
-    @app.post("/api/units/{source}/{unit_id:path}/state")
-    def set_unit_state(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+    @app.post("/api/units/{project}/{unit_id:path}/state")
+    def set_unit_state(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         def act(ledger: Ledger) -> Unit:
             return ledger.set_state(
                 unit_id, str(body.get("state", "")), reason=str(body.get("reason", "")).strip()
             )
 
-        return _mutate_ledger(config, source, body, act, unit_id)
+        return _mutate_ledger(config, project, body, act, unit_id)
 
-    @app.post("/api/units/{source}/{unit_id:path}/accept")
-    def accept_suggestion(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+    @app.post("/api/units/{project}/{unit_id:path}/accept")
+    def accept_suggestion(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         """Act on a proposed decision. The human is the one who decides."""
-        return _mutate_ledger(config, source, body, lambda led: led.accept(unit_id), unit_id)
+        return _mutate_ledger(config, project, body, lambda led: led.accept(unit_id), unit_id)
 
-    @app.post("/api/units/{source}/{unit_id:path}/dismiss")
-    def dismiss_suggestion(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
-        return _mutate_ledger(config, source, body, lambda led: led.dismiss(unit_id), unit_id)
+    @app.post("/api/units/{project}/{unit_id:path}/dismiss")
+    def dismiss_suggestion(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+        return _mutate_ledger(config, project, body, lambda led: led.dismiss(unit_id), unit_id)
 
-    @app.post("/api/units/{source}/{unit_id:path}/restore")
-    def restore_unit(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+    @app.post("/api/units/{project}/{unit_id:path}/restore")
+    def restore_unit(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         """Undo: put a unit back exactly as it was before the last action."""
         snapshot = body.get("snapshot") or {}
 
         def act(ledger: Ledger) -> Unit:
             return ledger.restore(unit_id, dict(snapshot))
 
-        return _mutate_ledger(config, source, body, act, unit_id)
+        return _mutate_ledger(config, project, body, act, unit_id)
 
-    @app.post("/api/units/{source}/{unit_id:path}/annotate")
-    def annotate_unit(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+    @app.post("/api/units/{project}/{unit_id:path}/annotate")
+    def annotate_unit(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         text = str(body.get("text", "")).strip()
         if not text:
             raise HTTPException(400, "empty annotation")
-        return _mutate_ledger(config, source, body, lambda led: led.annotate(unit_id, text))
+        return _mutate_ledger(config, project, body, lambda led: led.annotate(unit_id, text))
 
-    @app.post("/api/units/{source}/{unit_id:path}/answer")
-    def answer_unit_note(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+    @app.post("/api/units/{project}/{unit_id:path}/answer")
+    def answer_unit_note(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         """Settle one annotation, keeping what settled it.
 
         Deleting the line throws away the question along with the answer, and
@@ -818,10 +818,10 @@ def create_app(config: Config) -> FastAPI:
         def act(led: Ledger) -> Unit:
             return led.answer(unit_id, index, reply)
 
-        return _mutate_ledger(config, source, body, act, unit_id)
+        return _mutate_ledger(config, project, body, act, unit_id)
 
-    @app.post("/api/units/{source}/{unit_id:path}/context")
-    def set_unit_context(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+    @app.post("/api/units/{project}/{unit_id:path}/context")
+    def set_unit_context(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         """How much of the document a card writer gets for this unit.
 
         Set here rather than only in the config, because triage is the moment
@@ -848,10 +848,10 @@ def create_app(config: Config) -> FastAPI:
         # to pop. Without it the server returned an empty snapshot, nothing
         # was recorded, and the next `z` reached past to an older action --
         # on a different unit.
-        return _mutate_ledger(config, source, body, apply, unit_id)
+        return _mutate_ledger(config, project, body, apply, unit_id)
 
-    @app.post("/api/units/{source}/{unit_id:path}/web")
-    def set_unit_web(source: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
+    @app.post("/api/units/{project}/{unit_id:path}/web")
+    def set_unit_web(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         """Whether whoever writes this card may look things up on the web.
 
         Three states, not two: yes, no, and "whatever the source says". The
@@ -873,7 +873,7 @@ def create_app(config: Config) -> FastAPI:
         # to pop. Without it the server returned an empty snapshot, nothing
         # was recorded, and the next `z` reached past to an older action --
         # on a different unit.
-        return _mutate_ledger(config, source, body, apply, unit_id)
+        return _mutate_ledger(config, project, body, apply, unit_id)
 
     # -- card actions -----------------------------------------------------
 
@@ -1066,10 +1066,10 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(400, "empty annotation")
         return _mutate_card(config, uid, body, lambda card: card.add_annotation(text))
 
-    @app.get("/crop/{source}/{unit_id:path}.png")
+    @app.get("/crop/{project}/{unit_id:path}.png")
     def crop(
         request: Request,
-        source: str,
+        project: str,
         unit_id: str,
         context: float = 0.0,
         outline: bool = False,
@@ -1089,13 +1089,13 @@ def create_app(config: Config) -> FastAPI:
         """
         from ..extract import render as render_mod
 
-        ledger_path = config.units_path(source)
+        ledger_path = config.units_path(project)
         if not ledger_path.exists():
-            raise HTTPException(404, f"no ledger for source {source!r}")
+            raise HTTPException(404, f"no ledger for source {project!r}")
         # Through the cache: the scrolling document view asks for one of these
         # per page, and re-reading a 751-line ledger fifty-eight times to
         # answer "where is this one unit" is the whole cost of opening it.
-        ledger = _ledgers(config).get(source)
+        ledger = _ledgers(config).get(project)
         unit = ledger.get(unit_id) if ledger else None
         if unit is None:
             raise HTTPException(404, f"no unit {unit_id!r}")
@@ -1104,14 +1104,14 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(404, f"unit {unit_id!r} has no page geometry")
         if width and width not in render_mod.WIDTHS:
             raise HTTPException(400, f"unknown crop width {width!r}")
-        width = width or config.crop_width_for(source, from_a_mark=unit.crops_to_page)
+        width = width or config.crop_width_for(project, from_a_mark=unit.crops_to_page)
         regions = render_mod.regions_for(unit, geometry[0]) if marks else []
 
-        document = config.document_for(source, unit.locator.document)
+        document = config.document_for(project, unit.locator.document)
         if document is None or not document.exists():
             raise HTTPException(
                 409,
-                f"source document for {source!r} is not here "
+                f"source document for {project!r} is not here "
                 f"({document or 'unset'}); crops are rendered from it on demand",
             )
         def png() -> bytes:
@@ -1128,11 +1128,11 @@ def create_app(config: Config) -> FastAPI:
                 raise HTTPException(409, str(exc)) from exc
 
         return _rendered(
-            request, png, document, source, f"crop|{unit_id}|{context}|{outline}|{width}|{marks}"
+            request, png, document, project, f"crop|{unit_id}|{context}|{outline}|{width}|{marks}"
         )
 
     def _rendered(
-        request: Request, png_for: Any, document: Path, source: str, tag: str
+        request: Request, png_for: Any, document: Path, project: str, tag: str
     ) -> Response:
         """A rendered PNG, with an ETag so looking at it twice costs nothing.
 
@@ -1150,7 +1150,7 @@ def create_app(config: Config) -> FastAPI:
         reachable; none of them moves and the answer is a 304 in about five
         milliseconds.
         """
-        ledger_path = config.units_path(source)
+        ledger_path = config.units_path(project)
         stamp = (
             document.stat().st_mtime_ns,
             ledger_path.stat().st_mtime_ns if ledger_path.exists() else 0,
@@ -1162,29 +1162,29 @@ def create_app(config: Config) -> FastAPI:
             return Response(status_code=304, headers=headers)
         return Response(png_for(), media_type="image/png", headers=headers)
 
-    def _unit_document(source: str, unit_id: str) -> tuple[Unit, Path]:
+    def _unit_document(project: str, unit_id: str) -> tuple[Unit, Path]:
         """The unit and the file its geometry refers to, or an HTTP error."""
-        ledger_path = config.units_path(source)
+        ledger_path = config.units_path(project)
         if not ledger_path.exists():
-            raise HTTPException(404, f"no ledger for source {source!r}")
+            raise HTTPException(404, f"no ledger for source {project!r}")
         # Through the cache: the scrolling document view asks for one of these
         # per page, and re-reading a 751-line ledger fifty-eight times to
         # answer "where is this one unit" is the whole cost of opening it.
-        ledger = _ledgers(config).get(source)
+        ledger = _ledgers(config).get(project)
         unit = ledger.get(unit_id) if ledger else None
         if unit is None:
             raise HTTPException(404, f"no unit {unit_id!r}")
-        document = config.document_for(source, unit.locator.document)
+        document = config.document_for(project, unit.locator.document)
         if document is None or not document.exists():
             raise HTTPException(
                 409,
-                f"source document for {source!r} is not here "
+                f"source document for {project!r} is not here "
                 f"({document or 'unset'}); pages are rendered from it on demand",
             )
         return unit, document
 
-    @app.get("/api/document/{source}/{unit_id:path}")
-    def document_api(source: str, unit_id: str) -> Any:
+    @app.get("/api/document/{project}/{unit_id:path}")
+    def document_api(project: str, unit_id: str) -> Any:
         """How long the document is, and where in it this unit sits.
 
         Asked for only when the scrolling view is first opened, because it
@@ -1193,16 +1193,16 @@ def create_app(config: Config) -> FastAPI:
         """
         from ..extract import render as render_mod
 
-        unit, document = _unit_document(source, unit_id)
+        unit, document = _unit_document(project, unit_id)
         try:
             total = render_mod.page_count(document)
         except render_mod.PdfUnavailable as exc:
             raise HTTPException(409, str(exc)) from exc
         return {"pages": total, "page": unit.locator.page or 1}
 
-    @app.get("/page/{source}/{unit_id:path}.png")
+    @app.get("/page/{project}/{unit_id:path}.png")
     def page_image(
-        request: Request, source: str, unit_id: str, n: int = 1, marks: bool = True
+        request: Request, project: str, unit_id: str, n: int = 1, marks: bool = True
     ) -> Response:
         """One whole page of the unit's document, for the scrolling view.
 
@@ -1212,7 +1212,7 @@ def create_app(config: Config) -> FastAPI:
         """
         from ..extract import render as render_mod
 
-        unit, document = _unit_document(source, unit_id)
+        unit, document = _unit_document(project, unit_id)
 
         def png() -> bytes:
             try:
@@ -1226,7 +1226,7 @@ def create_app(config: Config) -> FastAPI:
             except (render_mod.PdfUnavailable, ValueError) as exc:
                 raise HTTPException(409, str(exc)) from exc
 
-        return _rendered(request, png, document, source, f"page|{unit_id}|{n}|{marks}")
+        return _rendered(request, png, document, project, f"page|{unit_id}|{n}|{marks}")
 
     @app.post("/api/cards/{uid}/open")
     def open_in_editor(uid: str) -> Any:
@@ -1417,7 +1417,7 @@ def _note_text(note: str) -> str:
 
 def pipeline_counts(
     config: Config,
-    source: str = "",
+    project: str = "",
     *,
     keep_unit: Any = None,
     keep_card: Any = None,
@@ -1460,7 +1460,7 @@ def pipeline_counts(
     counts["annotated_claude_card"] = 0
 
     for name, ledger in _ledgers(config).items():
-        if source and name != source:
+        if project and name != project:
             continue
         if keep_unit is None:
             for state, number in ledger.counts().items():
@@ -1479,7 +1479,7 @@ def pipeline_counts(
             counts["annotated_me_unit"] += has_annotation(unit.notes, "me")
             counts["annotated_claude_unit"] += has_annotation(unit.notes, "claude")
     for card in _cards(config):
-        if not card_in_source(card, source):
+        if not card_in_source(card, project):
             continue
         if keep_card is not None and not keep_card(card):
             continue
@@ -1498,7 +1498,7 @@ def pipeline_counts(
     return counts
 
 
-def scoped_counts(config: Config, source: str, filters: dict[str, Any]) -> dict[str, int]:
+def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict[str, int]:
     """The pipeline, counted over what the filters leave.
 
     Both lanes are filtered, not just the one the current view edits. The
@@ -1533,7 +1533,7 @@ def scoped_counts(config: Config, source: str, filters: dict[str, Any]) -> dict[
             return False
         return not annotated or has_annotation(card.annotations(), annotated)
 
-    return pipeline_counts(config, source, keep_unit=keep_unit, keep_card=keep_card)
+    return pipeline_counts(config, project, keep_unit=keep_unit, keep_card=keep_card)
 
 
 def has_annotation(notes: list[str], audience: str) -> bool:
@@ -1762,7 +1762,7 @@ def unit_mark(unit: Unit) -> str:
     return f"{own.kind}/{own.colour}" if own.colour else own.kind
 
 
-def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any]:
+def mark_matrix(units: list[Unit], config: Config, project: str) -> dict[str, Any]:
     """The marks you can filter by, as a grid: kinds down, colours across.
 
     A prose source is triaged by what you meant, not by what state a unit is
@@ -1814,7 +1814,7 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     from ..config import DEFAULT_MEANINGS
     from ..zotero import HEX_BY_NAME
 
-    scheme = config.zotero_for(source)
+    scheme = config.zotero_for(project)
     tally: dict[str, int] = {}
     # Every mark in the source, deduplicated by key, beside the units they
     # made. A mark rides along on every unit within a few pages of it, so
@@ -1904,7 +1904,7 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     }
 
 
-def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str, Any]]:
+def scheme_rows(units: list[Unit], config: Config, project: str) -> list[dict[str, Any]]:
     """What this source's marks mean, and which of them make units.
 
     The legend, not the filter. **One row per kind-and-colour pair**, because
@@ -1924,7 +1924,7 @@ def scheme_rows(units: list[Unit], config: Config, source: str) -> list[dict[str
     appears in the neighbour list of every unit near it and counting those
     would report the same highlight five times.
     """
-    scheme = config.zotero_for(source)
+    scheme = config.zotero_for(project)
     seen: dict[tuple[str, str], set[str]] = {}
     for unit in units:
         for mark in unit.marks:
@@ -2015,7 +2015,7 @@ def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
-def source_origin(config: Config, source: str) -> str:
+def project_origin(config: Config, project: str) -> str:
     """Where this source's material comes from: `zotero`, `pdf`, `tex`, or ``.
 
     Not cosmetic. It decides which passes make sense, how wide crops are cut,
@@ -2023,7 +2023,7 @@ def source_origin(config: Config, source: str) -> str:
     paper imported from Zotero and a PDF sitting in the repo looked identical
     in every view.
     """
-    spec = config.projects.get(source)
+    spec = config.projects.get(project)
     if spec is None:
         return ""
     if spec.zotero_key:
@@ -2033,7 +2033,7 @@ def source_origin(config: Config, source: str) -> str:
     return "tex" if spec.tex else ""
 
 
-def project_facts(config: Config, source: str, *, from_marks: bool = False) -> dict[str, Any]:
+def project_facts(config: Config, project: str, *, from_marks: bool = False) -> dict[str, Any]:
     """This source's resolved settings, for the information rail.
 
     The same numbers `/config` lists, for the one source you are actually
@@ -2043,37 +2043,37 @@ def project_facts(config: Config, source: str, *, from_marks: bool = False) -> d
     """
     from ..context import source_conventions
 
-    spec = config.projects.get(source)
-    origin = source_origin(config, source)
-    scheme = config.zotero_for(source)
+    spec = config.projects.get(project)
+    origin = project_origin(config, project)
+    scheme = config.zotero_for(project)
     return {
         # Which marks become units, and *only* for a source that came from
         # Zotero: a segmented book has no marks and no scheme, and showing it
         # one would be the rail describing machinery that is not running.
         "units_from": sorted(scheme.unit_pairs) if origin == "zotero" else [],
-        "name": source,
+        "name": project,
         "configured": spec is not None,
-        "title": spec.title if spec else source,
+        "title": spec.title if spec else project,
         "citation": spec.citation if spec else "",
         "tags": list(spec.tags) if spec else [],
         "origin": origin,
         "zotero_key": spec.zotero_key if spec else "",
-        "deck": config.deck_for(source),
+        "deck": config.deck_for(project),
         "decks": sorted(spec.decks.items()) if spec else [],
         # `[conventions]`: what this source declares as keys, all of it, not
         # only the one entry `verify` acts on. A convention the tool has never
         # heard of is still a fact whoever writes a card here needs.
-        "declared": sorted(config.conventions_for(source).items()),
-        "web": config.web_for(source),
+        "declared": sorted(config.conventions_for(project).items()),
+        "web": config.web_for(project),
         "web_own": spec is not None and spec.web is not None,
         "order": spec.order if spec else "",
-        "crop_width": config.crop_width_for(source, from_a_mark=from_marks),
-        "crop_context": config.crop_context_for(source),
-        "context_pages": config.context_pages_for(source),
+        "crop_width": config.crop_width_for(project, from_a_mark=from_marks),
+        "crop_context": config.crop_context_for(project),
+        "context_pages": config.context_pages_for(project),
         # Whether anyone has written down what is ambient here. An absent
         # convention is a card writer guessing, so it is worth saying out loud
         # rather than leaving as a blank.
-        "conventions": bool(source_conventions(config, source).strip()) if spec else False,
+        "conventions": bool(source_conventions(config, project).strip()) if spec else False,
     }
 
 
@@ -2108,7 +2108,7 @@ def source_gallery(config: Config) -> dict[str, Any]:
             "title": spec.title if spec else name,
             "citation": spec.citation if spec else "",
             "tags": list(spec.tags) if spec else [],
-            "origin": source_origin(config, name),
+            "origin": project_origin(config, name),
             "from_marks": any(u.marks for u in units),
             "counts": counts,
             "units": len(units),
@@ -2179,7 +2179,7 @@ def card_gist(card: Card, config: Config) -> str:
     return unit.gist if unit else ""
 
 
-def source_graph(config: Config, source: str, *, everything: bool = False) -> dict[str, Any]:
+def project_graph(config: Config, project: str, *, everything: bool = False) -> dict[str, Any]:
     """Everything the canvas draws for one source, laid out and positioned.
 
     Scoped to a source because that is the only scope where the graph means
@@ -2194,7 +2194,7 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
     is not the full arrangement with holes in it.
     """
     everywhere = _cards(config)
-    here = [c for c in everywhere if card_in_source(c, source)]
+    here = [c for c in everywhere if card_in_source(c, project)]
     mine = {c.uid for c in here}
     wanted = {n for c in here for n in c.requires} | mine
     foreign = [
@@ -2204,19 +2204,19 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
     ]
 
     def href(card: Card) -> str:
-        where = card.project_name or source
-        return filter_url("/review", {}, source=where, status="all") + f"#{card.uid}"
+        where = card.project_name or project
+        return filter_url("/review", {}, project=where, status="all") + f"#{card.uid}"
 
     whole = graph_mod.card_graph(
         here + foreign,
         label=lambda card: card_gist(card, config),
         href=href,
-        here=source,
+        here=project,
     )
     declared = study_order(config)
     ordered = in_study_order(here, source_positions(config), declared)
     order = [c.uid for c in ordered]
-    path = graph_mod.positions_path(config.projects_dir, source)
+    path = graph_mod.positions_path(config.projects_dir, project)
     positions = graph_mod.load_positions(path)
     # A card with no edges is on the canvas because somebody put it somewhere.
     # That is what "add this one so I can connect it" writes, and it is the
@@ -2224,7 +2224,7 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
     shown = whole if everything else whole.connected(positions)
     drawn = {n.id for n in shown.nodes}
     return {
-        "source": source,
+        "project": project,
         **shown.as_dict(),
         # Where each node sits before anyone has dragged it, and what has been
         # dragged. Two maps rather than one merged one: the canvas has to be
@@ -2326,14 +2326,14 @@ def study_reading(
     }
 
 
-def card_in_source(card: Card, source: str) -> bool:
+def card_in_source(card: Card, project: str) -> bool:
     """Does this card belong to the source the header is scoped to?
 
     An empty `source` means no scope, so everything belongs. A card whose
     units name no source belongs to all of them: it is misfiled, and the
     view that hides it is worse than the one that shows it twice.
     """
-    return not source or card.project_name in ("", source)
+    return not project or card.project_name in ("", project)
 
 
 def project_names(config: Config) -> list[str]:
@@ -2366,8 +2366,8 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     """
     rows: list[dict[str, Any]] = []
 
-    def add(where: str, key: str, value: Any, source: str) -> None:
-        rows.append({"where": where, "key": key, "value": value, "from": source})
+    def add(where: str, key: str, value: Any, project: str) -> None:
+        rows.append({"where": where, "key": key, "value": value, "from": project})
 
     add("repo", "language", config.language, "forge.toml")
     add("repo", "front_char_cap", config.front_char_cap, "forge.toml")
@@ -2419,7 +2419,7 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         where = f"source: {name}"
         origin = f"projects/{name}/project.toml"
         inherited = "inherited"
-        add(where, "material", source_origin(config, name) or "unset", origin)
+        add(where, "material", project_origin(config, name) or "unset", origin)
         add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
         add(where, "order", spec.order, origin)
         add(
@@ -2531,9 +2531,9 @@ def commands_for(
     already carries its own text; `/classify` proposes skipping fragments and
     table rows, which is a judgement about a page of formulas.
     """
-    source = str(filters.get("source", ""))
+    project = str(filters.get("project", ""))
     section = str(filters.get("section", ""))
-    src, sec = flag("--project", source), flag("--section", section)
+    src, sec = flag("--project", project), flag("--section", section)
     scope = sec or " --all"
     out: list[dict[str, str]] = []
 
@@ -2653,7 +2653,7 @@ def commands_for(
     return out
 
 
-def resolve_source(config: Config, source: str) -> str:
+def resolve_project(config: Config, project: str) -> str:
     """The source actually in force. An unknown or absent name falls back
     to the first, so a stale link lands somewhere real rather than on an
     empty deck.
@@ -2665,8 +2665,8 @@ def resolve_source(config: Config, source: str) -> str:
     falls back.
     """
     names = project_names(config)
-    if source in names:
-        return source
+    if project in names:
+        return project
     return names[0] if names else ""
 
 
@@ -2871,13 +2871,13 @@ def _mtime(path: Path) -> str:
     return str(path.stat().st_mtime_ns) if path.exists() else "0"
 
 
-def pdf_context(config: Config | None = None, source: str = "") -> float:
+def pdf_context(config: Config | None = None, project: str = "") -> float:
     """Points of page shown around a crop at triage."""
     from ..extract.render import TRIAGE_CONTEXT
 
     if config is None:
         return TRIAGE_CONTEXT
-    return config.crop_context_for(source)
+    return config.crop_context_for(project)
 
 def crop_url(unit: Unit, *, context: float = 0.0) -> str:
     """Where the app fetches this unit's crop, rendered on request.
@@ -3042,14 +3042,14 @@ def _card_web(card: Card, config: Config) -> bool:
     """
     if card.web is not None:
         return card.web
-    source = card.project_name
+    project = card.project_name
     unit = None
     if card.unit:
-        path = config.units_path(source)
+        path = config.units_path(project)
         if path.exists():
-            found = (_ledgers(config).get(source) or Ledger(path)).get(card.unit)
+            found = (_ledgers(config).get(project) or Ledger(path)).get(card.unit)
             unit = found.web if found else None
-    return config.web_for(source, unit)
+    return config.web_for(project, unit)
 
 
 def _unit_image(card: Card, config: Config) -> str:
@@ -3068,14 +3068,14 @@ def _unit_image(card: Card, config: Config) -> str:
     """
     if not card.unit:
         return ""
-    source = card.unit.split(":", 1)[0]
-    ledger_path = config.units_path(source)
+    project = card.unit.split(":", 1)[0]
+    ledger_path = config.units_path(project)
     if not ledger_path.exists():
         return ""
-    unit = (_ledgers(config).get(source) or Ledger(ledger_path)).get(card.unit)
+    unit = (_ledgers(config).get(project) or Ledger(ledger_path)).get(card.unit)
     if unit is None:
         return ""
-    return crop_url(unit, context=pdf_context(config, source))
+    return crop_url(unit, context=pdf_context(config, project))
 
 
 # -- writes ----------------------------------------------------------------
@@ -3131,14 +3131,14 @@ def _mutate_card(
 
 def _mutate_ledger(
     config: Config,
-    source: str,
+    project: str,
     body: dict[str, Any],
     action: Any,
     unit_id: str = "",
 ) -> Any:
-    path = config.units_path(source)
+    path = config.units_path(project)
     if not path.exists():
-        raise HTTPException(404, f"no ledger for source {source!r}")
+        raise HTTPException(404, f"no ledger for source {project!r}")
     expected = _expected_mtime(body)
     if expected is not None and path.stat().st_mtime_ns != expected:
         return JSONResponse(
@@ -3162,7 +3162,7 @@ def _mutate_ledger(
         # replaced one source's counts with the whole repo's: a card graded on
         # a fifteen-unit paper made the rail jump to 127 carded and 108
         # approved, which is a number about a different book.
-        "pipeline": pipeline_counts(config, _scope(body, source)),
+        "pipeline": pipeline_counts(config, _scope(body, project)),
     }
 
 

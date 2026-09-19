@@ -257,7 +257,7 @@ def test_both_panels_are_on_every_view(pdf_source: Config) -> None:
     for url in ("/units", "/review"):
         body = client.get(url).text
         assert 'id="gallery"' in body, url
-        assert 'id="source-pick"' in body, url
+        assert 'id="project-pick"' in body, url
         assert 'id="settings"' in body, url
         assert 'id="config-open"' in body, url
 
@@ -326,7 +326,7 @@ def test_the_settings_panel_shows_the_general_keys_and_this_source(
     on -- and the gallery answers that one. Listing them here buried the two
     groups you opened the panel for."""
     client = TestClient(create_app(pdf_source))
-    groups = [g["where"] for g in client.get("/api/config?source=book").json()["groups"]]
+    groups = [g["where"] for g in client.get("/api/config?project=book").json()["groups"]]
     assert groups[0] == "source: book"
     assert "repo" in groups and "anki" in groups
     assert not [g for g in groups if g.startswith("source: ") and g != "source: book"]

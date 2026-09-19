@@ -9,7 +9,7 @@ does not do.
 
 from __future__ import annotations
 
-GRAPH = "/graph?source=demo"
+GRAPH = "/graph?project=demo"
 
 
 def canvas(pg, live):  # type: ignore[no-untyped-def]

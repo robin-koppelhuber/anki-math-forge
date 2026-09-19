@@ -20,8 +20,8 @@ from anki_math_forge.app import (
     create_app,
     mark_payloads,
     project_facts,
+    project_origin,
     scheme_rows,
-    source_origin,
 )
 from anki_math_forge.config import Config
 from anki_math_forge.extract.render import regions_for
@@ -58,9 +58,9 @@ OVERLEAF = Mark(
 )
 
 
-def a_unit(source: str = "paper") -> Unit:
+def a_unit(project: str = "paper") -> Unit:
     return Unit(
-        id=f"{source}:AAA",
+        id=f"{project}:AAA",
         locator=Locator(section="PDF", kind="highlight", page=1, bbox=HERE.bbox),
         marks=[HERE, BESIDE, OVERLEAF],
     )
@@ -252,7 +252,7 @@ def test_a_colour_is_not_shared_across_kinds(zotero_config: Config) -> None:
 def test_a_zotero_source_is_distinguishable_from_a_local_pdf(zotero_config: Config) -> None:
     """They looked identical in every view, and they are not: it decides which
     passes make sense and where to go when a document is missing."""
-    assert source_origin(zotero_config, "paper") == "zotero"
+    assert project_origin(zotero_config, "paper") == "zotero"
 
 
 def test_the_source_facts_say_when_nothing_is_declared(zotero_config: Config) -> None:
@@ -347,7 +347,7 @@ def test_the_page_number_is_a_query_not_a_path_segment(zotero_config: Config) ->
     """`{unit_id:path}` is greedy and would swallow a trailing segment, and a
     unit id already contains the colons that make it look like a path."""
     paths = {getattr(route, "path", "") for route in create_app(zotero_config).routes}
-    assert "/page/{source}/{unit_id:path}.png" in paths
+    assert "/page/{project}/{unit_id:path}.png" in paths
 
 
 # -- the section a mark is in, from the document's own outline --------------

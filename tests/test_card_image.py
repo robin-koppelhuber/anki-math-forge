@@ -289,7 +289,7 @@ def test_the_review_view_draws_the_picture(pdf_source: Config) -> None:
     unit = a_unit(pdf_source)
     write(pdf_source, f"\n## front\n$a$\n\n## back\n![the figure](unit:{unit})\n")
 
-    body = TestClient(create_app(pdf_source)).get("/review?source=book&status=draft").text
+    body = TestClient(create_app(pdf_source)).get("/review?project=book&status=draft").text
 
     assert 'class="card-image"' in body
     assert "/crop/book/" in body
@@ -303,7 +303,7 @@ def test_a_card_with_a_picture_says_so(pdf_source: Config) -> None:
     write(pdf_source, f"\n## front\n$a$\n\n## back\n![the figure](unit:{unit})\n")
     write(pdf_source, "\n## front\n$a$\n\n## back\n$b$\n", uid="bb22cc", name="plain.md")
 
-    body = TestClient(create_app(pdf_source)).get("/review?source=book&status=draft").text
+    body = TestClient(create_app(pdf_source)).get("/review?project=book&status=draft").text
 
     assert body.count('class="badge image"') == 1
 

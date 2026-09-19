@@ -4,7 +4,7 @@
 
 const deck = new Deck();
 const board = document.getElementById("deck");
-const source = board ? board.dataset.source : "";
+const project = board ? board.dataset.project : "";
 const activeState = new URLSearchParams(location.search).get("state") || "new";
 
 /* Every action is undoable. The server hands back what the unit looked like
@@ -76,7 +76,7 @@ async function undo() {
   }
   const item = deck.items.find((node) => node.dataset.id === step.id);
   const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${step.id}/restore`,
+    `/api/units/${encodeURIComponent(project)}/${step.id}/restore`,
     { snapshot: step.before, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
@@ -118,7 +118,7 @@ async function setState(state, reason) {
   if (!item) return;
   const body = { state, reason: reason || "", mtime: board.dataset.mtime };
   const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/state`,
+    `/api/units/${encodeURIComponent(project)}/${item.dataset.id}/state`,
     body,
   );
   board.dataset.mtime = result.mtime;
@@ -146,7 +146,7 @@ async function decideOnSuggestion(verb) {
     return;
   }
   const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/${verb}`,
+    `/api/units/${encodeURIComponent(project)}/${item.dataset.id}/${verb}`,
     { mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
@@ -169,7 +169,7 @@ async function decideOnSuggestion(verb) {
 
 async function noteOn(item, text) {
   const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/annotate`,
+    `/api/units/${encodeURIComponent(project)}/${item.dataset.id}/annotate`,
     { text, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
@@ -227,7 +227,7 @@ async function queueWithABrief() {
    delete would be two ways to lose the reasoning. */
 async function answerNote(item, index, reply) {
   const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/answer`,
+    `/api/units/${encodeURIComponent(project)}/${item.dataset.id}/answer`,
     { index, answer: reply, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
@@ -269,7 +269,7 @@ function repaintNotes(item, unit) {
 /* How much of the document a card writer gets for this unit.
 
    Triage is the moment you can see it: the theorem is on this page and its
-   hypotheses are two pages back, and no per-source default knows that. `c`
+   hypotheses are two pages back, and no per-project default knows that. `c`
    cycles a few sizes rather than asking for a number, because the decision is
    "a bit more" or "all of it", not a measurement. */
 function cycleContext() {
@@ -287,7 +287,7 @@ function cycleContext() {
 
 async function setContext(item, pages) {
   const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/context`,
+    `/api/units/${encodeURIComponent(project)}/${item.dataset.id}/context`,
     { pages, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
@@ -308,7 +308,7 @@ function paintContext(item, unit) {
   if (!chip || !unit.context_steps) return;
   chip.classList.toggle("own", Boolean(unit.context_own));
   const whose = chip.querySelector(".chip-whose");
-  if (whose) whose.textContent = unit.context_own ? "this unit" : "source";
+  if (whose) whose.textContent = unit.context_own ? "this unit" : "project";
   unit.context_steps.forEach((step) => {
     const button = chip.querySelector(`[data-context-step="${step.pages}"]`);
     if (!button) return;
@@ -328,8 +328,8 @@ function contextLabel(pages) {
 /* Whether whoever writes this card may look things up on the web.
 
    Three states and not two. `inherit` is not the same as `no`: it is the
-   absence of a decision here, and collapsing them would make a source-wide
-   grant unrevokable for one unit and a source-wide refusal unliftable. `w`
+   absence of a decision here, and collapsing them would make a project-wide
+   grant unrevokable for one unit and a project-wide refusal unliftable. `w`
    walks allowed -> no -> inherit, which is also the order you would reach for
    them in -- you grant it, you change your mind, you stop having an opinion. */
 const WEB_STEPS = [true, false, null];
@@ -343,7 +343,7 @@ function cycleWeb() {
 
 async function setWeb(item, web) {
   const result = await post(
-    `/api/units/${encodeURIComponent(source)}/${item.dataset.id}/web`,
+    `/api/units/${encodeURIComponent(project)}/${item.dataset.id}/web`,
     { web, mtime: board.dataset.mtime },
   );
   board.dataset.mtime = result.mtime;
@@ -354,8 +354,8 @@ async function setWeb(item, web) {
       result.unit.web
         ? "web research allowed for this unit"
         : result.unit.web_own
-          ? "no lookups here, whatever the source says"
-          : "no lookups: inherited from the source"
+          ? "no lookups here, whatever the project says"
+          : "no lookups: inherited from the project"
     } · ${undoKeyName()} undoes`,
   );
 }
@@ -367,7 +367,7 @@ function paintWeb(item, unit) {
   item.dataset.webOwn = unit.web_own ? "1" : "0";
   chip.classList.toggle("own", Boolean(unit.web_own));
   const whose = chip.querySelector(".chip-whose");
-  if (whose) whose.textContent = unit.web_own ? "this unit" : "source";
+  if (whose) whose.textContent = unit.web_own ? "this unit" : "project";
   chip.querySelectorAll("[data-web-set]").forEach((button) => {
     button.classList.toggle("on", (button.dataset.webSet === "1") === Boolean(unit.web));
   });
@@ -382,9 +382,9 @@ function paintWeb(item, unit) {
    remove exactly the context the decision needs.
 
    Remembered, because you triage one paper in one sitting and the colours that
-   matter do not change between two units in a row. Per source, since a scheme
+   matter do not change between two units in a row. Per project, since a scheme
    is a fact about how one document was read. */
-const MARK_FILTER_KEY = `anki-forge.marks.${source}`;
+const MARK_FILTER_KEY = `anki-forge.marks.${project}`;
 
 function hiddenColours() {
   try {
@@ -579,7 +579,7 @@ async function buildDocument(item, figure) {
     return;
   }
   const id = item.dataset.id;
-  const at = (path) => `${path}/${encodeURIComponent(source)}/${encodeURIComponent(id)}`;
+  const at = (path) => `${path}/${encodeURIComponent(project)}/${encodeURIComponent(id)}`;
   let info;
   try {
     info = await (await fetch(at("/api/document"))).json();

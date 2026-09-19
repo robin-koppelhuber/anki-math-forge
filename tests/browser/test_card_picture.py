@@ -91,7 +91,7 @@ def a_card(repo: Path, uid: str, front: str, *, gist: str = "a card") -> str:
 
 def show(page, live: str, uid: str):  # type: ignore[no-untyped-def]
     """Open the deck on one card. The deck shows one at a time."""
-    page.goto(f"{live}/review?source=book&status=draft#{uid}")
+    page.goto(f"{live}/review?project=book&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
     return page.locator(f'[data-uid="{uid}"]')
 

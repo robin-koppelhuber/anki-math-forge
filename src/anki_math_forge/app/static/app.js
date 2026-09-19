@@ -87,7 +87,7 @@ function ask(label, value = "") {
   });
 }
 
-/* Which source this view is showing. Sent with every write, because every
+/* Which project this view is showing. Sent with every write, because every
    write hands back the counts for the rail and those have to be about what is
    on screen -- unscoped, grading one card on a fifteen-unit paper made the
    rail jump to the whole repo's 127 carded and 108 approved. Resolved on the
@@ -95,7 +95,7 @@ function ask(label, value = "") {
    the query string omitted. */
 function viewScope() {
   const deck = document.getElementById("deck");
-  return (deck && deck.dataset.source) || "";
+  return (deck && deck.dataset.project) || "";
 }
 
 async function post(url, body) {
@@ -768,7 +768,7 @@ function saveUndo(scope, stack) {
   }
 }
 
-/* The source gallery.
+/* The project gallery.
 
    A dropdown answers "which one am I on" and nothing else. With a shelf of
    papers the question is which one to work on next, and that is a comparison:
@@ -794,7 +794,7 @@ const CARD_LANE = ["draft", "approved", "rejected"];
 
 function sourceHref(name) {
   /* Keep the view and the state you were on; drop the filters that belong to
-     the source you are leaving. A section number from one book means nothing
+     the project you are leaving. A section number from one book means nothing
      in another, and carrying it over lands you on an empty deck that looks
      like the import failed. */
   const url = new URL(location.href);
@@ -804,7 +804,7 @@ function sourceHref(name) {
      looks like the import failed -- which is the sentence this line was
      written for. */
   ["section", "mark", "chapter"].forEach((key) => url.searchParams.delete(key));
-  url.searchParams.set("source", name);
+  url.searchParams.set("project", name);
   url.hash = "";
   return url.toString();
 }
@@ -851,7 +851,7 @@ function sourceCard(row, current) {
   if (row.origin) {
     head.appendChild(el("span", `gsource-origin o-${row.origin}`, ORIGIN_LABEL[row.origin] || row.origin));
   } else {
-    head.appendChild(el("span", "gsource-origin warn", "no source.md"));
+    head.appendChild(el("span", "gsource-origin warn", "no project.toml"));
   }
   card.appendChild(head);
   card.appendChild(el("span", "gsource-title", row.title));
@@ -879,7 +879,7 @@ function chip(label, active, onPick) {
 function paintGallery() {
   const data = gallery.data;
   if (!data) return;
-  const current = new URL(location.href).searchParams.get("source") || "";
+  const current = new URL(location.href).searchParams.get("project") || "";
   const chips = document.getElementById("gallery-chips");
   chips.textContent = "";
   const pick = (key) => (value) => () => {
@@ -941,7 +941,7 @@ async function openGallery() {
 (function wireGallery() {
   const dialog = document.getElementById("gallery");
   if (!dialog) return;
-  const open = document.getElementById("source-pick");
+  const open = document.getElementById("project-pick");
   if (open) open.addEventListener("click", openGallery);
   document.getElementById("gallery-close").addEventListener("click", () => dialog.close());
   const search = document.getElementById("gallery-search");
@@ -984,10 +984,10 @@ async function openSettings() {
   dialog.showModal();
   const body = document.getElementById("settings-body");
   body.textContent = "reading…";
-  const source = new URL(location.href).searchParams.get("source") || "";
+  const project = new URL(location.href).searchParams.get("project") || "";
   let data;
   try {
-    const response = await fetch(`/api/config?source=${encodeURIComponent(source)}`);
+    const response = await fetch(`/api/config?project=${encodeURIComponent(project)}`);
     data = await response.json();
   } catch {
     body.textContent = "could not read the configuration";
@@ -1003,7 +1003,7 @@ async function openSettings() {
       const tr = document.createElement("tr");
       tr.appendChild(el("th", "", row.key));
       const value = document.createElement("td");
-      // An empty value is an answer -- a source that declares no layout gets
+      // An empty value is an answer -- a project that declares no layout gets
       // no layout -- but a blank cell reads as a rendering failure, so say it.
       const text = String(row.value);
       value.appendChild(text ? el("code", "", text) : el("span", "muted", "unset"));
@@ -1077,7 +1077,7 @@ function aModalIsOpen() {
   return Array.from(document.querySelectorAll("dialog")).some((d) => d.open);
 }
 
-/* The mini diagram counts either the whole source or what the filters leave.
+/* The mini diagram counts either the whole project or what the filters leave.
    It has its own attribute because the rail shows the unfiltered numbers on
    the same page, and one repaint would otherwise overwrite the other. */
 function paintFsm(counts) {

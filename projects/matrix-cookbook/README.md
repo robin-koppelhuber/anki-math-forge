@@ -7,7 +7,7 @@ the last release the authors made. Extracted from `matrixcookbook.pdf`
 The PDF is not committed (see `.gitignore`); fetch it with:
 
 ```
-curl -o sources/matrix-cookbook/matrixcookbook.pdf \
+curl -o projects/matrix-cookbook/matrixcookbook.pdf \
   https://www.math.uwaterloo.ca/~hwolkowi/matrixcookbook.pdf
 uv sync --extra pdf
 uv run forge extract matrix-cookbook

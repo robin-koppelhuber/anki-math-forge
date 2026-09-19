@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 
-GRAPH = "/graph?source=demo"
+GRAPH = "/graph?project=demo"
 
 
 def open_panel(pg, live):  # type: ignore[no-untyped-def]

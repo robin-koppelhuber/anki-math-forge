@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-GRAPH = "/graph?source=demo"
+GRAPH = "/graph?project=demo"
 
 
 def boxes(pg):  # type: ignore[no-untyped-def]

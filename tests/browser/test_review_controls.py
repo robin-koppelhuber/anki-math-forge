@@ -45,7 +45,7 @@ def open_card(page, live, uid: str) -> None:  # type: ignore[no-untyped-def]
     painted it. Reading that back would pass whether or not anything reached
     the file, which is the one thing these tests are for.
     """
-    url = f"{live}/review?source=demo&status=all#{uid}"
+    url = f"{live}/review?project=demo&status=all#{uid}"
     if page.url == url:
         page.reload()
     else:

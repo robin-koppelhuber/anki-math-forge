@@ -196,7 +196,7 @@ def test_a_figure_travels_the_same_road_and_arrives_as_a_picture(
     )
 
     # -- the app shows what sync will upload -------------------------------
-    body = TestClient(create_app(pdf_source)).get("/review?source=book&status=draft").text
+    body = TestClient(create_app(pdf_source)).get("/review?project=book&status=draft").text
     assert 'class="card-image"' in body
     assert "marks=false" in body, "no frame painted round the figure"
     assert 'class="badge image"' in body
@@ -266,7 +266,7 @@ def test_a_window_set_at_triage_is_the_window_the_writer_reads_in(
         # And the app agrees about what is in force, which is the third
         # reader of the same field. Through the units view rather than an API:
         # the chip is what a person actually reads the setting off.
-        body = TestClient(create_app(pdf_source)).get("/units?source=book&state=all").text
+        body = TestClient(create_app(pdf_source)).get("/units?project=book&state=all").text
         chip = body[body.index("data-context-chip") : body.index("data-web-chip")]
         whose = chip[chip.index('class="chip-whose"') :][:60]
         if expect == CHAPTER:
@@ -276,7 +276,7 @@ def test_a_window_set_at_triage_is_the_window_the_writer_reads_in(
             assert "3 pages either side" in chip
             assert "this unit" in whose
         else:
-            assert "source" in whose, "cleared, so the source decides again"
+            assert "project" in whose, "cleared, so the project decides again"
 
 
 def test_a_re_extraction_does_not_undo_a_judgement(pdf_source: Config) -> None:
@@ -347,13 +347,13 @@ def test_the_app_and_the_files_never_disagree(pdf_source: Config) -> None:
         encoding="utf-8",
     )
     client = TestClient(create_app(pdf_source))
-    assert "ab99cd" in client.get("/review?source=book&status=draft").text
+    assert "ab99cd" in client.get("/review?project=book&status=draft").text
 
     edited = model.load(path)
     edited.set_section("prose", "written in an editor, not in the app")
     edited.save()
 
-    assert "written in an editor" in client.get("/review?source=book&status=draft").text
+    assert "written in an editor" in client.get("/review?project=book&status=draft").text
 
 
 def test_the_checks_a_deck_can_run_on_itself(pdf_source: Config) -> None:
