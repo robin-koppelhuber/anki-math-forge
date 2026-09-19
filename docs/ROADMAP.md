@@ -643,25 +643,41 @@ the picture worth having anyway.
 
 ### Build order
 
-1. Hand-write five units into a sourceless project's ledger and push them
-   through to Anki. No new code. If the premise does not hold, it fails here
-   and cheaply.
-2. The config split, the rename and the `forge.toml` pass, the walk-up
-   resolver, a source that is a URL, `forge units --add` with slug ids, unit
-   tags, the preview and the reference list. One migration script moves the
-   two real projects, exempts `tags` and re-stamps every approved card.
-3. `forge context` for a unit with no page: the ask, the references, the
-   conventions, the permissions. This one decides how good the cards are.
-4. The setup stage, topics and outlines first.
-5. Fenced code through `check` and `sync`, Pygments, a note type version
-   bump.
+Steps 1, 2, 3 and 5 are built, along with the end to end pass over what they
+compose. What they left is listed after them.
+
+1. **Done.** A project with no source walks from `units --add` to a note in
+   Anki, covered by `tests/test_end_to_end_project.py`. The premise holds:
+   only the first layer changed.
+2. **Done, bar one thing.** The config split, the rename, the `forge.toml`
+   pass, `units --add` with slug ids, unit tags, the preview, the reference
+   list, the migration and the `tags` exemption. **The walk-up resolver is
+   not built**: settings still resolve through a fixed unit, source,
+   project, repo ladder, so a parent relation or a topic layer is a change
+   at four call sites rather than one link. Worth doing before either lands,
+   and pointless before that.
+3. **Done.** `forge context` says plainly when nothing settles a card, and
+   hands over the unit's references and the project's shelf where the page
+   would be.
+5. **Done.** Fenced code through `check` and `sync`, highlighted by Pygments
+   at sync as an optional extra. No note type version bump: the CSS changed,
+   so the first sync wants `--templates`, and a new model name would orphan
+   every note on the old one.
+
+What is left, in order:
+
+4. The setup stage, topics and outlines first. Nothing else waits on it, and
+   it is where the breadth problem becomes visible.
 6. The tag filter and the property filters, and the chip and the commands
-   panel reading the unit. Then `/propose` and the outline pass.
-7. Docs, README and assets, once the screens have stopped moving.
-8. End to end tests over the whole of it, last: a project created, a topic
-   written, units proposed, triaged, carded, checked and synced, with the
-   browser driving the setup stage. Each step above carries its own unit
-   tests as it lands; this is the pass that makes sure they compose.
+   panel reading the unit. Units carry tags now and nothing shows them, so
+   this is the first gap somebody using it would hit. Then `/propose` and
+   the outline pass.
+7. Docs, README and assets, once the screens have stopped moving. `README`
+   already shows the `[[sources]]` shape; what it still lacks is prose about
+   a deck with no book behind it, and about pictures on cards.
+8. End to end tests over the topic half: a topic written, an outline
+   filled, the browser driving the setup stage. The pipeline half of this
+   is built.
 
 ### What no property settles
 
