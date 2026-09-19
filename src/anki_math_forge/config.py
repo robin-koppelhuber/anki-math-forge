@@ -892,6 +892,12 @@ CONVENTIONS_FILE = "conventions.md"
 # The shelf of reference material: prose, no schema, because nothing branches
 # on it. A source is read *from*; this is checked *against*.
 REFERENCES_FILE = "references.md"
+# What you asked for here, and the outline of what each ask should cover.
+# Prose with a recognisable shape rather than a schema: a heading per
+# subject, and lines under it. Nothing branches on it; `forge context` hands
+# it to whoever writes a card, because the ask says what you wanted and the
+# unit alone cannot.
+TOPICS_FILE = "topics.md"
 FENCE = "+++"
 
 

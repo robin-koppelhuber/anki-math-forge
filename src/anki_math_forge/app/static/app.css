@@ -808,6 +808,15 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 }
 .tag-search:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
 .filter-none { margin: 0.2rem 0 0.5rem 0.5rem; font-size: 12px; color: var(--muted); }
+/* Which scale the rows under it belong to. Two closed vocabularies in one
+   group, so without a label `core` and `short` read as one list. */
+.filter-sub {
+  margin: 0.4rem 0 0.1rem 0.5rem;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 .filter-clear { margin: 0.2rem 0 0.5rem 0.5rem; font-size: 12px; }
 .filter-clear a {
   color: var(--muted);

@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .config import CHAPTER, REFERENCES_FILE, Config
+from .config import CHAPTER, REFERENCES_FILE, TOPICS_FILE, Config
 from .extract import source_text_path, source_text_quality
 from .ledger import open_ledgers
 
@@ -61,6 +61,12 @@ class UnitContext:
     # anything (invariant 7, and ROADMAP.md 10 for the case with no source).
     refs: list[str] = field(default_factory=list)
     shelf: str = ""
+    # What you asked for here, verbatim, and the outline of what it should
+    # cover. A unit records what a card would be *about*; only the ask says
+    # what you wanted from the subject, and "I care about choosing between
+    # them, not the full API" is the difference between a useful deck and an
+    # even, shallow one.
+    asks: str = ""
     # Whether anything here settles what the card says. False when the unit
     # has no authoritative source, which is the whole of what a project with
     # no document is: the references keep a card from being invented and the
@@ -87,6 +93,7 @@ class UnitContext:
             "lang": self.lang,
             "refs": self.refs,
             "shelf": self.shelf,
+            "asks": self.asks,
             "settled": self.settled,
         }
 
@@ -172,6 +179,17 @@ class UnitContext:
             )
             for entry in proposed:
                 out.append(f"   - {entry['proposes']}")
+        if self.asks:
+            # Before the references, because it is the only part of this that
+            # was written *to* whoever comes next, the way a unit's own notes
+            # are. Everything else describes the material.
+            out.append(
+                "\n## what was asked for in this project\n"
+                "   Your words, and what each ask means to cover. Write for"
+                " this, not for the subject at large: a card nobody asked for"
+                " is a card that passes triage and is never wanted.\n"
+            )
+            out.append(self.asks)
         if self.refs or self.shelf:
             out.append(
                 "\n## what to check this against\n"
@@ -275,6 +293,7 @@ def assemble(
         lang=lang,
         refs=list(unit.refs),
         shelf=shelf(config, source),
+        asks=asks(config, source),
         settled=settled,
         conventions=source_conventions(config, source),
         declared=dict(config.conventions_for(source)),
@@ -464,6 +483,24 @@ def shelf(config: Config, project: str) -> str:
     if not path.exists():
         return ""
     return re.sub(r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M).strip()
+
+
+def asks(config: Config, project: str) -> str:
+    """What was asked for in this project, verbatim.
+
+    `projects/<name>/topics.md`, if there is one. Prose with a recognisable
+    shape rather than a schema: nothing here interprets it, and a pass that
+    counts outline entries against units counts lines rather than parsing
+    them.
+
+    Handed over whole. Which ask a unit belongs to is not recorded, and
+    guessing from a tag would be interpretation; with a handful of subjects
+    in a project, all of them is both honest and short.
+    """
+    path = config.projects_dir / project / TOPICS_FILE
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
 
 
 def source_conventions(config: Config, source: str) -> str:

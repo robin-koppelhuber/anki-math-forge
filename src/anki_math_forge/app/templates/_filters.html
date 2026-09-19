@@ -229,6 +229,32 @@
 
     </details>
     {% endif %}
+    {# The two graded scales. They decide when Anki introduces a card, and
+       until now they were chips you could read and not filters you could
+       click: "the core ones I have not augmented yet" was a question the
+       rail could not ask.
+
+       Both vocabularies in full, including `ungraded`. A row missing because
+       nothing carries that value reads as "none of these are core" when it
+       means "nothing is graded yet", and `ungraded` is the row you want most
+       on a deck being worked through. #}
+    {% if grade_rows %}
+    <details class="filter-group">
+      <summary>grading</summary>
+      {% for field in ['frequency', 'derivation'] %}
+      <p class="filter-sub">{{ field }}</p>
+      <ul class="filter-list flow">
+        {% for row in grade_rows if row.field == field %}
+        <li><a class="{{ 'on' if row.on }}{{ ' out' if row.value == 'none' }}"
+               href="{{ filter_url(here, f, **{field: (none if row.on else row.value)}) }}"
+               title="{{ 'click to clear' if row.on else 'only ' ~ row.label ~ ' cards' }}">
+          <span>{% if row.on %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}{{ row.label }}</span>
+          <b>{{ row.count }}</b></a></li>
+        {% endfor %}
+      </ul>
+      {% endfor %}
+    </details>
+    {% endif %}
     {# Tags, on both views. A section is where something sits in a document
        and a tag is what it is *about*, so they answer different questions and
        a deck with no sections may still be full of tags. Offered from what is

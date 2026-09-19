@@ -109,13 +109,16 @@ def test_the_search_box_waits_until_there_are_tags_to_hunt(repo: Path) -> None:
     assert 'id="tag-search"' in client(repo).get("/units?project=cpp&state=new").text
 
 
-def a_card(repo: Path, uid: str, gist: str, *tags: str) -> None:
+def a_card(repo: Path, uid: str, gist: str, *tags: str, freq: str = "", deriv: str = "") -> None:
     path = repo / "cards" / "demo" / f"{uid}-x.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     listed = ", ".join(f'"{t}"' for t in tags)
+    graded = (f"frequency: {freq}\n" if freq else "") + (
+        f"derivation: {deriv}\n" if deriv else ""
+    )
     path.write_text(
         f"---\nuid: {uid}\ntype: identity\nstatus: draft\n"
-        f'source: "Demo"\nunit: "demo:1:1"\ngist: {gist}\ntags: [{listed}]\n---\n\n'
+        f'source: "Demo"\nunit: "demo:1:1"\ngist: {gist}\ntags: [{listed}]\n{graded}---\n\n'
         "## front\n\n$a$\n\n## back\n\n$b$\n",
         encoding="utf-8",
     )
@@ -143,3 +146,42 @@ def test_clearing_is_one_click(repo: Path) -> None:
     page = client(repo).get("/units?project=cpp&tag=containers&state=new").text
 
     assert "all tags" in page, "and a link that drops it"
+
+
+# -- the graded scales ------------------------------------------------------
+
+
+def test_a_grading_can_be_selected_not_only_read(repo: Path) -> None:
+    """They decide when Anki introduces a card, and they were chips you could
+    read and not filters you could click."""
+    a_card(repo, "aa11bb", "a core fact", freq="core")
+    a_card(repo, "cc22dd", "a rare one", freq="rare")
+
+    page = client(repo).get("/review?project=demo&status=draft&frequency=core").text
+
+    assert "a core fact" in page
+    assert "a rare one" not in page
+
+
+def test_ungraded_is_a_value_you_can_ask_for(repo: Path) -> None:
+    """Asking what is not graded yet is the question you put most often
+    while working a deck through, and a filter over the vocabulary alone
+    cannot express it."""
+    a_card(repo, "aa11bb", "a core fact", freq="core")
+    a_card(repo, "cc22dd", "not judged yet")
+
+    page = client(repo).get("/review?project=demo&status=draft&frequency=none").text
+
+    assert "not judged yet" in page
+    assert "a core fact" not in page
+
+
+def test_the_whole_vocabulary_is_offered(repo: Path) -> None:
+    """A row missing because nothing carries that value reads as "none of
+    these are core" when it means "nothing is graded yet"."""
+    a_card(repo, "aa11bb", "a core fact", freq="core")
+
+    page = client(repo).get("/review?project=demo&status=draft").text
+
+    for value in ("core", "common", "rare", "definitional", "short", "long", "ungraded"):
+        assert f">{value}</span>" in page, value

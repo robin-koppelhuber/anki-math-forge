@@ -444,6 +444,8 @@ def create_app(config: Config) -> FastAPI:
         section: str = "",
         chapter: str = "",
         tag: str = "",
+        frequency: str = "",
+        derivation: str = "",
         counts_scope: str = "",
     ) -> Any:
         name = resolve_project(config, project)
@@ -486,6 +488,18 @@ def create_app(config: Config) -> FastAPI:
         # and not a tree.
         if tag:
             cards = [c for c in cards if tag in c.tags]
+        # The two coarse judgements. They decide when you meet a card, so
+        # "show me the core ones I have not augmented" is the question the
+        # rail could not ask: they were chips you could read and not filters
+        # you could click.
+        # `none` is a value here, not the absence of one: "what have I not
+        # graded yet" is the question you ask most while working a deck
+        # through, and it is the one a filter over the vocabulary alone
+        # cannot express.
+        if frequency:
+            cards = [c for c in cards if (c.frequency or "none") == frequency]
+        if derivation:
+            cards = [c for c in cards if (c.derivation or "none") == derivation]
         # Everything the other filters leave, ignoring the section: what each
         # section row would show if you clicked it.
         unsectioned = in_project
@@ -554,6 +568,8 @@ def create_app(config: Config) -> FastAPI:
         filters = {
             "project": name,
             "tag": tag,
+            "frequency": frequency,
+            "derivation": derivation,
             "status": status,
             "section": section,
             "chapter": chapter,
@@ -589,6 +605,7 @@ def create_app(config: Config) -> FastAPI:
                 "filters": filters,
                 "commands": commands_for("review", filters, pipeline, from_marks=from_marks),
                 "tag_rows": tag_rows([c.tags for c in in_project], tag),
+                "grade_rows": grade_rows(in_project, frequency, derivation),
                 "scheme": scheme_legend(scheme_rows(units_here, config, name)),
                 "project_facts": project_facts(config, name, from_marks=from_marks),
                 "section_tree": section_rows(
@@ -1537,6 +1554,34 @@ def tag_rows(tagged: list[list[str]], chosen: str) -> list[dict[str, Any]]:
         {"name": name, "count": counts[name], "on": name == chosen}
         for name in sorted(counts, key=lambda t: (-counts[t], t))
     ]
+
+
+def grade_rows(cards: list[Card], frequency: str, derivation: str) -> list[dict[str, Any]]:
+    """The two graded scales, with how many carry each value.
+
+    Both vocabularies in full rather than only the values in use, because
+    these are closed sets and a missing row reads as "none of these are
+    core" when it means "nothing is graded yet". `ungraded` is the row that
+    matters most on a deck being worked through, and it is the one a list
+    built from the values present could never show.
+    """
+    rows: list[dict[str, Any]] = []
+    for field_name, vocabulary, chosen in (
+        ("frequency", model.FREQUENCIES, frequency),
+        ("derivation", model.DERIVATIONS, derivation),
+    ):
+        for value in (*vocabulary, "none"):
+            got = [c for c in cards if (getattr(c, field_name) or "none") == value]
+            rows.append(
+                {
+                    "field": field_name,
+                    "value": value,
+                    "label": "ungraded" if value == "none" else value,
+                    "count": len(got),
+                    "on": chosen == value,
+                }
+            )
+    return rows
 
 
 def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict[str, int]:
