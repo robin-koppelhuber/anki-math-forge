@@ -40,13 +40,13 @@ def test_a_crop_renders_from_the_bounding_box(pdf_source: Config) -> None:
     extract.run(pdf_source, "book")
     unit = Ledger.load(pdf_source.units_path("book")).units[0]
     page, bbox = unit.crop_geometry()
-    png = render.render_crop(pdf_source.project("book").pdf, page, bbox)
+    png = render.render_crop(pdf_source.document_for("book"), page, bbox)
     assert png.startswith(b"\x89PNG")
     assert len(png) > 200
 
 
 def test_rendering_refuses_a_page_outside_the_document(pdf_source: Config) -> None:
-    document = pdf_source.project("book").pdf
+    document = pdf_source.document_for("book")
     with pytest.raises(ValueError, match="outside the document"):
         render.render_crop(document, 99, [0.0, 0.0, 100.0, 100.0])
 
@@ -285,7 +285,7 @@ def test_context_widens_the_crop(pdf_source: Config) -> None:
     extract.run(pdf_source, "book")
     unit = Ledger.load(pdf_source.units_path("book")).units[0]
     page, bbox = unit.crop_geometry()
-    document = pdf_source.project("book").pdf
+    document = pdf_source.document_for("book")
 
     tight = render.render_crop(document, page, bbox)
     wide = render.render_crop(document, page, bbox, context=render.TRIAGE_CONTEXT, outline=True)
@@ -298,7 +298,7 @@ def test_the_outline_is_actually_drawn(pdf_source: Config) -> None:
     extract.run(pdf_source, "book")
     unit = Ledger.load(pdf_source.units_path("book")).units[0]
     page, bbox = unit.crop_geometry()
-    document = pdf_source.project("book").pdf
+    document = pdf_source.document_for("book")
 
     plain = render.render_crop(document, page, bbox, context=render.TRIAGE_CONTEXT)
     boxed = render.render_crop(document, page, bbox, context=render.TRIAGE_CONTEXT, outline=True)
@@ -310,7 +310,7 @@ def test_a_tight_crop_has_no_outline(pdf_source: Config) -> None:
     extract.run(pdf_source, "book")
     unit = Ledger.load(pdf_source.units_path("book")).units[0]
     page, bbox = unit.crop_geometry()
-    png = render.render_crop(pdf_source.project("book").pdf, page, bbox, outline=True)
+    png = render.render_crop(pdf_source.document_for("book"), page, bbox, outline=True)
     assert png.startswith(b"\x89PNG")  # outline needs context; without it, nothing is drawn
 
 
@@ -324,7 +324,7 @@ def test_a_tight_crop_has_no_outline(pdf_source: Config) -> None:
 
 def test_segment_returns_units_with_a_locator_and_geometry(pdf_source: Config) -> None:
     """The whole contract: section, equation number, page, bbox."""
-    units = pdf.segment(pdf_source.project("book").pdf, "book")
+    units = pdf.segment(pdf_source.document_for("book"), "book")
     assert units
     for unit in units:
         assert unit.id.startswith("book:")
@@ -336,15 +336,15 @@ def test_segment_returns_units_with_a_locator_and_geometry(pdf_source: Config) -
 
 def test_ids_come_from_the_document_not_from_the_segmenter(pdf_source: Config) -> None:
     """Ids must survive a replacement, because triage state hangs off them."""
-    first = [u.id for u in pdf.segment(pdf_source.project("book").pdf, "book")]
-    second = [u.id for u in pdf.segment(pdf_source.project("book").pdf, "book")]
+    first = [u.id for u in pdf.segment(pdf_source.document_for("book"), "book")]
+    second = [u.id for u in pdf.segment(pdf_source.document_for("book"), "book")]
     assert first == second
     assert "book:2.4:61" in first, "the id is section + equation number, both printed in the book"
 
 
 def test_rendering_does_not_depend_on_the_segmenter(pdf_source: Config) -> None:
     """`render.py` outlives `pdf.py`: geometry in, pixels out, nothing else."""
-    png = render.render_crop(pdf_source.project("book").pdf, 1, [200.0, 150.0, 500.0, 200.0])
+    png = render.render_crop(pdf_source.document_for("book"), 1, [200.0, 150.0, 500.0, 200.0])
     assert png.startswith(b"\x89PNG")
 
 

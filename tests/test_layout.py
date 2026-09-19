@@ -327,9 +327,11 @@ def test_the_settings_panel_shows_the_general_keys_and_this_source(
     groups you opened the panel for."""
     client = TestClient(create_app(pdf_source))
     groups = [g["where"] for g in client.get("/api/config?project=book").json()["groups"]]
-    assert groups[0] == "source: book"
+    assert groups[0] == "project: book"
     assert "repo" in groups and "anki" in groups
-    assert not [g for g in groups if g.startswith("source: ") and g != "source: book"]
+    assert not [
+        g for g in groups if g.startswith("project: ") and g != "project: book"
+    ]
 
 
 def test_the_picture_cycles_three_ways_and_says_so() -> None:

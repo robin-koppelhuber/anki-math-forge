@@ -421,7 +421,8 @@ def test_an_imported_source_carries_its_own_deck_all_the_way(repo: Path) -> None
     folder = repo / "projects" / "paper"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("project.toml").write_text(
-        'title = "A  Paper:: On Tails"\ncitation = "Paper"\nzotero = "T7QDISXB"\n',
+        'title = "A  Paper:: On Tails"\ncitation = "Paper"\n'
+        '\n[[sources]]\nzotero = "T7QDISXB"\n',
         encoding="utf-8",
     )
     config = config_mod.load(repo)
@@ -450,8 +451,13 @@ def test_an_imported_source_carries_its_own_deck_all_the_way(repo: Path) -> None
 
     # -- and when the deck changes under it --------------------------------
     toml = folder / "project.toml"
+    # Above the `[[sources]]` header, not after it: a bare key written under a
+    # table header lands inside the table.
     toml.write_text(
-        toml.read_text(encoding="utf-8") + 'deck = "Mathe::Tails"\n', encoding="utf-8"
+        toml.read_text(encoding="utf-8").replace(
+            "\n[[sources]]", '\ndeck = "Mathe::Tails"\n\n[[sources]]'
+        ),
+        encoding="utf-8",
     )
     told = sync.run(config_mod.load(repo), client=anki, dry_run=False)
 

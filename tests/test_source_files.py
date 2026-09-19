@@ -70,7 +70,14 @@ def test_a_block_copies_between_the_two_files_unchanged(repo: Path) -> None:
         '[meanings]\n"highlight/green" = "a claim"\n'
     )
     add_toml(repo, "[zotero]\n" + block.replace("[meanings]", "[zotero.meanings]"))
-    write_source(repo, "book", 'title = "A Book"\n' + block)
+    # A marking scheme is a fact about a document, so in a project file it
+    # sits under the work it describes.
+    write_source(
+        repo,
+        "book",
+        'title = "A Book"\n\n[[sources]]\n'
+        + block.replace("[meanings]", "[sources.meanings]"),
+    )
 
     config = config_mod.load(repo)
     assert config.zotero_for("book").units_from == config.zotero.units_from
@@ -146,8 +153,8 @@ def test_a_source_may_read_its_colours_differently(repo: Path) -> None:
     write_source(
         repo,
         "book",
-        'title = "A Book"\nunits_from = ["highlight/magenta"]\n\n'
-        '[meanings]\n"highlight/magenta" = "a result"',
+        'title = "A Book"\n\n[[sources]]\nunits_from = ["highlight/magenta"]\n\n'
+        '[sources.meanings]\n"highlight/magenta" = "a result"',
     )
 
     config = config_mod.load(repo)
@@ -260,7 +267,7 @@ def test_declared_follows_the_meanings_actually_in_force(repo: Path) -> None:
     write_source(
         repo,
         "book",
-        'title = "A Book"\n\n[meanings]\n"highlight/magenta" = "a result"',
+        'title = "A Book"\n\n[[sources]]\n[sources.meanings]\n"highlight/magenta" = "a result"',
     )
 
     mine = config_mod.load(repo).zotero_for("book")
@@ -273,8 +280,8 @@ def test_a_source_may_opt_in_where_the_repo_lists_pairs(repo: Path) -> None:
     write_source(
         repo,
         "book",
-        'title = "A Book"\nunits_from = "declared"\n\n'
-        '[meanings]\n"highlight/magenta" = "a result"\n"note/yellow" = "a thought"',
+        'title = "A Book"\n\n[[sources]]\nunits_from = "declared"\n\n'
+        '[sources.meanings]\n"highlight/magenta" = "a result"\n"note/yellow" = "a thought"',
     )
 
     config = config_mod.load(repo)

@@ -127,8 +127,8 @@ def test_a_marked_unit_is_cut_to_the_page_width_by_default(config: Config) -> No
 def test_a_source_that_says_otherwise_is_believed_both_ways(tmp_path: Path) -> None:
     (tmp_path / "projects" / "book").mkdir(parents=True)
     (tmp_path / "forge.toml").write_text("", encoding="utf-8")
-    (tmp_path / "projects" / "book" / "source.md").write_text(
-        '+++\ntitle = "Book"\ncrop_width = "page"\n+++\n', encoding="utf-8"
+    (tmp_path / "projects" / "book" / "project.toml").write_text(
+        'title = "Book"\n\n[[sources]]\ncrop_width = "page"\n', encoding="utf-8"
     )
     config = config_mod.load(tmp_path)
     assert config.crop_width_for("book", from_a_mark=False) == "page"
@@ -140,8 +140,8 @@ def test_an_unrecognised_width_is_refused_at_load(tmp_path: Path) -> None:
     crops look wrong."""
     (tmp_path / "projects" / "book").mkdir(parents=True)
     (tmp_path / "forge.toml").write_text("", encoding="utf-8")
-    (tmp_path / "projects" / "book" / "source.md").write_text(
-        '+++\ntitle = "Book"\ncrop_width = "wide"\n+++\n', encoding="utf-8"
+    (tmp_path / "projects" / "book" / "project.toml").write_text(
+        'title = "Book"\n\n[[sources]]\ncrop_width = "wide"\n', encoding="utf-8"
     )
     with pytest.raises(config_mod.ConfigError, match="crop_width"):
         config_mod.load(tmp_path)

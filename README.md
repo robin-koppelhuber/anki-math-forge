@@ -41,8 +41,10 @@ npm install              # optional: gives `check` the real KaTeX parser
 # projects/<name>/project.toml, for a PDF source
 title = "The Matrix Cookbook"
 citation = "Matrix Cookbook"
-pdf = "projects/<name>/the-file.pdf"
 deck = "Mathematics::Matrix Calculus"   # optional; falls back to [anki] deck
+
+[[sources]]                             # one table per work the project reads
+files = ["projects/<name>/the-file.pdf"]
 ```
 
 For a Zotero source instead: run Zotero (version 7+) with its local API enabled

@@ -522,7 +522,7 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                 item,
                 source=source,
                 zotero=config.zotero_for(source),
-                documents=spec.documents if spec else (),
+                documents=(work.attachments if (work := spec.source() if spec else None) else ()),
                 text_for=None if args.dry_run else _text_cacher(config, source),
             )
             reports.append((source, item, report))
@@ -610,7 +610,10 @@ def _list_zotero(client: Any, config: Config, args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return FAILED
 
-    known = {name: spec.zotero_key for name, spec in config.projects.items()}
+    known = {
+        name: next((w.zotero_key for w in spec.sources if w.zotero_key), "")
+        for name, spec in config.projects.items()
+    }
     by_key = {key: name for name, key in known.items() if key}
     rows = [
         {
@@ -1126,6 +1129,12 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
     return OK
 
 
+def _document(config: Config, project: str) -> Path | None:
+    """The file a project's units were printed in, when it has one."""
+    work = config.project(project).source()
+    return work.pdf if work else None
+
+
 def cmd_classify(args: argparse.Namespace, config: Config) -> int:
     ledgers = ledger_mod.open_ledgers(config.projects_dir)
     if args.project:
@@ -1138,11 +1147,13 @@ def cmd_classify(args: argparse.Namespace, config: Config) -> int:
     for name, probe in ledgers.items():
         if args.dry_run:
             reports.append(
-                classify_mod.classify(probe, config.project(name).pdf, name, write=False)
+                classify_mod.classify(probe, _document(config, name), name, write=False)
             )
             continue
         with ledger_mod.Ledger.edit(probe.path) as led:
-            reports.append(classify_mod.classify(led, config.project(name).pdf, name, write=True))
+            reports.append(
+                classify_mod.classify(led, _document(config, name), name, write=True)
+            )
 
     if args.json:
         print(

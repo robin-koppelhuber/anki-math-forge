@@ -231,11 +231,11 @@ def create_app(config: Config) -> FastAPI:
         layout did this card resolve to -- and a navigation away and back is a
         poor way to look something up mid-decision.
 
-        The source in force comes first. With fifty of them, landing at the top
+        The project in force comes first. With fifty of them, landing at the top
         of an alphabetical list and scrolling is not an answer.
         """
         name = resolve_project(config, project)
-        focus = f"source: {name}"
+        focus = f"project: {name}"
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in effective_config(config):
             where = str(row["where"])
@@ -243,7 +243,7 @@ def create_app(config: Config) -> FastAPI:
             # different question -- which book to work on -- and the gallery
             # answers that one; listing them here buried the two groups you
             # opened the panel for.
-            if where.startswith("source: ") and where != focus:
+            if where.startswith("project: ") and where != focus:
                 continue
             grouped.setdefault(where, []).append(row)
         order = [focus, *(g for g in grouped if g != focus)]
@@ -2024,13 +2024,14 @@ def project_origin(config: Config, project: str) -> str:
     in every view.
     """
     spec = config.projects.get(project)
-    if spec is None:
+    work = spec.source() if spec else None
+    if work is None:
         return ""
-    if spec.zotero_key:
+    if work.zotero_key:
         return "zotero"
-    if spec.pdf:
+    if work.files:
         return "pdf"
-    return "tex" if spec.tex else ""
+    return "tex" if work.tex else ""
 
 
 def project_facts(config: Config, project: str, *, from_marks: bool = False) -> dict[str, Any]:
@@ -2057,7 +2058,9 @@ def project_facts(config: Config, project: str, *, from_marks: bool = False) -> 
         "citation": spec.citation if spec else "",
         "tags": list(spec.tags) if spec else [],
         "origin": origin,
-        "zotero_key": spec.zotero_key if spec else "",
+        "zotero_key": next((w.zotero_key for w in spec.sources if w.zotero_key), "")
+        if spec
+        else "",
         "deck": config.deck_for(project),
         "decks": sorted(spec.decks.items()) if spec else [],
         # `[conventions]`: what this source declares as keys, all of it, not
@@ -2416,9 +2419,13 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     )
 
     for name, spec in config.projects.items():
-        where = f"source: {name}"
+        where = f"project: {name}"
         origin = f"projects/{name}/project.toml"
         inherited = "inherited"
+        # The work this project reads, when it reads one. Crop settings and a
+        # marking scheme are facts about a document, so a project with none
+        # inherits every one of them.
+        work = spec.source()
         add(where, "material", project_origin(config, name) or "unset", origin)
         add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
         add(where, "order", spec.order, origin)
@@ -2437,13 +2444,13 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
             where,
             "crop_context",
             config.crop_context_for(name),
-            origin if spec.crop_context else inherited,
+            origin if work and work.crop_context else inherited,
         )
         add(
             where,
             "crop_width",
-            spec.crop_width or "page for marks, box for the rest",
-            origin if spec.crop_width else "by where the geometry came from",
+            (work.crop_width if work else "") or "page for marks, box for the rest",
+            origin if work and work.crop_width else "by where the geometry came from",
         )
         add(
             where,
@@ -2461,7 +2468,7 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
                 where,
                 "units from",
                 ", ".join(sorted(scheme.unit_pairs)),
-                (origin if spec.units_from else inherited)
+                (origin if work and work.units_from else inherited)
                 + (" · every declared mark" if DECLARED in scheme.units_from else ""),
             )
         # The whole colour scheme, **here** rather than in the rail. The rail
@@ -2482,7 +2489,7 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
                 f"means [{key}]",
                 meaning + (" · becomes a unit" if scheme.makes_a_unit(kind, colour) else ""),
                 origin
-                if declared and key in (spec.meanings or {})
+                if declared and key in ((work.meanings if work else None) or {})
                 else "forge.toml"
                 if declared
                 else "Zotero's own reading of the annotation kind",

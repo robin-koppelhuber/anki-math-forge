@@ -413,7 +413,7 @@ def test_the_stub_carries_your_tags_and_invents_none(tmp_path: Path) -> None:
     write_source_stub(path, item)
     text = path.read_text(encoding="utf-8")
     assert '"anki"' in text and '"Statistics - Machine Learning"' in text
-    assert "documents = []" in text
+    assert "attachments = []" in text
 
 
 def test_the_stub_carries_the_scheme_it_inherits(tmp_path: Path) -> None:
@@ -430,7 +430,7 @@ def test_the_stub_carries_the_scheme_it_inherits(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert '# units_from = ["highlight/green", "note/yellow"]' in text
     assert '# "highlight/green" = "a claim"' in text
-    assert "# [meanings]" in text
+    assert "# [sources.meanings]" in text
 
 
 def test_the_stub_is_valid_toml_once_uncommented(tmp_path: Path) -> None:
@@ -444,7 +444,7 @@ def test_the_stub_is_valid_toml_once_uncommented(tmp_path: Path) -> None:
 
     # Only the settings, not the prose around them: one of those sentences
     # quotes `units_from = "declared"` and would uncomment into nonsense.
-    setting = re.compile(r'^# (\[meanings\]|units_from = |"[a-z]+/[a-z]+" = )')
+    setting = re.compile(r'^# (\[sources\.meanings\]|units_from = |"[a-z]+/[a-z]+" = )')
     live = [
         line[2:]
         for line in path.read_text(encoding="utf-8").splitlines()
@@ -453,7 +453,7 @@ def test_the_stub_is_valid_toml_once_uncommented(tmp_path: Path) -> None:
     parsed = tomllib.loads("\n".join(live))
 
     assert parsed["units_from"] == ["highlight/green"]
-    assert parsed["meanings"] == {"highlight/green": "a claim"}
+    assert parsed["sources"]["meanings"] == {"highlight/green": "a claim"}
 
 
 def test_the_meanings_table_is_last(tmp_path: Path) -> None:
@@ -462,8 +462,8 @@ def test_the_meanings_table_is_last(tmp_path: Path) -> None:
     write_source_stub(path, Item(key="X", title="A Book"), scheme=zcfg("note/yellow"))
 
     lines = path.read_text(encoding="utf-8").splitlines()
-    header = next(i for i, line in enumerate(lines) if line == "# [meanings]")
-    after = [ln for ln in lines[header + 1 :] if "units_from" in ln or "documents" in ln]
+    header = next(i for i, line in enumerate(lines) if line == "# [sources.meanings]")
+    after = [ln for ln in lines[header + 1 :] if "units_from" in ln or "attachments" in ln]
     assert after == [], "a key after the table header would land inside it"
 
 

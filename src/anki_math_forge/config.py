@@ -55,27 +55,91 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True)
+class SourceConfig:
+    """One work inside a project: a book, a paper, a page on the web.
+
+    A project is what holds a ledger, a deck and a conventions file; a source
+    is a thing you read. The two were one class until a project could hold
+    several works, which is what a cluster of related papers is (ROADMAP.md
+    10).
+
+    **Files, not a file.** A book delivered as fifteen chapter PDFs is one
+    source with fifteen files, and `locator.document` names which of them a
+    unit was printed in. That is the whole of the hierarchy: project, source,
+    file, with no parent relations, because a work's parts are its files and
+    anything deeper is a project that has outgrown its `conventions.md`.
+
+    Everything here is about *reading a document*, which is why it is not on
+    the project: a marking scheme belongs to a work, and a project with two
+    works that disagree about one is a project to split.
+    """
+
+    #: How a unit names this source. For a Zotero item it is the item key, and
+    #: a unit's `locator.document` is one of its attachments rather than this.
+    key: str = ""
+    title: str = ""
+    citation: str = ""
+    #: A source you read on the web rather than out of a file. It carries no
+    #: geometry, so nothing is extracted from it and it needs none of the
+    #: settings below; it is there to be checked against.
+    url: str = ""
+    tex: Path | None = None
+    files: tuple[Path, ...] = ()
+    #: The Zotero item this came from, when it did. The units carry their own
+    #: attachment keys, so this is not used to find anything; it is what makes
+    #: "where did this come from" answerable without opening Zotero.
+    zotero_key: str = ""
+    #: Which of a Zotero item's attachments to read, by title or by key. Empty
+    #: means all of them, which is right until it is not: an item routinely
+    #: carries the paper and a preprint of the paper, and marks made in one
+    #: are not marks in the other.
+    attachments: tuple[str, ...] = ()
+    #: Points of page shown around this source's crops; 0 inherits.
+    crop_context: float = 0.0
+    #: `box` or `page`; empty inherits, and what it inherits depends on where
+    #: the geometry came from -- see `Config.crop_width_for`.
+    crop_width: str = ""
+    #: What this source's marks mean, overriding the repo-wide `[zotero]`.
+    #: Colour schemes drift between a book you read last year and a paper you
+    #: read last week, and a scheme that is wrong is worse than none.
+    units_from: frozenset[str] = frozenset()
+    meanings: Mapping[str, str] = field(default_factory=dict)
+    #: The word that asks for a convention here, when this document is read in
+    #: another language than the rest of the shelf. Empty inherits.
+    convention_keyword: str = ""
+
+    @property
+    def authoritative(self) -> bool:
+        """Whether units are extracted from this, rather than read beside it.
+
+        Derived rather than declared, because it is the same question as
+        "is there something here to segment". A URL you told a pass to read
+        is reference material: it settles nothing on its own, and a unit that
+        stands on it says where to look rather than what to write.
+        """
+        return bool(self.files or self.tex or self.zotero_key)
+
+    @property
+    def pdf(self) -> Path | None:
+        """The first file, for the many callers that read one document."""
+        return self.files[0] if self.files else None
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     title: str
     citation: str
-    tex: Path | None
-    pdf: Path | None
+    #: The works this project reads. Usually one; a tight cluster of related
+    #: papers is several, and a project with no authoritative source at all is
+    #: one whose cards come from topics instead.
+    sources: tuple[SourceConfig, ...] = ()
     # Empty means "inherit the repo default": which deck this source's cards
     # belong in. A repo with one source never sets it.
     deck: str = ""
     order: str = "printed"
-    # Points of page shown around this source's crops; 0 inherits.
-    crop_context: float = 0.0
-    # `box` or `page`; empty inherits, and what it inherits depends on where
-    # the geometry came from -- see `Config.crop_width_for`.
-    crop_width: str = ""
     # Pages either side handed to a card writer, or `chapter`; -1 inherits.
     context_pages: int | str = -1
-    # The Zotero item this source was imported from, when it was. Not used to
-    # find anything -- the units carry their own attachment keys -- but it is
-    # what makes "where did this come from" answerable without opening Zotero.
-    zotero_key: str = ""
     # Card type -> deck, for a source whose restatements and explanations want
     # different new-card rates. Empty means every type lands in `deck`.
     decks: Mapping[str, str] = field(default_factory=dict)
@@ -85,19 +149,6 @@ class ProjectConfig:
     # is a label that means whatever the tool guessed, and you would be
     # filtering by it without ever having decided what it says.
     tags: tuple[str, ...] = ()
-    # Which of a Zotero item's attachments to read, by title or by key. Empty
-    # means all of them, which is right until it is not: an item routinely
-    # carries the paper and a preprint of the paper, and marks made in one are
-    # not marks in the other.
-    documents: tuple[str, ...] = ()
-    # What this source's marks mean, overriding the repo-wide `[zotero]`.
-    # Colour schemes drift between a book you read last year and a paper you
-    # read last week, and a scheme that is wrong is worse than none.
-    units_from: frozenset[str] = frozenset()
-    meanings: Mapping[str, str] = field(default_factory=dict)
-    # The word that asks for a convention here, when this document is read in
-    # another language than the rest of the shelf. Empty inherits.
-    convention_keyword: str = ""
     # What is ambient in this source, as keys rather than prose: `[conventions]`
     # in `project.toml`. Free-form -- see `CONVENTIONS_ACTED_ON`. There is no
     # repo-wide counterpart, deliberately: a default convention is a claim
@@ -110,6 +161,29 @@ class ProjectConfig:
     @property
     def dir_name(self) -> str:
         return self.name
+
+    def source(self, document: str = "") -> SourceConfig | None:
+        """Which work a unit came out of, by the file it names.
+
+        A unit records `locator.document`, which is a file or a Zotero
+        attachment, and file to source is many to one and declared, so the
+        source is looked up rather than stored on the unit.
+
+        An empty `document` means the only one, which is what a project with
+        a single work always passes. With several works and no name there is
+        no answer, and guessing the first would silently read one book's
+        marking scheme onto another's crops.
+        """
+        if document:
+            for source in self.sources:
+                if document == source.key or document in source.attachments:
+                    return source
+                if any(document == f.name or document == str(f) for f in source.files):
+                    return source
+        real = [s for s in self.sources if s.authoritative]
+        if len(real) == 1:
+            return real[0]
+        return self.sources[0] if len(self.sources) == 1 else None
 
     @property
     def layout(self) -> str:
@@ -429,7 +503,7 @@ class Config:
             known = ", ".join(sorted(self.projects)) or "(none)"
             raise ConfigError(f"unknown source {name!r}; configured: {known}") from None
 
-    def zotero_for(self, source: str) -> ZoteroConfig:
+    def zotero_for(self, project: str, document: str = "") -> ZoteroConfig:
         """This source's reading of its own marks, over the repo default.
 
         `data_dir` is a fact about the machine, so it never varies per source;
@@ -440,17 +514,18 @@ class Config:
         plainest reason of the three: it is a word you type while reading, and
         you do not always read in the same language.
         """
-        spec = self.projects.get(source)
-        if spec is None or not (spec.units_from or spec.meanings or spec.convention_keyword):
+        spec = self.projects.get(project)
+        work = spec.source(document) if spec else None
+        if work is None or not (work.units_from or work.meanings or work.convention_keyword):
             return self.zotero
         return ZoteroConfig(
             data_dir=self.zotero.data_dir,
-            units_from=spec.units_from or self.zotero.units_from,
-            meanings=dict(spec.meanings) or dict(self.zotero.meanings),
-            convention_keyword=spec.convention_keyword or self.zotero.convention_keyword,
+            units_from=work.units_from or self.zotero.units_from,
+            meanings=dict(work.meanings) or dict(self.zotero.meanings),
+            convention_keyword=work.convention_keyword or self.zotero.convention_keyword,
         )
 
-    def crop_context_for(self, source: str) -> float:
+    def crop_context_for(self, project: str, document: str = "") -> float:
         """How much page to show around this source's crops.
 
         A fact about how a book is set: forty points frames a one-line display
@@ -459,12 +534,13 @@ class Config:
         """
         from .extract.render import TRIAGE_CONTEXT
 
-        spec = self.projects.get(source)
-        if spec and spec.crop_context:
-            return spec.crop_context
+        spec = self.projects.get(project)
+        work = spec.source(document) if spec else None
+        if work and work.crop_context:
+            return work.crop_context
         return self.crop_context or TRIAGE_CONTEXT
 
-    def crop_width_for(self, source: str, from_a_mark: bool = False) -> str:
+    def crop_width_for(self, project: str, from_a_mark: bool = False, document: str = "") -> str:
         """`box` or `page`: how wide this source's crops are cut.
 
         The default depends on where the geometry came from, because the
@@ -478,14 +554,15 @@ class Config:
         So a mark gets the whole page width unless the source says otherwise.
         A source that says otherwise is believed in both directions.
         """
-        spec = self.projects.get(source)
-        if spec and spec.crop_width:
-            return spec.crop_width
+        spec = self.projects.get(project)
+        work = spec.source(document) if spec else None
+        if work and work.crop_width:
+            return work.crop_width
         if self.crop_width:
             return self.crop_width
         return "page" if from_a_mark else "box"
 
-    def context_pages_for(self, source: str, unit: int | str | None = None) -> int | str:
+    def context_pages_for(self, project: str, unit: int | str | None = None) -> int | str:
         """The window a card writer gets, most specific first.
 
         A number of pages either side, or `chapter`. The unit wins, because
@@ -495,34 +572,39 @@ class Config:
         """
         if unit is not None:
             return unit
-        spec = self.projects.get(source)
+        spec = self.projects.get(project)
         if spec and context_asked(spec.context_pages):
             return spec.context_pages
         return self.context_pages
 
-    def document_for(self, source: str, document: str = "") -> Path | None:
+    def document_for(self, project: str, document: str = "") -> Path | None:
         """The file a unit's page and bbox refer to.
 
-        A source used to be one document, so `source.pdf` answered this. A
-        Zotero item is routinely several -- a paper and its appendix, a book as
-        fifteen chapter PDFs -- and page 17 of one is not page 17 of another,
-        so the unit names its own on `locator.document`.
+        A source is one work and its files are its parts, so page 17 of one
+        is not page 17 of another and the unit names its own on
+        `locator.document`. An empty one means the source's only file, which
+        is what a book in a single PDF always passes.
 
-        Zotero keeps each attachment in its own folder under `storage/`, one
-        file per folder, so the key is enough to find it and no filename has to
-        be recorded anywhere.
+        A named file is looked for among the project's own first, then under
+        Zotero's `storage/`, where each attachment has a folder to itself and
+        the key is enough to find it with no filename recorded anywhere.
         """
+        spec = self.projects.get(project)
         if document:
+            for declared in spec.sources if spec else ():
+                for path in declared.files:
+                    if document in (path.name, str(path), declared.key):
+                        return path
             folder = self.zotero.data_dir / "storage" / document
             files = sorted(folder.glob("*.pdf")) if folder.is_dir() else []
             return files[0] if files else None
-        spec = self.projects.get(source)
-        return spec.pdf if spec else None
+        work = spec.source() if spec else None
+        return work.pdf if work else None
 
-    def units_path(self, source: str) -> Path:
-        return self.projects_dir / source / "units.jsonl"
+    def units_path(self, project: str) -> Path:
+        return self.projects_dir / project / "units.jsonl"
 
-    def deck_for(self, source: str, card_type: str = "") -> str:
+    def deck_for(self, project: str, card_type: str = "") -> str:
         """Which Anki deck this source's cards belong in.
 
         Per source, because two books are two subjects far more often than
@@ -538,19 +620,20 @@ class Config:
         per-deck limit is the only way Anki lets you say that. Subdecks under a
         shared parent, so studying the parent still sees both.
         """
-        spec = self.projects.get(source)
+        spec = self.projects.get(project)
         if spec and card_type and spec.decks.get(card_type):
             return spec.decks[card_type]
         if spec and spec.deck:
             return spec.deck
-        if spec and spec.zotero_key:
+        if spec and any(w.zotero_key for w in spec.sources):
             # Imported reading, which is not the deck you curated. Said here
             # rather than written into the source file, so it is one decision
             # in one place and a source overrides it by naming a deck.
-            return zotero_deck(spec.title, spec.zotero_key)
+            key = next(w.zotero_key for w in spec.sources if w.zotero_key)
+            return zotero_deck(spec.title, key)
         return self.deck
 
-    def conventions_for(self, source: str) -> Mapping[str, str]:
+    def conventions_for(self, project: str) -> Mapping[str, str]:
         """What is ambient in this source, as keys: `[conventions]`.
 
         **There is no repo-wide layer to fall back to, and that is the point.**
@@ -559,10 +642,10 @@ class Config:
         denominator layout -- the silent mixing CLAUDE.md names, arriving
         through a default rather than through a mistake.
         """
-        spec = self.projects.get(source)
+        spec = self.projects.get(project)
         return dict(spec.conventions) if spec else {}
 
-    def layout_for(self, source: str) -> str:
+    def layout_for(self, project: str) -> str:
         """Which derivative layout this source's cards are written in.
 
         One entry in that source's `[conventions]`, and the only one anything
@@ -574,7 +657,7 @@ class Config:
         `verify` refuses to run rather than checking against a guess, and a
         card from it carries no layout clause.
         """
-        return self.conventions_for(source).get("layout", "")
+        return self.conventions_for(project).get("layout", "")
 
     def web_for(self, source: str, unit: bool | None = None) -> bool:
         """Whether whoever writes this card may look things up on the web.
@@ -648,30 +731,21 @@ def load(root: Path | None = None) -> Config:
 
     projects: dict[str, ProjectConfig] = {}
     for name, spec in specs.items():
+        _refuse_a_project_wide_document(spec, f"[projects.{name}]")
         projects[name] = ProjectConfig(
             name=name,
             title=spec.get("title", name),
             citation=spec.get("citation", spec.get("title", name)),
-            tex=_opt_path(root, spec.get("tex")),
-            pdf=_opt_path(root, spec.get("pdf")),
+            sources=_sources(root, spec, f"[projects.{name}]"),
             deck=str(spec.get("deck", "") or ""),
             conventions=_conventions(spec, f"[projects.{name}]"),
             web=_opt_bool(spec.get("web")),
             order=_order(spec.get("order", "printed"), f"[projects.{name}]"),
-            crop_context=float(spec.get("crop_context", 0.0)),
-            crop_width=_crop_width(spec.get("crop_width", ""), f"[projects.{name}]"),
             context_pages=context_size(
                 spec.get("context_pages", -1), f"[projects.{name}] context_pages"
             ),
-            zotero_key=str(spec.get("zotero", "") or ""),
             decks={str(k): str(v) for k, v in (spec.get("decks") or {}).items()},
             tags=tuple(str(x) for x in spec.get("tags", ())),
-            documents=tuple(str(x) for x in spec.get("documents", ())),
-            units_from=_units_from(
-                spec.get("units_from", ()), f"[projects.{name}] units_from"
-            ),
-            convention_keyword=str(spec.get("convention_keyword", "") or ""),
-            meanings=_meanings(spec.get("meanings") or {}, f"[projects.{name}.meanings]"),
         )
 
     return Config(
@@ -701,6 +775,75 @@ def load(root: Path | None = None) -> Config:
         projects=projects,
         zotero=_zotero(raw.get("zotero", {})),
     )
+
+
+#: Keys that described the one document a project used to be, and now
+#: describe one of the works it reads. Refused where they used to live rather
+#: than ignored, because a `pdf` nothing reads looks exactly like a `pdf`
+#: nobody wrote, and the failure would be a project that silently extracts
+#: nothing. Same argument as `[cards] layout`, one level down.
+MOVED_TO_A_SOURCE = (
+    "pdf",
+    "tex",
+    "zotero",
+    "documents",
+    "crop_context",
+    "crop_width",
+    "units_from",
+    "meanings",
+    "convention_keyword",
+)
+
+
+def _refuse_a_project_wide_document(spec: Mapping[str, Any], where: str) -> None:
+    for key in MOVED_TO_A_SOURCE:
+        if key in spec:
+            moved = "attachments" if key == "documents" else "files" if key == "pdf" else key
+            raise ConfigError(
+                f"{where} {key} describes a document, and a project may read several, "
+                f"so it belongs in a [[sources]] table as `{moved}`"
+            )
+
+
+def _sources(root: Path, spec: dict[str, Any], where: str) -> tuple[SourceConfig, ...]:
+    """`[[sources]]`: the works a project reads.
+
+    One table per work, each with its own files and its own marking scheme,
+    because those are facts about a document and a project may hold several.
+    A project that reads nothing declares none, and that absence is what says
+    it has no authoritative source; there is no kind key anywhere.
+    """
+    out: list[SourceConfig] = []
+    for i, raw in enumerate(spec.get("sources") or ()):
+        if not isinstance(raw, dict):
+            raise ConfigError(f"{where} sources[{i}] is not a table")
+        files = raw.get("files") or ()
+        if isinstance(files, str):
+            raise ConfigError(f"{where} sources[{i}] files is a list, even with one file in it")
+        paths = tuple(p for p in (_opt_path(root, f) for f in files) if p is not None)
+        key = str(raw.get("key", "") or raw.get("zotero", "") or "")
+        if not key and paths:
+            key = paths[0].name
+        out.append(
+            SourceConfig(
+                key=key,
+                title=str(raw.get("title", "") or ""),
+                citation=str(raw.get("citation", "") or ""),
+                url=str(raw.get("url", "") or ""),
+                tex=_opt_path(root, raw.get("tex")),
+                files=paths,
+                zotero_key=str(raw.get("zotero", "") or ""),
+                attachments=tuple(str(x) for x in raw.get("attachments", ())),
+                crop_context=float(raw.get("crop_context", 0.0)),
+                crop_width=_crop_width(raw.get("crop_width", ""), f"{where} sources[{i}]"),
+                units_from=_units_from(
+                    raw.get("units_from", ()), f"{where} sources[{i}] units_from"
+                ),
+                convention_keyword=str(raw.get("convention_keyword", "") or ""),
+                meanings=_meanings(raw.get("meanings") or {}, f"{where} sources[{i}].meanings"),
+            )
+        )
+    return tuple(out)
 
 
 def _study_order(raw: Any, where: str) -> tuple[str, ...]:

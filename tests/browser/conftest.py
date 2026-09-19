@@ -84,7 +84,7 @@ CONFIG = (
     '[repo]\ncards_dir = "cards"\nprojects_dir = "projects"\n\n'
     "[cards]\n\n"
     '[projects.demo]\ntitle = "Demo"\ncitation = "Demo"\n'
-    'tex = "projects/demo/demo.tex"\n'
+    '\n[[projects.demo.sources]]\ntex = "projects/demo/demo.tex"\n'
 )
 
 

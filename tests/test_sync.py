@@ -506,7 +506,8 @@ def zotero_source(repo: Path, key: str = "T7QDISXB", title: str = "A  Paper") ->
     folder = repo / "projects" / "paper"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("project.toml").write_text(
-        f'title = "{title}"\ncitation = "Paper"\nzotero = "{key}"\n', encoding="utf-8"
+        f'title = "{title}"\ncitation = "Paper"\n\n[[sources]]\nzotero = "{key}"\n',
+        encoding="utf-8",
     )
     return config_mod.load(repo)
 
@@ -527,8 +528,8 @@ def test_a_source_that_names_a_deck_keeps_it(repo: Path) -> None:
     folder = repo / "projects" / "paper"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("project.toml").write_text(
-        'title = "A Paper"\ncitation = "Paper"\nzotero = "T7QDISXB"\n'
-        'deck = "Mathe::Concentration"\n',
+        'title = "A Paper"\ncitation = "Paper"\ndeck = "Mathe::Concentration"\n'
+        '\n[[sources]]\nzotero = "T7QDISXB"\n',
         encoding="utf-8",
     )
     config = config_mod.load(repo)
@@ -553,6 +554,16 @@ def test_a_new_card_goes_to_the_deck_the_source_asks_for(repo: Path) -> None:
     assert "Zotero::A Paper" in anki.decks
 
 
+def name_the_deck(toml: str, deck: str) -> str:
+    """Add a `deck` to a project file, above its `[[sources]]` table.
+
+    Appending it would put it *inside* the table, because a TOML header
+    swallows every bare key under it. That is the same trap the Zotero stub
+    writer orders its own lines around.
+    """
+    return toml.replace("\n[[sources]]", f'\ndeck = "{deck}"\n\n[[sources]]')
+
+
 def test_a_deck_change_is_reported_rather_than_applied(repo: Path) -> None:
     """Anki settles a deck when the note is added and never again, so editing
     the setting moved nothing and the only symptom was one source spread over
@@ -564,7 +575,7 @@ def test_a_deck_change_is_reported_rather_than_applied(repo: Path) -> None:
 
     folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
-        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        name_the_deck(folder.read_text(encoding="utf-8"), "Mathe::Concentration"),
         encoding="utf-8",
     )
     report = sync.run(config_mod.load(repo), client=anki)
@@ -583,7 +594,7 @@ def test_move_decks_files_them_under_the_new_name(repo: Path) -> None:
     sync.run(config, client=anki)
     folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
-        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        name_the_deck(folder.read_text(encoding="utf-8"), "Mathe::Concentration"),
         encoding="utf-8",
     )
 
@@ -608,7 +619,7 @@ def test_the_summary_counts_what_moved(repo: Path) -> None:
 
     folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
-        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        name_the_deck(folder.read_text(encoding="utf-8"), "Mathe::Concentration"),
         encoding="utf-8",
     )
     report = sync.run(config_mod.load(repo), client=anki, move_decks=True)
@@ -653,7 +664,7 @@ def test_a_rehearsal_moves_nothing(repo: Path) -> None:
     sync.run(config, client=anki)
     folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
-        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        name_the_deck(folder.read_text(encoding="utf-8"), "Mathe::Concentration"),
         encoding="utf-8",
     )
 

@@ -1,10 +1,14 @@
 title = "The Matrix Cookbook"
 citation = "Matrix Cookbook"
-pdf = "projects/matrix-cookbook/matrixcookbook.pdf"
-tex = ""
 deck = "Mathe::Matrix-Calculus"
 order = "printed"
 tags = []
+
+# The work this project reads: its files, and how to read them. One table per
+# work, because a project may hold a tight cluster of papers and a marking
+# scheme is a fact about a document rather than about the deck.
+[[sources]]
+files = ["projects/matrix-cookbook/matrixcookbook.pdf"]
 
 # What is ambient in this book, as one-liners. Free-form: every key reaches
 # whoever writes a card, through `forge context`. Prose that wants a paragraph

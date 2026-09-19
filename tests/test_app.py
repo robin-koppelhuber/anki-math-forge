@@ -436,7 +436,9 @@ def test_a_missing_source_document_is_explained_not_a_broken_image(
     pdf_client: TestClient, pdf_units: Config
 ) -> None:
     unit = Ledger.load(pdf_units.units_path("book")).units[0]
-    pdf_units.project("book").pdf.unlink()
+    document = pdf_units.document_for("book")
+    assert document is not None
+    document.unlink()
     response = pdf_client.get(f"/crop/book/{unit.id}.png")
     assert response.status_code == 409
     assert "rendered from it on demand" in response.text

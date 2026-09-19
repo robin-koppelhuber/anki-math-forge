@@ -189,7 +189,8 @@ def test_a_comment_that_merely_starts_like_the_keyword_is_not_one(config: Config
 def test_a_source_may_read_the_keyword_in_its_own_language(repo: Path) -> None:
     """The word is typed while reading, in whatever language you read in."""
     (repo / "projects" / "demo" / "project.toml").write_text(
-        'title = "A Book"\nconvention_keyword = "Konvention"\n', encoding="utf-8"
+        'title = "A Book"\n\n[[sources]]\nconvention_keyword = "Konvention"\n',
+        encoding="utf-8",
     )
     config = config_mod.load(repo)
 

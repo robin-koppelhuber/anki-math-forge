@@ -75,10 +75,17 @@ def run(
     pages: range | None = None,
 ) -> ExtractReport:
     """Segment a configured source and merge the result into its ledger."""
-    source = config.project(project_name)
+    project = config.project(project_name)
+    # The work being segmented. A project with several is not extracted from
+    # wholesale: each is imported by the door that knows how to read it.
+    source = project.source()
     report = ExtractReport(project=project_name)
     checker = latex.checker(config.extra_macros)
 
+    if source is None:
+        raise ConfigError(
+            f"project {project_name!r} declares no source to read; add a [[sources]] table"
+        )
     if source.tex and source.tex.exists():
         report.mode, report.path = "tex", source.tex
         units = tex.segment(source.tex.read_text(encoding="utf-8"), project_name)
@@ -99,8 +106,8 @@ def run(
     else:
         configured = source.tex or source.pdf
         raise ConfigError(
-            f"source {project_name!r} has no readable input"
-            + (f" (configured: {configured})" if configured else " (set `tex` or `pdf`)")
+            f"project {project_name!r} has no readable input"
+            + (f" (configured: {configured})" if configured else " (set `files` or `tex`)")
         )
 
     report.found = len(units)
@@ -231,8 +238,11 @@ def cache_source_text(config: Config, project_name: str) -> int:
     equations are what stop you writing ten near-duplicates. The whole book is
     ~26k tokens, so the honest answer is to hand over all of it.
     """
-    source = config.project(project_name)
+    project = config.project(project_name)
+    source = project.source()
     text = ""
+    if source is None:
+        return 0
     if source.tex and source.tex.exists():
         text = source.tex.read_text(encoding="utf-8")
     elif source.pdf and source.pdf.exists():
@@ -241,7 +251,7 @@ def cache_source_text(config: Config, project_name: str) -> int:
         return 0
     path = source_text_path(config, project_name)
     header = (
-        f"<!-- {source.title}: text layer, cached by `forge extract`.\n"
+        f"<!-- {project.title}: text layer, cached by `forge extract`.\n"
         "     Generated; do not edit. The mathematics here is mangled -- it is\n"
         "     context for writing cards, never a transcription. The crop is\n"
         "     the authority for what an equation says. -->\n\n"

@@ -272,15 +272,6 @@ def write_source_stub(
         f'citation = "{item.citation}"',
         f"tags = [{', '.join(quoted)}]",
         "",
-        "# Which Zotero item this came from. The units carry attachment keys,",
-        "# and this is what they hang off.",
-        f'zotero = "{item.key}"',
-        "",
-        "# Which of its attachments to read, by title or by key. Empty means",
-        "# all of them; name them when the item carries more than one PDF of",
-        "# the same thing, since marks made in one are not marks in the other.",
-        "documents = []",
-        "",
         "# Which deck these cards land in. The line below is the default this",
         "# source already has, written out so you can see it: anything imported",
         "# from Zotero goes under `Zotero::`, which keeps a shelf you are",
@@ -301,6 +292,19 @@ def write_source_stub(
         "# in `conventions.md` beside this file. There is none until you write",
         "# one, and `forge context` says so rather than pretending.",
         "",
+        "# The work this project reads. One table per work: a project may hold a",
+        "# cluster of related papers, and how a document is marked up is a fact",
+        "# about that document rather than about the deck.",
+        "[[sources]]",
+        "# Which Zotero item this is. The units carry attachment keys, and this",
+        "# is what they hang off.",
+        f'zotero = "{item.key}"',
+        "",
+        "# Which of its attachments to read, by title or by key. Empty means",
+        "# all of them; name them when the item carries more than one PDF of",
+        "# the same thing, since marks made in one are not marks in the other.",
+        "attachments = []",
+        "",
         *_override_block(scheme),
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -311,9 +315,9 @@ def write_source_stub(
 def _override_block(scheme: ZoteroConfig | None) -> list[str]:
     """The two per-source keys, commented out and carrying what is inherited.
 
-    `[meanings]` is a table, so it goes last: a bare key written after it would
-    land inside it. The pairs are sorted so a diff between two sources is about
-    the scheme rather than about dictionary order.
+    `[sources.meanings]` is a table, so it goes last: a bare key written after
+    it would land inside it. The pairs are sorted so a diff between two works
+    is about the scheme rather than about dictionary order.
     """
     pairs = sorted(scheme.unit_pairs) if scheme else []
     meanings = sorted((scheme.meanings if scheme else {}).items())
@@ -333,7 +337,7 @@ def _override_block(scheme: ZoteroConfig | None) -> list[str]:
         "# anything you set replaces it whole, because a half-inherited colour",
         "# scheme is the failure this exists to prevent. Delete the lines that do",
         "# not apply to this document.",
-        "# [meanings]",
+        "# [sources.meanings]",
         *(f'# "{name}" = "{text}"' for name, text in meanings),
         "",
     ]

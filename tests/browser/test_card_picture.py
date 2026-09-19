@@ -39,7 +39,7 @@ CONFIG = (
     '[repo]\ncards_dir = "cards"\nprojects_dir = "projects"\n\n'
     "[cards]\n\n"
     '[projects.book]\ntitle = "A Book"\ncitation = "Book"\n'
-    'pdf = "projects/book/book.pdf"\n'
+    '\n[[projects.book.sources]]\nfiles = ["projects/book/book.pdf"]\n'
 )
 
 HEAD = (

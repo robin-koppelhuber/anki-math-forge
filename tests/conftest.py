@@ -34,6 +34,8 @@ katex_base = "/static/vendor/katex"
 [projects.demo]
 title = "Demo Source"
 citation = "Demo"
+
+[[projects.demo.sources]]
 tex = "projects/demo/demo.tex"
 
 # A convention belongs to the source, never to the repo: `[cards] layout` is
@@ -116,13 +118,12 @@ def zotero_config(repo: Path) -> Config:
     to be a meaning that does *not* make a unit.
     """
     (repo / "projects" / "paper").mkdir(parents=True)
-    (repo / "projects" / "paper" / "source.md").write_text(
-        "+++\n"
+    (repo / "projects" / "paper" / "project.toml").write_text(
         'title = "A Paper"\n'
         'citation = "Someone 2025"\n'
         'tags = ["paper"]\n'
-        'zotero = "VFD2E2BR"\n'
-        "+++\n",
+        "\n[[sources]]\n"
+        'zotero = "VFD2E2BR"\n',
         encoding="utf-8",
     )
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
@@ -184,8 +185,8 @@ def pdf_source(repo: Path) -> Config:
     build_pdf(repo / "projects" / "book" / "book.pdf")
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
     toml += (
-        '\n[projects.book]\ntitle = "A Book"\n'
-        'citation = "Book"\npdf = "projects/book/book.pdf"\n'
+        '\n[projects.book]\ntitle = "A Book"\ncitation = "Book"\n'
+        '\n[[projects.book.sources]]\nfiles = ["projects/book/book.pdf"]\n'
     )
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)

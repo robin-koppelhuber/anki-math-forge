@@ -240,17 +240,30 @@ Markdown below it.
 
 ### `project.toml`
 
-What a key can express, and what the tool acts on: `title`, `citation`,
-`pdf`/`tex`, `zotero`, `documents`, `deck`, `order`, `tags`,
-`crop_context`/`crop_width`, `context_pages`, `web`, a `[conventions]` table,
-and the source's own reading of its Zotero marks.
+What a key can express, and what the tool acts on. About the project:
+`title`, `citation`, `deck`, `order`, `tags`, `context_pages`, `web`, and a
+`[conventions]` table. About each work it reads, in a `[[sources]]` table of
+its own: `files`/`tex`, `zotero`, `attachments`, `url`,
+`crop_context`/`crop_width`, and that work's reading of its Zotero marks.
+
+**The split is the point.** A project holds one ledger, one deck and one
+conventions file; a source is a thing you read, and a project may read
+several, which is what a tight cluster of related papers is. A key that
+describes a document is refused at project level rather than ignored, for
+the reason `[cards] layout` is: a `pdf` nothing reads looks exactly like a
+`pdf` nobody wrote.
+
+`files` is a list even with one file in it. A book delivered as fifteen
+chapter PDFs is one source with fifteen files, and `locator.document` names
+which of them a unit was printed in. Project, source, file is the whole
+hierarchy; there are no parent relations.
 
 `crop_width` outside `box | page` is refused at load. An unrecognised value
 would read as "not box" and silently change every crop.
 
-`documents` names which of a Zotero item's PDFs to read, by title or key. An
-item routinely carries the paper and a preprint of the paper, and marks made in
-one are not marks in the other.
+`attachments` names which of a Zotero item's PDFs to read, by title or key.
+An item routinely carries the paper and a preprint of the paper, and marks
+made in one are not marks in the other.
 
 `tags` are yours to invent. Nothing writes one for you: a label the tool made
 up means whatever the tool guessed, and you would be filtering by it without
@@ -309,8 +322,8 @@ Every key in `project.toml` overrides one in `forge.toml`, so a block copied
 between the two has to work unchanged. TOML is also the stricter language: in
 YAML a tag or colour written `no`, `on` or `y` is silently a boolean.
 
-A folder with neither `project.toml` nor the older `source.md` is not a source.
-Discovery does not guess.
+A folder with neither `project.toml` nor the older `source.md` is not a
+project. Discovery does not guess.
 
 `forge.toml` keeps what is genuinely repo-wide: `[cards] language`, the note
 type, `[anki] deck` as a fallback, `[cards] web` as the floor under every

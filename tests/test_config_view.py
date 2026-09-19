@@ -30,7 +30,7 @@ def write_source(repo: Path, name: str, frontmatter: str) -> None:
 
 def test_it_says_which_value_won(repo: Path) -> None:
     write_source(repo, "book", 'title = "A Book"\ndeck = "Shelf"')
-    rows = rows_for(config_mod.load(repo), "source: book")
+    rows = rows_for(config_mod.load(repo), "project: book")
 
     assert rows["deck"]["value"] == "Shelf"
     assert rows["deck"]["from"] == "projects/book/project.toml"
@@ -40,7 +40,7 @@ def test_it_says_when_a_value_was_inherited(repo: Path) -> None:
     """The question the page exists to answer. A source that sets nothing still
     resolves to something, and which something is not guessable."""
     write_source(repo, "book", 'title = "A Book"')
-    rows = rows_for(config_mod.load(repo), "source: book")
+    rows = rows_for(config_mod.load(repo), "project: book")
 
     assert rows["context_pages"]["from"] == "inherited"
     assert rows["context_pages"]["value"] == config_mod.load(repo).context_pages
@@ -57,7 +57,7 @@ def test_a_convention_is_listed_whether_or_not_anything_acts_on_it(repo: Path) -
         "book",
         'title = "A Book"\n\n[conventions]\nlayout = "numerator"\nindices = "1-based"',
     )
-    rows = rows_for(config_mod.load(repo), "source: book")
+    rows = rows_for(config_mod.load(repo), "project: book")
 
     assert rows["conventions.layout"]["value"] == "numerator"
     assert rows["conventions.indices"]["value"] == "1-based"
@@ -69,7 +69,7 @@ def test_there_is_no_repo_wide_convention_to_inherit(repo: Path) -> None:
     layout -- the silent mixing CLAUDE.md names, arriving through a default
     rather than through a mistake."""
     write_source(repo, "book", 'title = "A Book"')
-    rows = rows_for(config_mod.load(repo), "source: book")
+    rows = rows_for(config_mod.load(repo), "project: book")
 
     assert not [key for key in rows if key.startswith("conventions.")]
     assert config_mod.load(repo).layout_for("book") == ""
@@ -81,7 +81,7 @@ def test_a_per_type_deck_is_listed_on_its_own_row(repo: Path) -> None:
         "book",
         'title = "A Book"\n\n[decks]\nintuition = "Shelf::Intuition"',
     )
-    rows = rows_for(config_mod.load(repo), "source: book")
+    rows = rows_for(config_mod.load(repo), "project: book")
     assert rows["deck [intuition]"]["value"] == "Shelf::Intuition"
 
 
@@ -119,5 +119,5 @@ def test_the_source_in_force_comes_first(pdf_source: Config) -> None:
 
     client = TestClient(create_app(pdf_source))
     payload = client.get("/api/config?project=book").json()
-    assert payload["groups"][0]["where"] == "source: book"
+    assert payload["groups"][0]["where"] == "project: book"
     assert payload["groups"][0]["focused"]
