@@ -517,6 +517,56 @@ teach.
 card's `alt` attribute, and it is also what you will read in a diff six
 months from now: "the graphical model, with the plate" and not "figure".
 
+## Code
+
+A card can carry a fenced block, and the fence names the language:
+
+````markdown
+```cpp
+auto it = std::remove(v.begin(), v.end(), x);
+v.erase(it, v.end());
+```
+````
+
+Nothing reads it as mathematics, the wrapped-prose lint leaves it alone, and
+`sync` renders it as a block with its newlines intact and its tokens
+coloured. The file keeps plain code, so what you write is what a diff shows.
+
+**Keep it to the smallest thing that makes the point.** A snippet on a card
+is not a program: no includes, no `main`, no error handling you are not
+teaching. If it does not compile on its own, that is usually correct. What
+it must not do is leave out the part being learned in order to be short.
+
+**One idea per card, as everywhere else.** "How do you erase every `x` from a
+vector" is a card. "How do you use `<algorithm>`" is a chapter.
+
+**Say which version you are in when it matters.** The ambient one is in the
+project's `conventions.md` and a card in that version says nothing. A card
+that departs from it puts the version in `## conditions`, which renders with
+the prompt, so the question is asked in the setting it has an answer in:
+"given C++14" belongs with the question and not with the answer.
+
+Where the older way is worth knowing, it goes in `## prose` as one line,
+not as a second block. A card that shows two ways of doing something is
+asking you to recall two things and grading you on neither. If both genuinely
+need learning, they are two cards, and the second one's front says so.
+
+**Prose around the code, not inside it.** A comment explaining the idea
+belongs in `## prose`: comments inside the block are part of the answer you
+are trying to recall, and a card that explains itself in its own answer
+cannot be got wrong. Comments that are genuinely part of the code, marking
+where something surprising happens, are fine.
+
+**Name the thing.** The same rule as everywhere: prefer "erase-remove" to
+"the trick with the two iterators", and prefer `std::vector::erase` to "the
+erase method". A card that never says the name leaves you able to do the
+thing and unable to look it up or talk about it.
+
+**A card about behaviour is a card about behaviour.** "What does this print"
+is a fine front when the answer is the point, and a bad one when you are
+really asking about a rule. Prefer asking the rule directly, and use the
+snippet as the setting it holds in.
+
 ## Uses
 
 Optional, and **one clause** — `check` caps it at 150 rendered characters.
