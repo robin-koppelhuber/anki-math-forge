@@ -264,6 +264,29 @@ IMAGE_RE = re.compile(r"!\[([^\]\n]*)\]\(unit(?::([^)\s]+))?\)")
 UNRENDERED_SECTIONS = frozenset({"notes", "verify"})
 
 
+# A fenced code block on a card, and the language it names.
+#
+# One regex, shared by `check`, `sync` and the review view, because the three
+# have to agree about where code starts and stops or a block lints as maths in
+# one place and renders as code in another. The language is optional and may
+# be empty, which is what a fence with no word after it means.
+CODE_FENCE_RE = re.compile(r"```([A-Za-z0-9_+#-]*)[ \t]*\r?\n(.*?)```", re.DOTALL)
+
+
+def code_free(text: str) -> str:
+    """The section with its fenced code taken out.
+
+    For the checks that read a body as prose or as maths. Code is neither:
+    it is full of braces, backslashes and `$`, so KaTeX refuses it, and it is
+    deliberately written one statement per line, so a line-counting lint
+    fires on exactly the shape that is correct.
+
+    The fence is replaced by blank lines rather than deleted, so anything
+    that reports a line number still points at the right line.
+    """
+    return CODE_FENCE_RE.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
+
 @dataclass(frozen=True)
 class ImageRef:
     """One `![...](unit:...)` on a card, resolved."""

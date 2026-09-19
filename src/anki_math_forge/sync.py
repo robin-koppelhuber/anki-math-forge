@@ -49,9 +49,31 @@ def to_anki_html(text: str) -> str:
     nodes, so the browser hands it back the decoded `&`, `<` and `>` that TeX
     wants. Newlines become `<br>` only *outside* math, since a `<br>` inside a
     formula would split the text node and break the render.
+
+    Fenced code is taken out **first** and rendered as a `<pre>`, before the
+    maths pass ever sees it. A snippet is full of `$`, braces and backslashes,
+    and its newlines are the thing that makes it readable rather than
+    something to turn into `<br>`. MathJax skips `pre` and `code` by default,
+    so the formula renderer leaves it alone on the card as well.
     """
     if not text.strip():
         return ""
+    out: list[str] = []
+    cursor = 0
+    for match in model.CODE_FENCE_RE.finditer(text):
+        # The blank line before a fence is markdown punctuation, not a break
+        # to render: `<pre>` is a block and already stands apart, so the
+        # `<br><br>` either side of it is empty space nobody asked for.
+        out.append(_math_to_html(text[cursor : match.start()].rstrip("\n")))
+        out.append(code_html(match.group(1), match.group(2)))
+        cursor = match.end()
+        while cursor < len(text) and text[cursor] == "\n":
+            cursor += 1
+    out.append(_math_to_html(text[cursor:]))
+    return "".join(out).strip()
+
+
+def _math_to_html(text: str) -> str:
     out: list[str] = []
     cursor = 0
     for span in latex.math_spans(text):
@@ -61,7 +83,37 @@ def to_anki_html(text: str) -> str:
         out.append(f"\\[{body}\\]" if span.display else f"\\({body}\\)")
         cursor = span.end
     out.append(_escape_prose(text[cursor:]))
-    return "".join(out).strip()
+    return "".join(out)
+
+
+def code_html(lang: str, code: str) -> str:
+    """One fenced block as the HTML Anki stores.
+
+    Highlighted here rather than on the card, the way a picture is rendered
+    here rather than stored: the file keeps plain code, so it stays diffable
+    and re-highlightable, and the field gets classes that the note type's CSS
+    colours. That needs no add-on in anybody's collection, which a template
+    calling out to a highlighter would.
+
+    Pygments is optional (`uv sync --extra code`). Without it the block is
+    still a correct, readable `<pre>`, just uncoloured: a missing dependency
+    should cost you the colours and not the card.
+    """
+    body = code.rstrip("\n")
+    try:
+        from pygments import highlight
+        from pygments.formatters import HtmlFormatter
+        from pygments.lexers import get_lexer_by_name, guess_lexer
+    except ImportError:
+        return f'<pre class="code">{html.escape(body, quote=False)}</pre>'
+    try:
+        lexer = get_lexer_by_name(lang) if lang else guess_lexer(body)
+    except Exception:  # pragma: no cover - an unknown language is not an error
+        return f'<pre class="code">{html.escape(body, quote=False)}</pre>'
+    # `nowrap` so the markup is ours: Pygments' own wrapper carries a
+    # `highlight` class this note type knows nothing about.
+    marked = highlight(body, lexer, HtmlFormatter(nowrap=True)).rstrip("\n")
+    return f'<pre class="code">{marked}</pre>'
 
 
 def _escape_prose(text: str) -> str:

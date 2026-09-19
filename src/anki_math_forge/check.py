@@ -56,8 +56,8 @@ class Finding:
 
 
 def _prose_only(text: str) -> str:
-    """The section with its maths taken out, for the one check that counts
-    lines.
+    """The section with its maths and its code taken out, for the one check
+    that counts lines.
 
     `to_anki_html` turns a newline into a `<br>` **outside** maths only:
     inside a span it collapses the whitespace, because a `<br>` in the middle
@@ -75,7 +75,12 @@ def _prose_only(text: str) -> str:
     Display spans come out entirely, so a line that was one of them is left
     empty and stops counting. Inline spans keep their place but lose their
     newlines, since a wrapped `$x +\n y$` is not a wrapped sentence either.
+
+    Fenced code goes the same way and for the same reason: it is written one
+    statement per line on purpose, and `to_anki_html` puts it in a `<pre>`
+    where a newline is a newline rather than a `<br>`.
     """
+    text = model.code_free(text)
     out: list[str] = []
     cursor = 0
     for span in latex.math_spans(text):
@@ -176,11 +181,14 @@ def check_card(
 
     # -- latex ------------------------------------------------------------
     for section in card.sections:
-        if section.name in {"notes", "verify"}:
+        if section.name in model.UNRENDERED_SECTIONS:
             continue  # scratchpad and executable python, not rendered math
-        if latex.unbalanced_dollars(section.body):
+        # Fenced code first: it is full of braces, backslashes and `$`, and
+        # feeding it to KaTeX reports a card as broken for being correct.
+        body = model.code_free(section.body)
+        if latex.unbalanced_dollars(body):
             add(ERROR, "latex-dollars", f"`## {section.name}`: unbalanced `$` delimiters")
-        for err in tex.validate_text(section.body):
+        for err in tex.validate_text(body):
             add(ERROR, "latex-parse", f"`## {section.name}`: {err.message} in `{err.tex}`")
 
     # -- length -----------------------------------------------------------

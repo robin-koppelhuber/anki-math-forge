@@ -68,6 +68,11 @@ document and uploaded when `sync` runs, so it stays reproducible and
 re-segmenting the unit fixes every card that shows it. Which section it goes
 in is the writer's call. `check` refuses a card whose picture cannot be drawn.
 
+Code is a fenced block, ```` ```cpp ````. It is not read as maths and not
+counted as wrapped prose, and `sync` renders it as a `<pre>`, highlighted if
+Pygments is installed (`uv sync --extra code`). The file keeps plain code;
+the colours are added on the way to Anki, so nobody needs an add-on.
+
 `identity` states a fact and `verify` can check it numerically. `intuition`
 explains one and has no `## verify` and no `## conditions`.
 

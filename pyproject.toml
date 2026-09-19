@@ -23,6 +23,12 @@ pdf = ["pymupdf>=1.24"]
 # installed rather than downloading one: `assets/make_assets.py` assumes a
 # local Chrome too, so this is a pip package and nothing else.
 browser = ["playwright>=1.44"]
+# Colouring a card's fenced code, at sync. Optional because a missing
+# highlighter should cost the colours and not the card: `sync` falls back to
+# an uncoloured `<pre>`, which is still correct and readable. Highlighted
+# here rather than on the card so nobody you share a deck with needs an
+# add-on.
+code = ["pygments>=2.17"]
 # NOTE: there is deliberately no `ocr` extra. Transcription is a Claude Code
 # skill (`/transcribe`) reading crops, not a local vision model -- which is
 # what keeps torch, and a 4 GB dependency tree, out of this project entirely.
@@ -63,6 +69,13 @@ python_version = "3.13"
 files = ["src"]
 strict = true
 warn_return_any = false
+
+# Pygments ships no stubs and is optional anyway: `sync` imports it inside a
+# `try` and falls back to an uncoloured `<pre>`, so a missing dependency
+# costs the colours and not the card.
+[[tool.mypy.overrides]]
+module = ["pygments.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["fitz.*"]

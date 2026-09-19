@@ -119,6 +119,44 @@ CSS = """.card {
   margin-bottom: 0.25em;
 }
 .source { font-size: 12px; opacity: 0.5; margin-top: 1.6em; }
+/* Code. Left-aligned and monospaced, against a card that is centred prose by
+   default: a snippet read down the middle of the screen is unreadable, and
+   its indentation is the part that carries the meaning. `pre` keeps the
+   newlines, which is why `sync` puts a fence here rather than joining it with
+   `<br>`, and why MathJax leaves the contents alone. */
+pre.code {
+  font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  font-size: 15px;
+  text-align: left;
+  line-height: 1.45;
+  margin: 0.9em auto;
+  max-width: 34em;
+  padding: 0.7em 0.9em;
+  overflow-x: auto;
+  background: #f4f4f2;
+  border-radius: 5px;
+  white-space: pre;
+}
+.nightMode pre.code { background: #2a2b2e; }
+/* Pygments' short class names, the handful a snippet actually uses. Anything
+   it emits that is not listed here falls back to the body colour, which is a
+   readable uncoloured token rather than an invisible one. */
+pre.code .k, pre.code .kd, pre.code .kt, pre.code .kn { color: #0a5d8f; }
+pre.code .s, pre.code .s1, pre.code .s2, pre.code .sc { color: #0b7261; }
+pre.code .c, pre.code .c1, pre.code .cm, pre.code .cp { color: #7a7a7a; font-style: italic; }
+pre.code .nf, pre.code .nc { color: #7a4ba8; }
+pre.code .mi, pre.code .mf, pre.code .mh { color: #a0522d; }
+pre.code .o, pre.code .p { color: #555; }
+.nightMode pre.code .k, .nightMode pre.code .kd,
+.nightMode pre.code .kt, .nightMode pre.code .kn { color: #79b8e8; }
+.nightMode pre.code .s, .nightMode pre.code .s1,
+.nightMode pre.code .s2, .nightMode pre.code .sc { color: #7fc9b4; }
+.nightMode pre.code .c, .nightMode pre.code .c1,
+.nightMode pre.code .cm, .nightMode pre.code .cp { color: #9a9a9a; }
+.nightMode pre.code .nf, .nightMode pre.code .nc { color: #c4a2e8; }
+.nightMode pre.code .mi, .nightMode pre.code .mf,
+.nightMode pre.code .mh { color: #d9a06a; }
+.nightMode pre.code .o, .nightMode pre.code .p { color: #b0b0b0; }
 /* A picture is a crop of a page at twice its printed size, which on a phone
    is several times the width of the screen. Capped by the field rather than
    by the image, so the same card reads on a laptop and on a phone without
