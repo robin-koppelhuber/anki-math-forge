@@ -194,6 +194,30 @@ class Unit:
     # the two apart. Its only job is to let you see, at triage, what was
     # understood, while changing it still costs one keystroke.
     gist: str = ""
+    # A machine's reading of a unit that is not mathematics: a snippet too
+    # small to run, enough to see the point at triage. `tex_auto` above is the
+    # same idea for a formula and keeps its name rather than being folded in
+    # here. Generalising the three transcription fields would mean rewriting
+    # every ledger line for no new fact, which is the trade `Locator.ref`
+    # already made for `equation`. `lang` is what it is written in, and it is
+    # what decides how the triage view and `check` treat it.
+    #
+    # It is a hint under the same rule as `tex_auto` (invariant 4) and `gist`:
+    # whoever writes the card reads the references, not this.
+    preview: str = ""
+    lang: str = ""
+    # Labels, the vocabulary cards already carry. What a unit is *about*, as
+    # against the one thing it came from, so there can be several and they
+    # cross each other: `invalidation` covers units under more than one
+    # subject. **Yours to invent**, like a card's, and the filter rail is
+    # where they earn their place.
+    tags: list[str] = field(default_factory=list)
+    # What this unit stands on besides its authoritative source: a URL, or a
+    # name from the project's shelf. Zero or many, where the authoritative
+    # source is at most one, because two things that settle a question can
+    # conflict with nothing to break the tie (ROADMAP.md 10). A reference
+    # says where to look, never what to write.
+    refs: list[str] = field(default_factory=list)
     state: str = "new"
     reason: str = ""  # why it was skipped
     uids: list[str] = field(default_factory=list)  # cards produced from it
@@ -223,6 +247,19 @@ class Unit:
         """The transcription to show: source LaTeX if we have it, else the
         one `/transcribe` read off the crop."""
         return self.tex_source or self.tex_auto
+
+    @property
+    def scannable(self) -> tuple[str, str]:
+        """What triage shows instead of making you read a picture, and what
+        language it is in.
+
+        One accessor so that a view, `context` and `check` cannot disagree
+        about which of the two fields a unit is carrying. A formula answers
+        `latex` whether it was transcribed or came from real source.
+        """
+        if self.preview:
+            return self.preview, self.lang or "text"
+        return self.tex, "latex"
 
     @property
     def own_mark(self) -> Mark | None:
@@ -298,8 +335,11 @@ class Unit:
         for tristate in ("context_pages", "web"):
             if data.get(tristate) is None:
                 data.pop(tristate, None)
-        if not data.get("gist"):
-            data.pop("gist", None)
+        # Empty means "nobody has said anything", and writing it out on every
+        # line turns a 751-unit ledger into a wall of defaults.
+        for blank in ("gist", "preview", "lang", "tags", "refs"):
+            if not data.get(blank):
+                data.pop(blank, None)
         return data
 
     @classmethod

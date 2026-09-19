@@ -242,6 +242,35 @@ def build_parser() -> argparse.ArgumentParser:
             "`@me` decision parked on the same unit"
         ),
     )
+    p.add_argument(
+        "--add",
+        default=None,
+        metavar="SLUG",
+        help=(
+            "write a new unit into --project's ledger, id `<project>:<slug>`. "
+            "The door for a pass that proposes units where no segmenter can: "
+            "it owes a stable id, whatever locator it has, something scannable "
+            "and nothing else, and the unit arrives `new` like every other. A "
+            "slug already in the ledger is left alone, so a re-run of the same "
+            "request adds only what is new"
+        ),
+    )
+    p.add_argument("--preview", default=None, metavar="TEXT", help="a short sample, for --add")
+    p.add_argument("--lang", default="", help="what --preview is written in, e.g. `cpp`")
+    p.add_argument(
+        "--ref",
+        action="append",
+        default=[],
+        metavar="URL",
+        help="something --add's unit stands on; repeat for several. Where to look, not what to say",
+    )
+    p.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        metavar="TAG",
+        help="a label for --add's unit; repeat for several",
+    )
     p.add_argument("--flagged", action="store_true", help="only units the audit is unsure about")
     p.add_argument("--suggested", action="store_true", help="only units with an open suggestion")
     p.add_argument(
@@ -763,6 +792,12 @@ def cmd_context(args: argparse.Namespace, config: Config) -> int:
 
 
 def cmd_units(args: argparse.Namespace, config: Config) -> int:
+    # Before the ledgers are opened: a project proposed into for the first
+    # time has no `units.jsonl` yet, and "run `forge extract`" is the wrong
+    # advice for one with no document to extract from.
+    if args.add is not None:
+        return _add_unit(args, config)
+
     ledgers = ledger_mod.open_ledgers(config.projects_dir)
     if args.project:
         ledgers = {k: v for k, v in ledgers.items() if k == args.project}
@@ -824,6 +859,58 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
             print(f"         {tex[:110]}")
     counts = {name: led.counts() for name, led in ledgers.items()}
     print("\n" + "  ".join(f"{n}: {c}" for n, c in counts.items()))
+    return OK
+
+
+def _add_unit(args: argparse.Namespace, config: Config) -> int:
+    """`units --add`: the door for a frontend that is not a segmenter.
+
+    Extraction produces units and never cards (invariant 3), and that holds
+    whichever door a unit came in by. This one is for a project with no
+    document, where nothing can be segmented and a pass proposes subjects
+    instead: a gist, a short sample, the references it read. It writes no
+    front and no back, which is the line between triage and review.
+
+    The id is `<project>:<slug>`, so the slug is the stable id the contract
+    asks for and re-running a request adds only what it has not proposed
+    before. An existing slug is reported and left exactly as it is: it may
+    have been triaged since, and a proposal must not walk over a decision.
+    """
+    if not args.project:
+        print("--add needs --project", file=sys.stderr)
+        return MISUSE
+    # `slugify` answers "card" for anything with no letters or digits in it,
+    # which is the right fallback when a slug is being derived from a card's
+    # front and the wrong one here: it would file every unnameable proposal
+    # under one id and silently make the second a no-op against the first.
+    if not re.search(r"[a-zA-Z0-9]", args.add):
+        print(f"--add {args.add!r} has nothing to make an id from", file=sys.stderr)
+        return MISUSE
+    slug = model.slugify(args.add)
+
+    folder = config.projects_dir / args.project
+    if not folder.is_dir():
+        known = ", ".join(sorted(config.projects)) or "(none)"
+        print(f"no project {args.project!r}; configured: {known}", file=sys.stderr)
+        return FAILED
+
+    unit_id = f"{args.project}:{slug}"
+    path = config.units_path(args.project)
+    with ledger_mod.Ledger.edit(path) as led:
+        if led.get(unit_id) is not None:
+            print(f"{unit_id} is already there, left alone")
+            return OK
+        led.units.append(
+            ledger_mod.Unit(
+                id=unit_id,
+                gist=args.gist or "",
+                preview=args.preview or "",
+                lang=args.lang,
+                tags=list(args.tag),
+                refs=list(args.ref),
+            )
+        )
+    print(f"{unit_id}  new" + (f"  {args.gist}" if args.gist else ""))
     return OK
 
 
