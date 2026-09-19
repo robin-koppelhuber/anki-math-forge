@@ -225,7 +225,7 @@ def test_it_comes_before_the_source_it_is_about(config: Config) -> None:
 
     said = context.assemble(config, "demo:2.2:61").format()
 
-    assert said.index("what triage asked for") < said.index("the setting this source")
+    assert said.index("what triage asked for") < said.index("the setting this project")
 
 
 def test_a_unit_nobody_wrote_on_says_nothing(config: Config) -> None:

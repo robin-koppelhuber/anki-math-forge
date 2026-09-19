@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .config import CHAPTER, Config
+from .config import CHAPTER, REFERENCES_FILE, Config
 from .extract import source_text_path, source_text_quality
 from .ledger import open_ledgers
 
@@ -51,6 +51,21 @@ class UnitContext:
     # has to work out whose setting won.
     web: bool = False
     web_from: str = "repo"
+    # What `transcription` is written in. `latex` for a formula, whatever the
+    # preview says for anything else, so a snippet is fenced as code rather
+    # than handed over as maths that will not parse.
+    lang: str = "latex"
+    # What this unit stands on besides its authoritative source, and the
+    # project's shelf behind them. Both are *where to look*, never what to
+    # write: a reference is checked against, and only a source settles
+    # anything (invariant 7, and ROADMAP.md 10 for the case with no source).
+    refs: list[str] = field(default_factory=list)
+    shelf: str = ""
+    # Whether anything here settles what the card says. False when the unit
+    # has no authoritative source, which is the whole of what a project with
+    # no document is: the references keep a card from being invented and the
+    # review loop catches the rest, and both are weaker than a crop.
+    settled: bool = True
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -69,12 +84,22 @@ class UnitContext:
             "page_units": self.page_units,
             "notes": self.notes,
             "marks": self.marks,
+            "lang": self.lang,
+            "refs": self.refs,
+            "shelf": self.shelf,
+            "settled": self.settled,
         }
 
     def format(self) -> str:
-        out = [f"{self.unit}  {self.locator}"]
+        out = [f"{self.unit}  {self.locator}".rstrip()]
         if self.transcription:
-            out.append(f"\n  {self.transcription}")
+            # Fenced when it is not maths, because a snippet handed over bare
+            # reads as prose and a reader has to guess where it ends.
+            out.append(
+                f"\n  {self.transcription}"
+                if self.lang == "latex"
+                else f"\n```{self.lang}\n{self.transcription}\n```"
+            )
         if self.notes:
             # First, because it is the only part of this that was written *to*
             # you. Everything else describes the source; this says what
@@ -84,7 +109,7 @@ class UnitContext:
             for note in self.notes:
                 out.append(f"   {note}")
         out.append(
-            "\n## the setting this source is read in\n"
+            "\n## the setting this project is read in\n"
             + (
                 self.conventions
                 or "(none recorded -- write projects/<name>/conventions.md,"
@@ -105,9 +130,10 @@ class UnitContext:
                 " Use it for what the source assumes and does not state, and say"
                 " in `## notes` what came from off the page."
                 if self.web
-                else "No web access. Everything on the card comes from the pages"
-                " below and from the conventions above; if the source does not"
-                " settle it, annotate the unit rather than guessing."
+                else "No web access. Everything on the card comes from "
+                + ("the pages below" if self.settled else "the references below")
+                + " and from the conventions above; if that does not settle it,"
+                " annotate the unit rather than guessing."
             )
         )
         if self.marks:
@@ -146,7 +172,36 @@ class UnitContext:
             )
             for entry in proposed:
                 out.append(f"   - {entry['proposes']}")
-        if self.text_quality != "ok":
+        if self.refs or self.shelf:
+            out.append(
+                "\n## what to check this against\n"
+                "   Reference material, not a source. **It says where to look,"
+                " never what to write.** Read it, then say what is true; where"
+                " it and the card disagree, the disagreement is the thing to"
+                " look at rather than a licence to copy."
+            )
+            for ref in self.refs:
+                out.append(f"   - {ref}")
+            if self.shelf:
+                out.append("\n### and the shelf this project keeps\n" + self.shelf)
+        if not self.settled:
+            # Said where the page would have been, because its absence is the
+            # thing a pass has to notice. Invariant 4 has nothing to point at
+            # here and invariant 7's first half does not apply, so the rule
+            # that survives is the second half: note what came from off the
+            # page, which is now the only record of where anything came from.
+            out.append(
+                "\n## there is no page, and nothing here settles what to say\n"
+                "   This unit has no authoritative source: no crop, no"
+                " printed statement, nothing to transcribe. A card from it is"
+                " yours to get right rather than a reading of somebody else's"
+                " work, and it carries weaker guarantees than one from a book.\n"
+                "   So: write what is true, check it against the references"
+                " above, and record in `## notes` what each part came from."
+                " Where you are unsure, annotate the card rather than"
+                " committing to a plausible sentence."
+            )
+        elif self.text_quality != "ok":
             # Before the text rather than after it: by the time you have read a
             # page of noise you have already formed an impression of what this
             # source says.
@@ -157,11 +212,12 @@ class UnitContext:
                 "absence of a condition below as the source not stating one, "
                 "and say in `## notes` if you had nothing but the crop."
             )
-        out.append(
-            f"\n## {self.window}\n{self.page_text or '(no text layer)'}"
-            if self.text_quality == "ok"
-            else self.page_text
-        )
+        if self.settled:
+            out.append(
+                f"\n## {self.window}\n{self.page_text or '(no text layer)'}"
+                if self.text_quality == "ok"
+                else self.page_text
+            )
         if self.page_units:
             out.append(
                 "\n## every unit on this page, in reading order\n"
@@ -201,10 +257,25 @@ def assemble(
     web_from = (
         "unit" if unit.web is not None else "source" if spec and spec.web is not None else "repo"
     )
+    # Whether anything settles what this card says. A property of the unit,
+    # not of the kind of project it is in: a book whose segmenter found no
+    # geometry for one region is in the same position as a proposal nobody
+    # printed, and both want the same warning.
+    work = spec.source(unit.locator.document) if spec else None
+    # Whether an authoritative source stands behind this unit, which is not
+    # the same question as whether its text layer happens to be cached: a
+    # missing layer is a real condition with a warning of its own, and a crop
+    # still settles the maths without it.
+    settled = bool(unit.has_crop or (work is not None and work.authoritative))
+    scannable, lang = unit.scannable
     return UnitContext(
         unit=unit.id,
         locator=unit.locator.describe(),
-        transcription=unit.tex_source or unit.tex_auto or "",
+        transcription=scannable,
+        lang=lang,
+        refs=list(unit.refs),
+        shelf=shelf(config, source),
+        settled=settled,
         conventions=source_conventions(config, source),
         declared=dict(config.conventions_for(source)),
         web=config.web_for(source, unit.web),
@@ -375,6 +446,25 @@ def _page_units(ledger: Any, page: int | None) -> list[dict[str, Any]]:
         }
         for u in rows
     ]
+
+def shelf(config: Config, project: str) -> str:
+    """The reference material a project keeps, verbatim.
+
+    `projects/<name>/references.md`: prose with no schema, because nothing
+    branches on it. It is a shelf to check against rather than things to
+    card, which is the difference between it and a source: a unit's
+    authoritative source settles what the card says, and these do not.
+
+    It matters most where there is no authoritative source at all. Then this
+    is all that keeps a card off the model's memory alone, and handing it
+    over is the difference between a deck that was checked and one that was
+    remembered.
+    """
+    path = config.projects_dir / project / REFERENCES_FILE
+    if not path.exists():
+        return ""
+    return re.sub(r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M).strip()
+
 
 def source_conventions(config: Config, source: str) -> str:
     """The ambient setting cards from this source are read in.

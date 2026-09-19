@@ -889,6 +889,9 @@ def _keys(raw: Any) -> dict[str, str]:
 PROJECT_TOML = "project.toml"
 SOURCE_FILE = "source.md"  # the older form: the same TOML, between `+++` fences
 CONVENTIONS_FILE = "conventions.md"
+# The shelf of reference material: prose, no schema, because nothing branches
+# on it. A source is read *from*; this is checked *against*.
+REFERENCES_FILE = "references.md"
 FENCE = "+++"
 
 
