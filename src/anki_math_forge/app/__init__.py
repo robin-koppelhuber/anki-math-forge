@@ -261,6 +261,7 @@ def create_app(config: Config) -> FastAPI:
     def units_view(
         request: Request,
         project: str = "",
+        tag: str = "",
         state: str = "new",
         section: str = "",
         chapter: str = "",
@@ -341,6 +342,11 @@ def create_app(config: Config) -> FastAPI:
             # Triage is much faster when you can read the maths rather than
             # squint at a picture of it.
             units = [u for u in units if u.transcription == "ok"]
+        # What a unit is *about*, as against the one thing it came from. Tags
+        # cross each other by design, so this is membership and not a tree.
+        if tag:
+            units = [u for u in units if tag in u.tags]
+            unsectioned = [u for u in unsectioned if tag in u.tags]
         everything = list(ledger)
         known = {u.id for u in everything}
         # Whether this source was read and marked up, or segmented. It decides
@@ -350,6 +356,7 @@ def create_app(config: Config) -> FastAPI:
         pipeline = pipeline_counts(config, name)
         filters = {
             "project": name,
+            "tag": tag,
             "state": state,
             "section": section,
             "chapter": chapter,
@@ -401,6 +408,7 @@ def create_app(config: Config) -> FastAPI:
                 "counts_scope": counts_scope,
                 "filters": filters,
                 "commands": commands_for("units", filters, pipeline, from_marks=from_marks),
+                "tag_rows": tag_rows([u.tags for u in everything], tag),
                 "mark": mark,
                 "mark_matrix": mark_matrix(
                     ledger.select(state=state or "all", section=section or None), config, name
@@ -435,6 +443,7 @@ def create_app(config: Config) -> FastAPI:
         augmented: str = "",
         section: str = "",
         chapter: str = "",
+        tag: str = "",
         counts_scope: str = "",
     ) -> Any:
         name = resolve_project(config, project)
@@ -472,6 +481,11 @@ def create_app(config: Config) -> FastAPI:
         # card this app cannot answer from the content.
         if augmented in ("yes", "no"):
             cards = [c for c in cards if c.augmented == (augmented == "yes")]
+        # What a card is *about*, as against the one thing it came from. A
+        # tag crosses subjects by design, so this is a plain membership test
+        # and not a tree.
+        if tag:
+            cards = [c for c in cards if tag in c.tags]
         # Everything the other filters leave, ignoring the section: what each
         # section row would show if you clicked it.
         unsectioned = in_project
@@ -539,6 +553,7 @@ def create_app(config: Config) -> FastAPI:
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         filters = {
             "project": name,
+            "tag": tag,
             "status": status,
             "section": section,
             "chapter": chapter,
@@ -573,6 +588,7 @@ def create_app(config: Config) -> FastAPI:
                 "section": section,
                 "filters": filters,
                 "commands": commands_for("review", filters, pipeline, from_marks=from_marks),
+                "tag_rows": tag_rows([c.tags for c in in_project], tag),
                 "scheme": scheme_legend(scheme_rows(units_here, config, name)),
                 "project_facts": project_facts(config, name, from_marks=from_marks),
                 "section_tree": section_rows(
@@ -1496,6 +1512,31 @@ def pipeline_counts(
         counts["unaugmented"] += card.effective_status == "draft" and not card.augmented
         counts["augmented"] += card.augmented
     return counts
+
+
+def tag_rows(tagged: list[list[str]], chosen: str) -> list[dict[str, Any]]:
+    """Every tag in view, with how many carry it, most used first.
+
+    Offered rather than configured: a tag exists because something is tagged
+    with it, so a list that came from anywhere else would show tags nothing
+    has and hide ones you just wrote. The chosen one is kept even when the
+    filter has narrowed the deck down to it, so there is always a way back
+    out.
+
+    Sorted by count and then by name, because a rail sorted alphabetically
+    puts the tag you use twice above the one you use ninety times, and the
+    order should not change as you click through.
+    """
+    counts: dict[str, int] = {}
+    for tags in tagged:
+        for name in tags:
+            counts[name] = counts.get(name, 0) + 1
+    if chosen:
+        counts.setdefault(chosen, 0)
+    return [
+        {"name": name, "count": counts[name], "on": name == chosen}
+        for name in sorted(counts, key=lambda t: (-counts[t], t))
+    ]
 
 
 def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict[str, int]:

@@ -229,6 +229,41 @@
 
     </details>
     {% endif %}
+    {# Tags, on both views. A section is where something sits in a document
+       and a tag is what it is *about*, so they answer different questions and
+       a deck with no sections may still be full of tags. Offered from what is
+       actually tagged: a list from anywhere else would show tags nothing
+       carries and hide one you wrote a minute ago.
+
+       Ordered by how many carry each, because alphabetical puts the tag you
+       used twice above the one you used ninety times, and the order should
+       not move as you click through. The search box appears once there are
+       enough of them to hunt through; below that it is one more thing to
+       look at. #}
+    {% if tag_rows %}
+    <details class="filter-group" open>
+      <summary>tags</summary>
+      {% if f.get('tag') %}
+      <p class="filter-clear"><a href="{{ filter_url(here, f, tag=none) }}"
+           title="stop filtering by tag">&larr; all tags</a></p>
+      {% endif %}
+      {% if tag_rows | length > 8 %}
+      <input type="search" class="tag-search" id="tag-search" placeholder="find a tag"
+             autocomplete="off" spellcheck="false"
+             aria-label="narrow the tag list">
+      {% endif %}
+      <ul class="filter-list" id="tag-list">
+        {% for row in tag_rows %}
+        <li data-tag="{{ row.name }}"><a class="{{ 'on' if row.on }}"
+               href="{{ filter_url(here, f, tag=(none if row.on else row.name)) }}"
+               title="{{ 'click to clear' if row.on else 'only what is tagged ' ~ row.name }}">
+          <span>{% if row.on %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}{{ row.name }}</span>
+          <b>{{ row.count }}</b></a></li>
+        {% endfor %}
+      </ul>
+      <p class="filter-none" id="tag-none" hidden>nothing matches that.</p>
+    </details>
+    {% endif %}
     {# Sections, on both views now. A card's section comes off its unit id, so
        "§2.4" means the same thing on either side and survives the jump. #}
     {% if section_tree %}

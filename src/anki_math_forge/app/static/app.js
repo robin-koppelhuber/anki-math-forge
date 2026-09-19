@@ -938,6 +938,29 @@ async function openGallery() {
   document.getElementById("gallery-search").focus();
 }
 
+/* Narrowing the tag list in the rail.
+
+   Client side and nothing else: the list is already on the page, the counts
+   beside each tag are the ones that matter, and a round trip per keystroke
+   would make the counts flicker between two answers. Clicking a tag is still
+   a link, so the filter itself stays a URL you can bookmark and share. */
+(function wireTagSearch() {
+  const search = document.getElementById("tag-search");
+  const list = document.getElementById("tag-list");
+  if (!search || !list) return;
+  const empty = document.getElementById("tag-none");
+  search.addEventListener("input", () => {
+    const wanted = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const row of list.children) {
+      const hit = !wanted || (row.dataset.tag || "").toLowerCase().includes(wanted);
+      row.hidden = !hit;
+      if (hit) shown += 1;
+    }
+    if (empty) empty.hidden = shown > 0;
+  });
+})();
+
 (function wireGallery() {
   const dialog = document.getElementById("gallery");
   if (!dialog) return;
