@@ -40,10 +40,10 @@ def test_the_src_tag_names_a_batch_not_a_card(config: Config) -> None:
 
 
 def test_the_source_is_read_the_same_way_from_both(config: Config) -> None:
-    """`source_name` is the first segment whatever follows it, and everything
+    """`project_name` is the first segment whatever follows it, and everything
     per-source resolves off that: deck, layout, conventions."""
-    assert a_card(MARKED).source_name == "wegelSampleComplexitySemisupervised2025"
-    assert a_card(NUMBERED).source_name == "matrix-cookbook"
+    assert a_card(MARKED).project_name == "wegelSampleComplexitySemisupervised2025"
+    assert a_card(NUMBERED).project_name == "matrix-cookbook"
 
 
 def test_a_marked_card_still_syncs(config: Config) -> None:

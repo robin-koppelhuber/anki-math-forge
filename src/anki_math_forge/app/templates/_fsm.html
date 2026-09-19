@@ -67,7 +67,7 @@
    through a box, no overlapping labels, no edge through a label. Hand-authored
    SVG does not stay correct on its own. #}
 <figure class="fsm">
-{% set sf = source_facts | default({}, true) %}
+{% set sf = project_facts | default({}, true) %}
 <svg viewBox="0 0 800 740" role="img" aria-labelledby="fsm-title">
   <title id="fsm-title">The life of a unit and the card it becomes</title>
   <defs>

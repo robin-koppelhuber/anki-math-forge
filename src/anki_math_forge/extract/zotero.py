@@ -234,9 +234,9 @@ def write_source_stub(
     tags: tuple[str, ...] = (),
     scheme: ZoteroConfig | None = None,
 ) -> bool:
-    """Give a freshly imported source its `source.toml`, if it has none.
+    """Give a freshly imported source its `project.toml`, if it has none.
 
-    Without one the units exist and the source does not: `config.source()` has
+    Without one the units exist and the source does not: `config.project()` has
     never heard of it, so nothing can resolve its deck or its conventions. The
     import is the only moment that knows the title and the citation, so it is
     the right moment to write them down.

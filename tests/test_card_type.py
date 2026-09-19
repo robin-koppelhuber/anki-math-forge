@@ -75,7 +75,7 @@ def test_verify_skips_an_intuition_card() -> None:
 
 
 def test_a_source_may_send_each_type_to_its_own_deck(repo: Path) -> None:
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("source.md").write_text(
         '+++\ntitle = "A Book"\ndeck = "Shelf"\n\n'
@@ -92,7 +92,7 @@ def test_a_source_may_send_each_type_to_its_own_deck(repo: Path) -> None:
 def test_a_source_without_a_mapping_sends_everything_to_one_deck(repo: Path) -> None:
     """Subdecks are for a different new-card rate. A source that does not want
     one should not be made to have two decks."""
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("source.md").write_text(
         '+++\ntitle = "A Book"\ndeck = "Shelf"\n+++\n', encoding="utf-8"

@@ -319,7 +319,7 @@ def test_dragging_a_box_writes_the_file_and_nothing_else(config: Config) -> None
     )
     assert response.status_code == 200
     assert response.json()["positions"] == {"aaa111": [120.0, 240.0]}
-    path = graph_mod.positions_path(config.sources_dir, "demo")
+    path = graph_mod.positions_path(config.projects_dir, "demo")
     assert graph_mod.load_positions(path) == {"aaa111": (120.0, 240.0)}
     assert client.get("/api/graph/demo").json()["positions"] == {"aaa111": [120.0, 240.0]}
 

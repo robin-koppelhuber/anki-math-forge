@@ -902,7 +902,7 @@ function paintGallery() {
   }
 
   const needle = gallery.query.trim().toLowerCase();
-  const shown = data.sources.filter((row) => {
+  const shown = data.projects.filter((row) => {
     if (gallery.tag && !row.tags.includes(gallery.tag)) return false;
     if (gallery.origin && row.origin !== gallery.origin) return false;
     if (!needle) return true;
@@ -916,7 +916,7 @@ function paintGallery() {
 
   const t = data.totals;
   document.getElementById("gallery-totals").textContent =
-    `${shown.length} of ${data.sources.length} sources · ` +
+    `${shown.length} of ${data.projects.length} sources · ` +
     `${data.units} units (${t.new} new, ${t.queued} queued) · ` +
     `${data.cards} cards (${t.draft} draft, ${t.approved} approved)`;
 }
@@ -927,10 +927,10 @@ async function openGallery() {
   dialog.showModal();
   if (!gallery.data) {
     try {
-      const response = await fetch("/api/sources");
+      const response = await fetch("/api/projects");
       gallery.data = await response.json();
     } catch {
-      document.getElementById("gallery-totals").textContent = "could not read the sources";
+      document.getElementById("gallery-totals").textContent = "could not read the projects";
       return;
     }
   }

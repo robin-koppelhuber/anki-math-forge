@@ -42,7 +42,7 @@ def test_no_source_is_named(path: Path) -> None:
     future pass runs against a different book.
     """
     text = path.read_text(encoding="utf-8")
-    for name in (d.name for d in (ROOT / "sources").iterdir() if d.is_dir()):
+    for name in (d.name for d in (ROOT / "projects").iterdir() if d.is_dir()):
         assert name not in text, f"{path.name} names the source {name!r}; use <source>"
 
 
@@ -144,7 +144,7 @@ def test_every_source_that_has_produced_cards_declares_its_conventions() -> None
     carded = {
         path.parent.name for path in (ROOT / "cards").glob("*/*.md")
     }
-    for source in (ROOT / "sources").iterdir():
+    for source in (ROOT / "projects").iterdir():
         if not source.is_dir() or source.name not in carded:
             continue
         # `conventions.md` is where they live; the prose half of an unmigrated

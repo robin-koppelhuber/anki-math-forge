@@ -25,16 +25,16 @@ node_modules/
 # cards are what the screenshots show. Everything else on the shelf is
 # somebody's private reading of somebody else's book, and a shelf is not a
 # demonstration -- the second source proves nothing the first one did not.
-sources/*
-!sources/matrix-cookbook/
+projects/*
+!projects/matrix-cookbook/
 cards/*
 !cards/matrix-cookbook/
 
 # Cached text layers of the source documents themselves, written by `extract`
 # and `zotero` and regenerated on demand. Somebody else's book; not ours to
 # redistribute.
-sources/*/text.md
-sources/*/text-*.md
+projects/*/text.md
+projects/*/text-*.md
 
 # The private half of the roadmap: what is worth carding and which sources to
 # import, which is about this deck rather than about the tool.

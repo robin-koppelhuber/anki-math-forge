@@ -74,7 +74,7 @@ UNITS: tuple[Key, ...] = (
     Key("next-alt", "ArrowDown", ""),
     Key("prev-alt", "ArrowUp", ""),
     Key("filters", "f", "filters"),
-    Key("sources", "g", "sources"),
+    Key("projects", "g", "projects"),
     Key("guide", "?", "guide"),
 )
 
@@ -92,7 +92,7 @@ REVIEW: tuple[Key, ...] = (
     Key("next-alt", "ArrowDown", ""),
     Key("prev-alt", "ArrowUp", ""),
     Key("filters", "f", "filters"),
-    Key("sources", "g", "sources"),
+    Key("projects", "g", "projects"),
     Key("guide", "?", "guide"),
 )
 
@@ -120,7 +120,7 @@ GRAPH: tuple[Key, ...] = (
     Key("zoom-in", ".", "zoom in", sep=True),
     Key("zoom-out", ",", "zoom out"),
     Key("recentre", "0", "fit on screen"),
-    Key("sources", "g", "sources"),
+    Key("projects", "g", "projects"),
 )
 
 # Every key that appears in more than one view, and the one thing it means

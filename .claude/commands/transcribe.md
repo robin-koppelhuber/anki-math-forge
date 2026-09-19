@@ -1,6 +1,6 @@
 ---
 description: Read unit crops and record their LaTeX, via transcriber subagents
-argument-hint: [--source NAME] [--section SECTION|--all] [haiku|sonnet|opus]
+argument-hint: [--project NAME] [--section SECTION|--all] [haiku|sonnet|opus]
 ---
 
 Fill in `tex_auto` for units that have a crop but no transcription, by
@@ -10,7 +10,7 @@ decide whether a unit is worth carding if all you can see is a picture
 
 Arguments: `$ARGUMENTS`
 
-- **`--source NAME`** — which source. **Ask if it is not given and the repo
+- **`--project NAME`** — which source. **Ask if it is not given and the repo
   has more than one**: none of the commands below defaults to a source, so
   leaving it out silently means *every* source in the repo.
 - **`--section SECTION`** — one section, as `locator.section` spells it, or
@@ -39,7 +39,7 @@ parallel** — several `Agent` calls in one message.
 1. See what needs doing:
 
    ```
-   uv run forge units --source <SOURCE> --state new --json
+   uv run forge units --project <PROJECT> --state new --json
    uv run forge audit
    ```
 
@@ -50,7 +50,7 @@ parallel** — several `Agent` calls in one message.
 2. Work out the sections and their sizes:
 
    ```
-   uv run forge units --source <SOURCE> --state all --json
+   uv run forge units --project <PROJECT> --state all --json
    ```
 
    Group by `locator.section`. Aim at a few dozen units per subagent: enough
@@ -63,7 +63,7 @@ parallel** — several `Agent` calls in one message.
    section in the prompt and `model` only if `$2` was given:
 
    > Transcribe section `<SECTION>` of `<SOURCE>`. Render the crops with
-   > `uv run forge crops --source <SOURCE> --section <SECTION> --untranscribed --json`,
+   > `uv run forge crops --project <PROJECT> --section <SECTION> --untranscribed --json`,
    > read each one, and record it with
    > `uv run forge units --id <id> --tex-auto '<latex>'`.
    > Follow your instructions exactly: transcribe what is printed, annotate
@@ -79,7 +79,7 @@ parallel** — several `Agent` calls in one message.
 
    ```
    uv run forge audit
-   uv run forge units --source <SOURCE> --state new --json   # count "ok"
+   uv run forge units --project <PROJECT> --state new --json   # count "ok"
    ```
 
 5. Report: how many transcribed per section, how many the KaTeX gate refused,

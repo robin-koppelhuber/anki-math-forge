@@ -369,11 +369,11 @@ class Card:
         return str(self.frontmatter.get("source", "") or "")
 
     @property
-    def source_name(self) -> str:
+    def project_name(self) -> str:
         """The source *key*, read off the unit ids.
 
         `source` is the human citation ("Some Book, ss3.1, eq. 148"); this is
-        the key that indexes `sources/` and `[sources.*]`, read off the unit
+        the key that indexes `projects/` and `[projects.*]`, read off the unit
         id's first segment. Derived rather than stored, so it cannot drift from
         the unit the card actually came from. Empty when the card names no
         unit, which the app treats as "belongs to every source" rather than
@@ -398,7 +398,7 @@ class Card:
         view's section rail listed one row per card, and the `src::` tag meant
         to suspend a batch wholesale named exactly one note.
 
-        Derived rather than stored for the same reason as `source_name`: a card
+        Derived rather than stored for the same reason as `project_name`: a card
         filed under a section it does not come from is a second truth waiting
         to disagree with the first. Two segments means there is nothing to
         derive, so it says so.

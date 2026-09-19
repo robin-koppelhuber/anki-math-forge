@@ -47,13 +47,13 @@
    counts you can click -- `new 16`, `approved 108` -- and those say where the
    work is as well as where to go, which two bare words never did. #}
 <header class="bar" id="topbar">
-  {% if sources is defined and sources %}
+  {% if projects is defined and projects %}
   {# A button rather than a select, and no caret: a caret promises a list
      dropping down from here, and what opens is the gallery -- every source at
      once, with where each came from and how far along it is. A dropdown
      answers "which one am I on" and nothing else. #}
   <button type="button" class="source-pick" id="source-pick"
-          title="all sources, with their counts (g)">
+          title="all projects, with their counts (g)">
     <span class="pick-icon" aria-hidden="true">▦</span>
     <span class="source-pick-name">{{ src or 'no source' }}</span>
   </button>
@@ -131,14 +131,14 @@
   </form>
 </dialog>
 
-{% if sources is defined and sources %}
+{% if projects is defined and projects %}
 {# The source gallery: the whole window, over whatever you were doing. Filled
-   from /api/sources when it is first opened, because it walks every ledger and
+   from /api/projects when it is first opened, because it walks every ledger and
    every card and that is not a price to pay on every page load. #}
-<dialog class="gallery" id="gallery" aria-label="sources">
+<dialog class="gallery" id="gallery" aria-label="projects">
   <header class="gallery-head">
     <div class="gallery-title">
-      <h2>sources</h2>
+      <h2>projects</h2>
       <p class="gallery-totals" id="gallery-totals">counting…</p>
     </div>
     <input type="search" class="gallery-search" id="gallery-search"
@@ -158,7 +158,7 @@
     <h3>add a source</h3>
     <p class="muted">Tag the item <code>anki</code> in Zotero, mark it up, then
       run one of these with Zotero open. Each writes
-      <code>sources/&lt;name&gt;/source.toml</code>, caches the document's text
+      <code>projects/&lt;name&gt;/project.toml</code>, caches the document's text
       layer next to it, and turns the marks you declared into units.</p>
     <ul class="filter-list runs">
       <li><button type="button" class="run shell" data-copy="uv run forge zotero --list">
@@ -197,7 +197,7 @@
   <p class="rail-more settings-foot">
     Read-only: the config is read at startup, and half these keys change what
     content that already exists <em>means</em>. Edit
-    <code>forge.toml</code> or <code>sources/&lt;name&gt;/source.toml</code>.
+    <code>forge.toml</code> or <code>projects/&lt;name&gt;/project.toml</code>.
   </p>
 </dialog>
 

@@ -12,7 +12,7 @@ from anki_math_forge import config as config_mod
 def two_source_repo(repo: Path, **book: str) -> config_mod.Config:
     """`demo` inherits the repo defaults; `book` overrides whatever is given."""
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
-    toml += '\n[sources.book]\ntitle = "A Book"\n'
+    toml += '\n[projects.book]\ntitle = "A Book"\n'
     for key, value in book.items():
         toml += f'{key} = "{value}"\n'
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
@@ -46,13 +46,13 @@ def test_an_unrecognised_layout_is_refused_at_load(repo: Path) -> None:
 
 
 def test_source_order_defaults_to_printed(repo: Path) -> None:
-    assert two_source_repo(repo).source("book").order == "printed"
+    assert two_source_repo(repo).project("book").order == "printed"
 
 
 def test_a_source_can_say_its_printed_order_means_nothing(repo: Path) -> None:
     """An alphabetical table or a paper whose results precede their lemmas
     should not have its print order followed as if it were a syllabus."""
-    assert two_source_repo(repo, order="none").source("book").order == "none"
+    assert two_source_repo(repo, order="none").project("book").order == "none"
 
 
 def test_an_unrecognised_order_is_refused_at_load(repo: Path) -> None:

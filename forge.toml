@@ -16,7 +16,7 @@
 
 [repo]
 cards_dir = "cards"
-sources_dir = "sources"
+projects_dir = "projects"
 work_dir = ".forge"      # crops, page renders, scratch LaTeX. Disposable.
 
 [cards]
@@ -35,7 +35,7 @@ web = false              # may a card writer look things up? A card should say
 study_order = ["frequency", "derivation", "printed"]
 
 # No `layout` key here, and no conventions section: a convention is a fact
-# about one book, so it lives in that book's `sources/<name>/source.toml`. A
+# about one book, so it lives in that book's `projects/<name>/project.toml`. A
 # value left here raises at load rather than being ignored.
 
 [anki]
@@ -113,7 +113,7 @@ convention_keyword = "convention"
 #
 # Zotero's palette: yellow, red, green, blue, purple, magenta, orange, grey.
 # Its kinds: highlight, underline, note, image, ink, text. A source overrides
-# all of it under `[meanings]` in its own `source.toml`.
+# all of it under `[meanings]` in its own `project.toml`.
 [zotero.meanings]
 "highlight/green" = "a claim or result"
 "highlight/purple" = "a term to know"
@@ -126,6 +126,6 @@ convention_keyword = "convention"
 "note/yellow" = "something I thought while reading"
 "image/yellow" = "a figure or table worth a card"
 
-# Sources describe themselves, in `sources/<name>/`: `source.toml` for the keys
+# Sources describe themselves, in `projects/<name>/`: `project.toml` for the keys
 # this tool acts on, `conventions.md` for the prose a card writer needs. A
-# `[sources.<name>]` block here still works and is read first.
+# `[projects.<name>]` block here still works and is read first.

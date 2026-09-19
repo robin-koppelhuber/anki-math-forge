@@ -1,6 +1,6 @@
 ---
 description: Propose which units are not worth carding, by looking at the crops
-argument-hint: [--source NAME] [--section SECTION|--all] [haiku|sonnet|opus]
+argument-hint: [--project NAME] [--section SECTION|--all] [haiku|sonnet|opus]
 ---
 
 Look at unit crops and **propose** which are not worth carding, so triage is
@@ -13,7 +13,7 @@ to emit -- mangled or absent for anything unusual, and missing entirely from a
 scanned source. Classifying an untranscribed book still works;
 it is just working from the worse of the two sources.
 
-Arguments: `$ARGUMENTS` — `--source NAME` which source (**ask if it is not
+Arguments: `$ARGUMENTS` — `--project NAME` which project (**ask if it is not
 given and the repo has more than one**: nothing below defaults to a source, so
 leaving it out means every source in the repo); `--section SECTION` or `--all`;
 a bare word as a model override. Pass `--source` and `--section` through to
@@ -35,7 +35,7 @@ and a guess that silently moved units would be indistinguishable from a bug.
    exact where they apply:
 
    ```
-   uv run forge classify --source <SOURCE>
+   uv run forge classify --project <PROJECT>
    ```
 
    It proposes `front-matter` and `no-relation` skips. It never touches a
@@ -45,8 +45,8 @@ and a guess that silently moved units would be indistinguishable from a bug.
 2. See what it left unremarked:
 
    ```
-   uv run forge units --source <SOURCE> --state new --json
-   uv run forge units --source <SOURCE> --state new --suggested --json
+   uv run forge units --project <PROJECT> --state new --json
+   uv run forge units --project <PROJECT> --state new --suggested --json
    ```
 
 3. Dispatch **classifier** subagents over the sections that still have
@@ -57,8 +57,8 @@ and a guess that silently moved units would be indistinguishable from a bug.
 4. Verify by counting rather than by reading summaries:
 
    ```
-   uv run forge units --source <SOURCE> --state new --suggested --json
-   uv run forge units --source <SOURCE> --state all --json   # states unchanged
+   uv run forge units --project <PROJECT> --state new --suggested --json
+   uv run forge units --project <PROJECT> --state all --json   # states unchanged
    ```
 
    If any unit's *state* changed, something is wrong: this pass proposes only.

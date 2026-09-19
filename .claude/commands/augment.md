@@ -1,11 +1,11 @@
 ---
 description: Fill in conditions, proof, prose and tags on stub cards
-argument-hint: [--source NAME]
+argument-hint: [--project NAME]
 ---
 
 Add the optional sections to stubs that are still bare.
 
-Arguments: `$ARGUMENTS` — **`--source NAME`** narrows to one source's drafts.
+Arguments: `$ARGUMENTS` — **`--project NAME`** narrows to one project's drafts.
 Worth asking for when the repo has several: conventions are per source, and a
 pass that hops between two books is one that has to reload the setting between
 every card.
@@ -83,7 +83,7 @@ a queue was. **One `augmenter` agent per batch, dispatched in parallel.**
    summaries:
 
    ```
-   uv run forge verify --source <SOURCE>
+   uv run forge verify --project <PROJECT>
    uv run forge check
    ```
 

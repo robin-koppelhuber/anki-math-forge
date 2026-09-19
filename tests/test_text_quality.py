@@ -73,7 +73,7 @@ def test_it_is_resolved_per_document(config: Config) -> None:
     """An item routinely carries a paper and its preprint, and the layers are
     cached per attachment. Asking about the source without naming one looks for
     `text.md`, which a multi-document source does not have."""
-    folder = config.sources_dir / "demo"
+    folder = config.projects_dir / "demo"
     folder.mkdir(parents=True, exist_ok=True)
     (folder / "text-ABCD1234.md").write_text(GOOD, encoding="utf-8")
     assert source_text_quality(config, "demo", "ABCD1234").verdict == "ok"
@@ -89,7 +89,7 @@ def test_the_card_writer_is_told_before_it_reads_the_noise(config: Config) -> No
     unit = next(iter(__import__("anki_math_forge.ledger", fromlist=["Ledger"]).Ledger.load(
         config.units_path("demo")
     )))
-    folder = config.sources_dir / "demo"
+    folder = config.projects_dir / "demo"
     (folder / "text.md").write_text(
         HEADER + "".join(f"## page {n}\n\n\n" for n in range(1, 9)), encoding="utf-8"
     )
@@ -108,7 +108,7 @@ def test_a_good_layer_says_nothing(config: Config) -> None:
     unit = next(iter(__import__("anki_math_forge.ledger", fromlist=["Ledger"]).Ledger.load(
         config.units_path("demo")
     )))
-    (config.sources_dir / "demo" / "text.md").write_text(GOOD, encoding="utf-8")
+    (config.projects_dir / "demo" / "text.md").write_text(GOOD, encoding="utf-8")
     assert "unusable" not in context_mod.assemble(config, unit.id).format()
 
 
@@ -129,7 +129,7 @@ def test_the_real_repo_is_healthy() -> None:
     against: if a real layer here ever reads as poor, the thresholds are wrong
     rather than the book."""
     root = Path(__file__).resolve().parents[1]
-    layers = sorted((root / "sources").glob("*/text*.md"))
+    layers = sorted((root / "projects").glob("*/text*.md"))
     for path in layers:
         quality = text_quality(path.read_text(encoding="utf-8", errors="replace"))
         assert quality.verdict == "ok", f"{path.name}: {quality.describe()}"

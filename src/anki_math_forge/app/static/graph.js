@@ -1677,7 +1677,7 @@ bindKeys({
   "select-all": mid(selectAll),
   /* The one shared key this view can honour beyond undo. `filters` here is
      the only filter the canvas has, and `guide` has no guide to open. */
-  sources: openGallery,
+  projects: openGallery,
 });
 
 /* Reopened where you left it, unless the link says otherwise.

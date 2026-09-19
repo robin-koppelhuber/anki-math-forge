@@ -38,16 +38,16 @@ npm install              # optional: gives `check` the real KaTeX parser
 ```
 
 ```toml
-# sources/<name>/source.toml, for a PDF source
+# projects/<name>/project.toml, for a PDF source
 title = "The Matrix Cookbook"
 citation = "Matrix Cookbook"
-pdf = "sources/<name>/the-file.pdf"
+pdf = "projects/<name>/the-file.pdf"
 deck = "Mathematics::Matrix Calculus"   # optional; falls back to [anki] deck
 ```
 
 For a Zotero source instead: run Zotero (version 7+) with its local API enabled
-(*Settings > Advanced*), tag the item `anki`, and skip the `source.toml`. Its
-cards go to `Zotero::<title>` unless the generated `source.toml` names a deck.
+(*Settings > Advanced*), tag the item `anki`, and skip the `project.toml`. Its
+cards go to `Zotero::<title>` unless the generated `project.toml` names a deck.
 
 ```
 uv run forge extract <name>            # or: uv run forge zotero --tag anki
@@ -74,18 +74,18 @@ extract  ->  units  ->  triage  ->  cards  ->  review  ->  sync
 ```
 # route 1: a PDF
 uv run forge extract <source>         # PDF -> units. Never reads the maths
-/transcribe --source <source>         # crops -> LaTeX, via subagents
-/classify --source <source>           # propose skips; applies nothing
+/transcribe --project <project>         # crops -> LaTeX, via subagents
+/classify --project <project>           # propose skips; applies nothing
 
 # route 2: a marked-up paper in Zotero (needs Zotero running, local API on)
 uv run forge zotero --list            # what Zotero has, and what is already a source
 uv run forge zotero --tag anki        # every item tagged `anki` -> units
 
 # both routes
-/gist --source <source>               # one line per unit: what its card would be about
+/gist --project <project>               # one line per unit: what its card would be about
 uv run forge serve                    # triage units, then review cards
-/extract-cards --source <source>      # queued units -> draft cards
-/augment --source <source>            # conditions, proof, prose, tags
+/extract-cards --project <project>      # queued units -> draft cards
+/augment --project <project>            # conditions, proof, prose, tags
 uv run forge sync --dry-run           # then without --dry-run
 ```
 
@@ -126,12 +126,12 @@ In the order the pipeline runs them:
 
 | Claude Code | |
 |---|---|
-| `/transcribe --source NAME` | crops -> LaTeX, via subagents |
-| `/classify --source NAME` | propose which units are not worth a card |
-| `/gist --source NAME` | one line per unit on what its card would be about |
-| `/extract-cards --source NAME` | queued units -> draft cards |
-| `/augment --source NAME` | conditions, proof, prose, tags on drafts. Run before approving |
-| `/triage claude [--source NAME]` | work the open `@claude` annotations |
+| `/transcribe --project NAME` | crops -> LaTeX, via subagents |
+| `/classify --project NAME` | propose which units are not worth a card |
+| `/gist --project NAME` | one line per unit on what its card would be about |
+| `/extract-cards --project NAME` | queued units -> draft cards |
+| `/augment --project NAME` | conditions, proof, prose, tags on drafts. Run before approving |
+| `/triage claude [--project NAME]` | work the open `@claude` annotations |
 
 Mostly called by the skills, or from a script:
 
@@ -158,7 +158,7 @@ Mostly called by the skills, or from a script:
 - `sync` does not push the card template; `sync --templates` does.
 - Changing a source's deck sends new notes there. `sync` names the cards left
   behind, and `sync --move-decks` moves them.
-- `[decks]` in `source.toml` splits `identity` and `intuition` into subdecks, so each gets its own new-card limit.
+- `[decks]` in `project.toml` splits `identity` and `intuition` into subdecks, so each gets its own new-card limit.
 - Study order: `frequency`, then `derivation`, then printed order;
  `requires` overrides. `sync --reposition` moves cards you have not
  studied yet.

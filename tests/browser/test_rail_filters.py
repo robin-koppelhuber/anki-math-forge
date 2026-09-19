@@ -252,7 +252,7 @@ def test_a_command_carries_what_is_on_screen(page, live) -> None:  # type: ignor
     runs = page.locator("#rail-actions .run code").all_inner_texts()
 
     assert runs, "the panel offered nothing to copy"
-    assert all('--source "demo"' in run for run in runs), runs
+    assert all('--project "demo"' in run for run in runs), runs
     assert all('--section "1.1"' in run for run in runs), runs
 
 

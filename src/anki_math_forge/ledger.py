@@ -215,7 +215,7 @@ class Unit:
     suggestion: Suggestion | None = None  # proposed, never applied
 
     @property
-    def source(self) -> str:
+    def project(self) -> str:
         return self.id.split(":", 1)[0]
 
     @property
@@ -734,11 +734,11 @@ def lock(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
     finally:
         lockfile.unlink(missing_ok=True)
 
-def open_ledgers(sources_dir: Path) -> dict[str, Ledger]:
+def open_ledgers(projects_dir: Path) -> dict[str, Ledger]:
     """Every units.jsonl under the sources directory, keyed by source name."""
     ledgers: dict[str, Ledger] = {}
-    if not sources_dir.exists():
+    if not projects_dir.exists():
         return ledgers
-    for path in sorted(sources_dir.glob("*/units.jsonl")):
+    for path in sorted(projects_dir.glob("*/units.jsonl")):
         ledgers[path.parent.name] = Ledger.load(path)
     return ledgers

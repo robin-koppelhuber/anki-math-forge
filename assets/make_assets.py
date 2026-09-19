@@ -29,7 +29,7 @@ they start `forge serve` on a spare port and point a headless Chrome at it.
 Which source each screenshot uses is worked out from the config rather than
 named here, so importing a different paper does not mean editing this file.
 `triage` and `review` take the first segmented source. `zotero` takes the
-first marked-up source that has **tagged itself `demo`** in its `source.toml`,
+first marked-up source that has **tagged itself `demo`** in its `project.toml`,
 and takes none otherwise: that shot is a legible page of whatever you were
 reading, and photographing the first Zotero source to hand would republish a
 page of somebody's book. `FORGE_ASSET_SOURCE` and `FORGE_ASSET_ZOTERO`
@@ -193,12 +193,12 @@ def render_states(out: Path, width: int, scale: int) -> None:
     # source in front of you came in by; in the README it is a picture of the
     # machine, and lighting one half would say this tool is for PDFs.
     #
-    # The keyword has to be `source_facts`: the template resolves `sf` from it
+    # The keyword has to be `project_facts`: the template resolves `sf` from it
     # itself, so the old `sf=facts` was silently discarded and every rendered
     # asset has been the no-source one anyway.
     env = Environment(loader=FileSystemLoader(str(TEMPLATES)), autoescape=True)
     body = env.get_template("_fsm.html").render(
-        source_facts={"origin": "", "units_from": []}
+        project_facts={"origin": "", "units_from": []}
     )
 
     # Chrome needs the stylesheet on disk beside the page; a file:// URL will
@@ -334,17 +334,17 @@ def urls() -> dict[str, str]:
     from anki_math_forge.ledger import open_ledgers
 
     config = load(ROOT)
-    ledgers = open_ledgers(config.sources_dir)
+    ledgers = open_ledgers(config.projects_dir)
 
     def candidates(marked_up: bool) -> list[str]:
         return [
             name
-            for name in config.sources
+            for name in config.projects
             if (source_origin(config, name) == "zotero") is marked_up and ledgers.get(name)
         ]
 
     def tagged_demo(name: str) -> bool:
-        spec = config.sources.get(name)
+        spec = config.projects.get(name)
         return bool(spec and "demo" in spec.tags)
 
     def state_of(source: str) -> str:

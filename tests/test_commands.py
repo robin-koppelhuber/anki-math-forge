@@ -61,7 +61,7 @@ def test_working_the_notes_stays_on_the_source_you_are_looking_at() -> None:
     between two books makes you reload the setting between every item."""
     out = runs("review", {"source": "book"}, {"annotated_claude_card": 3})
     triage = next(r for r in out if "/triage" in r)
-    assert triage == '/triage claude --source "book"'
+    assert triage == '/triage claude --project "book"'
 
 
 def test_every_command_names_the_source() -> None:
@@ -70,7 +70,7 @@ def test_every_command_names_the_source() -> None:
     repo, which is not what the person filtering to one paper asked for."""
     counts = {"new": 2, "queued": 2, "ungisted": 2}
     for run in runs("units", {"source": "book", "state": "new"}, counts):
-        assert '--source "book"' in run
+        assert '--project "book"' in run
 
 
 def test_the_command_carries_the_section_you_filtered_to() -> None:
@@ -97,7 +97,7 @@ def test_a_value_that_cannot_be_quoted_drops_its_flag() -> None:
     not."""
     filters = {"source": 'a "book"', "state": "new", "section": "2.4"}
     for run in runs("units", filters, {"new": 1}):
-        assert "--source" not in run
+        assert "--project" not in run
         assert '--section "2.4"' in run, "the unaffected flag survives"
 
 

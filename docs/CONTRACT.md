@@ -223,12 +223,12 @@ them repo-wide would make this contract wrong the moment a second source
 arrived, and a card writer told to read it as authoritative would apply
 conventions that do not hold for the page in front of them.
 
-So they live in **`sources/<name>/`**, in two files, because they are two
+So they live in **`projects/<name>/`**, in two files, because they are two
 things: a config and a document. The fenced single file they replaced was
 neither, since no editor checks the TOML above the fence *and* renders the
 Markdown below it.
 
-### `source.toml`
+### `project.toml`
 
 What a key can express, and what the tool acts on: `title`, `citation`,
 `pdf`/`tex`, `zotero`, `documents`, `deck`, `order`, `tags`,
@@ -295,11 +295,11 @@ card writer is guessing.
 
 ### Why TOML
 
-Every key in `source.toml` overrides one in `forge.toml`, so a block copied
+Every key in `project.toml` overrides one in `forge.toml`, so a block copied
 between the two has to work unchanged. TOML is also the stricter language: in
 YAML a tag or colour written `no`, `on` or `y` is silently a boolean.
 
-A folder with neither `source.toml` nor the older `source.md` is not a source.
+A folder with neither `project.toml` nor the older `source.md` is not a source.
 Discovery does not guess.
 
 `forge.toml` keeps what is genuinely repo-wide: `[cards] language`, the note
@@ -308,7 +308,7 @@ source's permission, `[zotero]` defaults. A source imported from Zotero falls
 back to `Zotero::<title>` rather than to `[anki] deck`: a shelf you are
 reading through is not the deck you have decided to keep, and one parent is
 what makes an import studiable or removable in one move. Naming a `deck` in
-the source overrides it. A `[sources.<name>]` block there still
+the source overrides it. A `[projects.<name>]` block there still
 works for a repo that has not moved yet. Conventions are the one thing it does
 not keep.
 

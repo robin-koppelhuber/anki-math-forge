@@ -316,7 +316,7 @@ def min_card(config: Config, uid: str, unit: str) -> Path:
 
 def with_book_deck(repo: Path, deck: str) -> Config:
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
-    toml += f'\n[sources.book]\ntitle = "A Book"\ndeck = "{deck}"\n'
+    toml += f'\n[projects.book]\ntitle = "A Book"\ndeck = "{deck}"\n'
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)
 
@@ -503,9 +503,9 @@ def test_a_dry_run_pushes_no_template(config: Config, card_path: Path) -> None:
 
 def zotero_source(repo: Path, key: str = "T7QDISXB", title: str = "A  Paper") -> Config:
     """A source with a Zotero key on it, which is what `forge zotero` writes."""
-    folder = repo / "sources" / "paper"
+    folder = repo / "projects" / "paper"
     folder.mkdir(parents=True, exist_ok=True)
-    folder.joinpath("source.toml").write_text(
+    folder.joinpath("project.toml").write_text(
         f'title = "{title}"\ncitation = "Paper"\nzotero = "{key}"\n', encoding="utf-8"
     )
     return config_mod.load(repo)
@@ -524,9 +524,9 @@ def test_an_imported_source_lands_under_its_own_deck(repo: Path) -> None:
 def test_a_source_that_names_a_deck_keeps_it(repo: Path) -> None:
     """The default is a default. Naming one is how you say this book belongs
     beside what you already study rather than beside what you have imported."""
-    folder = repo / "sources" / "paper"
+    folder = repo / "projects" / "paper"
     folder.mkdir(parents=True, exist_ok=True)
-    folder.joinpath("source.toml").write_text(
+    folder.joinpath("project.toml").write_text(
         'title = "A Paper"\ncitation = "Paper"\nzotero = "T7QDISXB"\n'
         'deck = "Mathe::Concentration"\n',
         encoding="utf-8",
@@ -562,7 +562,7 @@ def test_a_deck_change_is_reported_rather_than_applied(repo: Path) -> None:
     anki = FakeAnki()
     sync.run(config, client=anki)
 
-    folder = repo / "sources" / "paper" / "source.toml"
+    folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
         folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
         encoding="utf-8",
@@ -581,7 +581,7 @@ def test_move_decks_files_them_under_the_new_name(repo: Path) -> None:
     approve(min_card(config, "aaa111", "paper:1:1"))
     anki = FakeAnki()
     sync.run(config, client=anki)
-    folder = repo / "sources" / "paper" / "source.toml"
+    folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
         folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
         encoding="utf-8",
@@ -606,7 +606,7 @@ def test_the_summary_counts_what_moved(repo: Path) -> None:
     first = sync.run(config, client=anki)
     assert "move" not in first.summary(), first.summary()
 
-    folder = repo / "sources" / "paper" / "source.toml"
+    folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
         folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
         encoding="utf-8",
@@ -651,7 +651,7 @@ def test_a_rehearsal_moves_nothing(repo: Path) -> None:
     approve(min_card(config, "aaa111", "paper:1:1"))
     anki = FakeAnki()
     sync.run(config, client=anki)
-    folder = repo / "sources" / "paper" / "source.toml"
+    folder = repo / "projects" / "paper" / "project.toml"
     folder.write_text(
         folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
         encoding="utf-8",

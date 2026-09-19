@@ -21,7 +21,7 @@ def rows_for(config: Config, where: str) -> dict[str, dict[str, object]]:
 
 
 def write_source(repo: Path, name: str, frontmatter: str) -> None:
-    folder = repo / "sources" / name
+    folder = repo / "projects" / name
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("source.md").write_text(
         "+++\n" + frontmatter.strip() + "\n+++\n", encoding="utf-8"
@@ -33,7 +33,7 @@ def test_it_says_which_value_won(repo: Path) -> None:
     rows = rows_for(config_mod.load(repo), "source: book")
 
     assert rows["deck"]["value"] == "Shelf"
-    assert rows["deck"]["from"] == "sources/book/source.toml"
+    assert rows["deck"]["from"] == "projects/book/project.toml"
 
 
 def test_it_says_when_a_value_was_inherited(repo: Path) -> None:

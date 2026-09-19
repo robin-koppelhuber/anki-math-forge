@@ -195,8 +195,8 @@ def test_a_source_whose_order_means_nothing_gets_no_positions(repo: Path) -> Non
     from anki_math_forge import extract
 
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
-    # `[sources.demo]` already exists, so put the key inside it.
-    toml = toml.replace("[sources.demo]", '[sources.demo]\norder = "none"', 1)
+    # `[projects.demo]` already exists, so put the key inside it.
+    toml = toml.replace("[projects.demo]", '[projects.demo]\norder = "none"', 1)
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     config = config_mod.load(repo)
     extract.run(config, "demo")
@@ -211,7 +211,7 @@ def test_sources_are_numbered_in_the_order_the_config_lists_them(repo: Path) -> 
     from anki_math_forge import extract
 
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
-    toml += '\n[sources.aaa]\ntitle = "A"\n'
+    toml += '\n[projects.aaa]\ntitle = "A"\n'
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     config = config_mod.load(repo)
     extract.run(config, "demo")

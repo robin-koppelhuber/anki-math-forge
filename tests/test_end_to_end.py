@@ -237,7 +237,7 @@ def test_a_broken_picture_stops_at_the_gate(pdf_source: Config) -> None:
     card.approve()
     card.save()
 
-    (repo / "sources" / "book" / "book.pdf").unlink()
+    (repo / "projects" / "book" / "book.pdf").unlink()
 
     anki = FakeAnki()
     report = sync.run(pdf_source, client=anki, dry_run=False)
@@ -418,9 +418,9 @@ def test_an_imported_source_carries_its_own_deck_all_the_way(repo: Path) -> None
     config, used by `sync` when the note is created, and compared against the
     collection on every sync after that.
     """
-    folder = repo / "sources" / "paper"
+    folder = repo / "projects" / "paper"
     folder.mkdir(parents=True, exist_ok=True)
-    folder.joinpath("source.toml").write_text(
+    folder.joinpath("project.toml").write_text(
         'title = "A  Paper:: On Tails"\ncitation = "Paper"\nzotero = "T7QDISXB"\n',
         encoding="utf-8",
     )
@@ -449,7 +449,7 @@ def test_an_imported_source_carries_its_own_deck_all_the_way(repo: Path) -> None
     assert any("a tail bound" in o.format() for o in added.outcomes)
 
     # -- and when the deck changes under it --------------------------------
-    toml = folder / "source.toml"
+    toml = folder / "project.toml"
     toml.write_text(
         toml.read_text(encoding="utf-8") + 'deck = "Mathe::Tails"\n', encoding="utf-8"
     )

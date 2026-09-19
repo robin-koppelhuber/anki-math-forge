@@ -397,7 +397,7 @@ Three tiers, and only the middle one belongs on a card.
 
 1. **Ambient, declared once.** Finite-dimensional; entries real unless the card
    says otherwise; $A^\top$ transpose and $A^\mathsf{H}$ conjugate transpose.
-   Those are examples; the source declares its own. In its `source.toml`, not
+   Those are examples; the source declares its own. In its `project.toml`, not
    on 500 cards. A sentence repeated on every card stops being read, and then
    the one card where it is load-bearing reads like all the others.
 2. **On the card, because the identity turns on it.** Conformability
@@ -571,7 +571,7 @@ errors included (DESIGN.md §4).
 A **card** is what you review. A back you have shown to be false does not
 belong in it, whatever the book prints. Correct it, and record both the
 book's form and the evidence in `## notes` — the deck is a record of the
-mathematics, and `sources/<name>/README.md` is the record of the book.
+mathematics, and `projects/<name>/README.md` is the record of the book.
 
 The bar is evidence, not suspicion. `verify` exists for this: one identity in
 this deck has a printed denominator wrong by 8.6 against a numerical gradient

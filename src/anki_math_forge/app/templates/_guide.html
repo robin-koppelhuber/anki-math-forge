@@ -92,8 +92,8 @@
        Read-only, and the link goes to the full resolution table: the config
        is read at startup, so a box that edited it would take effect at some
        unrelated later moment. #}
-    {% if source_facts is defined and source_facts %}
-    {% set sf = source_facts %}
+    {% if project_facts is defined and project_facts %}
+    {% set sf = project_facts %}
     <section class="rail-card source-facts">
       <h3>this source</h3>
       <p class="sf-title" title="{{ sf.citation }}">{{ sf.title }}</p>
@@ -518,7 +518,7 @@
         reaches a card writer as a coloured box with no caption.</p>
       {% endif %}
       <p class="rail-more">declared in <code>[zotero.meanings]</code> as
-        <code>"kind/colour"</code>, or per source in <code>source.toml</code></p>
+        <code>"kind/colour"</code>, or per source in <code>project.toml</code></p>
     </details>
     {% endif %}
     </div>

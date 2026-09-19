@@ -44,7 +44,7 @@ class Finding:
 
 @dataclass
 class Report:
-    source: str
+    project: str
     total: int = 0
     numbered: int = 0
     expected: int = 0
@@ -67,20 +67,20 @@ class Report:
         else:
             coverage = f"{self.numbered} numbered equations (no numbering to check against)"
         return (
-            f"{self.source}: {self.total} units, {coverage}; "
+            f"{self.project}: {self.total} units, {coverage}; "
             f"{len(self.flagged)} flagged, {len(self.findings)} findings"
         )
 
 
 def audit(
     ledger: Ledger,
-    source: str = "",
+    project: str = "",
     makes_a_unit: Callable[[str, str], bool] | None = None,
 ) -> Report:
     """`makes_a_unit` is the source's `units_from` as a question, and it is
     optional because most callers are asking about a segmented book, where no
     colour scheme applies."""
-    report = Report(source=source or (ledger.path.parent.name if ledger.path else ""))
+    report = Report(project=project or (ledger.path.parent.name if ledger.path else ""))
     units = list(ledger)
     report.total = len(units)
 

@@ -726,6 +726,6 @@ bindKeys({
   "next-alt": () => deck.nextPending(),
   "prev-alt": () => deck.prev(),
   filters: toggleFilters,
-  sources: openGallery,
+  projects: openGallery,
   guide: cycleGuide,
 });

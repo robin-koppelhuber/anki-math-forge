@@ -57,11 +57,11 @@ def collect(config: Config) -> list[TodoItem]:
                 TodoItem(
                     "card", card.uid, note, where, card.status,
                     model.annotation_audience(note) or "claude",
-                    source=card.source_name,
+                    source=card.project_name,
                 )
             )
 
-    for name, ledger in open_ledgers(config.sources_dir).items():
+    for name, ledger in open_ledgers(config.projects_dir).items():
         where = str(_relative(ledger.path, config.root))
         for unit in ledger:
             for note in unit.notes:

@@ -127,7 +127,7 @@ def test_conventions_come_from_the_source(config: Config) -> None:
     led.save()
     _source(config, "## page 1\nsomething\n")
 
-    path = config.sources_dir / "demo" / "conventions.md"
+    path = config.projects_dir / "demo" / "conventions.md"
     path.write_text("# Conventions\n\n- entries are quaternions\n", encoding="utf-8")
 
     found = context.assemble(config, "demo:1:1")

@@ -320,7 +320,7 @@ def test_an_item_with_no_pdf_is_skipped_with_a_reason() -> None:
 def test_the_import_gives_a_new_source_its_own_file(tmp_path: Path) -> None:
     """Without one the units exist and the source does not: nothing can resolve
     its deck or its conventions."""
-    path = tmp_path / "wegel" / "source.toml"
+    path = tmp_path / "wegel" / "project.toml"
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
 
     assert write_source_stub(path, item) is True
@@ -335,7 +335,7 @@ def test_the_import_writes_no_placeholder_conventions(tmp_path: Path) -> None:
     telling a card writer that nobody has written down what is ambient here."""
     folder = tmp_path / "wegel"
     item = Item.from_json(load("item-wegel.json"))  # type: ignore[arg-type]
-    write_source_stub(folder / "source.toml", item)
+    write_source_stub(folder / "project.toml", item)
     assert not (folder / "conventions.md").exists()
 
 
@@ -419,7 +419,7 @@ def test_the_stub_carries_your_tags_and_invents_none(tmp_path: Path) -> None:
 def test_the_stub_carries_the_scheme_it_inherits(tmp_path: Path) -> None:
     """An override replaces rather than merges, so what you need in front of
     you before changing one is the value you are replacing."""
-    path = tmp_path / "book" / "source.toml"
+    path = tmp_path / "book" / "project.toml"
     scheme = zcfg(
         "highlight/green",
         "note/yellow",
@@ -438,7 +438,7 @@ def test_the_stub_is_valid_toml_once_uncommented(tmp_path: Path) -> None:
     one example in front of a reader was a `ConfigError` waiting to happen."""
     import tomllib
 
-    path = tmp_path / "book" / "source.toml"
+    path = tmp_path / "book" / "project.toml"
     scheme = zcfg("highlight/green", meanings={"highlight/green": "a claim"})
     write_source_stub(path, Item(key="X", title="A Book"), scheme=scheme)
 
@@ -458,7 +458,7 @@ def test_the_stub_is_valid_toml_once_uncommented(tmp_path: Path) -> None:
 
 def test_the_meanings_table_is_last(tmp_path: Path) -> None:
     """A bare key written after a table header lands inside the table."""
-    path = tmp_path / "book" / "source.toml"
+    path = tmp_path / "book" / "project.toml"
     write_source_stub(path, Item(key="X", title="A Book"), scheme=zcfg("note/yellow"))
 
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -468,6 +468,6 @@ def test_the_meanings_table_is_last(tmp_path: Path) -> None:
 
 
 def test_the_stub_has_no_tags_when_the_item_has_none(tmp_path: Path) -> None:
-    path = tmp_path / "bare" / "source.toml"
+    path = tmp_path / "bare" / "project.toml"
     write_source_stub(path, Item(key="X", title="Bare"))
     assert "tags = []" in path.read_text(encoding="utf-8")

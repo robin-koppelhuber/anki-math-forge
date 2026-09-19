@@ -16,7 +16,7 @@ from anki_math_forge.config import Config
 CONFIG_TOML = """
 [repo]
 cards_dir = "cards"
-sources_dir = "sources"
+projects_dir = "projects"
 
 [cards]
 language = "en"
@@ -31,15 +31,15 @@ tag_prefix = "forge"
 [app]
 katex_base = "/static/vendor/katex"
 
-[sources.demo]
+[projects.demo]
 title = "Demo Source"
 citation = "Demo"
-tex = "sources/demo/demo.tex"
+tex = "projects/demo/demo.tex"
 
 # A convention belongs to the source, never to the repo: `[cards] layout` is
 # refused at load now, because defaulting one here is how a statistics paper
 # came to be told it writes matrix calculus.
-[sources.demo.conventions]
+[projects.demo.conventions]
 layout = "denominator"
 """
 
@@ -97,8 +97,8 @@ The determinant identity everyone forgets. % a comment
 def repo(tmp_path: Path) -> Path:
     (tmp_path / "forge.toml").write_text(CONFIG_TOML, encoding="utf-8")
     (tmp_path / "cards").mkdir()
-    (tmp_path / "sources" / "demo").mkdir(parents=True)
-    (tmp_path / "sources" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
+    (tmp_path / "projects" / "demo").mkdir(parents=True)
+    (tmp_path / "projects" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
     return tmp_path
 
 
@@ -115,8 +115,8 @@ def zotero_config(repo: Path) -> Config:
     you set aside and have not marked anything with yet, and `purple` is here
     to be a meaning that does *not* make a unit.
     """
-    (repo / "sources" / "paper").mkdir(parents=True)
-    (repo / "sources" / "paper" / "source.md").write_text(
+    (repo / "projects" / "paper").mkdir(parents=True)
+    (repo / "projects" / "paper" / "source.md").write_text(
         "+++\n"
         'title = "A Paper"\n'
         'citation = "Someone 2025"\n'
@@ -180,10 +180,13 @@ def build_pdf(path: Path) -> None:
 @pytest.fixture
 def pdf_source(repo: Path) -> Config:
     """A repo with a PDF-backed source registered alongside the tex one."""
-    (repo / "sources" / "book").mkdir(parents=True)
-    build_pdf(repo / "sources" / "book" / "book.pdf")
+    (repo / "projects" / "book").mkdir(parents=True)
+    build_pdf(repo / "projects" / "book" / "book.pdf")
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
-    toml += '\n[sources.book]\ntitle = "A Book"\ncitation = "Book"\npdf = "sources/book/book.pdf"\n'
+    toml += (
+        '\n[projects.book]\ntitle = "A Book"\n'
+        'citation = "Book"\npdf = "projects/book/book.pdf"\n'
+    )
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     return config_mod.load(repo)
 

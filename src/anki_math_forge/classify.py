@@ -61,7 +61,7 @@ class Classification:
 
 @dataclass
 class Report:
-    source: str
+    project: str
     considered: int = 0
     classified: list[Classification] = field(default_factory=list)
     kept: int = 0
@@ -75,7 +75,7 @@ class Report:
     def summary(self) -> str:
         detail = ", ".join(f"{n} {reason}" for reason, n in sorted(self.by_reason().items()))
         return (
-            f"{self.source}: {len(self.classified)} of {self.considered} untriaged units "
+            f"{self.project}: {len(self.classified)} of {self.considered} untriaged units "
             f"*suggested* for skipping ({detail or 'none'}); {self.kept} unremarked. "
             "Nothing changed -- accept or override each in the triage view."
         )
@@ -94,13 +94,13 @@ def first_numbered_page(units: list[Unit]) -> int | None:
 def classify(
     ledger: Ledger,
     document: Path | None,
-    source: str = "",
+    project: str = "",
     *,
     write: bool = True,
 ) -> Report:
     """Propose skipping obviously non-cardable units. Applies nothing."""
     units = list(ledger)
-    report = Report(source=source or (ledger.path.parent.name if ledger.path else ""))
+    report = Report(project=project or (ledger.path.parent.name if ledger.path else ""))
     body_starts = first_numbered_page(units)
 
     renderer = None

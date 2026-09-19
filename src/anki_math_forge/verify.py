@@ -237,7 +237,7 @@ def run(
             continue
         results.append(
             verify_card(
-                card, trials=trials, layout=config.layout_for(card.source_name)
+                card, trials=trials, layout=config.layout_for(card.project_name)
             )
         )
     return results

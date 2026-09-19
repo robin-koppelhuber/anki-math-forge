@@ -1,6 +1,6 @@
 ---
 description: Work the open @claude annotations
-argument-hint: [claude|me|cards|units|<status>|<state>|--source NAME]
+argument-hint: [claude|me|cards|units|<status>|<state>|--project NAME]
 ---
 
 Resolve open annotations on cards and units.
@@ -12,7 +12,7 @@ Arguments: `$ARGUMENTS` — optional, and any combination of these filters:
 - **`cards`** or **`units`** — one side of the pipeline only.
 - a card status (`draft`, `approved`, `rejected`) or a unit state (`new`,
   `queued`, `skipped`, `carded`) — only things at that stage.
-- **`--source NAME`** — one book's notes. Worth reaching for whenever the repo
+- **`--project NAME`** — one book's notes. Worth reaching for whenever the repo
   has more than one: conventions are per source, so a list that hops between
   two books makes you reload the setting between every item.
 - nothing — everything open.
@@ -41,7 +41,7 @@ the urgent ones queue behind the speculative ones.
    ```
    uv run forge todo --audience claude --json
    uv run forge todo --audience claude --kind unit --status queued
-   uv run forge todo --audience claude --source <name>
+   uv run forge todo --audience claude --project <name>
    ```
 
    Then say in your report how many you left untouched, so the rest are not

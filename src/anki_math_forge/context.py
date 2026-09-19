@@ -87,7 +87,7 @@ class UnitContext:
             "\n## the setting this source is read in\n"
             + (
                 self.conventions
-                or "(none recorded -- write sources/<name>/conventions.md,"
+                or "(none recorded -- write projects/<name>/conventions.md,"
                 " or whoever writes a card here is guessing at what is ambient)"
             )
         )
@@ -180,7 +180,7 @@ def assemble(
     config: Config, unit_id: str, *, spread: int | str | None = None
 ) -> UnitContext | None:
     source = unit_id.split(":", 1)[0]
-    ledger = open_ledgers(config.sources_dir).get(source)
+    ledger = open_ledgers(config.projects_dir).get(source)
     if ledger is None:
         return None
     unit = ledger.get(unit_id)
@@ -197,7 +197,7 @@ def assemble(
     quality = source_text_quality(config, source, unit.locator.document)
 
     wanted, window = _window(ledger, unit, text, spread)
-    spec = config.sources.get(source)
+    spec = config.projects.get(source)
     web_from = (
         "unit" if unit.web is not None else "source" if spec and spec.web is not None else "repo"
     )
@@ -384,8 +384,8 @@ def source_conventions(config: Config, source: str) -> str:
     in the project's own contract would make that contract wrong the moment
     the deck grows.
 
-    It is `sources/<name>/conventions.md`: a plain Markdown document beside
-    `source.toml`, which holds the keys. They were one file for a while, TOML
+    It is `projects/<name>/conventions.md`: a plain Markdown document beside
+    `project.toml`, which holds the keys. They were one file for a while, TOML
     fenced above prose, on the argument that a convention kept away from the
     keys it qualifies is the one nobody opens. What that produced was a file
     that is neither -- no editor checks the TOML above the fence *and* renders
@@ -394,7 +394,7 @@ def source_conventions(config: Config, source: str) -> str:
     """
     from .config import CONVENTIONS_FILE, SOURCE_FILE, split_source_file
 
-    folder = config.sources_dir / source
+    folder = config.projects_dir / source
     path = folder / CONVENTIONS_FILE
     if path.exists():
         body = path.read_text(encoding="utf-8")

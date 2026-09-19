@@ -79,8 +79,8 @@ introduced first, for a real dependency only.
 
 **Conventions belong to a source, not to this file.** Which layout a
 derivative uses, what a bare symbol means: each is a fact about one book. They
-live in `sources/<name>/source.toml` (the `[conventions]` table, open to any
-key) and `sources/<name>/conventions.md` (the prose a card writer must read).
+live in `projects/<name>/project.toml` (the `[conventions]` table, open to any
+key) and `projects/<name>/conventions.md` (the prose a card writer must read).
 `forge context <unit>` hands both over, along with whether web lookups are
 allowed here.
 

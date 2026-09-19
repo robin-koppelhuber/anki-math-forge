@@ -1,4 +1,4 @@
-"""`sources/<name>/source.toml`, and `conventions.md` beside it.
+"""`projects/<name>/project.toml`, and `conventions.md` beside it.
 
 They were one file for a while: TOML between `+++` fences, then prose, on the
 argument that a convention kept away from the keys it qualifies is the one
@@ -20,46 +20,46 @@ from anki_math_forge.context import source_conventions
 
 def a_repo(tmp_path: Path) -> Path:
     (tmp_path / "forge.toml").write_text("", encoding="utf-8")
-    (tmp_path / "sources" / "book").mkdir(parents=True)
+    (tmp_path / "projects" / "book").mkdir(parents=True)
     return tmp_path
 
 
 def test_a_source_is_plain_toml(tmp_path: Path) -> None:
     repo = a_repo(tmp_path)
-    (repo / "sources" / "book" / "source.toml").write_text(
+    (repo / "projects" / "book" / "project.toml").write_text(
         'title = "A Book"\ndeck = "Shelf"\n', encoding="utf-8"
     )
     config = config_mod.load(repo)
-    assert config.source("book").title == "A Book"
+    assert config.project("book").title == "A Book"
     assert config.deck_for("book") == "Shelf"
 
 
 def test_the_fenced_form_is_still_read(tmp_path: Path) -> None:
     """A repo should not have to migrate all at once."""
     repo = a_repo(tmp_path)
-    (repo / "sources" / "book" / "source.md").write_text(
+    (repo / "projects" / "book" / "source.md").write_text(
         '+++\ntitle = "An Old Book"\n+++\n\n# An Old Book\n\nDenominator layout.\n',
         encoding="utf-8",
     )
     config = config_mod.load(repo)
-    assert config.source("book").title == "An Old Book"
+    assert config.project("book").title == "An Old Book"
     assert "Denominator layout." in source_conventions(config, "book")
 
 
 def test_where_a_folder_has_both_the_new_file_wins(tmp_path: Path) -> None:
     """The file you are being migrated *to* is the one that should decide."""
     repo = a_repo(tmp_path)
-    (repo / "sources" / "book" / "source.md").write_text(
+    (repo / "projects" / "book" / "source.md").write_text(
         '+++\ntitle = "Old"\n+++\n', encoding="utf-8"
     )
-    (repo / "sources" / "book" / "source.toml").write_text('title = "New"\n', encoding="utf-8")
-    assert config_mod.load(repo).source("book").title == "New"
+    (repo / "projects" / "book" / "project.toml").write_text('title = "New"\n', encoding="utf-8")
+    assert config_mod.load(repo).project("book").title == "New"
 
 
 def test_conventions_are_their_own_markdown_file(tmp_path: Path) -> None:
     repo = a_repo(tmp_path)
-    (repo / "sources" / "book" / "source.toml").write_text('title = "A Book"\n', encoding="utf-8")
-    (repo / "sources" / "book" / "conventions.md").write_text(
+    (repo / "projects" / "book" / "project.toml").write_text('title = "A Book"\n', encoding="utf-8")
+    (repo / "projects" / "book" / "conventions.md").write_text(
         "# A Book\n\nEverything is real unless a card says otherwise.\n", encoding="utf-8"
     )
     prose = source_conventions(config_mod.load(repo), "book")
@@ -72,29 +72,29 @@ def test_a_source_with_no_conventions_has_no_file(tmp_path: Path) -> None:
     recorded yet" is indistinguishable from a real one to everything that reads
     it, and would silence the warning it should raise."""
     repo = a_repo(tmp_path)
-    (repo / "sources" / "book" / "source.toml").write_text('title = "A Book"\n', encoding="utf-8")
+    (repo / "projects" / "book" / "project.toml").write_text('title = "A Book"\n', encoding="utf-8")
     assert source_conventions(config_mod.load(repo), "book") == ""
 
 
 def test_a_folder_with_neither_is_not_a_source(tmp_path: Path) -> None:
     """Discovery is not a guess."""
     repo = a_repo(tmp_path)
-    (repo / "sources" / "book" / "notes.md").write_text("stray\n", encoding="utf-8")
-    assert "book" not in config_mod.load(repo).sources
+    (repo / "projects" / "book" / "notes.md").write_text("stray\n", encoding="utf-8")
+    assert "book" not in config_mod.load(repo).projects
 
 
 def test_broken_toml_is_refused_by_name(tmp_path: Path) -> None:
     repo = a_repo(tmp_path)
-    (repo / "sources" / "book" / "source.toml").write_text("title = \n", encoding="utf-8")
-    with pytest.raises(config_mod.ConfigError, match=r"source\.toml"):
+    (repo / "projects" / "book" / "project.toml").write_text("title = \n", encoding="utf-8")
+    with pytest.raises(config_mod.ConfigError, match=r"project\.toml"):
         config_mod.load(repo)
 
 
 def test_the_repo_s_own_sources_have_migrated() -> None:
     """The mechanism is only real if this repo uses it."""
     root = Path(__file__).resolve().parents[1]
-    for folder in (root / "sources").iterdir():
+    for folder in (root / "projects").iterdir():
         if not folder.is_dir() or not (folder / "units.jsonl").exists():
             continue
-        assert (folder / "source.toml").exists(), f"{folder.name} still has only the old file"
+        assert (folder / "project.toml").exists(), f"{folder.name} still has only the old file"
         assert not (folder / "source.md").exists(), f"{folder.name} kept a stale source.md"

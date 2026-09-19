@@ -50,7 +50,7 @@ __all__ = [
 
 @dataclass
 class ExtractReport:
-    source: str
+    project: str
     path: Path | None = None
     mode: str = ""  # tex | pdf
     found: int = 0
@@ -63,25 +63,25 @@ class ExtractReport:
     def summary(self) -> str:
         counts = ", ".join(f"{n} {state}" for state, n in sorted(self.transcription.items()))
         return (
-            f"{self.source}: {self.found} units found via {self.mode} "
+            f"{self.project}: {self.found} units found via {self.mode} "
             f"({self.added} new, {self.refreshed} refreshed); transcription: {counts or 'n/a'}"
         )
 
 
 def run(
     config: Config,
-    source_name: str,
+    project_name: str,
     *,
     pages: range | None = None,
 ) -> ExtractReport:
     """Segment a configured source and merge the result into its ledger."""
-    source = config.source(source_name)
-    report = ExtractReport(source=source_name)
+    source = config.project(project_name)
+    report = ExtractReport(project=project_name)
     checker = latex.checker(config.extra_macros)
 
     if source.tex and source.tex.exists():
         report.mode, report.path = "tex", source.tex
-        units = tex.segment(source.tex.read_text(encoding="utf-8"), source_name)
+        units = tex.segment(source.tex.read_text(encoding="utf-8"), project_name)
         for unit in units:
             state, _ = transcribe.gate(unit.tex_source or "", checker)
             # Source LaTeX is authoritative even when KaTeX cannot render it
@@ -89,7 +89,7 @@ def run(
             unit.transcription = state if state != "none" else "none"
     elif source.pdf and source.pdf.exists():
         report.mode, report.path = "pdf", source.pdf
-        units = pdf.segment(source.pdf, source_name, pages=pages)
+        units = pdf.segment(source.pdf, project_name, pages=pages)
         untranscribed = sum(1 for u in units if u.transcription == "none")
         if untranscribed:
             report.warnings.append(
@@ -99,15 +99,15 @@ def run(
     else:
         configured = source.tex or source.pdf
         raise ConfigError(
-            f"source {source_name!r} has no readable input"
+            f"source {project_name!r} has no readable input"
             + (f" (configured: {configured})" if configured else " (set `tex` or `pdf`)")
         )
 
     report.found = len(units)
     report.transcription = _tally(units)
-    report.text_chars = cache_source_text(config, source_name)
+    report.text_chars = cache_source_text(config, project_name)
 
-    ledger_path = config.units_path(source_name)
+    ledger_path = config.units_path(project_name)
     with Ledger.edit(ledger_path) as ledger:
         report.added, report.refreshed = ledger.upsert(units)
     return report
@@ -205,24 +205,24 @@ def text_quality(text: str) -> TextQuality:
     )
 
 
-def source_text_quality(config: Config, source_name: str, document: str = "") -> TextQuality:
-    path = source_text_path(config, source_name, document)
+def source_text_quality(config: Config, project_name: str, document: str = "") -> TextQuality:
+    path = source_text_path(config, project_name, document)
     if not path.exists():
         return TextQuality("missing", 0, 0, 0.0, 0.0, ("no text layer has been cached",))
     return text_quality(path.read_text(encoding="utf-8", errors="replace"))
 
 
-def source_text_path(config: Config, source_name: str, document: str = "") -> Path:
+def source_text_path(config: Config, project_name: str, document: str = "") -> Path:
     """Where a source's text layer is cached.
 
     Per document, because `## page 7` means nothing across fifteen
     chapter PDFs. A single-document source keeps the plain name it had.
     """
-    folder = config.sources_dir / source_name
+    folder = config.projects_dir / project_name
     return folder / (f"text-{document}.md" if document else "text.md")
 
 
-def cache_source_text(config: Config, source_name: str) -> int:
+def cache_source_text(config: Config, project_name: str) -> int:
     """Write the source's text layer next to its ledger, and return its size.
 
     This is what a card writer should have open. A 400-character snippet of
@@ -231,7 +231,7 @@ def cache_source_text(config: Config, source_name: str) -> int:
     equations are what stop you writing ten near-duplicates. The whole book is
     ~26k tokens, so the honest answer is to hand over all of it.
     """
-    source = config.source(source_name)
+    source = config.project(project_name)
     text = ""
     if source.tex and source.tex.exists():
         text = source.tex.read_text(encoding="utf-8")
@@ -239,7 +239,7 @@ def cache_source_text(config: Config, source_name: str) -> int:
         text = _pdf_text(source.pdf)
     if not text.strip():
         return 0
-    path = source_text_path(config, source_name)
+    path = source_text_path(config, project_name)
     header = (
         f"<!-- {source.title}: text layer, cached by `forge extract`.\n"
         "     Generated; do not edit. The mathematics here is mangled -- it is\n"
@@ -250,7 +250,7 @@ def cache_source_text(config: Config, source_name: str) -> int:
     return len(text)
 
 
-def cache_document_text(config: Config, source_name: str, document: str, pdf: Path) -> int:
+def cache_document_text(config: Config, project_name: str, document: str, pdf: Path) -> int:
     """The same thing, for one attachment of a multi-document source.
 
     Handing over the whole document is the point: a card is easier to write and
@@ -261,10 +261,10 @@ def cache_document_text(config: Config, source_name: str, document: str, pdf: Pa
     if not text.strip():
         return 0
     header = (
-        f"<!-- {source_name}/{document}: text layer, cached by `forge zotero`.\n"
+        f"<!-- {project_name}/{document}: text layer, cached by `forge zotero`.\n"
         "     Generated; do not edit. -->\n\n"
     )
-    write_atomic(source_text_path(config, source_name, document), header + text)
+    write_atomic(source_text_path(config, project_name, document), header + text)
     return len(text)
 
 

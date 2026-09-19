@@ -27,7 +27,7 @@ CONFIG_NAMES = (CONFIG_NAME, *LEGACY_CONFIG_NAMES)
 # that `verify` has to act on it. See `CONVENTIONS` below.
 LAYOUTS = ("denominator", "numerator")
 
-# The conventions table: `[conventions]` in `source.toml`, free-form.
+# The conventions table: `[conventions]` in `project.toml`, free-form.
 #
 # **Open on purpose.** What is ambient in a source is not a vocabulary this
 # tool can enumerate -- the next paper will assume something neither of us has
@@ -55,7 +55,7 @@ class ConfigError(Exception):
 
 
 @dataclass(frozen=True)
-class SourceConfig:
+class ProjectConfig:
     name: str
     title: str
     citation: str
@@ -99,7 +99,7 @@ class SourceConfig:
     # another language than the rest of the shelf. Empty inherits.
     convention_keyword: str = ""
     # What is ambient in this source, as keys rather than prose: `[conventions]`
-    # in `source.toml`. Free-form -- see `CONVENTIONS_ACTED_ON`. There is no
+    # in `project.toml`. Free-form -- see `CONVENTIONS_ACTED_ON`. There is no
     # repo-wide counterpart, deliberately: a default convention is a claim
     # about a book nobody has read yet.
     conventions: Mapping[str, str] = field(default_factory=dict)
@@ -129,7 +129,7 @@ class SourceConfig:
 # library and the tool can state them; a *colour* is a scheme you invented and
 # it cannot. So this is the floor: a mark always reads as something, and a
 # fresh repo is not a wall of squares with no captions. Anything you declare --
-# repo-wide in `[zotero.meanings]`, or per source in `source.toml` -- sits on
+# repo-wide in `[zotero.meanings]`, or per source in `project.toml` -- sits on
 # top, and the views say which of the two a meaning came from, because "you
 # have not decided about this colour yet" is worth seeing.
 #
@@ -358,7 +358,7 @@ class ZoteroConfig:
 class Config:
     root: Path
     cards_dir: Path
-    sources_dir: Path
+    projects_dir: Path
     work_dir: Path
     language: str
     front_char_cap: int
@@ -406,7 +406,7 @@ class Config:
     # Flag number -> what you meant by it. Empty by default: a flag with no
     # meaning here is reported rather than guessed at.
     flags: dict[int, str] = field(default_factory=dict)
-    sources: dict[str, SourceConfig] = field(default_factory=dict)
+    projects: dict[str, ProjectConfig] = field(default_factory=dict)
     zotero: ZoteroConfig = field(
         default_factory=lambda: ZoteroConfig(data_dir=Path.home() / "Zotero")
     )
@@ -422,11 +422,11 @@ class Config:
         """
         return f"{self.note_type_name} v{self.note_type_version}"
 
-    def source(self, name: str) -> SourceConfig:
+    def project(self, name: str) -> ProjectConfig:
         try:
-            return self.sources[name]
+            return self.projects[name]
         except KeyError:
-            known = ", ".join(sorted(self.sources)) or "(none)"
+            known = ", ".join(sorted(self.projects)) or "(none)"
             raise ConfigError(f"unknown source {name!r}; configured: {known}") from None
 
     def zotero_for(self, source: str) -> ZoteroConfig:
@@ -440,7 +440,7 @@ class Config:
         plainest reason of the three: it is a word you type while reading, and
         you do not always read in the same language.
         """
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         if spec is None or not (spec.units_from or spec.meanings or spec.convention_keyword):
             return self.zotero
         return ZoteroConfig(
@@ -459,7 +459,7 @@ class Config:
         """
         from .extract.render import TRIAGE_CONTEXT
 
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         if spec and spec.crop_context:
             return spec.crop_context
         return self.crop_context or TRIAGE_CONTEXT
@@ -478,7 +478,7 @@ class Config:
         So a mark gets the whole page width unless the source says otherwise.
         A source that says otherwise is believed in both directions.
         """
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         if spec and spec.crop_width:
             return spec.crop_width
         if self.crop_width:
@@ -495,7 +495,7 @@ class Config:
         """
         if unit is not None:
             return unit
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         if spec and context_asked(spec.context_pages):
             return spec.context_pages
         return self.context_pages
@@ -516,11 +516,11 @@ class Config:
             folder = self.zotero.data_dir / "storage" / document
             files = sorted(folder.glob("*.pdf")) if folder.is_dir() else []
             return files[0] if files else None
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         return spec.pdf if spec else None
 
     def units_path(self, source: str) -> Path:
-        return self.sources_dir / source / "units.jsonl"
+        return self.projects_dir / source / "units.jsonl"
 
     def deck_for(self, source: str, card_type: str = "") -> str:
         """Which Anki deck this source's cards belong in.
@@ -538,7 +538,7 @@ class Config:
         per-deck limit is the only way Anki lets you say that. Subdecks under a
         shared parent, so studying the parent still sees both.
         """
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         if spec and card_type and spec.decks.get(card_type):
             return spec.decks[card_type]
         if spec and spec.deck:
@@ -559,7 +559,7 @@ class Config:
         denominator layout -- the silent mixing CLAUDE.md names, arriving
         through a default rather than through a mistake.
         """
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         return dict(spec.conventions) if spec else {}
 
     def layout_for(self, source: str) -> str:
@@ -592,7 +592,7 @@ class Config:
         """
         if unit is not None:
             return unit
-        spec = self.sources.get(source)
+        spec = self.projects.get(source)
         if spec is not None and spec.web is not None:
             return spec.web
         return self.web
@@ -636,48 +636,48 @@ def load(root: Path | None = None) -> Config:
     check = raw.get("check", {})
     app = raw.get("app", {})
 
-    # A source's own folder is authoritative; `[sources.<name>]` in this file
+    # A source's own folder is authoritative; `[projects.<name>]` in this file
     # is the older way and still works, so a repo does not have to migrate all
     # at once. Where both speak, the folder wins: it sits next to the document
     # it describes, and one file per source is what keeps a root file readable
     # once there are fifty papers in it.
-    specs: dict[str, dict[str, Any]] = dict(raw.get("sources", {}))
-    sources_dir = root / repo.get("sources_dir", "sources")
-    for found, spec in discover_sources(sources_dir).items():
+    specs: dict[str, dict[str, Any]] = dict(raw.get("projects", {}))
+    projects_dir = root / repo.get("projects_dir", "projects")
+    for found, spec in discover_projects(projects_dir).items():
         specs.setdefault(found, {}).update(spec)
 
-    sources: dict[str, SourceConfig] = {}
+    projects: dict[str, ProjectConfig] = {}
     for name, spec in specs.items():
-        sources[name] = SourceConfig(
+        projects[name] = ProjectConfig(
             name=name,
             title=spec.get("title", name),
             citation=spec.get("citation", spec.get("title", name)),
             tex=_opt_path(root, spec.get("tex")),
             pdf=_opt_path(root, spec.get("pdf")),
             deck=str(spec.get("deck", "") or ""),
-            conventions=_conventions(spec, f"[sources.{name}]"),
+            conventions=_conventions(spec, f"[projects.{name}]"),
             web=_opt_bool(spec.get("web")),
-            order=_order(spec.get("order", "printed"), f"[sources.{name}]"),
+            order=_order(spec.get("order", "printed"), f"[projects.{name}]"),
             crop_context=float(spec.get("crop_context", 0.0)),
-            crop_width=_crop_width(spec.get("crop_width", ""), f"[sources.{name}]"),
+            crop_width=_crop_width(spec.get("crop_width", ""), f"[projects.{name}]"),
             context_pages=context_size(
-                spec.get("context_pages", -1), f"[sources.{name}] context_pages"
+                spec.get("context_pages", -1), f"[projects.{name}] context_pages"
             ),
             zotero_key=str(spec.get("zotero", "") or ""),
             decks={str(k): str(v) for k, v in (spec.get("decks") or {}).items()},
             tags=tuple(str(x) for x in spec.get("tags", ())),
             documents=tuple(str(x) for x in spec.get("documents", ())),
             units_from=_units_from(
-                spec.get("units_from", ()), f"[sources.{name}] units_from"
+                spec.get("units_from", ()), f"[projects.{name}] units_from"
             ),
             convention_keyword=str(spec.get("convention_keyword", "") or ""),
-            meanings=_meanings(spec.get("meanings") or {}, f"[sources.{name}.meanings]"),
+            meanings=_meanings(spec.get("meanings") or {}, f"[projects.{name}.meanings]"),
         )
 
     return Config(
         root=root,
         cards_dir=root / repo.get("cards_dir", "cards"),
-        sources_dir=root / repo.get("sources_dir", "sources"),
+        projects_dir=root / repo.get("projects_dir", "projects"),
         work_dir=root / repo.get("work_dir", ".forge"),
         language=cards.get("language", "en"),
         front_char_cap=int(cards.get("front_char_cap", 160)),
@@ -698,7 +698,7 @@ def load(root: Path | None = None) -> Config:
         katex_base=app.get("katex_base", ""),
         graph=bool(app.get("graph", True)),
         keys=_keys(app.get("keys", {})),
-        sources=sources,
+        projects=projects,
         zotero=_zotero(raw.get("zotero", {})),
     )
 
@@ -743,7 +743,7 @@ def _keys(raw: Any) -> dict[str, str]:
     return {k: str(v) for k, v in table.items()}
 
 
-SOURCE_TOML = "source.toml"
+PROJECT_TOML = "project.toml"
 SOURCE_FILE = "source.md"  # the older form: the same TOML, between `+++` fences
 CONVENTIONS_FILE = "conventions.md"
 FENCE = "+++"
@@ -753,7 +753,7 @@ def split_source_file(path: Path) -> tuple[dict[str, Any], str]:
     """The older source file: TOML between `+++` fences, then prose.
 
     Kept because a repo should not have to migrate all at once, and because
-    reading it is four lines. New sources are `source.toml` next to a plain
+    reading it is four lines. New sources are `project.toml` next to a plain
     `conventions.md`.
 
     The frontmatter form put both halves in one file on the argument that a
@@ -778,7 +778,7 @@ def split_source_file(path: Path) -> tuple[dict[str, Any], str]:
 
 
 def read_source_toml(path: Path) -> dict[str, Any]:
-    """`sources/<name>/source.toml`: plain TOML, no fences.
+    """`projects/<name>/project.toml`: plain TOML, no fences.
 
     TOML rather than YAML because every key here overrides one in
     `forge.toml`, and a block copied between the two has to work unchanged. It
@@ -792,19 +792,19 @@ def read_source_toml(path: Path) -> dict[str, Any]:
         raise ConfigError(f"{path} is not valid TOML: {exc}") from exc
 
 
-def discover_sources(sources_dir: Path) -> dict[str, dict[str, Any]]:
-    """Every `sources/<name>/source.toml`, and the older `source.md` beside it.
+def discover_projects(projects_dir: Path) -> dict[str, dict[str, Any]]:
+    """Every `projects/<name>/project.toml`, and the older `source.md` beside it.
 
     A folder with neither is not a source. Discovery is not a guess.
     """
     found: dict[str, dict[str, Any]] = {}
-    if not sources_dir.is_dir():
+    if not projects_dir.is_dir():
         return found
-    for path in sorted(sources_dir.glob(f"*/{SOURCE_FILE}")):
+    for path in sorted(projects_dir.glob(f"*/{SOURCE_FILE}")):
         found[path.parent.name] = split_source_file(path)[0]
     # Second, and therefore winning where a folder still has both: the file
     # you are being migrated *to* is the one that should decide.
-    for path in sorted(sources_dir.glob(f"*/{SOURCE_TOML}")):
+    for path in sorted(projects_dir.glob(f"*/{PROJECT_TOML}")):
         found[path.parent.name] = read_source_toml(path)
     return found
 
@@ -953,7 +953,7 @@ def _refuse_a_repo_wide_convention(cards: Mapping[str, Any], path: Path) -> None
         raise ConfigError(
             f"{path}: [cards] layout is no longer read. A layout is a fact about "
             "one book, not a repo-wide default -- move it to that source's "
-            "`sources/<name>/source.toml`, under [conventions]."
+            "`projects/<name>/project.toml`, under [conventions]."
         )
 
 

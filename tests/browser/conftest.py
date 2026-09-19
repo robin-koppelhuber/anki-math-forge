@@ -81,10 +81,10 @@ The identity everyone forgets.
 # `[cards] study_order` into this file, so a test that reorders the criteria
 # would otherwise hand the next test a deck in a different order.
 CONFIG = (
-    '[repo]\ncards_dir = "cards"\nsources_dir = "sources"\n\n'
+    '[repo]\ncards_dir = "cards"\nprojects_dir = "projects"\n\n'
     "[cards]\n\n"
-    '[sources.demo]\ntitle = "Demo"\ncitation = "Demo"\n'
-    'tex = "sources/demo/demo.tex"\n'
+    '[projects.demo]\ntitle = "Demo"\ncitation = "Demo"\n'
+    'tex = "projects/demo/demo.tex"\n'
 )
 
 
@@ -104,10 +104,10 @@ def lay_out(repo: Path) -> None:
     # became three failures somewhere else.
     for stale in cards.glob("*.md"):
         stale.unlink()
-    (repo / "sources" / "demo").mkdir(parents=True, exist_ok=True)
-    (repo / "sources" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
-    (repo / "sources" / "demo" / "units.jsonl").unlink(missing_ok=True)
-    (repo / "sources" / "demo" / "graph.json").unlink(missing_ok=True)
+    (repo / "projects" / "demo").mkdir(parents=True, exist_ok=True)
+    (repo / "projects" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
+    (repo / "projects" / "demo" / "units.jsonl").unlink(missing_ok=True)
+    (repo / "projects" / "demo" / "graph.json").unlink(missing_ok=True)
     for uid, gist, needs, frequency, derivation in DECK:
         graded = ""
         if frequency:

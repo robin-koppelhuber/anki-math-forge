@@ -179,7 +179,7 @@ The `requires` of one source, on a canvas you arrange by hand. The review view a
 - `click` selects a box or an arrow · `double-click` opens the card · `del` removes what is selected
 - `drag` a box to arrange it, `drag` the background to pan
 - `+` puts a card with no dependencies on the canvas · `x` puts a box back · `z` undo · `f` every card · `0` recentre
-- the arrangement is written to `sources/<name>/graph.json`, committed and diffable
+- the arrangement is written to `projects/<name>/graph.json`, committed and diffable
 
 An arrow runs dot to dot, out of the prerequisite's right port and into the dependent's left port, so the line you drew is the line you get. Dropping one on empty space opens the card picker and connects whatever you choose, because the card you meant is usually one of the ones not drawn.
 
@@ -263,7 +263,7 @@ anki-forge/
     skills/card-writing/SKILL.md
     commands/{extract-cards,augment,triage}.md
   cards/                       # source of truth
-  sources/matrix-cookbook/
+  projects/matrix-cookbook/
     units.jsonl
     assets/
   src/anki_math_forge/

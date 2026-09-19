@@ -1,10 +1,10 @@
 """A source describes itself, in its own folder.
 
-This suite covers the **older** fenced form, `sources/<name>/source.md`: TOML
+This suite covers the **older** fenced form, `projects/<name>/source.md`: TOML
 between `+++` fences for the keys, prose below for the conventions. It is still
 read, because a repo should not have to migrate all at once -- and everything
 asserted here about inheritance, precedence and refusal is the same machinery
-`source.toml` uses, so it is worth keeping exercised through both doors.
+`project.toml` uses, so it is worth keeping exercised through both doors.
 `test_source_toml.py` covers the current form.
 """
 
@@ -18,7 +18,7 @@ from anki_math_forge import config as config_mod
 
 
 def write_source(repo: Path, name: str, frontmatter: str, prose: str = "") -> None:
-    folder = repo / "sources" / name
+    folder = repo / "projects" / name
     folder.mkdir(parents=True, exist_ok=True)
     body = "+++\n" + frontmatter.strip() + "\n+++\n\n" + prose
     folder.joinpath("source.md").write_text(body, encoding="utf-8")
@@ -38,28 +38,28 @@ def test_a_source_is_discovered_from_its_folder(repo: Path) -> None:
     write_source(repo, "book", 'title = "A Book"\ndeck = "Shelf::A Book"\ntags = ["paper"]')
     config = config_mod.load(repo)
 
-    assert "book" in config.sources
-    assert config.source("book").title == "A Book"
+    assert "book" in config.projects
+    assert config.project("book").title == "A Book"
     assert config.deck_for("book") == "Shelf::A Book"
-    assert config.source("book").tags == ("paper",)
+    assert config.project("book").tags == ("paper",)
 
 
 def test_a_folder_without_a_source_file_is_not_a_source(repo: Path) -> None:
     """Discovery does not guess: a stray directory is not a book."""
-    (repo / "sources" / "scratch").mkdir(parents=True, exist_ok=True)
-    assert "scratch" not in config_mod.load(repo).sources
+    (repo / "projects" / "scratch").mkdir(parents=True, exist_ok=True)
+    assert "scratch" not in config_mod.load(repo).projects
 
 
 def test_the_folder_wins_over_the_root_file(repo: Path) -> None:
     """Both are read, so a repo migrates one source at a time. The file sitting
     next to the document is the one that is right."""
-    add_toml(repo, '[sources.book]\ntitle = "Stale"\ndeck = "Old"\norder = "none"\n')
+    add_toml(repo, '[projects.book]\ntitle = "Stale"\ndeck = "Old"\norder = "none"\n')
     write_source(repo, "book", 'title = "Current"\ndeck = "New"')
 
     config = config_mod.load(repo)
-    assert config.source("book").title == "Current"
+    assert config.project("book").title == "Current"
     assert config.deck_for("book") == "New"
-    assert config.source("book").order == "none", "keys it does not restate are kept"
+    assert config.project("book").order == "none", "keys it does not restate are kept"
 
 
 def test_a_block_copies_between_the_two_files_unchanged(repo: Path) -> None:
@@ -91,11 +91,11 @@ def test_a_tag_named_no_stays_a_string(repo: Path) -> None:
     booleans, so a tag or colour spelled that way would silently stop being
     either one."""
     write_source(repo, "book", 'title = "A Book"\ntags = ["no", "on", "y"]')
-    assert config_mod.load(repo).source("book").tags == ("no", "on", "y")
+    assert config_mod.load(repo).project("book").tags == ("no", "on", "y")
 
 
 def test_a_source_file_without_frontmatter_is_refused(repo: Path) -> None:
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("source.md").write_text("# just prose\n", encoding="utf-8")
     with pytest.raises(config_mod.ConfigError, match="no frontmatter"):
@@ -103,7 +103,7 @@ def test_a_source_file_without_frontmatter_is_refused(repo: Path) -> None:
 
 
 def test_an_unclosed_frontmatter_block_is_refused(repo: Path) -> None:
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("source.md").write_text('+++\ntitle = "A Book"\n', encoding="utf-8")
     with pytest.raises(config_mod.ConfigError, match="never closed"):
@@ -216,7 +216,7 @@ def test_a_bare_kind_is_refused_in_units_from(repo: Path) -> None:
 def test_a_source_naming_half_a_mark_is_refused(repo: Path) -> None:
     add_toml(repo, REPO_ZOTERO)
     write_source(repo, "book", 'title = "A Book"\nunits_from = ["magenta"]')
-    with pytest.raises(config_mod.ConfigError, match=r"sources\.book"):
+    with pytest.raises(config_mod.ConfigError, match=r"projects\.book"):
         config_mod.load(repo)
 
 
@@ -326,7 +326,7 @@ def test_conventions_still_read_from_the_older_file(repo: Path) -> None:
     """A repo that has not migrated keeps working."""
     from anki_math_forge.context import source_conventions
 
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("conventions.md").write_text("# Old\n\nStill read.\n", encoding="utf-8")
     assert "Still read." in source_conventions(config_mod.load(repo), "book")

@@ -1,6 +1,6 @@
 ---
 description: Say in one line what a card from each unit would be about
-argument-hint: [--source NAME] [--section SECTION | --all]
+argument-hint: [--project NAME] [--section SECTION | --all]
 ---
 
 Fill in the one-line subject for units that have none, by dispatching
@@ -8,7 +8,7 @@ Fill in the one-line subject for units that have none, by dispatching
 
 Arguments: `$ARGUMENTS`
 
-- **`--source NAME`** — which source. **Ask if it is not given and the repo
+- **`--project NAME`** — which source. **Ask if it is not given and the repo
   has more than one.**
 - **`--section SECTION`**, or **`--all`** for the whole source. Default: ask.
 
@@ -34,7 +34,7 @@ not a wire.
 1. See what needs doing:
 
    ```
-   uv run forge units --source <name> --ungisted --json
+   uv run forge units --project <name> --ungisted --json
    ```
 
 2. Group by `locator.section`. A section of 30–40 units is one subagent; split
@@ -45,7 +45,7 @@ not a wire.
    calls in one message, each with its own temp directory:
 
    > Gist section <section> of <source>. Render with
-   > `uv run --no-sync forge crops --source <source> --section <section> --ungisted --out <temp dir> --json`,
+   > `uv run --no-sync forge crops --project <project> --section <section> --ungisted --out <temp dir> --json`,
    > read each crop and the `marked`/`comment` fields, and record with
    > `uv run --no-sync forge units --id <id> --gist '<one line>'`.
    > Follow your instructions exactly: a subject, not a summary; no maths; say
@@ -54,8 +54,8 @@ not a wire.
 4. Verify mechanically rather than trusting the summaries:
 
    ```
-   uv run forge units --source <name> --ungisted --json     # should be near empty
-   uv run forge units --source <name> --state new           # gists print under each id
+   uv run forge units --project <name> --ungisted --json     # should be near empty
+   uv run forge units --project <name> --state new           # gists print under each id
    ```
 
 5. Report: how many per section, and **every gist that says the unit is

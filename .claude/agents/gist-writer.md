@@ -28,7 +28,7 @@ a card exists costs a rewrite.
 1. Render the crops you need, with the manifest:
 
    ```
-   uv run --no-sync forge crops --source <name> --section <s> --ungisted --out <a temp dir> --json
+   uv run --no-sync forge crops --project <name> --section <s> --ungisted --out <a temp dir> --json
    ```
 
    Each manifest entry carries the PNG, plus `marked` and `comment` — the

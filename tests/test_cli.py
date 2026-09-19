@@ -132,7 +132,7 @@ def test_new_files_the_card_under_its_source(repo: Path, config: Config) -> None
     written = list(config.cards_dir.rglob("*.md"))
     assert len(written) == 1
     assert written[0].parent.name == "demo"
-    assert model.load_all(config.cards_dir)[0].source_name == "demo"
+    assert model.load_all(config.cards_dir)[0].project_name == "demo"
 
 
 def test_new_without_a_unit_stays_at_the_top(repo: Path, config: Config) -> None:
@@ -308,7 +308,7 @@ def test_crops_renders_working_files_with_a_manifest(
     run(repo, "extract")
     drain(capsys)
     out = tmp_path / "crops"
-    assert run(repo, "crops", "--source", "book", "--out", str(out), "--json") == 0
+    assert run(repo, "crops", "--project", "book", "--out", str(out), "--json") == 0
 
     manifest = json.loads(capsys.readouterr().out)
     assert len(manifest) == 2
@@ -330,7 +330,7 @@ def test_crops_can_select_only_what_still_needs_reading(
     run(repo, "units", "--id", units[0].id, "--tex-auto", "a = b")
     drain(capsys)
 
-    run(repo, "crops", "--source", "book", "--untranscribed", "--out", str(tmp_path), "--json")
+    run(repo, "crops", "--project", "book", "--untranscribed", "--out", str(tmp_path), "--json")
     remaining = json.loads(capsys.readouterr().out)
     assert [e["unit"] for e in remaining] == [units[1].id]
 
@@ -501,12 +501,12 @@ def test_todo_filters_on_source(
     card.save()
     drain(capsys)
 
-    run(repo, "todo", "--source", "demo", "--json")
+    run(repo, "todo", "--project", "demo", "--json")
     here = json.loads(out(capsys))
     assert {i["source"] for i in here} == {"demo"}
     assert len(here) == 2, "the card names a demo unit, so it is demo's work"
 
-    run(repo, "todo", "--source", "elsewhere")
+    run(repo, "todo", "--project", "elsewhere")
     assert "matching that filter" in out(capsys)
 
 
@@ -525,7 +525,7 @@ def test_a_card_that_names_no_source_is_never_filtered_away(
     )
     drain(capsys)
 
-    run(repo, "todo", "--source", "demo", "--json")
+    run(repo, "todo", "--project", "demo", "--json")
     items = json.loads(out(capsys))
 
     assert [i["ref"] for i in items] == ["ab12cd"]

@@ -54,7 +54,7 @@ def size_of(repo: Path, unit_id: str) -> int | str:
     that shows up, and it is the harness racing the server, not a fault in
     either.
     """
-    ledger = repo / "sources" / "demo" / "units.jsonl"
+    ledger = repo / "projects" / "demo" / "units.jsonl"
     for attempt in range(10):
         try:
             text = ledger.read_text(encoding="utf-8")

@@ -187,7 +187,7 @@ rather than deciding (see **What not to card**).
 `forge context <unit>` ends with a section headed *looking things up* that
 says, for that unit, whether web research is permitted. It is off unless
 somebody granted it — per unit during triage, or per source in
-`source.toml`.
+`project.toml`.
 
 Do not search when it says no. Not to check a theorem name, not to confirm a
 standard form, not for "one quick look". The permission exists because the

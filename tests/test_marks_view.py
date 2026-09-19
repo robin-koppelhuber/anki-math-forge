@@ -19,8 +19,8 @@ from anki_math_forge import config as config_mod
 from anki_math_forge.app import (
     create_app,
     mark_payloads,
+    project_facts,
     scheme_rows,
-    source_facts,
     source_origin,
 )
 from anki_math_forge.config import Config
@@ -125,9 +125,9 @@ def test_a_marked_unit_is_cut_to_the_page_width_by_default(config: Config) -> No
 
 
 def test_a_source_that_says_otherwise_is_believed_both_ways(tmp_path: Path) -> None:
-    (tmp_path / "sources" / "book").mkdir(parents=True)
+    (tmp_path / "projects" / "book").mkdir(parents=True)
     (tmp_path / "forge.toml").write_text("", encoding="utf-8")
-    (tmp_path / "sources" / "book" / "source.md").write_text(
+    (tmp_path / "projects" / "book" / "source.md").write_text(
         '+++\ntitle = "Book"\ncrop_width = "page"\n+++\n', encoding="utf-8"
     )
     config = config_mod.load(tmp_path)
@@ -138,9 +138,9 @@ def test_an_unrecognised_width_is_refused_at_load(tmp_path: Path) -> None:
     """Same reason `layout` is: it would fall through to whichever branch
     happens to be the `else`, and you would find out by wondering why half the
     crops look wrong."""
-    (tmp_path / "sources" / "book").mkdir(parents=True)
+    (tmp_path / "projects" / "book").mkdir(parents=True)
     (tmp_path / "forge.toml").write_text("", encoding="utf-8")
-    (tmp_path / "sources" / "book" / "source.md").write_text(
+    (tmp_path / "projects" / "book" / "source.md").write_text(
         '+++\ntitle = "Book"\ncrop_width = "wide"\n+++\n', encoding="utf-8"
     )
     with pytest.raises(config_mod.ConfigError, match="crop_width"):
@@ -259,7 +259,7 @@ def test_the_source_facts_say_when_nothing_is_declared(zotero_config: Config) ->
     """An absent convention is a card writer guessing at what is ambient, and
     it was a blank where a value would be -- indistinguishable from a setting
     that happens to be empty."""
-    facts = source_facts(zotero_config, "paper")
+    facts = project_facts(zotero_config, "paper")
     assert facts["conventions"] is False
     assert facts["origin"] == "zotero"
     assert facts["crop_width"] == "box", "nothing said, and nothing asked about marks"
@@ -309,7 +309,7 @@ def test_the_legend_says_which_are_yours(zotero_config: Config) -> None:
 def test_the_marks_scheme_is_zotero_only(config: Config) -> None:
     """A segmented book has no marks and no scheme, and a rail describing
     machinery that is not running is worse than an empty one."""
-    assert source_facts(config, "demo")["units_from"] == []
+    assert project_facts(config, "demo")["units_from"] == []
 
 
 # -- reading the document rather than judging a crop ------------------------

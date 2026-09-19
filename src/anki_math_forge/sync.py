@@ -288,7 +288,7 @@ def live_uid_counts(client: AnkiConnect, config: Config) -> dict[str, int]:
 
 def decks_for(cards: list[Card], config: Config) -> list[str]:
     """Every deck this run will write to, in a stable order."""
-    return sorted({config.deck_for(card.source_name, card.type) for card in cards})
+    return sorted({config.deck_for(card.project_name, card.type) for card in cards})
 
 
 def source_positions(config: Config) -> dict[str, int]:
@@ -307,14 +307,14 @@ def source_positions(config: Config) -> dict[str, int]:
     """
     from .ledger import open_ledgers
 
-    ledgers = open_ledgers(config.sources_dir)
-    names = [n for n in config.sources if n in ledgers]
+    ledgers = open_ledgers(config.projects_dir)
+    names = [n for n in config.projects if n in ledgers]
     names += sorted(set(ledgers) - set(names))
 
     positions: dict[str, int] = {}
     at = 0
     for name in names:
-        spec = config.sources.get(name)
+        spec = config.projects.get(name)
         if spec is not None and spec.order == "none":
             continue
         for unit in ledgers[name]:
@@ -814,7 +814,7 @@ def deck_drift(client: AnkiConnect, config: Config, cards: list[Card]) -> list[D
     Two calls for the whole deck rather than two per card: every card of this
     note type, then their decks in one batch.
     """
-    wanted = {c.uid: config.deck_for(c.source_name, c.type) for c in cards}
+    wanted = {c.uid: config.deck_for(c.project_name, c.type) for c in cards}
     if not wanted:
         return []
     found = client.cards_info(client.find_cards(f'"note:{config.note_type}"'))
@@ -854,7 +854,7 @@ def _upsert(client: AnkiConnect, config: Config, card: Card, *, dry_run: bool) -
         )
 
     if not note_ids:
-        deck = config.deck_for(card.source_name, card.type)
+        deck = config.deck_for(card.project_name, card.type)
         if not dry_run:
             client.add_note(deck, config.note_type, fields, tags)
         return CardOutcome(card.uid, "add", f"-> {deck}", gist=card.gist)

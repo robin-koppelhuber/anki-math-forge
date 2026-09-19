@@ -26,7 +26,7 @@ from . import extract as extract_mod
 from . import latex, model, todo, verify
 from . import ledger as ledger_mod
 from .anki import AnkiConnect, AnkiError
-from .config import CHAPTER, SOURCE_TOML, Config, ConfigError, context_size, load
+from .config import CHAPTER, PROJECT_TOML, Config, ConfigError, context_size, load
 
 OK, FAILED, MISUSE = 0, 1, 2
 
@@ -85,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     subs = parser.add_subparsers(dest="verb", required=True)
 
     p = subs.add_parser("extract", help="segment a source into units; never writes cards")
-    p.add_argument("source", nargs="?", default=None)
+    p.add_argument("project", nargs="?", default=None)
     p.add_argument("--pages", default=None, help="page range, e.g. 10-40 (pdf sources)")
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_extract)
@@ -106,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="import every item carrying this Zotero tag",
     )
     p.add_argument(
-        "--source",
+        "--project",
         default=None,
         help="which source to file the units under (default: the cite key)",
     )
@@ -132,7 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
         "export",
         help="a deck as an .apkg, for sharing or for keeping",
     )
-    p.add_argument("source", nargs="?", default=None, help="whose deck to export")
+    p.add_argument("project", nargs="?", default=None, help="whose deck to export")
     p.add_argument("--deck", default=None, help="a deck name, instead of a source")
     p.add_argument("--out", default=None, metavar="PATH", help="where to write it")
     p.add_argument(
@@ -172,7 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_context)
 
     p = subs.add_parser("units", help="view or re-state the ledger")
-    p.add_argument("--source", default=None)
+    p.add_argument("--project", default=None)
     p.add_argument("--state", default="all", help=f"one of: {', '.join(ledger_mod.STATES)}, all")
     p.add_argument("--section", default=None)
     p.add_argument("--limit", type=int, default=0)
@@ -258,7 +258,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_units)
 
     p = subs.add_parser("crops", help="render unit crops to a directory, for transcription")
-    p.add_argument("--source", default=None)
+    p.add_argument("--project", default=None)
     p.add_argument("--section", default=None)
     p.add_argument("--state", default="all", help=f"one of: {', '.join(ledger_mod.STATES)}, all")
     p.add_argument(
@@ -296,7 +296,7 @@ def build_parser() -> argparse.ArgumentParser:
     p = subs.add_parser(
         "classify", help="skip units that were never going to be cards, with a reason"
     )
-    p.add_argument("--source", default=None)
+    p.add_argument("--project", default=None)
     p.add_argument(
         "--dry-run", action="store_true", help="report the proposals without recording them"
     )
@@ -304,12 +304,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(run=cmd_classify)
 
     p = subs.add_parser("audit", help="mechanical confidence checks over a ledger")
-    p.add_argument("--source", default=None)
+    p.add_argument("--project", default=None)
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_audit)
 
     p = subs.add_parser("source-text", help="the cached text layer, for card-writing context")
-    p.add_argument("source", nargs="?", default=None)
+    p.add_argument("project", nargs="?", default=None)
     p.set_defaults(run=cmd_source_text)
 
     p = subs.add_parser("new", help="scaffold a stub card from a queued unit")
@@ -359,7 +359,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--status", default=None, help="a card status or a unit state, e.g. approved, queued"
     )
     p.add_argument(
-        "--source",
+        "--project",
         default=None,
         help=(
             "one source's notes. Worth reaching for on a repo with several: "
@@ -413,7 +413,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = subs.add_parser("verify", help="opt-in numeric check of identities")
     p.add_argument("--uid", default=None)
-    p.add_argument("--source", default=None, help="only this source's cards")
+    p.add_argument("--project", default=None, help="only this project's cards")
     p.add_argument("--trials", type=int, default=verify.TRIALS)
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_verify)
@@ -425,7 +425,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_extract(args: argparse.Namespace, config: Config) -> int:
-    names = [args.source] if args.source else sorted(config.sources)
+    names = [args.project] if args.project else sorted(config.projects)
     if not names:
         print("no sources configured in forge.toml", file=sys.stderr)
         return MISUSE
@@ -439,7 +439,7 @@ def cmd_extract(args: argparse.Namespace, config: Config) -> int:
             # `forge zotero`, not by segmentation. Taking the whole run down
             # over one such source meant the bare `forge extract` in the docs
             # always exited non-zero once a second kind of source existed.
-            if args.source:
+            if args.project:
                 raise
             print(f"  skipped {name}: {exc}", file=sys.stderr)
             continue
@@ -486,8 +486,8 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
 
         reports = []
         for item in items:
-            source = args.source or _source_name(item)
-            spec = config.sources.get(source)
+            source = args.project or _project_name(item)
+            spec = config.projects.get(source)
             report = zotero_units.build(
                 client,
                 item,
@@ -498,7 +498,7 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
             )
             reports.append((source, item, report))
             if not args.dry_run and report.units:
-                stub = config.sources_dir / source / SOURCE_TOML
+                stub = config.projects_dir / source / PROJECT_TOML
                 scheme = config.zotero_for(source)
                 # The scheme in force, written into the stub commented out, so
                 # the first thing you see when you go to override one of these
@@ -581,7 +581,7 @@ def _list_zotero(client: Any, config: Config, args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return FAILED
 
-    known = {name: spec.zotero_key for name, spec in config.sources.items()}
+    known = {name: spec.zotero_key for name, spec in config.projects.items()}
     by_key = {key: name for name, key in known.items() if key}
     rows = [
         {
@@ -636,7 +636,7 @@ def _zotero_lookup(client: Any, wanted: str) -> list[Any]:
     return exact or found
 
 
-def _source_name(item: Any) -> str:
+def _project_name(item: Any) -> str:
     """The cite key if Better BibTeX gave it one, else the Zotero key.
 
     Never the title: a source name ends up in every unit id, and a title that
@@ -681,8 +681,8 @@ def cmd_export(args: argparse.Namespace, config: Config) -> int:
     """
     if args.deck:
         deck = args.deck
-    elif args.source:
-        deck = config.deck_for(args.source)
+    elif args.project:
+        deck = config.deck_for(args.project)
     else:
         print("name a source, or --deck", file=sys.stderr)
         return MISUSE
@@ -763,9 +763,9 @@ def cmd_context(args: argparse.Namespace, config: Config) -> int:
 
 
 def cmd_units(args: argparse.Namespace, config: Config) -> int:
-    ledgers = ledger_mod.open_ledgers(config.sources_dir)
-    if args.source:
-        ledgers = {k: v for k, v in ledgers.items() if k == args.source}
+    ledgers = ledger_mod.open_ledgers(config.projects_dir)
+    if args.project:
+        ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
         print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
@@ -799,7 +799,7 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
                 continue
             row = unit.to_json()
             row["source"] = name
-            row["citation"] = unit.citation(config.source(name).citation)
+            row["citation"] = unit.citation(config.project(name).citation)
             rows.append(row)
     if args.limit:
         rows = rows[: args.limit]
@@ -868,7 +868,7 @@ def _mutate_unit(
                     None if isinstance(asked_for, int) and asked_for < 0 else asked_for
                 )
                 led.save()
-                asked = config.context_pages_for(target.source, target.context_pages)
+                asked = config.context_pages_for(target.project, target.context_pages)
                 print(
                     f"{args.id}: card writers get "
                     + (
@@ -896,7 +896,7 @@ def _mutate_unit(
                     return FAILED
                 target.web = None if args.web == "inherit" else args.web == "yes"
                 led.save()
-                allowed = config.web_for(target.source, target.web)
+                allowed = config.web_for(target.project, target.web)
                 whose = "this unit" if target.web is not None else "inherited"
                 print(
                     f"{args.id}: web research "
@@ -935,9 +935,9 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
     """
     from .extract import render as render_mod
 
-    ledgers = ledger_mod.open_ledgers(config.sources_dir)
-    if args.source:
-        ledgers = {k: v for k, v in ledgers.items() if k == args.source}
+    ledgers = ledger_mod.open_ledgers(config.projects_dir)
+    if args.project:
+        ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
         print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
@@ -1040,9 +1040,9 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
 
 
 def cmd_classify(args: argparse.Namespace, config: Config) -> int:
-    ledgers = ledger_mod.open_ledgers(config.sources_dir)
-    if args.source:
-        ledgers = {k: v for k, v in ledgers.items() if k == args.source}
+    ledgers = ledger_mod.open_ledgers(config.projects_dir)
+    if args.project:
+        ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
         print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
@@ -1050,17 +1050,19 @@ def cmd_classify(args: argparse.Namespace, config: Config) -> int:
     reports = []
     for name, probe in ledgers.items():
         if args.dry_run:
-            reports.append(classify_mod.classify(probe, config.source(name).pdf, name, write=False))
+            reports.append(
+                classify_mod.classify(probe, config.project(name).pdf, name, write=False)
+            )
             continue
         with ledger_mod.Ledger.edit(probe.path) as led:
-            reports.append(classify_mod.classify(led, config.source(name).pdf, name, write=True))
+            reports.append(classify_mod.classify(led, config.project(name).pdf, name, write=True))
 
     if args.json:
         print(
             json.dumps(
                 [
                     {
-                        "source": r.source,
+                        "source": r.project,
                         "considered": r.considered,
                         "kept": r.kept,
                         "dry_run": args.dry_run,
@@ -1081,14 +1083,14 @@ def cmd_classify(args: argparse.Namespace, config: Config) -> int:
         if args.dry_run:
             print("  (dry run -- nothing changed)")
         elif report.classified:
-            print(f"  review them with: forge units --state skipped --source {report.source}")
+            print(f"  review them with: forge units --state skipped --project {report.project}")
     return OK
 
 
 def cmd_audit(args: argparse.Namespace, config: Config) -> int:
-    ledgers = ledger_mod.open_ledgers(config.sources_dir)
-    if args.source:
-        ledgers = {k: v for k, v in ledgers.items() if k == args.source}
+    ledgers = ledger_mod.open_ledgers(config.projects_dir)
+    if args.project:
+        ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
         print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
@@ -1104,7 +1106,7 @@ def cmd_audit(args: argparse.Namespace, config: Config) -> int:
             json.dumps(
                 [
                     {
-                        "source": r.source,
+                        "source": r.project,
                         "total": r.total,
                         "numbered": r.numbered,
                         "expected": r.expected,
@@ -1128,7 +1130,7 @@ def cmd_audit(args: argparse.Namespace, config: Config) -> int:
 
 def cmd_source_text(args: argparse.Namespace, config: Config) -> int:
     """Print a source's cached text layer -- the context a card writer needs."""
-    names = [args.source] if args.source else sorted(config.sources)
+    names = [args.project] if args.project else sorted(config.projects)
     for name in names:
         path = extract_mod.source_text_path(config, name)
         if not path.exists():
@@ -1145,20 +1147,20 @@ def cmd_new(args: argparse.Namespace, config: Config) -> int:
     units: list[ledger_mod.Unit] = []
     unit_ids: list[str] = list(args.unit or [])
     source_text = args.source or ""
-    ledgers = ledger_mod.open_ledgers(config.sources_dir)
+    ledgers = ledger_mod.open_ledgers(config.projects_dir)
     for unit_id in unit_ids:
-        source_name = unit_id.split(":", 1)[0]
-        led = ledgers.get(source_name)
+        project_name = unit_id.split(":", 1)[0]
+        led = ledgers.get(project_name)
         found = led.get(unit_id) if led else None
         if found is None:
-            print(f"no unit {unit_id!r} in {source_name}/units.jsonl", file=sys.stderr)
+            print(f"no unit {unit_id!r} in {project_name}/units.jsonl", file=sys.stderr)
             return FAILED
         units.append(found)
     if units and not source_text:
         # One citation, from the first unit: the pieces of a split display are
         # the same equation, so citing each of them would just be noise.
         first = unit_ids[0].split(":", 1)[0]
-        source_text = units[0].citation(config.source(first).citation)
+        source_text = units[0].citation(config.project(first).citation)
 
     uid = model.mint_uid((unit_ids[0] if unit_ids else "") or args.front, taken)
     card = model.stub(
@@ -1234,12 +1236,12 @@ def cmd_todo(args: argparse.Namespace, config: Config) -> int:
         items = [i for i in items if i.kind == args.kind]
     if args.status:
         items = [i for i in items if i.status == args.status]
-    if args.source:
+    if args.project:
         # Same rule as `app.card_in_source`: a card whose units name no source
         # belongs to all of them. It is misfiled, and a filter that hides it is
         # worse than one that shows it twice -- an open note nobody can reach
         # is an open note that blocks sync for ever.
-        items = [i for i in items if i.source in ("", args.source)]
+        items = [i for i in items if i.source in ("", args.project)]
     if args.json:
         print(json.dumps([i.as_dict() for i in items], indent=2, ensure_ascii=False))
         return OK
@@ -1253,7 +1255,7 @@ def cmd_todo(args: argparse.Namespace, config: Config) -> int:
 
 
 def _todo_filtered(args: argparse.Namespace) -> bool:
-    return bool(args.audience or args.kind or args.status or args.source)
+    return bool(args.audience or args.kind or args.status or args.project)
 
 
 def cmd_feedback(args: argparse.Namespace, config: Config) -> int:
@@ -1311,11 +1313,11 @@ def cmd_sync(args: argparse.Namespace, config: Config) -> int:
 
 def cmd_verify(args: argparse.Namespace, config: Config) -> int:
     cards = model.load_all(config.cards_dir)
-    if args.source:
+    if args.project:
         # Layout is per source and `verify` refuses a source that declares
         # none, so "check this paper" is a question worth being able to ask
         # without the other books' skips burying the answer.
-        cards = [c for c in cards if c.source_name == args.source]
+        cards = [c for c in cards if c.project_name == args.project]
     results = verify.run(cards, config, trials=args.trials, only=args.uid)
     if args.json:
         print(json.dumps([vars(r) for r in results], indent=2))

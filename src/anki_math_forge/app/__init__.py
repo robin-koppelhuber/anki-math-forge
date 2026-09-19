@@ -70,7 +70,7 @@ CDN_KATEX = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist"
 #: so until `empty.js` there was nothing bound at all while the footer listed
 #: all fifteen. The first screen anybody sees was the one that lied about how
 #: to drive it.
-EMPTY_VIEW_KEYS = ("filters", "sources", "guide")
+EMPTY_VIEW_KEYS = ("filters", "projects", "guide")
 
 
 def key_context(
@@ -283,7 +283,7 @@ def create_app(config: Config) -> FastAPI:
                     **key_context(config, "units", EMPTY_VIEW_KEYS),
                     "config": config,
                     "source": resolve_source(config, source),
-                    "sources": source_names(config),
+                    "projects": project_names(config),
                     "pipeline": pipeline_counts(config, resolve_source(config, source)),
                 },
             )
@@ -372,7 +372,7 @@ def create_app(config: Config) -> FastAPI:
                 **key_context(config, "units"),
                 "config": config,
                 "source": name,
-                "sources": source_names(config),
+                "projects": project_names(config),
                 "units": [_unit_payload(u, config, known) for u in units],
                 "counts": ledger.counts(),
                 "sections": ledger.sections(),
@@ -406,7 +406,7 @@ def create_app(config: Config) -> FastAPI:
                     ledger.select(state=state or "all", section=section or None), config, name
                 ),
                 "scheme": scheme_legend(scheme_rows(everything, config, name)),
-                "source_facts": source_facts(config, name, from_marks=from_marks),
+                "project_facts": project_facts(config, name, from_marks=from_marks),
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
                     if counts_scope == "filtered"
@@ -454,7 +454,7 @@ def create_app(config: Config) -> FastAPI:
                     **key_context(config, "review", EMPTY_VIEW_KEYS),
                     "config": config,
                     "source": name,
-                    "sources": source_names(config),
+                    "projects": project_names(config),
                     "pipeline": pipeline_counts(config, name),
                 },
             )
@@ -485,7 +485,7 @@ def create_app(config: Config) -> FastAPI:
         # `requires` against the whole repo, not one book. Linking it with the
         # *current* source would land on a card that is not there, and the
         # hash lookup would find nothing and say nothing.
-        homes = {c.uid: c.source_name for c in everywhere}
+        homes = {c.uid: c.project_name for c in everywhere}
 
         by_uid_everywhere = {c.uid: c for c in everywhere}
 
@@ -568,13 +568,13 @@ def create_app(config: Config) -> FastAPI:
                 "total": len(cards),
                 "status": status,
                 "source": name,
-                "sources": source_names(config),
+                "projects": project_names(config),
                 "annotated": annotated,
                 "section": section,
                 "filters": filters,
                 "commands": commands_for("review", filters, pipeline, from_marks=from_marks),
                 "scheme": scheme_legend(scheme_rows(units_here, config, name)),
-                "source_facts": source_facts(config, name, from_marks=from_marks),
+                "project_facts": project_facts(config, name, from_marks=from_marks),
                 "section_tree": section_rows(
                     in_source,
                     {c.uid for c in unsectioned},
@@ -633,7 +633,7 @@ def create_app(config: Config) -> FastAPI:
                     **key_context(config, "review", EMPTY_VIEW_KEYS),
                     "config": config,
                     "source": resolve_source(config, source),
-                    "sources": source_names(config),
+                    "projects": project_names(config),
                     "pipeline": pipeline_counts(config, resolve_source(config, source)),
                 },
                 status_code=404,
@@ -646,7 +646,7 @@ def create_app(config: Config) -> FastAPI:
                 **key_context(config, "graph"),
                 "config": config,
                 "source": name,
-                "sources": source_names(config),
+                "projects": project_names(config),
             },
         )
 
@@ -674,7 +674,7 @@ def create_app(config: Config) -> FastAPI:
             for node_id, pair in raw.items()
             if pair is None or (isinstance(pair, (list, tuple)) and len(pair) == 2)
         }
-        path = graph_mod.positions_path(config.sources_dir, name)
+        path = graph_mod.positions_path(config.projects_dir, name)
         # No staleness check, unlike every other write here. `graph.move` merges
         # per node, so a writer working from a stale picture cannot destroy a
         # position it never mentions -- and the guard, while it was on, made two
@@ -718,7 +718,7 @@ def create_app(config: Config) -> FastAPI:
             "path": str(path.relative_to(config.root)),
         }
 
-    @app.get("/api/sources")
+    @app.get("/api/projects")
     def sources_api() -> Any:
         """Every source with its counts, for the picker.
 
@@ -1621,11 +1621,11 @@ def mark_payloads(
     `meaning` is resolved now rather than stored, so editing `[zotero.meanings]`
     changes every unit at once instead of only the ones imported since.
     """
-    scheme = config.zotero_for(unit.source)
+    scheme = config.zotero_for(unit.project)
     rows: list[dict[str, Any]] = []
     for index, mark in enumerate(unit.marks):
         own = not index
-        elsewhere = f"{unit.source}:{mark.key}"
+        elsewhere = f"{unit.project}:{mark.key}"
         rows.append({
             "key": mark.key,
             "kind": mark.kind,
@@ -2023,7 +2023,7 @@ def source_origin(config: Config, source: str) -> str:
     paper imported from Zotero and a PDF sitting in the repo looked identical
     in every view.
     """
-    spec = config.sources.get(source)
+    spec = config.projects.get(source)
     if spec is None:
         return ""
     if spec.zotero_key:
@@ -2033,7 +2033,7 @@ def source_origin(config: Config, source: str) -> str:
     return "tex" if spec.tex else ""
 
 
-def source_facts(config: Config, source: str, *, from_marks: bool = False) -> dict[str, Any]:
+def project_facts(config: Config, source: str, *, from_marks: bool = False) -> dict[str, Any]:
     """This source's resolved settings, for the information rail.
 
     The same numbers `/config` lists, for the one source you are actually
@@ -2043,7 +2043,7 @@ def source_facts(config: Config, source: str, *, from_marks: bool = False) -> di
     """
     from ..context import source_conventions
 
-    spec = config.sources.get(source)
+    spec = config.projects.get(source)
     origin = source_origin(config, source)
     scheme = config.zotero_for(source)
     return {
@@ -2092,11 +2092,11 @@ def source_gallery(config: Config) -> dict[str, Any]:
     ledgers = _ledgers(config)
     by_source: dict[str, list[Card]] = {}
     for card in _cards(config):
-        by_source.setdefault(card.source_name, []).append(card)
+        by_source.setdefault(card.project_name, []).append(card)
 
     rows: list[dict[str, Any]] = []
-    for name in source_names(config):
-        spec = config.sources.get(name)
+    for name in project_names(config):
+        spec = config.projects.get(name)
         units = list(ledgers.get(name, ()))
         counts = dict.fromkeys((*UNIT_STATES, *CARD_STATES), 0)
         for unit in units:
@@ -2123,7 +2123,7 @@ def source_gallery(config: Config) -> dict[str, Any]:
         for state, number in row["counts"].items():
             totals[state] += number
     return {
-        "sources": rows,
+        "projects": rows,
         "totals": totals,
         "units": sum(int(r["units"]) for r in rows),
         "cards": sum(int(r["cards"]) for r in rows),
@@ -2151,7 +2151,7 @@ def card_section(card: Card, config: Config) -> str:
     """
     if not card.unit:
         return card.section_name
-    ledger = _ledgers(config).get(card.source_name)
+    ledger = _ledgers(config).get(card.project_name)
     unit = ledger.get(card.unit) if ledger else None
     return unit.locator.section if unit else card.section_name
 
@@ -2174,7 +2174,7 @@ def card_gist(card: Card, config: Config) -> str:
         return card.gist
     if not card.unit:
         return ""
-    ledger = _ledgers(config).get(card.source_name)
+    ledger = _ledgers(config).get(card.project_name)
     unit = ledger.get(card.unit) if ledger else None
     return unit.gist if unit else ""
 
@@ -2204,7 +2204,7 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
     ]
 
     def href(card: Card) -> str:
-        where = card.source_name or source
+        where = card.project_name or source
         return filter_url("/review", {}, source=where, status="all") + f"#{card.uid}"
 
     whole = graph_mod.card_graph(
@@ -2216,7 +2216,7 @@ def source_graph(config: Config, source: str, *, everything: bool = False) -> di
     declared = study_order(config)
     ordered = in_study_order(here, source_positions(config), declared)
     order = [c.uid for c in ordered]
-    path = graph_mod.positions_path(config.sources_dir, source)
+    path = graph_mod.positions_path(config.projects_dir, source)
     positions = graph_mod.load_positions(path)
     # A card with no edges is on the canvas because somebody put it somewhere.
     # That is what "add this one so I can connect it" writes, and it is the
@@ -2333,19 +2333,19 @@ def card_in_source(card: Card, source: str) -> bool:
     units name no source belongs to all of them: it is misfiled, and the
     view that hides it is worse than the one that shows it twice.
     """
-    return not source or card.source_name in ("", source)
+    return not source or card.project_name in ("", source)
 
 
-def source_names(config: Config) -> list[str]:
+def project_names(config: Config) -> list[str]:
     """Everything the dropdown may offer: configured sources and any ledger on
     disk, so a source extracted but not yet in the TOML (or the reverse) is
     still reachable.
 
     In TOML order, not alphabetical, because the first one is the default and
     that should be a choice you make by editing `forge.toml` rather than
-    an accident of spelling. Ledgers with no `[sources.*]` entry follow.
+    an accident of spelling. Ledgers with no `[projects.*]` entry follow.
     """
-    names = list(config.sources)
+    names = list(config.projects)
     names += sorted(set(_ledgers(config)) - set(names))
     return names
 
@@ -2415,9 +2415,9 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         + (" · every declared mark" if DECLARED in config.zotero.units_from else ""),
     )
 
-    for name, spec in config.sources.items():
+    for name, spec in config.projects.items():
         where = f"source: {name}"
-        origin = f"sources/{name}/source.toml"
+        origin = f"projects/{name}/project.toml"
         inherited = "inherited"
         add(where, "material", source_origin(config, name) or "unset", origin)
         add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
@@ -2533,7 +2533,7 @@ def commands_for(
     """
     source = str(filters.get("source", ""))
     section = str(filters.get("section", ""))
-    src, sec = flag("--source", source), flag("--section", section)
+    src, sec = flag("--project", source), flag("--section", section)
     scope = sec or " --all"
     out: list[dict[str, str]] = []
 
@@ -2658,13 +2658,13 @@ def resolve_source(config: Config, source: str) -> str:
     to the first, so a stale link lands somewhere real rather than on an
     empty deck.
 
-    `source_names` includes a source configured in `forge.toml` with nothing
+    `project_names` includes a source configured in `forge.toml` with nothing
     extracted yet, which is the case worth naming: it *is* a source, so it
     resolves to itself and its view comes up empty rather than silently showing
     a different book under its name. Only a name that is not a source at all
     falls back.
     """
-    names = source_names(config)
+    names = project_names(config)
     if source in names:
         return source
     return names[0] if names else ""
@@ -2762,9 +2762,9 @@ _ORDER: dict[Path, tuple[int, tuple[str, ...]]] = {}
 
 def _ledgers(config: Config) -> dict[str, Ledger]:
     return _cached(
-        f"ledgers:{config.sources_dir}",
-        config.sources_dir.rglob("units.jsonl"),
-        lambda: open_ledgers(config.sources_dir),
+        f"ledgers:{config.projects_dir}",
+        config.projects_dir.rglob("units.jsonl"),
+        lambda: open_ledgers(config.projects_dir),
     )
 
 
@@ -2888,14 +2888,14 @@ def crop_url(unit: Unit, *, context: float = 0.0) -> str:
     """
     if not unit.has_crop:
         return ""
-    url = f"/crop/{quote(unit.source)}/{quote(unit.id, safe='')}.png"
+    url = f"/crop/{quote(unit.project)}/{quote(unit.id, safe='')}.png"
     return f"{url}?context={context:g}&outline=1" if context else url
 
 
 def _unit_payload(
     unit: Unit, config: Config, known: set[str] | None = None
 ) -> dict[str, Any]:
-    image = crop_url(unit, context=pdf_context(config, unit.source))
+    image = crop_url(unit, context=pdf_context(config, unit.project))
     return {
         # What the reader marked here and on the pages around it: the text
         # each one covers and whatever they wrote about it. The crop shows
@@ -2930,14 +2930,14 @@ def _unit_payload(
         "suggestion": vars(unit.suggestion) if unit.suggestion else None,
         # How much of the document a card writer will be handed, and whether
         # this unit asked for it or inherited it.
-        "context_pages": config.context_pages_for(unit.source, unit.context_pages),
+        "context_pages": config.context_pages_for(unit.project, unit.context_pages),
         "context_steps": context_steps(
-            config.context_pages_for(unit.source, unit.context_pages)
+            config.context_pages_for(unit.project, unit.context_pages)
         ),
         "context_own": unit.context_pages is not None,
         # Whether whoever writes this card may look things up, resolved the
         # same way and shown the same way: the answer, and whose answer it is.
-        "web": config.web_for(unit.source, unit.web),
+        "web": config.web_for(unit.project, unit.web),
         "web_own": unit.web is not None,
     }
 
@@ -3042,7 +3042,7 @@ def _card_web(card: Card, config: Config) -> bool:
     """
     if card.web is not None:
         return card.web
-    source = card.source_name
+    source = card.project_name
     unit = None
     if card.unit:
         path = config.units_path(source)

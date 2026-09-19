@@ -157,7 +157,7 @@ def test_verify_refuses_a_layout_its_gradient_cannot_compute(repo: Path) -> None
     from anki_math_forge import config as config_mod
 
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
-    toml += '\n[sources.book]\ntitle = "A Book"\nlayout = "numerator"\n'
+    toml += '\n[projects.book]\ntitle = "A Book"\nlayout = "numerator"\n'
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     config = config_mod.load(repo)
 
@@ -183,7 +183,7 @@ def test_a_card_with_no_derivative_needs_no_declared_layout(repo: Path) -> None:
     from anki_math_forge import config as config_mod
 
     toml = (repo / "forge.toml").read_text(encoding="utf-8")
-    toml += '\n[sources.paper]\ntitle = "A Paper"\n'
+    toml += '\n[projects.paper]\ntitle = "A Paper"\n'
     (repo / "forge.toml").write_text(toml, encoding="utf-8")
     config = config_mod.load(repo)
 

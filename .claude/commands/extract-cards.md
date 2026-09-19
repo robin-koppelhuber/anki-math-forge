@@ -1,13 +1,13 @@
 ---
 description: Turn queued units into stub cards
-argument-hint: [--source NAME] [--section SECTION]
+argument-hint: [--project NAME] [--section SECTION]
 ---
 
 Write stub cards for every queued unit. Stubs only — augmentation is `/augment`.
 
 Arguments: `$ARGUMENTS`
 
-- **`--source NAME`** — which source. **Ask if it is not given and the repo
+- **`--project NAME`** — which source. **Ask if it is not given and the repo
   has more than one.** Nothing here defaults to a source, so leaving it out
   writes cards for every queued unit in the repo — including books you were
   not looking at.
@@ -28,7 +28,7 @@ nothing else touches.
 1. See what is waiting, and group it:
 
    ```
-   uv run forge units --source <SOURCE> --state queued --json
+   uv run forge units --project <PROJECT> --state queued --json
    ```
 
    Group by `locator.section`. Aim at a few dozen units per agent: enough that
@@ -42,7 +42,7 @@ nothing else touches.
 
    > Write stub cards for every queued unit in section `<SECTION>` of
    > `<SOURCE>`. Your work list is
-   > `uv run forge units --source <SOURCE> --section <SECTION> --state queued --json`.
+   > `uv run forge units --project <PROJECT> --section <SECTION> --state queued --json`.
    > Read each unit's `@claude` notes and do what they say: that is the brief
    > you were left at triage. Follow your instructions exactly — check the
    > mathematics yourself, write stubs only, approve nothing, and propose a
@@ -59,7 +59,7 @@ nothing else touches.
 
    ```
    uv run forge check
-   uv run forge units --source <SOURCE> --state queued --json   # what is left
+   uv run forge units --project <PROJECT> --state queued --json   # what is left
    ```
 
    A section that comes back with units still queued and no reason given is a

@@ -45,7 +45,7 @@ MATHS = re.compile("[" + "".join(f"{chr(lo)}-{chr(hi)}" for lo, hi in MATHS_RANG
 # gets copied.
 READ_BEFORE_WRITING = sorted(
     [*(ROOT / ".claude").rglob("*.md")]
-    + [p for p in (ROOT / "sources").glob("*/conventions.md")]
+    + [p for p in (ROOT / "projects").glob("*/conventions.md")]
 )
 
 
@@ -74,4 +74,4 @@ def test_the_rule_names_the_files_it_governs() -> None:
     assert READ_BEFORE_WRITING, "no instruction files found; the glob moved"
     style = (ROOT / "docs" / "STYLE.md").read_text(encoding="utf-8")
     assert ".claude/**" in style
-    assert "sources/*/conventions.md" in style
+    assert "projects/*/conventions.md" in style

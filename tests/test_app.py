@@ -429,14 +429,14 @@ def test_the_crop_route_renders_from_the_source_document(
 def test_the_units_view_points_at_the_crop_route(pdf_client: TestClient, pdf_units: Config) -> None:
     body = pdf_client.get("/units?source=book&state=new").text
     assert "/crop/book/" in body
-    assert "/sources/" not in body, "nothing is served off disk any more"
+    assert "/projects/" not in body, "nothing is served off disk any more"
 
 
 def test_a_missing_source_document_is_explained_not_a_broken_image(
     pdf_client: TestClient, pdf_units: Config
 ) -> None:
     unit = Ledger.load(pdf_units.units_path("book")).units[0]
-    pdf_units.source("book").pdf.unlink()
+    pdf_units.project("book").pdf.unlink()
     response = pdf_client.get(f"/crop/book/{unit.id}.png")
     assert response.status_code == 409
     assert "rendered from it on demand" in response.text
@@ -1293,8 +1293,8 @@ def test_the_gallery_lists_every_configured_source(pdf_source: Config) -> None:
     """The picker is a gallery now, filled from the API: a dropdown answers
     "which one am I on" and nothing else, and the question with a shelf of
     papers is which to work on next."""
-    rows = TestClient(create_app(pdf_source)).get("/api/sources").json()
-    assert [row["name"] for row in rows["sources"]] == ["demo", "book"]
+    rows = TestClient(create_app(pdf_source)).get("/api/projects").json()
+    assert [row["name"] for row in rows["projects"]] == ["demo", "book"]
 
 
 def test_the_gallery_counts_both_halves_of_the_pipeline(pdf_source: Config) -> None:
@@ -1303,8 +1303,8 @@ def test_the_gallery_counts_both_halves_of_the_pipeline(pdf_source: Config) -> N
     no cards written, which looks identical to an untouched one by unit count."""
     write_card(pdf_source, "aaa111", "demo:2.4:61")
     write_card(pdf_source, "bbb222", "book:1.1:1")
-    rows = TestClient(create_app(pdf_source)).get("/api/sources").json()
-    by_name = {row["name"]: row for row in rows["sources"]}
+    rows = TestClient(create_app(pdf_source)).get("/api/projects").json()
+    by_name = {row["name"]: row for row in rows["projects"]}
     assert by_name["demo"]["counts"]["draft"] == 1
     assert by_name["book"]["counts"]["draft"] == 1
     assert rows["cards"] == 2
@@ -1315,8 +1315,8 @@ def test_the_gallery_says_where_each_source_came_from(pdf_source: Config) -> Non
     """A paper imported from Zotero and a PDF sitting in the repo looked
     identical in every view, and they are not: it decides which passes make
     sense and where to go when a document is missing."""
-    rows = TestClient(create_app(pdf_source)).get("/api/sources").json()
-    by_name = {row["name"]: row for row in rows["sources"]}
+    rows = TestClient(create_app(pdf_source)).get("/api/projects").json()
+    by_name = {row["name"]: row for row in rows["projects"]}
     assert by_name["book"]["origin"] == "pdf"
     assert "pdf" in rows["origins"]
 
@@ -1389,8 +1389,8 @@ def test_source_name_comes_off_the_unit_id() -> None:
         frontmatter={"uid": "a1b2c3", "unit": ["matrix-cookbook:3.1:148", "other:1:1"]},
         sections=[],
     )
-    assert card.source_name == "matrix-cookbook"
-    assert model.Card(frontmatter={"uid": "a1b2c3"}, sections=[]).source_name == ""
+    assert card.project_name == "matrix-cookbook"
+    assert model.Card(frontmatter={"uid": "a1b2c3"}, sections=[]).project_name == ""
 
 
 def test_api_counts_take_a_source(pdf_source: Config) -> None:
@@ -1404,9 +1404,9 @@ def test_api_counts_take_a_source(pdf_source: Config) -> None:
 def test_the_default_source_is_the_first_in_the_toml(pdf_source: Config) -> None:
     """Not alphabetical: which book you land on is a decision you make by
     editing the config, not a consequence of its name."""
-    from anki_math_forge.app import resolve_source, source_names
+    from anki_math_forge.app import project_names, resolve_source
 
-    assert source_names(pdf_source) == ["demo", "book"]
+    assert project_names(pdf_source) == ["demo", "book"]
     assert resolve_source(pdf_source, "") == "demo"
 
 

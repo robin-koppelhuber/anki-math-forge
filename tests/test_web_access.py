@@ -178,9 +178,9 @@ def test_a_repo_wide_layout_is_refused_rather_than_ignored(repo: Path) -> None:
 
 
 def test_a_source_declares_its_own_conventions(repo: Path) -> None:
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
-    folder.joinpath("source.toml").write_text(
+    folder.joinpath("project.toml").write_text(
         'title = "A Book"\n\n[conventions]\nlayout = "numerator"\nentries = "complex"\n',
         encoding="utf-8",
     )
@@ -193,9 +193,9 @@ def test_a_source_declares_its_own_conventions(repo: Path) -> None:
 def test_an_unrecognised_layout_is_still_refused(repo: Path) -> None:
     """The one convention anything acts on. An unrecognised value would read as
     "not denominator" and silently change what every derivative means."""
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
-    folder.joinpath("source.toml").write_text(
+    folder.joinpath("project.toml").write_text(
         'title = "A Book"\n\n[conventions]\nlayout = "sideways"\n', encoding="utf-8"
     )
     with pytest.raises(ConfigError, match="sideways"):
@@ -204,9 +204,9 @@ def test_an_unrecognised_layout_is_still_refused(repo: Path) -> None:
 
 def test_the_older_top_level_layout_is_still_read(repo: Path) -> None:
     """A repo should not have to migrate in the same sitting as the tool."""
-    folder = repo / "sources" / "book"
+    folder = repo / "projects" / "book"
     folder.mkdir(parents=True, exist_ok=True)
-    folder.joinpath("source.toml").write_text(
+    folder.joinpath("project.toml").write_text(
         'title = "A Book"\nlayout = "numerator"\n', encoding="utf-8"
     )
     assert config_mod.load(repo).layout_for("book") == "numerator"

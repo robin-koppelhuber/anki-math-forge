@@ -21,7 +21,7 @@ instructions. **The vocabulary** fixes what each object is called, because rule
 3. **No undefined jargon.** Use a term from the vocabulary below. If the right
    word is missing, do not coin one silently: add an entry here first.
 4. **Math in LaTeX, in every file a card writer reads.** `.claude/**` and
-   `sources/*/conventions.md` reach whoever writes a card, through the skill
+   `projects/*/conventions.md` reach whoever writes a card, through the skill
    and through `forge context`, immediately before they emit `$...$` into a
    card. An example written `∂ tr(AX)/∂X = Aᵀ` is an example in the notation
    the card must not use, sitting in the one file the next pass copies from.
@@ -96,11 +96,11 @@ entry exists to stop.
 
 | Term | What it is | Do not call it |
 |---|---|---|
-| **source** | one book or paper, a folder under `sources/` | document, book, deck |
+| **source** | one book or paper, a folder under `projects/` | document, book, deck |
 | **document** | one PDF inside a source. An item routinely carries a paper and its preprint | source, file |
 | **unit** | a located region of a source: document, page, bbox, section, label. Geometry, never an image file | item, region, equation, annotation |
 | **locator** | where a unit is. Carries the document, so re-filing never renames a unit | position, coordinates |
-| **ledger** | `sources/<name>/units.jsonl`, the units and their triage state | database, index, store |
+| **ledger** | `projects/<name>/units.jsonl`, the units and their triage state | database, index, store |
 | **crop** | an image of a unit's box, rendered from the document on demand | asset, thumbnail |
 | **card** | a markdown file in `cards/` with `## front` and `## back` | note |
 | **note** | what a card becomes *in Anki*. Anki's word, used only about Anki | card |
@@ -132,7 +132,7 @@ entry exists to stop.
 - **Rule 4 is scoped rather than global.** The original applies it to every
   repo file. Here the failure is specific and so is the scope: an agent about
   to write LaTeX reads `.claude/**` and `conventions.md`, and copies the
-  notation it finds. Nothing reads `sources/*/README.md`, which is an errata
+  notation it finds. Nothing reads `projects/*/README.md`, which is an errata
   record for a person, so its Unicode maths stays.
 - **Rule 2 keeps the dash as a separator.** The original bans the character
   outright, which suits continuous prose. Half this project's text is

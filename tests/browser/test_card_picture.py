@@ -33,13 +33,13 @@ from conftest import build_pdf
 
 ROOT = Path(__file__).resolve().parents[2]
 
-# A PDF-backed source, which the shared fixture has none of. `[sources.demo]`
+# A PDF-backed source, which the shared fixture has none of. `[projects.demo]`
 # there is a `.tex`, and a `.tex` has geometry for nothing.
 CONFIG = (
-    '[repo]\ncards_dir = "cards"\nsources_dir = "sources"\n\n'
+    '[repo]\ncards_dir = "cards"\nprojects_dir = "projects"\n\n'
     "[cards]\n\n"
-    '[sources.book]\ntitle = "A Book"\ncitation = "Book"\n'
-    'pdf = "sources/book/book.pdf"\n'
+    '[projects.book]\ntitle = "A Book"\ncitation = "Book"\n'
+    'pdf = "projects/book/book.pdf"\n'
 )
 
 HEAD = (
@@ -51,7 +51,7 @@ HEAD = (
 def lay_out(repo: Path) -> None:
     """Write the config, the PDF, the ledger and an empty deck."""
     (repo / "forge.toml").write_text(CONFIG, encoding="utf-8")
-    source = repo / "sources" / "book"
+    source = repo / "projects" / "book"
     source.mkdir(parents=True, exist_ok=True)
     pdf = source / "book.pdf"
     if not pdf.exists():
@@ -74,7 +74,7 @@ def _extract(repo: Path) -> None:
 
 def a_unit(repo: Path) -> str:
     """The id of the first extracted unit, which has a page and a box."""
-    line = (repo / "sources" / "book" / "units.jsonl").read_text(encoding="utf-8")
+    line = (repo / "projects" / "book" / "units.jsonl").read_text(encoding="utf-8")
     return str(json.loads(line.splitlines()[0])["id"])
 
 

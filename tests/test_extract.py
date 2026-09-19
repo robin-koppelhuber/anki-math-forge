@@ -114,7 +114,7 @@ def test_a_skip_is_sticky(config: Config) -> None:
 
 def test_new_source_material_is_added_on_rerun(config: Config, repo: Path) -> None:
     extract.run(config, "demo")
-    source = repo / "sources" / "demo" / "demo.tex"
+    source = repo / "projects" / "demo" / "demo.tex"
     text = source.read_text(encoding="utf-8").replace(
         r"\end{document}",
         "\\begin{equation}\nA^{-1}A = I\n\\end{equation}\n\\end{document}",

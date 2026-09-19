@@ -110,7 +110,7 @@ CRITERIA: tuple[Criterion, ...] = (
             "the order the source introduces it in. A text that builds up "
             "introduces things in a usable order and following it costs "
             "nothing; a source that is a table says `order = \"none\"` in its "
-            "`source.toml` and opts out."
+            "`project.toml` and opts out."
         ),
         unset="no printed position",
     ),

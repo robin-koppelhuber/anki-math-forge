@@ -154,7 +154,7 @@ def test_a_missing_document_is_refused(pdf_source: Config) -> None:
     It is the failure that arrives long after the card was written."""
     unit = a_unit(pdf_source)
     write(pdf_source, f"\n## front\n$a$\n\n## back\n![the figure](unit:{unit})\n")
-    (pdf_source.root / "sources" / "book" / "book.pdf").unlink()
+    (pdf_source.root / "projects" / "book" / "book.pdf").unlink()
 
     assert "image-document-missing" in codes(pdf_source)
 

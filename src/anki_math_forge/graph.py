@@ -143,7 +143,7 @@ def card_graph(
             id=card.uid,
             label=naming(card),
             detail=card.source or card.unit,
-            kind="card" if not here or card.source_name == here else "elsewhere",
+            kind="card" if not here or card.project_name == here else "elsewhere",
             state=card.effective_status,
             href=linking(card),
         )
@@ -251,8 +251,8 @@ def layered(graph: Graph, order: Sequence[str] = ()) -> dict[str, tuple[float, f
 # -- where an arrangement is kept -------------------------------------------
 
 
-def positions_path(sources_dir: Path, source: str) -> Path:
-    """`sources/<name>/graph.json`.
+def positions_path(projects_dir: Path, source: str) -> Path:
+    """`projects/<name>/graph.json`.
 
     In the source's folder rather than in `localStorage`, so an arrangement is
     shared, diffable and survives a new machine. Not in card frontmatter, where
@@ -262,7 +262,7 @@ def positions_path(sources_dir: Path, source: str) -> Path:
     concept name cannot collide in practice, and the day they could is the day
     ids get prefixes.
     """
-    return sources_dir / source / POSITIONS_FILE
+    return projects_dir / source / POSITIONS_FILE
 
 
 def load_positions(path: Path) -> dict[str, tuple[float, float]]:

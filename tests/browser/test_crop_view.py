@@ -31,7 +31,7 @@ def a_crop(repo: Path) -> str:
         "locator": {"section": "9", "equation": 1, "page": 1, "bbox": [10, 10, 200, 60]},
         "state": "carded",
     }
-    ledger = repo / "sources" / "demo" / "units.jsonl"
+    ledger = repo / "projects" / "demo" / "units.jsonl"
     with ledger.open("a", encoding="utf-8") as out:
         out.write(json.dumps(unit) + "\n")
     card = repo / "cards" / "demo" / "zzcrop-x.md"

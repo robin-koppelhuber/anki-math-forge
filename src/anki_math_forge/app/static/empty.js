@@ -11,6 +11,6 @@
    `EMPTY_VIEW_KEYS` on the Python side, so the two cannot drift. */
 bindKeys({
   filters: toggleFilters,
-  sources: openGallery,
+  projects: openGallery,
   guide: cycleGuide,
 });
