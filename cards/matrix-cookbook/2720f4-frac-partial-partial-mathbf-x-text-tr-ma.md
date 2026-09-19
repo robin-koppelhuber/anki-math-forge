@@ -2,7 +2,7 @@
 uid: 2720f4
 type: identity
 status: approved
-content_hash: 23be45df9fba22a2
+content_hash: ed7b2fcba5545bcc
 source: "Matrix Cookbook §2.5, eq. 106, p. 13"
 unit: "matrix-cookbook:2.5:106"
 gist: the derivative of the trace of X squared

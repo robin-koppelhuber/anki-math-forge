@@ -2,7 +2,7 @@
 uid: 62af94
 type: identity
 status: approved
-content_hash: 1a590cc84404380e
+content_hash: 752a5949e286896b
 source: "Matrix Cookbook §2.6, eq. 130, p. 14"
 unit: "matrix-cookbook:2.6:130"
 gist: the derivative of a normalised difference

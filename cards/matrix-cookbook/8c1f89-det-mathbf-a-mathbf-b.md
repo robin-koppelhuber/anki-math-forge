@@ -2,7 +2,7 @@
 uid: 8c1f89
 type: identity
 status: approved
-content_hash: d1b96d413c614110
+content_hash: d5e977e042191c69
 source: "Matrix Cookbook §1.2, eq. 21, p. 6"
 unit: "matrix-cookbook:1.2:21"
 gist: the determinant of a product

@@ -2,7 +2,7 @@
 uid: c76625
 type: identity
 status: approved
-content_hash: f103c33e6681a425
+content_hash: dd61b92037c6f529
 source: "Matrix Cookbook §1, eq. 9, p. 6"
 unit: "matrix-cookbook:1:9, matrix-cookbook:1:10"
 gist: the conjugate transpose of a product reverses the order

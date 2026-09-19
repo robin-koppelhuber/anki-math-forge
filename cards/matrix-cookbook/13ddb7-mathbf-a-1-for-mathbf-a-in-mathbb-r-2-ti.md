@@ -2,7 +2,7 @@
 uid: 13ddb7
 type: identity
 status: approved
-content_hash: 597599d62ad35abb
+content_hash: 42a39b0ec8bc0507
 source: "Matrix Cookbook §1.3, eq. 31, p. 7"
 unit: "matrix-cookbook:1.3:31"
 gist: the inverse of a 2 by 2 matrix

@@ -2,7 +2,7 @@
 uid: 28d4ef
 type: identity
 status: approved
-content_hash: b4f045221ef8743b
+content_hash: 1f3482d3b8bfeb60
 source: "Matrix Cookbook §2.4, eq. 94-95, p. 12"
 unit: "matrix-cookbook:2.4:94, matrix-cookbook:2.4:95"
 gist: the derivative of a ratio of two quadratic forms

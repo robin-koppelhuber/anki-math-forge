@@ -2,7 +2,7 @@
 uid: 18ee56
 type: identity
 status: approved
-content_hash: fefbc58cec88dda9
+content_hash: 5ed64fb56e672531
 source: "Matrix Cookbook §2.5, eq. 105, p. 12"
 unit: "matrix-cookbook:2.5:105"
 gist: the derivative of the trace of a Kronecker product

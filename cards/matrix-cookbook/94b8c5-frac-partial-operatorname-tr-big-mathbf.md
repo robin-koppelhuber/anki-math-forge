@@ -2,7 +2,7 @@
 uid: 94b8c5
 type: identity
 status: approved
-content_hash: b89dfe371d590bea
+content_hash: a58d9f571b480342
 source: "Matrix Cookbook §2.2, eq. 64, p. 10"
 unit: "matrix-cookbook:2.2:64"
 gist: the derivative of the trace of a shifted inverse

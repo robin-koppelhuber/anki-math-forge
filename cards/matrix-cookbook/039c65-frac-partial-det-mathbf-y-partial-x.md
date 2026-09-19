@@ -2,7 +2,7 @@
 uid: 039c65
 type: identity
 status: approved
-content_hash: cda27407ecf8658c
+content_hash: 241ef2371019a64d
 source: "Matrix Cookbook §2.1, eq. 46, p. 8"
 unit: "matrix-cookbook:2.1:46"
 gist: the derivative of a determinant by a scalar

@@ -2,7 +2,7 @@
 uid: 13115c
 type: identity
 status: approved
-content_hash: 2b42762a4120e45b
+content_hash: 4c7cc3970c05ae78
 source: "Matrix Cookbook §2.4, eq. 70, p. 10"
 unit: "matrix-cookbook:2.4:70"
 gist: the derivative of a bilinear form in a matrix

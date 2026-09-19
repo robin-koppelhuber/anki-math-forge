@@ -2,7 +2,7 @@
 uid: a59d3b
 type: identity
 status: approved
-content_hash: fd44a2454cf5c6d5
+content_hash: 64a71d08aafdb00b
 source: "Matrix Cookbook §2.1, eq. 57, p. 9"
 unit: "matrix-cookbook:2.1:57"
 gist: the derivative of the log absolute determinant

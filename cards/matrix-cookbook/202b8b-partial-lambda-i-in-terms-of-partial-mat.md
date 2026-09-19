@@ -2,7 +2,7 @@
 uid: 202b8b
 type: identity
 status: approved
-content_hash: 8fcec841f6b0dd63
+content_hash: d78424a922f8c4e4
 source: "Matrix Cookbook §2.3, eq. 67, p. 10"
 unit: "matrix-cookbook:2.3:67"
 gist: how an eigenvalue moves when the matrix does

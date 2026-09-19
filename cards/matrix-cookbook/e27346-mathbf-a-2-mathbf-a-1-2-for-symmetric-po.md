@@ -2,7 +2,7 @@
 uid: e27346
 type: identity
 status: approved
-content_hash: c070f078c8e79536
+content_hash: 54fabce1fe9453c3
 source: "Matrix Cookbook §3.1, eq. 154, p. 18"
 unit: "matrix-cookbook:3.1:154"
 gist: the condition number when A is positive definite

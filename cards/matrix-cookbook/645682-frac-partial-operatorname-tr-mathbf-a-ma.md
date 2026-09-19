@@ -2,7 +2,7 @@
 uid: "645682"
 type: identity
 status: approved
-content_hash: e3e7c6cc7f63922f
+content_hash: 646985c7c1a3060f
 source: "Matrix Cookbook §2.2, eq. 63, p. 10"
 unit: "matrix-cookbook:2.2:63"
 gist: the derivative of a trace containing an inverse

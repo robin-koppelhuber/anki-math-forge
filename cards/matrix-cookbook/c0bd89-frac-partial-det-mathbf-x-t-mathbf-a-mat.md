@@ -2,7 +2,7 @@
 uid: c0bd89
 type: identity
 status: approved
-content_hash: 8b5e19dd96f52997
+content_hash: 3ad1818f80efd7d4
 source: "Matrix Cookbook §2.1, eq. 54, p. 9"
 unit: "matrix-cookbook:2.1:53, matrix-cookbook:2.1:54"
 gist: "the derivative of det(X^T A X), X rectangular"

@@ -2,7 +2,7 @@
 uid: "77e454"
 type: identity
 status: approved
-content_hash: 7cf896a48355b2f4
+content_hash: 5aec95d004d99ccb
 source: "Matrix Cookbook §2.5, eq. 122, p. 13"
 unit: "matrix-cookbook:2.5:122"
 gist: the derivative of the trace of A times a power

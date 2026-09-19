@@ -2,7 +2,7 @@
 uid: 2d3bf4
 type: identity
 status: approved
-content_hash: acfb50d8eda11821
+content_hash: 1ba86c58b85d1b3e
 source: "Matrix Cookbook §1.3, p. 7"
 unit: "matrix-cookbook:1.3:p7y427"
 gist: the eigenvalues of a 2 by 2 matrix

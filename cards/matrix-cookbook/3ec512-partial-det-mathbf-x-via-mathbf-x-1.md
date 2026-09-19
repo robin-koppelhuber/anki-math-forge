@@ -2,7 +2,7 @@
 uid: 3ec512
 type: identity
 status: approved
-content_hash: e238a2b52af419bc
+content_hash: c169b50e66ec8fce
 source: "Matrix Cookbook §2, eq. 42, p. 8"
 unit: "matrix-cookbook:2:42"
 gist: "the differential of a determinant, via the inverse"

@@ -2,7 +2,7 @@
 uid: 85be8e
 type: identity
 status: approved
-content_hash: a55b066f4ca23014
+content_hash: 848758208ad239ad
 source: "Matrix Cookbook §1, eq. 1, p. 6"
 unit: "matrix-cookbook:1:1, matrix-cookbook:1:2"
 gist: the inverse of a product reverses the order

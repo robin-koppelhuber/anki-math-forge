@@ -49,47 +49,21 @@ def test_a_caption_is_not_card_content(config: Config) -> None:
     assert card.content_hash() == before
 
 
-def test_adding_the_exemption_moved_no_hash_that_existed(config: Config) -> None:
-    """The exemption was safe to add precisely because no card carried the key.
-    Widening `UNHASHED_FRONTMATTER` over a field cards *do* carry is the mass
-    demotion invariant 5 exists to prevent, and it needs the legacy shim."""
-    card = model.load(write(config, "bbb222", "demo:2.4:61"))
-    assert card.gist == "", "a card with no caption has none, rather than a guess"
-    assert card.content_hash() == card.content_hash(legacy=True)
-
-
-def test_a_caption_does_not_demote_a_card_stamped_under_the_old_rule(
-    config: Config,
-) -> None:
-    """The case the fixture above cannot see, and the one the whole deck is in.
-
-    Every approval in this repo predates the `frequency`/`derivation`/`web`
-    exemption, so its stored hash is the *legacy* digest and the current one
-    does not match it. A card whose two digests coincide -- a freshly written
-    one, with none of those keys -- proves nothing about that.
-
-    Measured before this was fixed: `af5ca1`, approved and matching, went to
-    `draft` the moment it was given a caption. `/augment` writing one per card
-    would have demoted all 108 in a single pass.
-    """
-    card = model.load(
-        write(config, "ccc111", "demo:2.4:61", frequency="core", derivation="short")
-    )
-    card.frontmatter["content_hash"] = card.content_hash(legacy=True)
-    card.frontmatter["status"] = "approved"
+def test_a_caption_is_not_an_edit_on_an_approved_card(config: Config) -> None:
+    """The case the whole deck is in. `/augment` writes a caption per card,
+    and a caption that demoted an approval would demote all of them in one
+    pass. Measured before the exemption existed: `af5ca1` went to `draft` the
+    moment it was given one."""
+    card = model.load(write(config, "ccc111", "demo:2.4:61"))
+    card.approve()
     card.save()
 
     stamped = model.load(card.path)
-    assert stamped.content_hash() != stamped.frontmatter["content_hash"], (
-        "this fixture is only meaningful while the two digests differ"
-    )
-    assert stamped.hash_matches() and stamped.effective_status == "approved"
-
     stamped.frontmatter["gist"] = "the determinant as a product of eigenvalues"
     stamped.save()
 
     after = model.load(card.path)
-    assert after.hash_matches(), "a caption broke a legacy-stamped approval"
+    assert after.hash_matches(), "a caption broke an approval"
     assert after.effective_status == "approved"
 
 

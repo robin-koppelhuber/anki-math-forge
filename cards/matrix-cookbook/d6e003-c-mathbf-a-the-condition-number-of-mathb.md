@@ -2,7 +2,7 @@
 uid: d6e003
 type: identity
 status: approved
-content_hash: 0764e37bb6ca3cbb
+content_hash: 1d8f2401c2777c95
 source: "Matrix Cookbook §3.1, eq. 152, p. 18"
 unit: "matrix-cookbook:3.1:152"
 gist: the condition number as a ratio of singular values

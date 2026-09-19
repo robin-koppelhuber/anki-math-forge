@@ -130,6 +130,16 @@ UNHASHED_SECTIONS = frozenset({"notes", "verify"})
 # be read off the content: augmentation's right answer is usually to add
 # nothing, so a finished card and an untouched one are the same file. Hashing
 # it would mean the pass un-approved every card it decided to leave alone.
+#
+# `tags` is filing, and the hash covers what a reviewer read. The argument is
+# already made by the two above it: `frequency` and `derivation` are exempt and
+# *both become Anki tags*, so hashing `tags` meant `freq::core` could change
+# without a re-review while `tags: [core]` could not, which is an accident of
+# which field a value lives in rather than a policy. Change
+# `matrix-calculus` to `linear-algebra` and the claim on the card is
+# identical; a tag that changes what the question means belongs in
+# `## conditions`, which renders with the front. It is also what lets a deck
+# be routed by tag (ROADMAP.md 10) without re-tagging counting as an edit.
 UNHASHED_FRONTMATTER = frozenset({
     "status",
     "content_hash",
@@ -140,28 +150,17 @@ UNHASHED_FRONTMATTER = frozenset({
     "web",
     "gist",
     "augmented",
+    "tags",
 })
 
-# What `content_hash` used to cover. Kept so that widening the exemption above
-# does not un-approve a deck: every card in it was stamped under the old rule,
-# and recomputing would make 108 approvals stop matching at once -- the exact
-# mass demotion invariant 5 exists to make impossible without a human.
-#
-# This decays on its own. Any re-approval writes the current digest, and the
-# only cards it can rescue are ones that were already approved before the rule
-# changed. See `Card.hash_matches`.
-# `gist` is in here too, and that is not a claim about what the old rule said.
-# The legacy digest's whole job is to reproduce the number a card was stamped
-# with, and no card stamped under the old rule carries a `gist` key -- the
-# field did not exist. A key that is absent contributes nothing to either
-# digest, so exempting it reproduces every old stamp unchanged. What it does
-# buy is the case that matters: adding a caption to a card still pinned to a
-# legacy hash leaves that hash matching. Without it, `/augment` writing gists
-# demotes all 108 approvals at once, which is the mass demotion invariant 5
-# exists to make impossible. Measured on `af5ca1`, which demoted.
-LEGACY_UNHASHED_FRONTMATTER = frozenset(
-    {"status", "content_hash", "requires", "verify", "gist"}
-)
+# There used to be a second, older exemption set here, accepted as a fallback
+# so that widening the one above did not report a whole deck as edited on the
+# strength of a code change. Exempting `tags` retired it: tags were hashed
+# under *both* earlier rules, so the fallback caught nothing, and every
+# approval had to be re-stamped anyway. One rule is the simpler thing to
+# reason about, and the next widening re-stamps rather than accumulating a
+# third digest. See ROADMAP.md 10, "migrating rather than staying
+# compatible".
 
 STATUSES = ("draft", "approved", "rejected")
 
@@ -612,17 +611,14 @@ class Card:
         return [line.strip() for line in body.splitlines() if is_resolved(line)]
 
     # -- hashing (DESIGN.md §3.5, §8) -------------------------------------
-    def content_hash(self, *, legacy: bool = False) -> str:
+    def content_hash(self) -> str:
         """Hash of everything that is card content.
 
         Excludes `status`, `content_hash` itself and `## notes`, so approving a
         card or scribbling an annotation on it is not an edit -- but changing
         anything a reviewer looked at is.
-
-        `legacy` recomputes under the older exemption set, which is only ever
-        asked for by `hash_matches`; see `LEGACY_UNHASHED_FRONTMATTER`.
         """
-        exempt = LEGACY_UNHASHED_FRONTMATTER if legacy else UNHASHED_FRONTMATTER
+        exempt = UNHASHED_FRONTMATTER
         # Hash the content, not the file. Rendering it would make the digest
         # depend on FRONTMATTER_ORDER, so adding an optional field to that
         # tuple silently invalidated every approval in the deck -- the card
@@ -645,20 +641,16 @@ class Card:
     def hash_matches(self) -> bool:
         """Whether this card still says what it was approved saying.
 
-        Two digests are accepted, not one. A card stamped before `frequency`,
-        `derivation` and `web` were exempted carries a hash computed over them,
-        and recomputing it under today's rule would report a whole deck as
-        edited on the strength of a code change rather than a content one.
-
-        The fallback is strictly weaker in the only direction that matters: it
-        can hold an approval that the current rule would also hold, never one
-        the current rule would drop. Change the mathematics and *both* digests
-        move. Change only a grading and only the legacy one does -- which is
-        exactly the case the exemption was widened for.
+        One digest, not two. A second was accepted for a while so that
+        widening the exemption set did not report a whole deck as edited on
+        the strength of a code change; exempting `tags` retired it, because
+        both earlier rules hashed tags and every approval had to be re-stamped
+        anyway. The next widening does the same: migrate the deck rather than
+        teach this to accept another number.
         """
         if not self.stored_hash:
             return False
-        return self.stored_hash in (self.content_hash(), self.content_hash(legacy=True))
+        return self.stored_hash == self.content_hash()
 
     @property
     def demotion(self) -> str:

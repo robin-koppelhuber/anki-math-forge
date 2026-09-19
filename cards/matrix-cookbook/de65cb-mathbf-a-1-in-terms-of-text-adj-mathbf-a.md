@@ -2,7 +2,7 @@
 uid: de65cb
 type: identity
 status: approved
-content_hash: 2801a1d386b21154
+content_hash: 00c6322fb9878629
 source: "Matrix Cookbook §3.1, eq. 151, p. 17"
 unit: "matrix-cookbook:3.1:151"
 gist: the inverse in terms of the adjugate

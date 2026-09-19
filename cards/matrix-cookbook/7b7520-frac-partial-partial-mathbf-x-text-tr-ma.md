@@ -2,7 +2,7 @@
 uid: 7b7520
 type: identity
 status: approved
-content_hash: c2f421e4fc76b211
+content_hash: a3e0843eec07a5d6
 source: "Matrix Cookbook §2.5, eq. 99, p. 12"
 unit: "matrix-cookbook:2.5:99"
 gist: the derivative of the trace

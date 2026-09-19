@@ -2,7 +2,7 @@
 uid: a934cd
 type: identity
 status: approved
-content_hash: 4c14eb23b2cb9bca
+content_hash: 2d012bcd861bf06c
 source: "Matrix Cookbook §1.2, eq. 23, p. 6"
 unit: "matrix-cookbook:1.2:23"
 gist: the determinant of a matrix power

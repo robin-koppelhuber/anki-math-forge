@@ -2,7 +2,7 @@
 uid: cdaadb
 type: identity
 status: approved
-content_hash: dbc84db3896fee34
+content_hash: 7c0144aeb1ff5bcb
 source: "Matrix Cookbook §2.7, eq. 132, p. 14"
 unit: "matrix-cookbook:2.7:132"
 gist: the gradient of a squared Frobenius norm

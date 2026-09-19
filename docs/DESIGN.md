@@ -183,7 +183,7 @@ The `requires` of one source, on a canvas you arrange by hand. The review view a
 
 An arrow runs dot to dot, out of the prerequisite's right port and into the dependent's left port, so the line you drew is the line you get. Dropping one on empty space opens the card picker and connects whatever you choose, because the card you meant is usually one of the ones not drawn.
 
-Writing an arrow writes `requires` into the card that needs the other, which is a write to a card file and is checked like one: refused before the write for a self-reference, an unknown uid, or a cycle, with the loop named. `requires` sits outside `content_hash` under both the current rule and the legacy one, so linking two approved cards demotes neither.
+Writing an arrow writes `requires` into the card that needs the other, which is a write to a card file and is checked like one: refused before the write for a self-reference, an unknown uid, or a cycle, with the loop named. `requires` sits outside `content_hash`, so linking two approved cards demotes neither.
 
 The default picture is the part of the deck that has edges, and the count it left out is on screen beside the toggle. A card with no dependency either way is drawn once it has a position, which is what `+` writes: being on the canvas is a position in `graph.json`, not a change to the card.
 

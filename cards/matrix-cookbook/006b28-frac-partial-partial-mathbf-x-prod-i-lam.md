@@ -2,7 +2,7 @@
 uid: 006b28
 type: identity
 status: approved
-content_hash: 1f44ac9768ade020
+content_hash: 0bb950e1283fa241
 source: "Matrix Cookbook §2.3, eq. 66, p. 10"
 unit: "matrix-cookbook:2.3:66"
 gist: the derivative of the product of the eigenvalues

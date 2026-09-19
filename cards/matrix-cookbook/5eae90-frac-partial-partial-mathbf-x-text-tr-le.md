@@ -2,7 +2,7 @@
 uid: 5eae90
 type: identity
 status: approved
-content_hash: f2d79c86aac78ed5
+content_hash: 9c3a8d29c049e9e5
 source: "Matrix Cookbook §2.5, eq. 125, p. 14"
 unit: "matrix-cookbook:2.5:125"
 gist: the derivative of the trace of an inverted X^T C X

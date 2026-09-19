@@ -2,7 +2,7 @@
 uid: ab9900
 type: identity
 status: approved
-content_hash: 58b8c98f4e4dea8d
+content_hash: 8e437ee3f4915f59
 source: "Matrix Cookbook §2.8, eq. 142, p. 15"
 unit: "matrix-cookbook:2.8:142"
 gist: "the derivative of a trace, X diagonal"

@@ -2,7 +2,7 @@
 uid: a35122
 type: identity
 status: approved
-content_hash: fcb95f27d17325ce
+content_hash: 9a7ca8c682b325a1
 source: "Matrix Cookbook §2.4, eq. 90, p. 11"
 unit: "matrix-cookbook:2.4:90"
 gist: the derivative of a matrix power by one entry

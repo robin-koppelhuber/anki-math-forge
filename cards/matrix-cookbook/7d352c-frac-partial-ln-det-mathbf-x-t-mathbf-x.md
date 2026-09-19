@@ -2,7 +2,7 @@
 uid: 7d352c
 type: identity
 status: approved
-content_hash: c8b4a4f6356d6196
+content_hash: 4454a9e238e56f2c
 source: "Matrix Cookbook §2.1, eq. 55, p. 9"
 unit: "matrix-cookbook:2.1:55"
 gist: "the derivative of log det(X^T X), via the pseudoinverse"

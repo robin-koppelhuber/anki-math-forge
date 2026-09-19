@@ -2,7 +2,7 @@
 uid: "1039e9"
 type: identity
 status: approved
-content_hash: af23978e45a7383c
+content_hash: 444cd85a1d0ae7ec
 source: "Matrix Cookbook §1.3, p. 7"
 unit: "matrix-cookbook:1.3:p7y407"
 gist: the characteristic equation of a 2 by 2 matrix

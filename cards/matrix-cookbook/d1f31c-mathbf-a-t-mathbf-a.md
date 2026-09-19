@@ -2,7 +2,7 @@
 uid: d1f31c
 type: identity
 status: approved
-content_hash: 3196088be49399ac
+content_hash: 402c25781668aac9
 source: "Matrix Cookbook §1.1, eq. 17, p. 6"
 unit: "matrix-cookbook:1.1:17"
 gist: an inner product as the trace of an outer product

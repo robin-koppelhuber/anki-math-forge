@@ -23,10 +23,10 @@ Tests cite these by number. Each links to the reasoning.
    not triage.
 4. **`tex_auto` is a hint.** The crop is authoritative. A transcription error
    must not become a card by inheritance.
-5. **Editing an approved card un-approves it.** `content_hash` covers content
-   and nothing else. Outside it: `status`, `content_hash`, `## notes`,
-   `## verify`, `verify`, `requires`, `frequency`, `derivation`, `web`, `gist`,
-   `augmented`.
+5. **Editing an approved card un-approves it.** `content_hash` covers what a
+   reviewer read, and filing is not read. Outside it: `status`,
+   `content_hash`, `## notes`, `## verify`, `verify`, `requires`,
+   `frequency`, `derivation`, `web`, `gist`, `augmented`, `tags`.
    Nothing rewrites a file to enforce this; `Card.demotion` reports it, and
    fixing the cause restores the approval with no re-review.
 6. **Card content guidelines live in the skill, not in code.** The Python never

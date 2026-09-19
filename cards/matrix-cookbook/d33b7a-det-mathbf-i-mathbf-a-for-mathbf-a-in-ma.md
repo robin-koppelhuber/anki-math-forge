@@ -2,7 +2,7 @@
 uid: d33b7a
 type: identity
 status: approved
-content_hash: 9ed255c83305b7ae
+content_hash: 37a3844937e83b92
 source: "Matrix Cookbook §1.2, eq. 25, p. 6"
 unit: "matrix-cookbook:1.2:25"
 gist: det(I + A) for a 2 by 2 matrix

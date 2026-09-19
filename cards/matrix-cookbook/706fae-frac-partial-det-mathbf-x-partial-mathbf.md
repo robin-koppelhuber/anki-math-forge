@@ -2,7 +2,7 @@
 uid: 706fae
 type: identity
 status: approved
-content_hash: 5c66f408d3570b90
+content_hash: d5695dfae03d1967
 source: "Matrix Cookbook §2.8, eq. 140, p. 15"
 unit: "matrix-cookbook:2.8:140"
 gist: "the derivative of a determinant, X symmetric"

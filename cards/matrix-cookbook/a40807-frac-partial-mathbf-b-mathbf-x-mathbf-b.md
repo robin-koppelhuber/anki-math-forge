@@ -2,7 +2,7 @@
 uid: a40807
 type: identity
 status: approved
-content_hash: 37b2503cb4254f5e
+content_hash: 40673330aba1db27
 source: "Matrix Cookbook §2.4, eq. 78, p. 11"
 unit: "matrix-cookbook:2.4:78"
 gist: the derivative of a bilinear form in two affine maps

@@ -2,7 +2,7 @@
 uid: b92035
 type: identity
 status: approved
-content_hash: 42e810c30df9267a
+content_hash: 1cf005295440dc5e
 source: "Matrix Cookbook §2.3, eq. 65, p. 10"
 unit: "matrix-cookbook:2.3:65"
 gist: the derivative of the sum of the eigenvalues

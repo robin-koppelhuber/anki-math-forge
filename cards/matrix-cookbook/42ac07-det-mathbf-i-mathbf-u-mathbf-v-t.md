@@ -2,7 +2,7 @@
 uid: 42ac07
 type: identity
 status: approved
-content_hash: 6c1d4af87c8ec1c9
+content_hash: f90fdcaaf270b284
 source: "Matrix Cookbook §1.2, eq. 24, p. 6"
 unit: "matrix-cookbook:1.2:24"
 gist: the determinant of a rank-one update to the identity

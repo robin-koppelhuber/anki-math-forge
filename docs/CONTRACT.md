@@ -44,14 +44,24 @@ become a card by inheritance.
 
 ### 5. Editing an approved card un-approves it
 
-Enforced by `content_hash`, which covers the card's content and nothing else.
-Outside it: `status`, `content_hash`, `## notes`, `## verify`, `verify`,
-`requires`, `frequency`, `derivation`, `web`, `gist`, `augmented`.
+Enforced by `content_hash`, which covers what a reviewer read and nothing
+else. Outside it: `status`, `content_hash`, `## notes`, `## verify`,
+`verify`, `requires`, `frequency`, `derivation`, `web`, `gist`, `augmented`,
+`tags`.
 
-The last six are not claims the card makes. Three decide when you meet it, one
-is a permission granted to whoever writes it, one is the caption it appears
-under in a list, and approving a card is not approving its position in the
-queue.
+The last seven are not claims the card makes. Three decide when you meet it,
+one is a permission granted to whoever writes it, one is the caption it
+appears under in a list, one is where it is filed, and approving a card is
+not approving its position in the queue.
+
+`tags` is the one that had to be argued for, because it does reach Anki.
+So do `frequency` and `derivation`, as `freq::core` and `derive::short`, and
+they were exempt already: hashing `tags` meant the same kind of statement
+counted as an edit or did not depending on which field it happened to live
+in. Change `matrix-calculus` to `linear-algebra` and the claim on the card
+is identical. A tag that changes what the question means belongs in
+`## conditions`, which renders with the front. It is also what lets a deck be
+routed by tag without re-tagging demoting the card.
 
 `augmented` is the odd one, and the reason it is stored at all. Every other
 state of a card is read off the card: a stub has no optional sections, an

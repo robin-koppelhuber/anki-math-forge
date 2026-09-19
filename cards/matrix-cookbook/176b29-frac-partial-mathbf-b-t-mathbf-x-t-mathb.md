@@ -2,7 +2,7 @@
 uid: 176b29
 type: identity
 status: approved
-content_hash: 516c0eb5fdfe7826
+content_hash: e5a2cc5c9d58c5c6
 source: "Matrix Cookbook §2.4, eq. 82, p. 11"
 unit: "matrix-cookbook:2.4:82"
 gist: the derivative of b^T X^T D X c

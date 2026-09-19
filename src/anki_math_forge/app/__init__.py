@@ -927,8 +927,8 @@ def create_app(config: Config) -> FastAPI:
         either end of the canvas lands here the same way, because the port you
         grabbed decides which card is the dependent before anything is sent.
 
-        `requires` is outside `content_hash` under both the current rule and
-        the legacy one, so linking two approved cards demotes neither. That is
+        `requires` is outside `content_hash` and always has been, so linking
+        two approved cards demotes neither. That is
         what makes this safe to do by dragging: the order cards are introduced
         in is a judgement about the deck, not a change to any card's content,
         and it was previously authorable only by opening the file.

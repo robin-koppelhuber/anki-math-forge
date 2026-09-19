@@ -2,7 +2,7 @@
 uid: e6da40
 type: identity
 status: approved
-content_hash: 967cdc10c9c6bda1
+content_hash: f1631d6e8e2461e5
 source: "Matrix Cookbook §2.8, eq. 141, p. 15"
 unit: "matrix-cookbook:2.8:141"
 gist: "the derivative of the log determinant, X symmetric"

@@ -2,7 +2,7 @@
 uid: 8179d7
 type: identity
 status: approved
-content_hash: 3c25f520b24eb847
+content_hash: 20c982d8b34c92a3
 source: "Matrix Cookbook §1.3, p. 7"
 unit: "matrix-cookbook:1.3:p7y487"
 gist: an eigenvector of a 2 by 2 matrix

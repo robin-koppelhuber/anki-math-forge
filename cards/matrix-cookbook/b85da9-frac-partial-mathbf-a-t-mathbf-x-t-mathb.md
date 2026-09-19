@@ -2,7 +2,7 @@
 uid: b85da9
 type: identity
 status: approved
-content_hash: 74f03329a98e380d
+content_hash: 30f956a2a098c639
 source: "Matrix Cookbook §2.4, eq. 71, p. 10"
 unit: "matrix-cookbook:2.4:71"
 gist: the derivative of a bilinear form with X transposed

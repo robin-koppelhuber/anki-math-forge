@@ -2,7 +2,7 @@
 uid: "644726"
 type: identity
 status: approved
-content_hash: d5aee07934bff027
+content_hash: 293a86942f00d6ca
 source: "Matrix Cookbook §2.5, eq. 123, p. 13"
 unit: "matrix-cookbook:2.5:p13y636, matrix-cookbook:2.5:p13y667, matrix-cookbook:2.5:123"
 gist: the derivative of a four-factor trace in X

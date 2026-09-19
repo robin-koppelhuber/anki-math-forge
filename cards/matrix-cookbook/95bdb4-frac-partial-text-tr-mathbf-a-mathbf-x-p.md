@@ -2,7 +2,7 @@
 uid: 95bdb4
 type: identity
 status: approved
-content_hash: f03c27a38cd2ab9c
+content_hash: f7599b1f3c05ea20
 source: "Matrix Cookbook §2.8, eq. 139, p. 15"
 unit: "matrix-cookbook:2.8:139"
 gist: "the derivative of a trace, X symmetric"

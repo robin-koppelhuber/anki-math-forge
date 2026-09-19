@@ -2,7 +2,7 @@
 uid: 1c955d
 type: identity
 status: approved
-content_hash: 24cdfb2f01f78e94
+content_hash: 8a2fdf3140cb2d8e
 source: "Matrix Cookbook §2.2, eq. 62, p. 10"
 unit: "matrix-cookbook:2.2:62"
 gist: the derivative of the determinant of the inverse

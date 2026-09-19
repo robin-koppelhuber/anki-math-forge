@@ -2,7 +2,7 @@
 uid: 2da328
 type: identity
 status: approved
-content_hash: d23b8e9946c5f7a4
+content_hash: eef7b86d514376ec
 source: "Matrix Cookbook §2, eq. 40, p. 8"
 unit: "matrix-cookbook:2:40"
 gist: the differential of an inverse

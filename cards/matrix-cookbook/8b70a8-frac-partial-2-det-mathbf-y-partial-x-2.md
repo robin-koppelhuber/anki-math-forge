@@ -2,7 +2,7 @@
 uid: 8b70a8
 type: identity
 status: approved
-content_hash: fbe38b54ace9832d
+content_hash: 574fcc28725bbf65
 source: "Matrix Cookbook §2.1, eq. 48, p. 8"
 unit: "matrix-cookbook:2.1:p8y617, matrix-cookbook:2.1:p8y651, matrix-cookbook:2.1:48"
 gist: the second derivative of a determinant by a scalar

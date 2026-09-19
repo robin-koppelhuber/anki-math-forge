@@ -2,7 +2,7 @@
 uid: ce09ba
 type: identity
 status: approved
-content_hash: 1995b5a6ed37a60d
+content_hash: 60fb1d1f74bb92fb
 source: "Matrix Cookbook §2.5, eq. 119, p. 13"
 unit: "matrix-cookbook:2.5:119"
 gist: the derivative of a squared affine residual

@@ -2,7 +2,7 @@
 uid: c382cb
 type: identity
 status: approved
-content_hash: b2fb43ad8132aaa9
+content_hash: 0e3d0c227822553e
 source: "Matrix Cookbook §2.4, eq. 81, p. 11"
 unit: "matrix-cookbook:2.4:81"
 gist: the derivative of a quadratic form in a vector

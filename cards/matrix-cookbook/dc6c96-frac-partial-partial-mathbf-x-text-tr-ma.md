@@ -2,7 +2,7 @@
 uid: dc6c96
 type: identity
 status: approved
-content_hash: d659885d73fd55a1
+content_hash: 44c2122af7ba5eb7
 source: "Matrix Cookbook §2.5, eq. 120, p. 13"
 unit: "matrix-cookbook:2.5:120"
 gist: the derivative of the trace of X Kronecker X

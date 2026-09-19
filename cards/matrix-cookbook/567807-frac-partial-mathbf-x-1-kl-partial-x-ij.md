@@ -2,7 +2,7 @@
 uid: "567807"
 type: identity
 status: approved
-content_hash: dd5edce4ce19d1ae
+content_hash: 5fd2daa8acf66acc
 source: "Matrix Cookbook §2.2, eq. 60, p. 10"
 unit: "matrix-cookbook:2.2:60"
 gist: the derivative of one inverse entry by one entry

@@ -2,7 +2,7 @@
 uid: ae6e48
 type: identity
 status: approved
-content_hash: 2c6dca05fdc218ed
+content_hash: ba0869547ee2ecf1
 source: "Matrix Cookbook §2.1, eq. 49, p. 9"
 unit: "matrix-cookbook:2.1:49"
 gist: the derivative of the determinant

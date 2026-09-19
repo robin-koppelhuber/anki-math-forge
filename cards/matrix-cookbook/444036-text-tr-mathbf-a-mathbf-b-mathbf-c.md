@@ -2,7 +2,7 @@
 uid: "444036"
 type: identity
 status: approved
-content_hash: b7e4bd86c8f94b61
+content_hash: 6c8e9446e0aa6ac7
 source: "Matrix Cookbook §1.1, eq. 16, p. 6"
 unit: "matrix-cookbook:1.1:16"
 gist: cyclic permutation inside a trace

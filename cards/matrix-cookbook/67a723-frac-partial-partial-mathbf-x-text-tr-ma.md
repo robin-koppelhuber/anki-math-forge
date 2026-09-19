@@ -2,7 +2,7 @@
 uid: 67a723
 type: identity
 status: approved
-content_hash: 807a2eb441d3ddde
+content_hash: 8d967ebef3d304d5
 source: "Matrix Cookbook §2.5, eq. 100, p. 12"
 unit: "matrix-cookbook:2.5:100"
 gist: the derivative of the trace of X times A

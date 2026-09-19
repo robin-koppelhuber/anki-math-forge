@@ -2,7 +2,7 @@
 uid: 6a0990
 type: identity
 status: approved
-content_hash: 3f48bdb3cfebe8ab
+content_hash: d59ab9d431907d0e
 source: "Matrix Cookbook §2.1, eq. 47, p. 8"
 unit: "matrix-cookbook:2.1:47, matrix-cookbook:2.1:50"
 gist: the cofactor sum that vanishes off the diagonal

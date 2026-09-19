@@ -2,7 +2,7 @@
 uid: 15109d
 type: identity
 status: approved
-content_hash: 1a7ee24d0aeff120
+content_hash: 72be9282236d3ff9
 source: "Matrix Cookbook §2.4, eq. 84, p. 11"
 unit: "matrix-cookbook:2.4:84"
 gist: the weighted least squares gradient in the coefficients

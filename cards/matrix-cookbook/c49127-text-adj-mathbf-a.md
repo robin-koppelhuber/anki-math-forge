@@ -2,7 +2,7 @@
 uid: c49127
 type: identity
 status: approved
-content_hash: 9d93e7f8b97bf863
+content_hash: 2ec19147d13e3b88
 source: "Matrix Cookbook §3.1, eq. 148, p. 17"
 unit: "matrix-cookbook:3.1:148"
 gist: the adjugate as the transposed cofactor matrix

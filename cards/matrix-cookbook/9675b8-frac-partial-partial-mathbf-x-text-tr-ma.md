@@ -2,7 +2,7 @@
 uid: 9675b8
 type: identity
 status: approved
-content_hash: a727fd1e8ce5be6f
+content_hash: c6bc3bfb669d1c96
 source: "Matrix Cookbook §2.5, eq. 101, p. 12"
 unit: "matrix-cookbook:2.5:101"
 gist: the derivative of the trace of AXB

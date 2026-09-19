@@ -2,7 +2,7 @@
 uid: bde58d
 type: identity
 status: approved
-content_hash: dd58ea192d90f40d
+content_hash: 7721756559a59887
 source: "Matrix Cookbook §2.4, eq. 91, p. 11"
 unit: "matrix-cookbook:2.4:91"
 gist: the derivative of a^T X^n b

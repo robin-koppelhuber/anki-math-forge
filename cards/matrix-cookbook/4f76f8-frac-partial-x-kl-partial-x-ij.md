@@ -2,7 +2,7 @@
 uid: 4f76f8
 type: identity
 status: approved
-content_hash: a379dc1d3df4ad09
+content_hash: a0ab44a3436c62ea
 source: "Matrix Cookbook §2, eq. 32, p. 8"
 unit: "matrix-cookbook:2:32"
 gist: the derivative of one entry by another

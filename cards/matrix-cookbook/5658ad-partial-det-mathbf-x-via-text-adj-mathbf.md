@@ -2,7 +2,7 @@
 uid: 5658ad
 type: identity
 status: approved
-content_hash: 632e8b05c0366bc1
+content_hash: 15d9012ae1619d20
 source: "Matrix Cookbook §2, eq. 41, p. 8"
 unit: "matrix-cookbook:2:41"
 gist: "the differential of a determinant, via the adjugate"

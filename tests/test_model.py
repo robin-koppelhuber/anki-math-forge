@@ -117,13 +117,10 @@ def test_a_grading_is_not_a_claim_the_card_makes(card_path: Path) -> None:
 
 
 def test_a_grading_carries_the_approval_with_it(card_path: Path) -> None:
-    """Including on a card stamped under the older rule, whose digest covers
-    the very key being changed. Without the re-stamp, the first click on any
-    card approved before the exemption widened would report it as edited --
-    which is a lie: nobody edited the mathematics."""
+    """A grading says when you should meet a card, not what it claims, so the
+    first click on an approved one must not report it as edited."""
     card = model.load(card_path)
     card.approve()
-    card.frontmatter["content_hash"] = card.content_hash(legacy=True)
 
     card.set_grade("frequency", "rare")
 
@@ -146,28 +143,32 @@ def test_a_grading_does_not_launder_a_real_edit(card_path: Path) -> None:
     assert card.effective_status == "draft"
 
 
-def test_the_older_digest_is_still_accepted(card_path: Path) -> None:
-    """Widening the exemption changed what `content_hash` computes, and a whole
-    deck was stamped under the old rule. Recomputing alone would have reported
-    108 untouched cards as edited on the strength of a code change."""
+def test_re_tagging_an_approved_card_is_not_an_edit(card_path: Path) -> None:
+    """Filing is not what a reviewer read, and a deck is routed by tag
+    (ROADMAP.md 10), so moving a card between decks must not un-approve it.
+    `frequency` and `derivation` already worked this way and both reach Anki
+    as tags themselves."""
     card = model.load(card_path)
-    card.frontmatter["frequency"] = "core"
-    card.frontmatter["status"] = "approved"
-    card.frontmatter["content_hash"] = card.content_hash(legacy=True)
+    card.approve()
+
+    card.frontmatter["tags"] = ["linear-algebra"]
 
     assert card.hash_matches()
     assert card.effective_status == "approved"
 
 
-def test_the_older_digest_does_not_forgive_an_edit(card_path: Path) -> None:
-    """The fallback is weaker in one direction only. Change the mathematics and
-    both digests move, so a legacy stamp rescues nothing it should not."""
+def test_only_one_digest_is_accepted(card_path: Path) -> None:
+    """A second was taken for a while, to carry a deck across a widening of
+    the exemption set. Exempting `tags` retired it: both earlier rules hashed
+    tags, so it caught nothing and every approval was re-stamped instead."""
     card = model.load(card_path)
-    card.frontmatter["status"] = "approved"
-    card.frontmatter["content_hash"] = card.content_hash(legacy=True)
+    card.approve()
+    stamped = card.stored_hash
+
     card.set_section("front", "$a different question$")
 
-    assert not card.hash_matches()
+    assert not card.hash_matches(), "the only digest accepted is the current one"
+    assert stamped != card.content_hash()
 
 
 def test_approve_stamps_a_matching_hash(card_path: Path) -> None:
@@ -264,11 +265,13 @@ def test_changing_content_still_changes_the_hash() -> None:
     )
     assert edited.content_hash() != before
 
-    tagged = model.Card(
-        frontmatter={"uid": "aa11bb", "type": "identity", "tags": ["traces"]},
+    # A hashed field, deliberately: `tags` is filing and is exempt, so it
+    # would prove the opposite of what this line is for.
+    cited = model.Card(
+        frontmatter={"uid": "aa11bb", "type": "identity", "source": "Cookbook eq. 61"},
         sections=[model.Section("front", "$a$"), model.Section("back", "$b$")],
     )
-    assert tagged.content_hash() != before, "adding a field is a real content change"
+    assert cited.content_hash() != before, "adding a field is a real content change"
 
 
 def test_status_and_notes_stay_out_of_the_hash() -> None:

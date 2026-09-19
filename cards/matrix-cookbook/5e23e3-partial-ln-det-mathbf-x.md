@@ -2,7 +2,7 @@
 uid: 5e23e3
 type: identity
 status: approved
-content_hash: 1adbb8120ac03bde
+content_hash: 5c03d6b9d49f9f72
 source: "Matrix Cookbook §2, eq. 43, p. 8"
 unit: "matrix-cookbook:2:43"
 gist: the differential of the log determinant

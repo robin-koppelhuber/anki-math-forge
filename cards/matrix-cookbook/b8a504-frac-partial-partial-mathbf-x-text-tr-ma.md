@@ -2,7 +2,7 @@
 uid: b8a504
 type: identity
 status: approved
-content_hash: 77206004ceb99d14
+content_hash: 656c5311131fa0b3
 source: "Matrix Cookbook §2.5, eq. 111, p. 13"
 unit: "matrix-cookbook:2.5:111"
 gist: the derivative of the trace of X B X^T

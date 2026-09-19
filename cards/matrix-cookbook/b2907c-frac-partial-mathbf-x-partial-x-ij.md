@@ -2,7 +2,7 @@
 uid: b2907c
 type: identity
 status: approved
-content_hash: bba721aa027631f2
+content_hash: 96f08637f7e8dbd5
 source: "Matrix Cookbook §2.4, eq. 73, p. 10"
 unit: "matrix-cookbook:2.4:73"
 gist: the derivative of a matrix by one of its entries

@@ -2,7 +2,7 @@
 uid: "055428"
 type: identity
 status: approved
-content_hash: 920fe4a16eb75c68
+content_hash: 54617bb3ee55c2a5
 source: "Matrix Cookbook §2.2, eq. 59, p. 9"
 unit: "matrix-cookbook:2.2:59"
 gist: the derivative of an inverse by a scalar
