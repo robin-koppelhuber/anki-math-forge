@@ -20,7 +20,7 @@ the next free number.
 
 Built, at `/graph`, per source, and `[app] graph = false` turns it off.
 `graph.py` holds the graph and its layout with no app in it, `graph.js` draws
-it, and `sources/<name>/graph.json` holds whatever you dragged.
+it, and `projects/<name>/graph.json` holds whatever you dragged.
 
 - **A second edge kind.** `requires` is the only one, and `Edge.kind` is
   already carried through for the next. Nothing proposes a second: two cards
@@ -95,6 +95,612 @@ every assumption `locator` makes stops holding.
 
 **Trigger:** the first card whose conventions you type out of a note instead
 of reading off the page.
+
+## 10. Projects, sources and topics
+
+A deck you want on a subject where no single book is canonical. You say "I
+want cards for how to use the standard containers", a pass proposes units,
+you triage them the usual way, and the cards are written, reviewed and
+iterated like every other card.
+
+Only the first layer changes. `extract` and `zotero` are two frontends that
+fill one ledger, and everything after the ledger already ignores which door a
+unit came in by (invariant 3). This is a third frontend, plus generality in
+the middle.
+
+Worked through, it stops being one feature. It is four, and three of them
+improve the sources that already exist:
+
+1. sources become first-class inside a project, with their own settings, and
+   a source may be a URL
+2. topics: an optional grouping with an ask and an outline
+3. a frontend that proposes units where there is no document
+4. code on a card
+
+**A frontend owes five things**, and nothing states this today:
+
+- a stable id that survives a re-run
+- a locator, as much of one as it can fill
+- something scannable, so triage is not guesswork
+- a subject and not a draft. A gist, a short preview, some references. The
+  moment a frontend emits a front and a back, triage has become review
+- `state: new`, and no opinion about anything after that
+
+### The vocabulary, and a rename
+
+Two things were called a source: the directory under `sources/`, and
+the document a unit was printed in. They are now separate concepts and the
+word has to go to one of them.
+
+- **project**: what `sources/<name>/` was. One ledger, one deck, one
+  `conventions.md`, one graph.
+- **source**: one work inside it. A book, a paper, a URL. This is the
+  meaning `Card.source` has always had, which is the evidence the word
+  belongs here.
+- **file**: a physical PDF under a source. A book delivered as fifteen
+  chapter PDFs is one source with fifteen files.
+- **topic**: optional, described below.
+
+**The depth is fixed at project, source, file, and there are no parent
+relations.** A source is one work, and a work's parts are its files. Nesting
+beyond that is what the "split the project" rule below is for.
+
+There is then no such thing as a custom project. There are projects, and
+some have no authoritative source.
+
+What gets renamed: `sources/`, `source.toml`, `SourceConfig`, `--source`,
+`Unit.source`, the picker. In the same commit as the config split, since
+that pass touches all of it, and by migrating rather than by keeping the old
+spellings working (below).
+
+What does not: **`Card.source`**, which is now exactly right. And **the
+`src::` Anki tag**, though not for the reason I first gave. It could be
+migrated, because `sync` diffs tags against the live note and adds and
+removes them, so the next run would move every card over. It stays because
+it is fine: the tag's job is filtering inside Anki, "src" still reads as
+provenance, and renaming it breaks saved searches in a collection for no
+gain in the repo.
+
+### How big is a project
+
+**A project's scope is the scope over which one `conventions.md` is true.**
+
+CLAUDE.md refuses a repo-wide conventions table because a convention is a
+fact about one book, and it names the failure it prevents: a statistics
+paper told it writes matrix calculus in denominator layout. A project called
+"probability theory" recreates that one level down. Two books that do not
+share a notation leave no sentence in that file true, and every card writer
+is handed something misleading.
+
+Several authoritative sources in one project is fine and expected: a tight
+cluster of papers is one subject and one notation. The signal is not
+plurality, it is **two sources that disagree about their settings**. That is
+also exactly when somebody would ask for a parent relation, so the ask is
+the signal to split rather than to nest.
+
+### Properties, not kinds
+
+**No stage distinguishes source types. Every stage decides from properties
+of the unit, the card, the source and the project in front of it.** That is
+the whole design, and most of what would otherwise need arguing follows.
+
+It is already the house style in one place: `from_marks` in the units view,
+whose comment says it decides which passes are offered and that it is a
+property of the units rather than a setting. Two invariants half say it too.
+3 ends "whichever door it came in by", and 7 is careful to be authoritative
+only "for what is printed". The rest is that applied everywhere instead of
+twice.
+
+Two sorts of property.
+
+**What it has.** Derived, stored nowhere. Geometry, page text, an
+authoritative source, references, marks, tags, a preview and its language.
+`has_crop` and `from_marks` are the two that exist.
+
+**What was decided.** A tri-state on the unit, falling back through the
+chain. `web` and `context_pages` are both already this, and both put the
+decision on the unit for the reason triage is where you can see it.
+
+**The list is open.** The test for adding to it is whether some stage would
+otherwise have to ask what kind of thing it is looking at. That test is what
+keeps it from filling with settings nobody reads.
+
+Today the screen is built from constants, and each of these becomes a read
+of what the unit has:
+
+- **the context chip.** `CONTEXT_STEPS` is a fixed tuple of page counts. A
+  page-backed unit should offer pages and its chapter; a unit with
+  references should offer this one or all of them. Same chip, same stored
+  setting, a vocabulary that comes from the unit.
+- **the commands panel.** `commands_for` takes one ad-hoc `from_marks` flag.
+  Each row declares what it needs instead, and the panel shows the rows
+  whose needs are met: no `/transcribe` where there is nothing to
+  transcribe, no `/propose` where a source already answers what to cover.
+- **the aside and the pdf view cycling** already read `has_crop`. The guide
+  and `project_facts` should describe what is there rather than assume a
+  document.
+- **the rail.** The tag group appears when there are tags.
+
+None of this is new behaviour for a book. It is the same screens deciding
+from the unit instead of from a constant, which is also what keeps the two
+kinds of deck from drifting into two front ends.
+
+### What a unit stands on
+
+**At most one authoritative source, and zero to many references.**
+
+At most one, because two things that settle it can conflict with nothing to
+break the tie. A card built from several units still has one authoritative
+source each; merging is a card-level thing and does not need the unit to
+hold two.
+
+This lands on what exists. `locator.document` keeps its current meaning, the
+authoritative file, and page and bbox keep resolving against it with no
+migration. Which source that file belongs to is looked up rather than
+stored, because file to source is many to one and declared. Plurality lives
+in a new list beside it, so nothing existing becomes a list.
+
+**So there is no `authority` setting.** A unit has an authoritative source
+or it does not, and that is read off the links. Promoting a reference into
+the authoritative slot is how you say "this one I did look up and it
+settles it", which is more concrete than a tri-state and needs no
+inheritance. `has_crop` stays separate and answers the other half: whether
+that authoritative source has geometry you can check against at review.
+
+Invariants 4 and 7 were always carrying this as an assumption. Naming it
+lets them stand as written instead of growing an exception. What the two
+cases cost is one paragraph at the end of this section rather than a rule
+each.
+
+### Topics
+
+**A source answers "what does this say". A topic answers "what should we
+cover".**
+
+A topic is an ask in the words you used, an outline of what it means to
+cover, any references particular to it, and a few defaults. It is what
+supplies settings, context and provenance when no single source does.
+
+**Zero by default, for every project.** A source with marks has already
+answered the coverage question: the marks are the decision. Giving every
+source a topic would put an empty outline on every book, which is a null
+object and carries no information. **A topic exists if and only if somebody
+wrote one**, and nothing auto-creates one for a source, a project or an
+import.
+
+Two shapes, both real:
+
+- **standing alone**, where there is no definitive source and the topic is
+  the only thing that can say what to cover
+- **augmenting a source**, where a book is authoritative and you want a
+  slice its own structure cannot express, with an outline of its own:
+  "concentration inequalities", which crosses chapters and is not a section
+
+Not required even in a sourceless project. Proposing into one with no topic
+works; you get no outline, no recorded ask and no shared defaults, which is
+why writing one is in practice the first thing you do there.
+
+**Topics are not tags.** A tag like `invalidation` spans topics by design
+and a topic does not. A topic is provenance and a tag is a property of the
+content, so a unit has at most one topic and any number of tags, and they
+want different controls: a picker and a search box.
+
+**Topics do not duplicate sources**, because the two hold nearly disjoint
+things. A source holds files, a marking scheme, crop settings, cached text
+and a citation, all of it about reading a document. A topic holds an ask, an
+outline and references, all of it about deciding what to cover. The overlap
+is references, deck and a couple of permissions, which is a small shared
+shape rather than a second system.
+
+### The setup stage
+
+Every project already has a pre-unit stage. It has no view and no name, so
+it happens by editing TOML: which item, which files, which marks become
+units, what the colours mean, which deck, what is ambient. That is not
+triage and not review, and it is where a project with no book spends all of
+its effort.
+
+So it gets a view, for every project and not only for the new kind. A list
+on the left of the sources and the topics, a panel on the right for whatever
+is selected. The topic list is empty for most projects, and an empty list is
+a true statement about them.
+
+- **a source** shows its files, whether it is authoritative, which marks
+  become units, what the colours mean, its citation, its deck
+- **a topic** shows the ask, the outline with which entries have units, its
+  references, its defaults
+- **the project** shows the deck, the conventions, the permissions
+
+Three things to hold to.
+
+**It writes files and nothing else.** Everything it does is doable by
+editing a file, per invariant 2. A form that starts owning its fields is the
+failure here.
+
+**Only decisions that change what the next pass does.** Deck, permissions,
+marks, references, outline. Not `crop_width`, not `katex_base`, nothing that
+is a fact about a machine. "Defaults etc." is unbounded and ends as forty
+fields nobody reads.
+
+**The outline is what makes it worth opening.** Configuration alone will rot
+because you will edit the TOML instead. Build the topic half first; the
+source half is mostly giving `project_facts` and the scheme legend room they
+do not have in the rail.
+
+### A topic, start to finish
+
+Five steps. Two need Claude and three are file edits.
+
+1. **Ask.** `forge topic --new "how to use the standard containers"` records
+   the ask and nothing else.
+2. **Sources, if you want them.** A pass appends what it found, as links
+   with a line each on why. You add and delete.
+3. **Approving is leaving them in.** No approved flag, the same way an
+   annotation is resolved by deleting it. The list is what you left.
+4. **Outline, then propose.** Below.
+5. **The usual pipeline.** Units arrive `new`, and triage is triage.
+
+**A topic has no state of its own.** Where it has got to is derivable, so it
+is derived: no references means nobody has looked, no outline means nobody
+has planned, no unit carrying the tag means nothing has been proposed. Same
+call as `has_crop`, and it is what keeps this from adding a second state
+machine beside the ledger's.
+
+**The gate is that the steps are separate commands.** `classify` already
+works this way: it proposes and applies nothing. Nothing mechanical enforces
+the pause, and nothing should. The pause is that you run the next command.
+
+#### Breadth, which is step 4
+
+A single pass asked for forty proposals produces twelve and stops. It is
+satisficing under length pressure, and nothing tells it that twelve is
+short, because nothing knows what the subject contains.
+
+- **Outline first, as its own pass.** One short line per thing to cover, no
+  detail. Forty of those is cheap to generate, which is exactly why the
+  failure does not happen there.
+- **You edit the outline, not the units.** Deleting padding and adding the
+  obvious gap costs three lines here and forty edits later. It is also a
+  second look before anything enters the ledger.
+- **Fan out the fill.** One subagent per chunk of the outline, which is what
+  `/transcribe` already does per section and for the same reasons. A small
+  list is easy to finish, so the pressure never builds.
+- **Coverage becomes a diff.** Outline entries with no unit against them,
+  printed by `forge`. Mechanical, counting rather than judging, and the same
+  kind of question `audit`'s contiguity oracle asks about extraction. It
+  also makes a second run resumable rather than a re-run.
+- **Do not ask for a number.** "Produce forty" produces padding, and padding
+  survives triage because none of it is clearly wrong. Twelve is sometimes
+  the honest answer. An outline of sixty entries is the signal to split the
+  topic.
+
+None of it is enforced. A propose with no outline just proposes.
+
+### What a project is on disk
+
+A directory, a `project.toml`, and prose files beside it. No kind key: once
+the config splits, a project with no authoritative source is one whose
+sources declare no files, and that absence is the fact.
+
+`project.toml` gains a table per source: its key or URL, its files, whether
+it is authoritative, its marking scheme when it has one, its topics, its
+deck. **Structured relations go here and not in prose**, because a relation
+written in a prose file is the one that drifts.
+
+`references.md` is the project's shelf of reference material, one entry each,
+in prose, with no schema. A shelf to check against, not things to card.
+
+`topics.md` holds the asks and the outlines, a heading each. One file rather
+than a directory: there are ten of these, not a thousand.
+
+`conventions.md` changes meaning in a project with no authoritative source.
+For a book it describes what the source does. With no source it decides what
+the deck does: which language version is ambient, how a snippet is written,
+what is assumed. Write it before the first proposal, not after the first
+batch reads inconsistent.
+
+### Where a thing lives, and what may be overridden
+
+The split already exists and is written down in `config.py`. Naming it
+rather than inventing a new one:
+
+- **TOML: what the tool acts on.** It resolves a path, runs an import,
+  routes a deck, branches on it.
+- **`[conventions]`, free-form keys: a short fact that reaches the writer
+  verbatim.** Nothing branches on one except `layout`.
+- **Markdown: prose the writer reads.**
+
+The test for anything new is **does any Python branch on it.** Yes, TOML. No
+and it is a sentence, markdown. No and it is a label, the conventions table.
+
+A fourth case appears here and is worth naming: **markdown the tool counts
+but does not interpret.** A topic's outline is read only to find its
+entries, which is what `annotation_audience` already does with a prefix at
+line start. Counting lines is not a schema.
+
+That splits a topic across two files, the ask and the outline in markdown
+and any defaults in TOML, joined by slug. Not novel: `project.toml` and
+`conventions.md` are already one thing split by whether the tool acts on it,
+and most topics will carry no TOML block at all.
+
+**Everything is overridable except a short list**, and the list is short
+because the test is narrow: **overriding is allowed unless it would make two
+things in the same deck mean different things without saying so.**
+
+- **Identity and derived facts** are not settings. You cannot override
+  whether a unit has a crop; you change the thing.
+- **Conventions.** Overriding `layout` on one unit puts two cards in one
+  deck that read differently with nothing on either saying which. That is
+  the silent mixing CLAUDE.md exists to prevent, so a convention is declared
+  at the level it is true and does not cascade down.
+- **Reading settings stop at the source.** A unit cannot have its own
+  marking scheme; it was already imported by one.
+
+Permissions, windows, decks and tags all pass the test, which is why they
+are free. `layout` fails it.
+
+### Units
+
+Ids are slugs, `<project>:<slug>`, so a re-run adds only what is new.
+
+**Units grow `tags`, which cards already have.** The first draft made the
+topic the middle segment of the id, because a section is filtered everywhere
+and it was free. Wrong shape: a section is where something sits in a
+document. The topic is a field of its own, single-valued, and tags are the
+many-valued thing beside it.
+
+A unit has no `tex_auto`. It has a preview: for code, a snippet too small to
+run, enough to see the point. Rather than a field beside `tex_auto`, this is
+the moment to say what those three fields have always been, a machine's
+reading of the unit and how far to trust it. `Unit.tex` is already the
+accessor, so the seam exists. Generalise it to a preview with a language if
+that stays cheap; otherwise a parallel field and two spellings of one idea.
+
+### Cards
+
+No new card type yet. `identity` and `intuition` carry definitions and
+explanations, and the "here is code, is it right" card waits until there are
+enough of them to know what it wants.
+
+**Where a card goes** is a first-match chain, which is what `deck_for`
+already is: the card's own tag, then its topic, then its source, then the
+project's type map, then the project's deck. Topic above source, because a
+topic says what the material is about and a source says where it was
+printed, and a deck is something you study rather than somewhere you read.
+Most links are unset in any given project, so the chain is long on paper and
+short in practice.
+
+A language version is a tag. `cpp20` is filterable in Anki, which is where
+"drill only these" is decided. A card that departs from the ambient version
+says so in `## conditions`, which renders with the front, so the question is
+asked in the right setting.
+
+**Routing needs `tags` out of the content hash.** As it stands, re-tagging
+a card to move decks un-approves it for a change nobody reviewed, which is
+invariant 5 firing on something it was not written for.
+
+Exempting it is the consistent answer rather than a convenience, because the
+inconsistency is already there: `frequency` and `derivation` are exempt
+**and they become Anki tags**, `freq::core` and `derive::short`. So today
+changing `freq::core` does not un-approve a card and changing
+`tags: [core]` does, and they are the same kind of statement landing in the
+same place. That is an accident of which field a value lives in, not a
+policy.
+
+The rule every existing exemption already implies: **the hash covers what a
+reviewer read, and filing is not read.** `requires` says where a card sits
+in the queue, `frequency` says when you meet it, a tag says where it is
+filed, and approving a card is not approving its filing. The objection that
+a subject tag is content does not survive the test: change
+`matrix-calculus` to `linear-algebra` and the claim on the card is
+identical. A tag that changes what the question means belongs in
+`## conditions`, which renders with the front.
+
+What it costs: `check` stops noticing a tag typo on an approved card. That
+is already true of `frequency`, mitigated there by a vocabulary that free
+tags do not have. The rest is already wired, since `sync` diffs tags against
+the live note and `deck_drift` plus `--move-decks` move what the new deck
+says.
+
+### Filtering, which is the UI work
+
+This matters more without a book. A book gives you sections, and a section
+is a real division somebody made. A project gives you tags you invented,
+there are more of them, and they are how you find anything.
+
+The left rail does not scale to that. Every filter is a written-out row,
+which is right for six and wrong for forty.
+
+- a tag group with a search box: type to narrow, click to select, selected
+  tags pin to the top, counts beside each, several at once
+- one control, both views. Units carry tags now, so triage needs the same
+  thing review does
+- the topic is a separate single-select, beside the section tree rather than
+  among the tags
+- `frequency` and `derivation` become filters. They are chips on a card
+  today and you cannot select by them
+- the graph takes them too. It has no filters at all today, so this is the
+  first one: a topic or a subject looked at alone, on the canvas as well as
+  in the list
+
+Nothing here is specific to a sourceless project. A book with four hundred
+cards wants it too, and a tag filter carrying counts is the first thing
+likely to make a page render slowly enough to want what "a database" below
+describes, which is an index and not a store.
+
+### Code on a card
+
+The review view already handles fenced blocks: `render_body` splits on the
+fences and emits `<pre>`, which KaTeX skips. Three gaps are left.
+
+- `check` runs KaTeX over `## back`, so a fence has to be cut out first, the
+  way `_prose_only` cuts out display math
+- `section-wrapped` fires on anything multi-line, and code is meant to be
+  multi-line
+- `to_anki_html` turns newlines into `<br>`, so a fence has to become `<pre>`
+
+Highlighting is not built into Anki. The add-ons bake Pygments HTML into the
+field when you type it, which we do not need because we write the field. Run
+Pygments at sync, the way a picture is rendered at sync: the card file keeps
+plain code, the field gets classes, and the colours live in the note type
+CSS so night mode works. No add-on for anyone you share the deck with.
+MathJax skips `pre` and `code` by default, so the maths renderer leaves it
+alone.
+
+### Boundaries to fix while doing this
+
+Not a rewrite. Six seams this leans on that are blurred today, each cheaper
+to sharpen now than to work around twice.
+
+**`ProjectConfig` holds two things.** Who a project is and where its deck
+goes, and how to read its documents. The second half becomes a table per
+source, and `document_for`, `crop_width_for`, `crop_context_for` and
+`zotero_for` hang off it. That is what removes the need for a kind.
+
+**Settings resolve by walking a chain, not a fixed ladder.** Unit, source,
+project, repo today. Written as a walk, a parent relation or a topic layer
+is one extra link and no caller changes. Written as four hardcoded lookups,
+it is a rewrite each time.
+
+**The frontend contract is written down and has one door.** In `ledger.py`'s
+docstring, with `forge units --add` the only way in for a frontend that is
+not a segmenter.
+
+**The two views build their context by hand.** `/units` and `/review` each
+compute `from_marks`, the filter dict and the counts inline, and they have
+drifted once. One builder, which is also where the resolved properties land,
+so a widget cannot read a different value than a pass.
+
+**`check` says "skip these sections" in four places.** Fenced code makes it
+five. One notion of which sections are linted as prose.
+
+**`forge.toml` needs a pass, not a rename.** `[repo] projects_dir` becomes
+`projects_dir`. `[zotero] units_from` and `[zotero.meanings]` are a marking
+scheme, which is a property of a source rather than of a vendor, so the
+data directory stays as a machine fact and the scheme becomes the last link
+of a chain in a section not named after a company. And the
+`Zotero::<title>` fallback inside `deck_for` is provenance picking a deck,
+which belongs in the routing chain rather than as a branch in the middle of
+it. Same code as the config split, so the same pass.
+
+### Migrating rather than staying compatible
+
+**No compatibility code for our own file formats.** There are two projects
+with real content, the Cookbook and the Krause script, and everything else
+is demo that never reached Anki. Carrying a fallback forever to avoid
+editing two files is the worse trade.
+
+So: no `projects/` falling back to `sources/`, no `--source` alias, no
+list-of-strings form of the source table. A script moves the two projects
+and the tests move with them.
+
+**`LEGACY_UNHASHED_FRONTMATTER` goes with it.** It exists so that widening
+the exemption does not invalidate a deck stamped under the old rule, and
+the same migration re-stamps every approved card instead. That is honest
+because nothing about those cards changed except the rule, it is one time
+rather than permanent, and it clears the way for the `tags` exemption above
+and for whatever the next one is.
+
+**The line is at the collection.** Repo files get migrated; a live Anki
+collection does not. Tags are safe because `sync` diffs them, so a renamed
+tag would migrate itself. The note type is not: renaming it orphans every
+note and its review history, which is what `PREVIOUS_NAMES` is for and it
+stays.
+
+One thing deliberately not migrated: `Locator.equation`. Its shim exists
+because `extract/pdf.py` is frozen, not for compatibility, so rewriting 751
+ledger lines to say `kind` and `label` would still leave the shim in place
+on the write side. No new fact, so no change.
+
+### What the website does, and what it does not
+
+The setup stage is file edits: create a project, add a source, write a
+topic, keep or drop a reference. Instant, local, no Claude, which is what
+§12 is about, and the app already rewrites card markdown line by line to
+resolve and edit annotations, so this is that machinery pointed at another
+file.
+
+The proposing passes stay copyable commands in the panel. That is what
+"Triggering Claude from the website" settled and nothing here reopens it.
+The division is clean enough to state: **the website edits files, Claude
+Code does the thinking, and the commands panel is the handover.**
+
+### Docs and pictures
+
+The diagram in DESIGN.md §2 shows one door into the ledger and is already a
+frontend behind, since `zotero` is not on it. It grows to three, which is
+the picture worth having anyway.
+
+- **CLAUDE.md**: the commands block, the vocabulary, and the conventions
+  paragraph, which currently says "a source" where it now means a project.
+- **DESIGN.md**: the §2 diagram, and §4's ledger paragraph.
+- **README**: prose is yours. It is missing pictures on cards today, and
+  this is a second gap, so both want the same pass.
+- **assets**: `triage.png` changes with the chip and the commands panel, and
+  the setup stage deserves a shot, which means `make_assets.py` needs a rule
+  for picking a project the way it picks a marked-up one by a `demo` tag.
+  `states.png` stands: the states do not change.
+
+### Build order
+
+1. Hand-write five units into a sourceless project's ledger and push them
+   through to Anki. No new code. If the premise does not hold, it fails here
+   and cheaply.
+2. The config split, the rename and the `forge.toml` pass, the walk-up
+   resolver, a source that is a URL, `forge units --add` with slug ids, unit
+   tags, the preview and the reference list. One migration script moves the
+   two real projects, exempts `tags` and re-stamps every approved card.
+3. `forge context` for a unit with no page: the ask, the references, the
+   conventions, the permissions. This one decides how good the cards are.
+4. The setup stage, topics and outlines first.
+5. Fenced code through `check` and `sync`, Pygments, a note type version
+   bump.
+6. The tag filter and the property filters, and the chip and the commands
+   panel reading the unit. Then `/propose` and the outline pass.
+7. Docs, README and assets, once the screens have stopped moving.
+8. End to end tests over the whole of it, last: a project created, a topic
+   written, units proposed, triaged, carded, checked and synced, with the
+   browser driving the setup stage. Each step above carries its own unit
+   tests as it lands; this is the pass that makes sure they compose.
+
+### What no property settles
+
+**Ask for less per topic.** "The standard containers" produces forty even,
+shallow proposals that all survive triage because none is clearly wrong. A
+topic you can enumerate does not: "the erase-remove idiom and what replaced
+it", "when a `vector` invalidates". Breadth comes from many small topics.
+Guidance for the skill, not a check, and that goes for every other worry on
+this page: with no crop to check against, each one wants to become a `check`
+rule and none of them is mechanical (invariant 6).
+
+**A unit with no authoritative source costs something, and no rule recovers
+it.** A book gives review a crop, and a wrong card is obvious in one glance.
+Without one there are two weaker nets: the references keep a card from being
+invented, and the loop catches the ones that are plausible and wrong, which
+is the annotation, `/triage`, the settled note that keeps what you asked,
+and `feedback` from Anki. Cost moves from triage to review, the opposite of
+the Cookbook, and the pressure that comes with it is a bulk approve. There
+is not one, and invariant 1 is the reason.
+
+**Trigger:** none needed. The first sourceless project is the test.
+
+## 12. Running a command from the website
+
+The commands panel gives you a line to copy. Some of those commands need no
+Claude and no watching: `zotero`, `sync`, `check`, and everything in §10 that
+is a file edit. A button for them is not the thing "Triggering Claude from
+the website" rejects, which is about pushing a prompt into a session. The
+aim is that every command with no model behind it is reachable from the app.
+
+Two kinds, and the easy kind is worth doing first. **A file edit** writes a
+directory or rewrites a line and answers immediately: create a project, add
+a source, write a topic, keep or drop a reference. The app already rewrites
+card markdown line by line, so this is that machinery pointed at another
+file, and it needs nothing new. **A long run** is `zotero`, `sync`,
+`extract`. Those want a job to stream and cancel, which the app has none of.
+Build that when a button is what you actually miss.
+
+**Trigger:** the first project you create by hand while the app is open.
 
 ## 4. Publishing, what is left
 
