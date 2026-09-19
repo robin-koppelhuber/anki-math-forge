@@ -279,3 +279,117 @@ def test_a_long_uses_line_is_flagged(config: Config) -> None:
 
     card.sections[-1].body = "Backpropagation through a linear layer."
     assert "uses-too-long" not in {f.code for f in check.check_card(card, config)}
+
+
+# -- a check that cannot fail -----------------------------------------------
+
+DRAWN = (
+    "\n## front\n$x$\n\n## back\n$y$\n\n"
+    "## verify\n```python\n"
+    "X = spd(3)\n"
+    "lhs = np.trace(X)\n"
+    "rhs = float(np.sum(np.diag(X)))\n"
+    "```\n"
+)
+FIXED = (
+    "\n## front\n$x$\n\n## back\n$y$\n\n"
+    "## verify\n```python\n"
+    "lhs = np.zeros(2)\n"
+    "rhs = np.zeros(2)\n"
+    "```\n"
+)
+
+
+def test_a_verify_block_that_draws_nothing_is_flagged(repo: Path, config: Config) -> None:
+    """Both sides typed from the same expression and evaluated once is a check
+    that reports coverage the deck does not have."""
+    write(repo, FIXED, verify="true")
+
+    findings = lint(repo, config)
+
+    assert "verify-fixed" in codes(findings)
+    said = next(f for f in findings if f.code == "verify-fixed")
+    assert said.level == check.WARN, "a closed form checked at one point is legitimate"
+
+
+def test_a_verify_block_that_samples_is_not(repo: Path, config: Config) -> None:
+    write(repo, DRAWN, verify="true")
+
+    assert "verify-fixed" not in codes(lint(repo, config))
+
+
+def test_a_draw_is_found_by_name_not_by_substring(repo: Path, config: Config) -> None:
+    """`spd_cache = 1` draws nothing."""
+    body = FIXED.replace("lhs = np.zeros(2)", "spd_cache = 1\nlhs = np.zeros(2)")
+    write(repo, body, verify="true")
+
+    assert "verify-fixed" in codes(lint(repo, config))
+
+
+def test_a_card_without_verify_is_not_asked(repo: Path, config: Config) -> None:
+    write(repo, FIXED)
+
+    assert "verify-fixed" not in codes(lint(repo, config))
+
+
+def test_augmented_has_to_be_a_flag(repo: Path, config: Config) -> None:
+    """A string reads as true to Python and as a date to a person."""
+    path = write(repo, "\n## front\n$x$\n\n## back\n$y$\n")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "verify: false", 'verify: false\naugmented: "2026-09-18"'
+        ),
+        encoding="utf-8",
+    )
+
+    assert "augmented-not-a-flag" in codes(lint(repo, config))
+
+
+# -- a newline is only a break where Anki makes one --------------------------
+
+
+def wrapped(repo: Path, config: Config, proof: str) -> bool:
+    """Whether `## proof` written this way is called wrapped prose."""
+    write(repo, f"\n## front\n$a$\n\n## back\n$b$\n\n## proof\n{proof}\n")
+    return "section-wrapped" in codes(lint(repo, config))
+
+
+def test_a_proof_written_as_steps_is_not_wrapped_prose(repo: Path, config: Config) -> None:
+    """One display block per line is what the card-writing skill asks a proof
+    to look like. `to_anki_html` turns a newline into a `<br>` outside maths
+    only, so none of these breaks reaches the card as one -- and a lint firing
+    on the recommended shape is a lint you learn to scroll past."""
+    assert not wrapped(repo, config, "$$a = b$$\n$$= c$$")
+
+
+def test_an_aligned_environment_is_one_formula(repo: Path, config: Config) -> None:
+    """Four lines of one display block. The whitespace inside it is collapsed
+    on the way to Anki, which is why `\\\\` and not a newline is what breaks
+    a line there."""
+    assert not wrapped(
+        repo,
+        config,
+        "$$\\begin{aligned}\na &= b \\\\\n  &= c\n\\end{aligned}$$",
+    )
+
+
+def test_a_clause_above_a_step_is_a_deliberate_break(repo: Path, config: Config) -> None:
+    """Prose belongs around the steps: one line naming the move, the move
+    under it."""
+    assert not wrapped(repo, config, "By the cyclic property,\n$$a = b$$")
+
+
+def test_a_sentence_split_across_lines_still_is(repo: Path, config: Config) -> None:
+    """Which is the case the check exists for, and the one shape the skill
+    tells you not to write a proof in."""
+    assert wrapped(
+        repo,
+        config,
+        "$\\det(\\mathbf{X})$ and Jacobi's formula\nread together give the result.",
+    )
+
+
+def test_maths_wrapped_inside_one_inline_span_is_not_a_wrapped_sentence(
+    repo: Path, config: Config
+) -> None:
+    assert not wrapped(repo, config, "$a +\nb$")

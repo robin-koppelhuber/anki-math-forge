@@ -496,3 +496,180 @@ def test_a_dry_run_pushes_no_template(config: Config, card_path: Path) -> None:
     sync.run(config, client=anki, templates=True, dry_run=True)
 
     assert anki.templates[config.note_type][notetype.CARD_TEMPLATE]["Back"] == "stale"
+
+
+# -- which deck, and what happens when it changes ---------------------------
+
+
+def zotero_source(repo: Path, key: str = "T7QDISXB", title: str = "A  Paper") -> Config:
+    """A source with a Zotero key on it, which is what `forge zotero` writes."""
+    folder = repo / "sources" / "paper"
+    folder.mkdir(parents=True, exist_ok=True)
+    folder.joinpath("source.toml").write_text(
+        f'title = "{title}"\ncitation = "Paper"\nzotero = "{key}"\n', encoding="utf-8"
+    )
+    return config_mod.load(repo)
+
+
+def test_an_imported_source_lands_under_its_own_deck(repo: Path) -> None:
+    """A shelf you are reading through is not the deck you have decided to
+    keep, and one parent is what makes an import studiable or removable in one
+    move. `::` is Anki's separator, so a title carrying one would nest a level
+    nobody asked for, and a doubled space is a deck name you mistype once."""
+    config = zotero_source(repo, title="A  Paper:: With Punctuation")
+
+    assert config.deck_for("paper") == "Zotero::A Paper: With Punctuation"
+
+
+def test_a_source_that_names_a_deck_keeps_it(repo: Path) -> None:
+    """The default is a default. Naming one is how you say this book belongs
+    beside what you already study rather than beside what you have imported."""
+    folder = repo / "sources" / "paper"
+    folder.mkdir(parents=True, exist_ok=True)
+    folder.joinpath("source.toml").write_text(
+        'title = "A Paper"\ncitation = "Paper"\nzotero = "T7QDISXB"\n'
+        'deck = "Mathe::Concentration"\n',
+        encoding="utf-8",
+    )
+    config = config_mod.load(repo)
+
+    assert config.deck_for("paper") == "Mathe::Concentration"
+
+
+def test_a_source_that_did_not_come_from_zotero_is_untouched(config: Config) -> None:
+    """Segmented from a file on disk, so there is nothing to file under an
+    importer's name. It takes the repo default as it always has."""
+    assert config.deck_for("demo") == config.deck
+
+
+def test_a_new_card_goes_to_the_deck_the_source_asks_for(repo: Path) -> None:
+    config = zotero_source(repo)
+    approve(min_card(config, "aaa111", "paper:1:1"))
+    anki = FakeAnki()
+
+    sync.run(config, client=anki)
+
+    assert next(iter(anki.notes.values()))["deck"] == "Zotero::A Paper"
+    assert "Zotero::A Paper" in anki.decks
+
+
+def test_a_deck_change_is_reported_rather_than_applied(repo: Path) -> None:
+    """Anki settles a deck when the note is added and never again, so editing
+    the setting moved nothing and the only symptom was one source spread over
+    two decks, noticed weeks later."""
+    config = zotero_source(repo)
+    approve(min_card(config, "aaa111", "paper:1:1"))
+    anki = FakeAnki()
+    sync.run(config, client=anki)
+
+    folder = repo / "sources" / "paper" / "source.toml"
+    folder.write_text(
+        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        encoding="utf-8",
+    )
+    report = sync.run(config_mod.load(repo), client=anki)
+
+    said = [o for o in report.outcomes if o.uid == "aaa111"]
+    assert any("Zotero::A Paper" in o.detail and "Mathe::Concentration" in o.detail
+               for o in said), report.format()
+    assert any("--move-decks" in o.detail for o in said)
+    assert next(iter(anki.notes.values()))["deck"] == "Zotero::A Paper", "nothing moved"
+
+
+def test_move_decks_files_them_under_the_new_name(repo: Path) -> None:
+    config = zotero_source(repo)
+    approve(min_card(config, "aaa111", "paper:1:1"))
+    anki = FakeAnki()
+    sync.run(config, client=anki)
+    folder = repo / "sources" / "paper" / "source.toml"
+    folder.write_text(
+        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        encoding="utf-8",
+    )
+
+    report = sync.run(config_mod.load(repo), client=anki, move_decks=True)
+
+    assert [o.action for o in report.outcomes if o.uid == "aaa111"] == ["unchanged", "move"]
+    assert next(iter(anki.notes.values()))["deck"] == "Mathe::Concentration"
+
+
+def test_the_summary_counts_what_moved(repo: Path) -> None:
+    """Every other action is tallied, and a move was not: you ran the flag and
+    the report said nothing about whether it had done anything.
+
+    Only when something moved, though. A line reading "0 move" on every sync
+    is a number nobody reads, which is how the one that is not zero is missed.
+    """
+    config = zotero_source(repo)
+    approve(min_card(config, "aaa111", "paper:1:1"))
+    anki = FakeAnki()
+    first = sync.run(config, client=anki)
+    assert "move" not in first.summary(), first.summary()
+
+    folder = repo / "sources" / "paper" / "source.toml"
+    folder.write_text(
+        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        encoding="utf-8",
+    )
+    report = sync.run(config_mod.load(repo), client=anki, move_decks=True)
+
+    assert "1 move" in report.summary(), report.summary()
+
+
+def test_a_report_line_says_which_card_it_is_about(repo: Path) -> None:
+    """A uid answers "which file". A report you read to decide whether
+    something went wrong is asking "which card", and a column of six hex
+    digits answers that only if you look every one of them up."""
+    config = zotero_source(repo)
+    path = min_card(config, "aaa111", "paper:1:1")
+    card = model.load(path)
+    card.frontmatter["gist"] = "the predictive posterior"
+    card.save()
+    approve(path)
+
+    report = sync.run(config, client=FakeAnki())
+
+    line = next(o.format() for o in report.outcomes if o.uid == "aaa111")
+    assert "aaa111" in line and "the predictive posterior" in line
+
+
+def test_a_card_with_no_gist_shows_its_uid_alone(repo: Path) -> None:
+    """Honest rather than padded: a card nobody has named has only its uid,
+    and seeing that is what sends you to `/gist`."""
+    config = zotero_source(repo)
+    approve(min_card(config, "aaa111", "paper:1:1"))
+
+    report = sync.run(config, client=FakeAnki())
+
+    line = next(o.format() for o in report.outcomes if o.uid == "aaa111")
+    assert line.split() == ["add", "aaa111", "--", "->", "Zotero::A", "Paper"]
+
+
+def test_a_rehearsal_moves_nothing(repo: Path) -> None:
+    """`--dry-run` is a rehearsal whatever else is asked for."""
+    config = zotero_source(repo)
+    approve(min_card(config, "aaa111", "paper:1:1"))
+    anki = FakeAnki()
+    sync.run(config, client=anki)
+    folder = repo / "sources" / "paper" / "source.toml"
+    folder.write_text(
+        folder.read_text(encoding="utf-8") + 'deck = "Mathe::Concentration"\n',
+        encoding="utf-8",
+    )
+
+    sync.run(config_mod.load(repo), client=anki, dry_run=True, move_decks=True)
+
+    assert "changeDeck" not in anki.calls
+    assert next(iter(anki.notes.values()))["deck"] == "Zotero::A Paper"
+
+
+def test_a_deck_that_still_agrees_says_nothing(repo: Path) -> None:
+    """The report is for drift. A deck nobody changed is not news."""
+    config = zotero_source(repo)
+    approve(min_card(config, "aaa111", "paper:1:1"))
+    anki = FakeAnki()
+    sync.run(config, client=anki)
+
+    report = sync.run(config, client=anki)
+
+    assert not [o for o in report.outcomes if o.action == "move" or "asks for" in o.detail]

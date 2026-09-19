@@ -91,22 +91,114 @@ def test_what_to_run_is_pinned_to_the_bottom_of_the_rail() -> None:
     """With sixty-four sections above it, the one panel that says what to do
     next was four screens down the scroll.
 
-    Pinning it means being a sibling of the scrolling column rather than the
-    last thing inside it, so the test is that the column has closed by the
-    time the panel starts: `<div>` depth back to zero.
+    Pinning it means being a row of the rail's grid rather than the last
+    thing inside the scrolling column, so the test is that the column has
+    closed by the time the panel starts: `<div>` depth back to zero.
     """
     start = FILTERS.index('<div class="filter-rail-scroll"')
     segment = FILTERS[start : FILTERS.index('class="rail-actions"')]
     assert segment.count("<div") >= 1
     assert segment.count("<div") == segment.count("</div>"), "still inside the scroll column"
-    assert "flex: 1" in rule(".filter-rail-scroll"), "the column takes the slack"
-    assert "flex: none" in rule(".rail-actions"), "the panel keeps its height"
+    rows = rule(".rail-panes")
+    assert "minmax(0, 1fr) auto" in rows, "the column takes the slack"
+    assert "--split-commands" in rows, "and the panel is the row with a height"
+    assert "overflow-y: auto" in rule(".rail-actions"), "it scrolls inside itself"
 
 
 def test_the_actions_panel_says_what_it_is() -> None:
     """"Next on this" read as "the next item", which is what `j` does."""
     assert "copy a command" in FILTERS
     assert "next on this" not in FILTERS
+
+
+def test_both_rails_resize_their_bottom_panel_the_same_way() -> None:
+    """Each rail is a column with something pinned under it, and only the
+    guide could be resized. Which split is right depends on the work -- four
+    commands and sixty-four sections want different ones -- and that is the
+    decision a handle hands over."""
+    assert 'data-splitter="commands"' in FILTERS
+    assert 'data-splitter="guide"' in GUIDE
+    # One handle, one stylesheet rule, one drag loop. Two hand-rolled ones is
+    # how they end up behaving differently.
+    assert FILTERS.count('class="splitter y"') == 1
+    assert "row-resize" in rule(".splitter.y")
+
+    split = JS[JS.index("  commands: {") :][:400]
+    assert '"--split-commands"' in split and 'axis: "y"' in split
+    # The sized pane is the lower one here, so a drag is measured up from the
+    # bottom -- the same asymmetry the two rail grips already have.
+    assert 'from: "bottom"' in split
+    loop = JS[JS.index('document.addEventListener("pointermove"') :][:900]
+    assert "box.bottom - event.clientY" in loop
+    assert "event.clientY - box.top" in loop
+
+
+def test_a_folded_commands_panel_gives_its_room_back() -> None:
+    """A dragged height on a panel you have since put away is a band of
+    nothing above a closed summary."""
+    assert ":has(> .rail-actions:not([open]))" in CSS
+
+
+def test_a_command_hover_reads_as_two_lines_not_as_an_entity() -> None:
+    """The separator between what a command does and where to paste it was
+    written as `&#10;` in the template, so Jinja escaped its `&` and the hover
+    read the entity out loud. It also carried a stray third brace, which put a
+    `}` in front of every one of them."""
+    # The attribute itself, not the block around it: the comment above it
+    # names the entity in order to say why it is wrong.
+    start = FILTERS.index('class="run {{ cmd.kind }}"')
+    title = FILTERS[FILTERS.index('title="', start) :]
+    title = title[: title.index('">') + 2]
+    assert "&#10;" not in title
+    assert "}}}" not in title
+    assert r"'\n\n'" in title, "a literal newline, which an attribute keeps"
+
+
+def test_the_commands_panel_shows_that_it_folds() -> None:
+    """It was a `<details>` with a flex summary, and a flex summary has no
+    disclosure triangle in any browser. Nothing on screen said the panel could
+    be shut, on the rail where the section list is already short of room."""
+    assert 'class="rail-actions"' in FILTERS
+    assert "<summary>" in FILTERS
+    marker = rule(".rail-actions > summary::before")
+    assert "content" in marker and "order: -1" in marker
+    assert '.rail-actions:not([open]) > summary::before' in CSS
+    assert "list-style: none" in rule(".rail-actions > summary")
+
+
+def test_folding_the_commands_panel_sticks() -> None:
+    """Every view here is rendered by the server, so a panel folded on one
+    click came back open on the next. Same tax as the rail itself, which is
+    remembered for the same reason."""
+    block = JS[JS.index("function rememberCommands") :][:700]
+    assert "rail-actions" in block
+    assert "localStorage.getItem(COMMANDS_KEY)" in block
+    assert 'addEventListener("toggle"' in block
+    assert block.count("catch") >= 2, "a private window must not break the fold"
+
+
+def test_what_a_person_wrote_comes_before_what_the_linter_made_of_it() -> None:
+    """Two blocks in one column: the notes, and a machine's reading of the
+    card they are about. The reading went first and was labelled as nothing,
+    so `section-wrapped` above a row of `@claude` lines read as a third note."""
+    review = (APP / "templates" / "review.html").read_text(encoding="utf-8")
+    review_js = (APP / "static" / "review.js").read_text(encoding="utf-8")
+    assert review.index('class="annotations"') < review.index('class="findings"')
+    assert review.index('class="checks-what"') < review.index('class="findings"')
+    # And a note written now lands where a note read from the file would.
+    block = review_js[review_js.index("function paintAnnotations") :][:900]
+    assert ".checks-what, .findings" in block
+
+
+def test_a_note_can_be_reworded_before_it_is_resolved() -> None:
+    """Resolving deletes the line, and for a note that came from Anki the file
+    is the only copy there is. Fixing a typo should not go through that."""
+    review = (APP / "templates" / "review.html").read_text(encoding="utf-8")
+    assert "data-edit-note" in review
+    assert review.index("data-edit-note") < review.index('class="resolve"'), (
+        "the edit button sits left of resolve"
+    )
+    assert "auto 1fr auto auto" in rule(".annotation"), "and the row has a column for it"
 
 
 def test_the_meaning_of_a_mark_is_on_the_information_side() -> None:
@@ -512,6 +604,54 @@ def test_the_chip_says_what_a_page_count_actually_means() -> None:
     assert context_label(3, chosen=True) == "3 pages either side"
     assert context_label(3) == "3"
     assert "either side" in (APP / "templates" / "units.html").read_text(encoding="utf-8")
+
+
+def test_a_chip_that_moves_a_count_repaints_the_rail() -> None:
+    """The rail's `not augmented` row is how the augment queue is worked, so a
+    chip that flips a card without moving the tally leaves the number wrong in
+    the view you clicked it from. Every other write on this page repaints."""
+    review_js = (APP / "static" / "review.js").read_text(encoding="utf-8")
+    for name in ("toggleAugmented", "cycleGrade", "annotate"):
+        block = review_js[review_js.index(f"function {name}") :][:900]
+        assert "repaintCounts(" in block, name
+
+
+def test_undo_repaints_everything_it_put_back() -> None:
+    """`restore` puts the state, the brief, the window and the web grant back
+    in the file. A repaint that covered only the state left the two chips
+    showing the value you had just undone, which is the one moment they are
+    wrong and the one moment you are watching them."""
+    units_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    block = units_js[units_js.index("async function undo") :][:1400]
+    for painter in ("paintState(item", "paintContext(item", "paintWeb(item"):
+        assert painter in block, painter
+
+
+def test_the_chip_offers_the_chapter_between_ten_pages_and_the_book() -> None:
+    """The size you want between "ten pages either side" and "all of it" is
+    usually the chapter, and where a chapter starts is a fact about the book
+    rather than a number you can guess from a unit's page."""
+    from anki_math_forge.app import CONTEXT_STEPS, context_label
+
+    assert list(CONTEXT_STEPS).index("chapter") == list(CONTEXT_STEPS).index(10) + 1
+    assert list(CONTEXT_STEPS)[-1] >= 100, "and the whole document is still last"
+    assert context_label("chapter", chosen=True) == "the chapter it is in"
+    assert context_label("chapter") == "chapter"
+
+
+def test_the_chip_sends_the_step_as_it_is_written() -> None:
+    """One of the sizes is a word, and `Number("chapter")` is NaN -- which
+    posts as `null` and the server reads as no size at all, so clicking
+    `chapter` took the setting *off*.
+
+    **Both** call sites: the key that cycles the sizes and the click on one of
+    them. The first was fixed and the second was not, and the half that was
+    left is the half everybody uses."""
+    units_js = (APP / "static" / "units.js").read_text(encoding="utf-8")
+    assert "Number(next.dataset.contextStep)" not in units_js
+    assert "Number(step.dataset.contextStep)" not in units_js
+    assert units_js.count("setContext(item, next.dataset.contextStep)") == 1
+    assert units_js.count("setContext(item, step.dataset.contextStep)") == 1
 
 
 def test_the_unit_s_own_mark_is_set_apart_from_its_neighbours() -> None:

@@ -38,7 +38,16 @@ from markupsafe import Markup
 
 from .. import check, latex, model, study
 from .. import graph as graph_mod
-from ..config import DECLARED, DEFAULT_MEANINGS, Config, save_study_order
+from ..config import (
+    CHAPTER,
+    DECLARED,
+    DEFAULT_MEANINGS,
+    Config,
+    ConfigError,
+    context_asked,
+    context_size,
+    save_study_order,
+)
 from ..ledger import Ledger, Unit, open_ledgers
 from ..model import Card, StaleFileError
 from ..sync import (
@@ -92,18 +101,23 @@ def key_context(
     }
 
 
-def render_body(body: str) -> Markup:
+def render_body(body: str, unit: str = "") -> Markup:
     """Card text as HTML, with fenced code blocks kept out of KaTeX's way.
 
     A `## verify` block is Python between triple backticks. Rendered as plain
     text it showed the fences literally and KaTeX tried to read the maths-like
     parts of the code. `<pre>` is right here for the same reason it was wrong
     for notes: KaTeX skips it by default.
+
+    `unit` is the card's own, which is what a bare `![...](unit)` means. The
+    picture is rendered from the source document per request, exactly as the
+    crop beside the card is: the app shows what `sync` will upload rather than
+    a second rendering of it.
     """
     out: list[str] = []
     for i, chunk in enumerate(body.split("```")):
         if i % 2 == 0:
-            out.append(escape(chunk))
+            out.append(_with_images(escape(chunk), unit))
             continue
         # a fence may name its language on the first line
         first, _, rest = chunk.partition("\n")
@@ -112,6 +126,43 @@ def render_body(body: str) -> Markup:
     # Markup, not str: the filter escapes its own input, so returning a plain
     # string would have Jinja escape the tags too and show them as text.
     return Markup("".join(out))
+
+
+def _with_images(chunk: str, unit: str) -> str:
+    """`![what it shows](unit:<id>)` -> the crop, rendered on request.
+
+    Against the escaped text, since that is what the tag has to end up inside.
+    A reference comes through `escape` unchanged apart from its alt text,
+    which is why the alt is read back out of the escaped copy rather than
+    matched in the original.
+    """
+
+    from ..extract.render import CARD_INSET
+
+    def tag(match: Any) -> str:
+        named = (match.group(2) or unit).strip()
+        if not named:
+            # Nothing to point at. `check` reports it; the view shows the line
+            # as written rather than an image element with no source.
+            return str(match.group(0))
+        source = named.split(":", 1)[0]
+        # Rendered exactly as `sync` will render it: no `width`, so the same
+        # resolution the crop beside the card uses; `marks=false`, because the
+        # mark an image unit came from *is* its boundary and painting it back
+        # draws a frame round the picture; and the same inset, for the copy of
+        # that frame that lives in the PDF itself.
+        #
+        # A picture you approved on screen has to be the picture Anki gets.
+        url = (
+            f"/crop/{quote(source)}/{quote(named, safe='')}.png"
+            f"?context=-{CARD_INSET:g}&marks=false"
+        )
+        return (
+            f'<img class="card-image" src="{url}" alt="{match.group(1)}" '
+            f'loading="lazy" title="{named}">'
+        )
+
+    return model.IMAGE_RE.sub(tag, chunk)
 
 
 def create_app(config: Config) -> FastAPI:
@@ -312,6 +363,12 @@ def create_app(config: Config) -> FastAPI:
             request,
             "units.html",
             {
+                # Every filter this view resolved, under its own name. The rail
+                # marks a row active by reading these, and a filter that is in
+                # `filters` but not here builds correct links and then never
+                # lights the row they came from. Explicit keys below win, so
+                # this only ever adds.
+                **filters,
                 **key_context(config, "units"),
                 "config": config,
                 "source": name,
@@ -375,6 +432,7 @@ def create_app(config: Config) -> FastAPI:
         status: str = "draft",
         source: str = "",
         annotated: str = "",
+        augmented: str = "",
         section: str = "",
         chapter: str = "",
         counts_scope: str = "",
@@ -410,11 +468,17 @@ def create_app(config: Config) -> FastAPI:
             cards = [c for c in cards if _chapter_of(card_section(c, config)) == chapter]
         if annotated:
             cards = [c for c in cards if has_annotation(c.annotations(), annotated)]
+        # Which pass has been over them, which is the only thing about a
+        # card this app cannot answer from the content.
+        if augmented in ("yes", "no"):
+            cards = [c for c in cards if c.augmented == (augmented == "yes")]
         # Everything the other filters leave, ignoring the section: what each
         # section row would show if you clicked it.
         unsectioned = in_source
         if annotated:
             unsectioned = [c for c in unsectioned if has_annotation(c.annotations(), annotated)]
+        if augmented in ("yes", "no"):
+            unsectioned = [c for c in unsectioned if c.augmented == (augmented == "yes")]
         if status not in ("all", ""):
             unsectioned = [c for c in unsectioned if c.effective_status == status]
         # A dependency may name a card in another source: `check` validates
@@ -479,6 +543,7 @@ def create_app(config: Config) -> FastAPI:
             "section": section,
             "chapter": chapter,
             "annotated": annotated,
+            "augmented": augmented,
             "counts_scope": counts_scope,
         }
         counts = {s: sum(1 for c in cards if c.effective_status == s) for s in model.STATUSES}
@@ -489,6 +554,10 @@ def create_app(config: Config) -> FastAPI:
             request,
             "review.html",
             {
+                # See the units view: the rail's active rows are read from
+                # these, so they come from the same dict the links are built
+                # from rather than from a second list kept by hand.
+                **filters,
                 **key_context(config, "review"),
                 "config": config,
                 "cards": [
@@ -760,7 +829,13 @@ def create_app(config: Config) -> FastAPI:
         pages back, and no per-source default knows that.
         """
         raw = body.get("pages")
-        pages = None if raw is None or int(raw) < 0 else int(raw)
+        try:
+            size = context_size(raw, "pages") if raw is not None else -1
+        except ConfigError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        # A negative number is how the chip says "inherit again", which is not
+        # a size and so never reaches the file.
+        pages = None if isinstance(size, int) and size < 0 else size
 
         def apply(led: Ledger) -> Unit:
             unit = led.get(unit_id)
@@ -907,6 +982,20 @@ def create_app(config: Config) -> FastAPI:
         value = "" if raw is None else bool(raw)
         return _mutate_card(config, uid, body, lambda card: card.set_grade("web", value))
 
+    @app.post("/api/cards/{uid}/augmented")
+    def set_card_augmented(uid: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Record, or withdraw, that `/augment` has been over this card.
+
+        Two states rather than three: a card has had the pass or it has not,
+        and there is nothing for it to inherit from. Withdrawing is the way to
+        ask for it again, which is why this is a control rather than something
+        only an agent writes.
+        """
+        value = bool(body.get("augmented"))
+        return _mutate_card(
+            config, uid, body, lambda card: card.set_grade("augmented", value or "")
+        )
+
     @app.post("/api/cards/{uid}/restore")
     def restore_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
         """Undo: put a card's status back, with the hash that went with it.
@@ -955,6 +1044,21 @@ def create_app(config: Config) -> FastAPI:
             remember=lambda card: {"note": _nth_annotation(card, index)},
         )
 
+    @app.post("/api/cards/{uid}/edit-annotation")
+    def edit_card_annotation(uid: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Reword one annotation, leaving it open.
+
+        Not in the undo stack, for the same reason writing one is not: `restore`
+        puts a note *back*, and putting back the line this replaced would leave
+        the card carrying both. The way to undo a wording is to edit it again,
+        which is the same gesture and costs one click.
+        """
+        index = int(body.get("index", 0))
+        text = str(body.get("text", "")).strip()
+        if not text:
+            raise HTTPException(400, "empty annotation")
+        return _mutate_card(config, uid, body, lambda card: card.edit_annotation(index, text))
+
     @app.post("/api/cards/{uid}/annotate")
     def annotate_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
         text = str(body.get("text", "")).strip()
@@ -1000,7 +1104,7 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(404, f"unit {unit_id!r} has no page geometry")
         if width and width not in render_mod.WIDTHS:
             raise HTTPException(400, f"unknown crop width {width!r}")
-        width = width or config.crop_width_for(source, from_a_mark=bool(unit.marks))
+        width = width or config.crop_width_for(source, from_a_mark=unit.crops_to_page)
         regions = render_mod.regions_for(unit, geometry[0]) if marks else []
 
         document = config.document_for(source, unit.locator.document)
@@ -1333,6 +1437,12 @@ def pipeline_counts(
     # is allowed next -- but they are live and actionable, so they belong in
     # the strip beside the states rather than only in the diagram.
     counts["suggested"] = 0
+    # Queued units with no one-line subject yet. Only queued ones: a gist on
+    # a unit nobody has decided about is a sentence written for a card that
+    # may never exist.
+    counts["ungisted"] = 0
+    counts["unaugmented"] = 0
+    counts["augmented"] = 0
     counts["annotated"] = 0
     # Split by audience, because they are different jobs. `claude` is work
     # waiting to be done; `me` is a decision only the human can take, and a
@@ -1361,6 +1471,7 @@ def pipeline_counts(
                     continue
                 counts[unit.state] += 1
             counts["suggested"] += unit.suggestion is not None
+            counts["ungisted"] += unit.state == "queued" and not unit.gist
             counts["annotated"] += bool(unit.notes)
             counts["annotated_me"] += has_annotation(unit.notes, "me")
             counts["annotated_claude"] += has_annotation(unit.notes, "claude")
@@ -1380,6 +1491,10 @@ def pipeline_counts(
         counts["unannotated_card"] += has_annotation(notes, "none")
         counts["annotated_me_card"] += has_annotation(notes, "me")
         counts["annotated_claude_card"] += has_annotation(notes, "claude")
+        # Only drafts: `/augment` refuses an approved card, so counting one
+        # would be counting work the pass would decline to do.
+        counts["unaugmented"] += card.effective_status == "draft" and not card.augmented
+        counts["augmented"] += card.augmented
     return counts
 
 
@@ -1528,16 +1643,20 @@ def mark_payloads(
 
 
 # The sizes the chip offers. Coarse on purpose: the decision is "a bit more" or
-# "all of it", not a measurement. `999` means the whole document.
-CONTEXT_STEPS = (0, 1, 3, 10, 999)
+# "all of it", not a measurement. `999` means the whole document, and `chapter`
+# is the one step that is not a count: between ten pages and the whole book the
+# size you want is usually the chapter, and where it starts is a fact about the
+# book rather than a number you can guess from here.
+CONTEXT_STEPS: tuple[int | str, ...] = (0, 1, 3, 10, CHAPTER, 999)
 
 
-def context_label(pages: int, *, chosen: bool = False) -> str:
+def context_label(pages: int | str, *, chosen: bool = False) -> str:
     """One step of the context chip.
 
     The chosen one is written out and the rest are bare numbers, so the chip
     reads as a sentence with the answer in it -- `context: 1 · 3 pages either
-    side · 10 · all` -- rather than as five numbers you have to decode.
+    side · 10 · chapter · all` -- rather than as a row of sizes you have to
+    decode.
 
     **"3 pages" means three pages either side**, seven in total: `context.py`
     takes `range(page - n, page + n + 1)`. Saying "3 pages" and handing over
@@ -1545,6 +1664,9 @@ def context_label(pages: int, *, chosen: bool = False) -> str:
     have the whole story when they have more of it than they expected, so the
     chosen label spells it out and the tooltip repeats it.
     """
+    if pages == CHAPTER:
+        return "the chapter it is in" if chosen else "chapter"
+    pages = int(pages)
     if pages >= 100:
         return "the whole document" if chosen else "all"
     if pages == 0:
@@ -1554,7 +1676,7 @@ def context_label(pages: int, *, chosen: bool = False) -> str:
     return f"{pages} page{'' if pages == 1 else 's'} either side"
 
 
-def context_steps(current: int) -> list[dict[str, Any]]:
+def context_steps(current: int | str) -> list[dict[str, Any]]:
     """Every size, with the one in force written out and marked."""
     return [
         {
@@ -1662,12 +1784,24 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     for last time was somewhere else -- and it hid the combinations you have
     never used, which is half of what a scheme *is*.
 
-    Cells come in three states, and they are three different facts:
+    The number in a cell is **units**, because clicking it filters units and
+    a control whose number does not match what it returns is worse than no
+    number. A mark that is not a unit still happened, though, and the grid was
+    drawing it as though it never had.
+
+    Cells come in four states, and they are four different facts:
 
     * **declared** -- you said what this combination means. Full strength.
     * **default only** -- it reads as what Zotero's annotation kind is, which
       is not the same as a decision. Still filterable, drawn dashed, and the
       tooltip says so.
+    * **marked, no unit here** -- you drew it and no unit in view came from
+      it. Not clickable, because the filter would return nothing, but it
+      carries the count of marks and says why, and *why* is two different
+      answers: `units_from` does not name the pair, so there is never a unit;
+      or it does, and the units it made are in another state than the one you
+      are looking at. It used to be indistinguishable from a combination
+      nobody has ever drawn.
     * **empty** -- nothing in this source is marked that way. Not clickable,
       because a filter that can only ever return nothing is a dead control --
       but still drawn in its own colour, because five identical grey squares
@@ -1682,10 +1816,17 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
 
     scheme = config.zotero_for(source)
     tally: dict[str, int] = {}
+    # Every mark in the source, deduplicated by key, beside the units they
+    # made. A mark rides along on every unit within a few pages of it, so
+    # counting appearances would report one highlight five times.
+    drawn: dict[str, set[str]] = {}
     for unit in units:
         key = unit_mark(unit)
         if key:
             tally[key] = tally.get(key, 0) + 1
+        for mark in unit.marks:
+            pair = f"{mark.kind}/{mark.colour}" if mark.colour else mark.kind
+            drawn.setdefault(pair, set()).add(mark.key)
 
     # Only combinations the scheme gives a reading to, so a kind Zotero does
     # not define never becomes a row -- the floor under your declarations is
@@ -1693,11 +1834,12 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
     cells: dict[tuple[str, str], dict[str, Any]] = {}
     kind_total: dict[str, int] = {}
     colour_total: dict[str, int] = {}
-    for key, count in tally.items():
+    for key in {*tally, *drawn}:
         kind, _, colour = key.partition("/")
         meaning, where = scheme.reading(kind, colour)
         if not meaning:
             continue
+        count = tally.get(key, 0)
         cells[kind, colour] = {
             "key": key,
             "kind": kind,
@@ -1705,7 +1847,16 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
             "meaning": meaning,
             "declared": where == "declared",
             "count": count,
+            "marks": len(drawn.get(key, ())),
+            # Whether `units_from` names this pair at all, which is the only
+            # scope-free answer to "why is there no unit here". The grid is
+            # built from the state you are filtered to, so a green highlight
+            # can be a unit in this source and absent from this view.
+            "unit_making": scheme.makes_a_unit(kind, colour),
         }
+        # The axis totals stay unit counts, because the axis header sits over a
+        # column of unit counts and a row total in a different unit of measure
+        # is a number nobody can add up.
         kind_total[kind] = kind_total.get(kind, 0) + count
         colour_total[colour] = colour_total.get(colour, 0) + count
     if not cells:
@@ -1736,6 +1887,8 @@ def mark_matrix(units: list[Unit], config: Config, source: str) -> dict[str, Any
                         "meaning": scheme.reading(kind, colour)[0],
                         "declared": False,
                         "count": 0,
+                        "marks": 0,
+                        "unit_making": scheme.makes_a_unit(kind, colour),
                     },
                 )
                 for colour in colours
@@ -2296,7 +2449,7 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
             where,
             "context_pages",
             config.context_pages_for(name),
-            origin if spec.context_pages >= 0 else inherited,
+            origin if context_asked(spec.context_pages) else inherited,
         )
         if spec.tags:
             add(where, "tags", ", ".join(spec.tags), origin)
@@ -2420,6 +2573,16 @@ def commands_for(
                 "run": f"/classify{src}{scope}",
                 "kind": "claude",
             })
+        if counts.get("ungisted"):
+            out.append({
+                "label": f"name {counts['ungisted']} queued units in a line each",
+                "why": "one line saying what a card from each would be about,"
+                " so the list, the graph and every link to a card read as"
+                " something rather than as a uid. Cheap, and it makes the"
+                " stub-writing pass easier to check.",
+                "run": f"/gist{src}{sec}",
+                "kind": "claude",
+            })
         if counts.get("queued"):
             out.append({
                 "label": f"write stubs for {counts['queued']} queued",
@@ -2439,9 +2602,12 @@ def commands_for(
             "kind": "shell",
         })
     else:
-        if counts.get("draft"):
+        # Offered on what is *left*. A card records that the pass has been
+        # over it, so the panel can stop suggesting a second opinion about
+        # cards that already got one.
+        if counts.get("unaugmented"):
             out.append({
-                "label": f"fill in {counts['draft']} thin drafts",
+                "label": f"augment {counts['unaugmented']} drafts nobody has been over",
                 "why": "adds conditions, a proof where it earns its place, the"
                 " gradings. Run it before approving, not after: augmenting an"
                 " approved card sends it back to draft.",
@@ -2454,7 +2620,7 @@ def commands_for(
                 "why": "works the @claude notes and deletes each line it has"
                 " acted on. Every one of them is holding a card out of sync"
                 " until it goes.",
-                "run": "/triage claude",
+                "run": f"/triage claude{src}",
                 "kind": "claude",
             })
         if counts.get("approved"):
@@ -2470,6 +2636,18 @@ def commands_for(
             "why": "a rehearsal: approved cards only, nothing written, and it"
             " names every card it would skip and why.",
             "run": "uv run forge sync --dry-run",
+            "kind": "shell",
+        })
+        # The one flow *back*. Offered on every review page rather than on a
+        # count, because nothing here can know you left a comment in Anki
+        # last night -- and until this runs, that comment is not a note on any
+        # card and no list in this app is showing it.
+        out.append({
+            "label": "pull what you wrote in Anki",
+            "why": "a comment or a flag you left while reviewing becomes an"
+            " @claude note on the card, and is erased in Anki as it is taken:"
+            " after this the line here is the only copy.",
+            "run": "uv run forge feedback",
             "kind": "shell",
         })
     return out
@@ -2771,6 +2949,12 @@ def _card_payload(
     place: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     mine = [f.as_dict() for f in check.findings_for(findings, card)]
+    # The annotations are listed on this card as rows with a resolve button on
+    # each. `annotation-open` prints the first one's text again, one block
+    # above them and in the linter's voice, which reads as a note nobody
+    # remembers writing -- and the banner above already says what an open note
+    # costs. It stays in `forge check`, where nothing else shows the line.
+    shown = [f for f in mine if f["code"] != "annotation-open"]
     return {
         "uid": card.uid,
         "status": card.effective_status,
@@ -2816,18 +3000,33 @@ def _card_payload(
             for s in card.canonical().sections
             if s.name != "notes" and s.body.strip()
         ],
+        # The prose somebody left on the card, which is neither an open
+        # request nor a record of a settled one. Invariant 7 puts real content
+        # here ("note any condition you add that the source does not state"),
+        # so it stays visible and is not folded away with the history.
         "plain_notes": "\n".join(
             line
             for line in (card.section("notes") or "").splitlines()
-            if not model.annotation_audience(line)
+            if not model.annotation_audience(line) and not model.is_resolved(line)
         ).strip(),
+        # What was asked of this card and what was done about it, oldest
+        # first. Folded away by default: it is the answer to "why is this
+        # different from what I remember", a question you only ask sometimes.
+        "resolved": [model.resolved_body(line) for line in card.resolved()],
         "notes": card.section("notes") or "",
         "annotations": [
             {"text": _note_text(n), "audience": model.annotation_audience(n)}
             for n in card.annotations()
         ],
-        "findings": mine,
+        "findings": shown,
+        # Over everything `check` said, not only what is on screen: the number
+        # answers "is this card clean", and hiding a row must not change it.
         "errors": sum(1 for f in mine if f["level"] == check.ERROR),
+        "augmented": card.augmented,
+        # Whether this card carries a picture. A label, not a filter: it says
+        # what you are looking at while you look at it, and nobody works
+        # through the pile of cards that have one.
+        "has_image": card.has_image,
         "unit_image": _unit_image(card, config),
         "front_length": latex.rendered_length(card.section("front") or ""),
     }
@@ -2854,8 +3053,19 @@ def _card_web(card: Card, config: Config) -> bool:
 
 
 def _unit_image(card: Card, config: Config) -> str:
-    """Link back to the originating unit's crop -- the fastest way to settle
-    whether a card is wrong (DESIGN.md §6)."""
+    """The originating unit's crop, which is the fastest way to settle whether
+    a card is wrong (DESIGN.md §6).
+
+    **The same crop triage looked at**: the page around the box, an outline on
+    it, and the marks painted back on. The aside used to cut it to the box
+    alone, on the argument that a picture this size is provenance rather than
+    evidence. It is not. The question you ask beside a draft is the one you
+    asked at triage, and a tight box answers it with a single line of a page.
+
+    One URL, used for the strip and for what opens when you click it, so
+    opening it is the picture the browser already has rather than a second
+    render of a different framing.
+    """
     if not card.unit:
         return ""
     source = card.unit.split(":", 1)[0]
@@ -2863,7 +3073,9 @@ def _unit_image(card: Card, config: Config) -> str:
     if not ledger_path.exists():
         return ""
     unit = (_ledgers(config).get(source) or Ledger(ledger_path)).get(card.unit)
-    return crop_url(unit) if unit else ""
+    if unit is None:
+        return ""
+    return crop_url(unit, context=pdf_context(config, source))
 
 
 # -- writes ----------------------------------------------------------------

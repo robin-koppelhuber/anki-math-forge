@@ -6,7 +6,7 @@ from pathlib import Path
 
 from anki_math_forge import config as config_mod
 from anki_math_forge import extract
-from anki_math_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge.ledger import Ledger, Locator, Mark, Unit
 
 
 def test_resolve_notes_defaults_to_claude_only(repo: Path) -> None:
@@ -125,3 +125,54 @@ def test_dropping_nothing_touches_nothing(tmp_path: Path) -> None:
     ledger = Ledger(tmp_path / "units.jsonl", [marked("a", "KEEP")])
     assert ledger.drop_from_documents(set()) == (0, 0)
     assert len(list(ledger)) == 1
+
+
+# -- the colour scheme moved under the ledger -------------------------------
+
+
+def one_mark(unit_id: str, kind: str, colour: str, **rest: object) -> Unit:
+    """A unit anchored on one mark, the way a Zotero import writes it."""
+    return Unit(
+        id=unit_id,
+        locator=Locator(section="s", page=1, bbox=[0.0, 0.0, 1.0, 1.0]),
+        marks=[Mark(key=unit_id.split(":")[-1], kind=kind, colour=colour)],
+        **rest,  # type: ignore[arg-type]
+    )
+
+
+def test_narrowing_units_from_forgets_only_what_nobody_touched(tmp_path: Path) -> None:
+    """The same trade `drop_from_documents` makes: a config change says what to
+    import next, not that a decision should be undone."""
+    led = Ledger(
+        tmp_path / "units.jsonl",
+        [
+            one_mark("s:a", "highlight", "green"),
+            one_mark("s:b", "highlight", "blue"),
+            one_mark("s:c", "highlight", "blue", state="skipped"),
+            one_mark("s:d", "highlight", "blue", notes=["@me decide"]),
+        ],
+    )
+
+    dropped, kept = led.drop_from_scheme(lambda kind, colour: colour == "green")
+
+    assert (dropped, kept) == (1, 2)
+    assert [u.id for u in led.units] == ["s:a", "s:c", "s:d"]
+
+
+def test_a_unit_with_a_card_is_never_forgotten(tmp_path: Path) -> None:
+    """`uids` means a card names this unit, and forgetting it would leave that
+    card pointing at nothing."""
+    led = Ledger(
+        tmp_path / "units.jsonl",
+        [one_mark("s:a", "highlight", "blue", state="carded", uids=["aaaaaa"])],
+    )
+
+    assert led.drop_from_scheme(lambda kind, colour: False) == (0, 1)
+
+
+def test_a_unit_from_a_segmenter_is_left_alone(tmp_path: Path) -> None:
+    """No marks means no reader and no colour scheme to disagree with."""
+    led = Ledger(tmp_path / "units.jsonl", [Unit(id="s:2.4:61", locator=Locator(section="2.4"))])
+
+    assert led.drop_from_scheme(lambda kind, colour: False) == (0, 0)
+    assert len(led.units) == 1

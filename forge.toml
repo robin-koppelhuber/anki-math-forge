@@ -24,7 +24,9 @@ language = "en"          # prose sections are written in English
 front_char_cap = 160     # rendered `## front` length cap, enforced by `check`
 crop_context = 0         # points of page shown around a crop; 0 is the default
 crop_width = ""          # `box`, `page`, or empty to let the geometry decide
-context_pages = 1        # pages either side handed to whoever writes a card
+context_pages = 1        # pages either side handed to whoever writes a card.
+                         # `"chapter"` hands over the whole chapter instead,
+                         # which is the size between ten pages and the book.
 web = false              # may a card writer look things up? A card should say
                          # what *this source* says.
 # Which criterion outranks which when Anki decides what new card you meet next.
@@ -38,7 +40,9 @@ study_order = ["frequency", "derivation", "printed"]
 
 [anki]
 url = "http://127.0.0.1:8765"
-deck = "Mathe"                    # the default; a source may name its own
+deck = "Mathe"                    # the default; a source may name its own,
+                                  # and a Zotero import defaults to
+                                  # "Zotero::<title>" instead of this
 note_type_name = "Math Card"      # -> "Math Card v1". Change the stem and
 note_type_version = 1             # `sync` tells you to rename it in Anki
                                   # rather than orphan your review history.
@@ -84,12 +88,19 @@ data_dir = "~/Zotero"
 # not tell a green highlight from a green underline. Everything else you
 # marked is shown beside the nearest unit. A source may override this list in
 # its own file, and an override replaces rather than adds to it.
-units_from = ["highlight/green", "note/yellow", "image/yellow", "underline/orange"]
+units_from = ["highlight/green", "note/yellow", "image/yellow", "underline/grey"]
 # `units_from = "declared"` instead takes every pair the meanings below name.
 # For a document you mark sparingly, where writing a colour down at all means
 # you expect a card out of it. Not the default: on a document marked up the
 # usual way, "a term to know" and "a citation to follow up" are meanings worth
 # having for marks that are context rather than cards.
+
+# What a comment on a mark has to open with to be asking for a convention
+# rather than a card. What it produces is an `@me` note proposing one, never a
+# line in conventions.md: a convention decides how every later card here is
+# read, and unlike a card nothing reviews it. A source may read it in its own
+# language.
+convention_keyword = "convention"
 
 # What you meant by each mark. **A key names both halves: `"kind/colour"`**,
 # quoted, because a bare TOML key cannot contain a slash. Both halves always: a
@@ -111,7 +122,7 @@ units_from = ["highlight/green", "note/yellow", "image/yellow", "underline/orang
 "highlight/orange" = "a definition or named algorithm"
 "highlight/grey" = "minor, in passing"
 "highlight/yellow" = "a citation to follow up"
-"underline/orange" = "generic create card annotation"
+"underline/grey" = "generic create card annotation"
 "note/yellow" = "something I thought while reading"
 "image/yellow" = "a figure or table worth a card"
 

@@ -22,7 +22,7 @@
         {% for section in card.sections if section.name == name %}
       <section class="sec sec-{{ section.name }}">
         {% if section.name != 'front' %}<h2>given</h2>{% endif %}
-        <div class="math">{{ section.body | body }}</div>
+        <div class="math">{{ section.body | body(card.unit) }}</div>
       </section>
         {% endfor %}
       {% endfor %}
@@ -30,7 +30,7 @@
       {% for section in card.sections if section.name not in prompt %}
       <section class="sec sec-{{ section.name }}">
         {% if section.name != 'back' %}<h2>{{ section.name }}</h2>{% endif %}
-        <div class="math">{{ section.body | body }}</div>
+        <div class="math">{{ section.body | body(card.unit) }}</div>
       </section>
       {% endfor %}
     </div>
@@ -41,6 +41,12 @@
       <div class="row"><span class="badge state-{{ card.status }}">{{ card.status }}</span>
         <code>{{ card.uid }}</code>
         {% if card.verify %}<span class="badge verify">verify</span>{% endif %}
+        {# A label rather than a filter: it says what this card is while you
+           are looking at it. The picture itself is in the body beside it, so
+           this is for the list and for knowing that `sync` has a crop to
+           render and upload before this card can go. #}
+        {% if card.has_image %}<span class="badge image"
+             title="this card carries a picture: `sync` renders the crop from the source document and uploads it">image</span>{% endif %}
       </div>
       {# A few words naming the card. The front beside it is the thing to
          review; this is the thing to recognise it by in a list, in a link from
@@ -79,6 +85,12 @@
           {# The same permission the unit carries, resolved for this card. It
              is what `/augment` is allowed to do when it fills in the optional
              sections, and it was invisible from here. #}
+          {# Whether the augmentation pass has been over this card. The one
+             card state no amount of reading the file can answer, because the
+             pass's usual right answer is to add nothing. #}
+          <button type="button" class="grade augmented {{ 'on' if card.augmented }}"
+                  data-card-augmented
+                  title="whether `/augment` has been over this card. Click to set or withdraw it; withdrawing is how you ask for the pass again. Not part of the content hash.">{{ 'augmented' if card.augmented else 'not augmented' }}</button>
           <button type="button" class="grade web {{ 'on' if card.web }}{{ ' own' if card.web_own }}"
                   data-card-web
                   title="whether whoever augments this card may look things up on the web. Inherited from the unit, then the source, then the repo; click to cycle allowed / no / inherit.">{{ 'web: allowed' if card.web else 'web: no' }}</button>
@@ -117,16 +129,6 @@
       </p>
       {% endif %}
 
-      {% if card.findings %}
-      <ul class="findings">
-        {% for finding in card.findings %}
-        <li class="level-{{ finding.level }}"><b>{{ finding.code }}</b> {{ finding.message }}</li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="checks-ok">check: clean</p>
-      {% endif %}
-
       {# A div, not a <pre>: KaTeX's auto-render ignores `pre` by default, so
          maths in a note was the one place on the card that never rendered.
          `white-space: pre-wrap` keeps the line breaks. #}
@@ -136,6 +138,10 @@
         <li class="annotation {{ note.audience }}">
           <span class="who">@{{ note.audience }}</span>
           <span class="what">{{ note.text }}</span>
+          {# Left of resolve, and quieter. Rewording a note is the common thing
+             to want and the reversible one; resolve deletes the line. #}
+          <button type="button" class="edit-note" data-edit-note="{{ loop.index0 }}"
+                  title="edit this note, keeping it open">edit</button>
           <button type="button" class="resolve" data-resolve="{{ loop.index0 }}"
                   title="resolve: deletes the line, which is the only thing that unblocks sync">
             resolve</button>
@@ -145,9 +151,54 @@
       {% endif %}
       {% if card.plain_notes %}<div class="notes">{{ card.plain_notes }}</div>{% endif %}
 
+      {# What was asked and what was done, shut until you ask for it.
+
+         Resolving an annotation deletes the line, which is what stops a
+         settled note holding the card out of sync. It also used to delete the
+         question, and after two passes over a card the edits are there and
+         the reason for them is not: you cannot tell whether the point you
+         made was taken, because you no longer have the point. The units view
+         has kept both halves since `answer` landed; this is the same record,
+         on the other half of the pipeline. #}
+      {% if card.resolved %}
+      <details class="settled-notes">
+        <summary>{{ card.resolved | length }} settled
+          <span class="settled-hint">what was asked, and what was done</span></summary>
+        <ul>
+          {% for done in card.resolved %}<li>{{ done }}</li>{% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+
+      {# The linter, last and labelled. It is a reading of the card rather
+         than something anybody wrote on it, and unlabelled directly above the
+         `@claude` rows it read as one more note nobody remembered writing. #}
+      {% if card.findings %}
+      <p class="checks-what">check</p>
+      <ul class="findings">
+        {% for finding in card.findings %}
+        <li class="level-{{ finding.level }}"><b>{{ finding.code }}</b> {{ finding.message }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="checks-ok">check: clean</p>
+      {% endif %}
+
       {% if card.unit_image %}
+      {# A button, not a figure with a handler on it: it opens something, it is
+         reachable by keyboard, and a screen reader is told which of the two it
+         is. The caption stays outside, because the unit id is a label for the
+         card's provenance rather than part of the control. #}
       <figure class="crop small">
-        <img src="{{ card.unit_image }}" alt="source crop for {{ card.unit }}" loading="lazy">
+        {# One picture, shown twice: the crop triage looked at, scaled to the
+           aside here and at full size in the dialog. A crop cut to page width
+           is unreadable in a column this narrow, which is every crop from a
+           marked-up source, and that is what the dialog is for. #}
+        <button type="button" class="crop-open" data-crop="{{ card.unit_image }}"
+                data-unit="{{ card.unit }}"
+                title="the crop this card was written from, full size">
+          <img src="{{ card.unit_image }}" alt="source crop for {{ card.unit }}" loading="lazy">
+        </button>
         <figcaption>{{ card.unit }}</figcaption>
       </figure>
       {% elif card.unit %}
@@ -164,4 +215,4 @@
 {% include "_keys.html" %}
 {% endblock %}
 
-{% block scripts %}<script defer src="/static/review.js"></script>{% endblock %}
+{% block scripts %}<script defer src="/static/review.js?b={{ app_build }}"></script>{% endblock %}

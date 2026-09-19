@@ -119,6 +119,19 @@ CSS = """.card {
   margin-bottom: 0.25em;
 }
 .source { font-size: 12px; opacity: 0.5; margin-top: 1.6em; }
+/* A picture is a crop of a page at twice its printed size, which on a phone
+   is several times the width of the screen. Capped by the field rather than
+   by the image, so the same card reads on a laptop and on a phone without
+   anybody choosing a pixel size while writing it. Boxed and on white because
+   a figure is line art on paper: in night mode an uncapped transparent PNG of
+   black strokes is a black rectangle. */
+img {
+  max-width: 100%;
+  height: auto;
+  background: #fff;
+  border-radius: 4px;
+  padding: 0.3em;
+}
 """
 
 

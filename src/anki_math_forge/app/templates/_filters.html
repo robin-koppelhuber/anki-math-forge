@@ -21,6 +21,12 @@
     <button type="button" class="rail-fold" id="filters-fold"
             title="hide this rail (f)">&#8249;</button>
   </div>
+  {# Two panes and a handle between them, the same arrangement as the guide
+     on the other side: the list scrolls and takes the slack, the panel under
+     it is the one with a height. The grid is declared whether or not there
+     are commands -- with no splitter and no panel the last two tracks are
+     empty and collapse, so an unmodified rail renders as it always did. #}
+  <div class="rail-panes">
   <div class="filter-rail-scroll">
 
     {# The pipeline, as counts rather than as a diagram. Each row is a filter,
@@ -78,7 +84,7 @@
        cards, because all 42 were on units. #}
     {% set kind = 'card' if view == 'review' else 'unit' %}
     <details class="filter-group" open>
-      <summary>action required</summary>
+      <summary>properties</summary>
       <ul class="filter-list">
         {% if view == 'units' %}
         <li><a class="{{ 'on' if suggested }}"
@@ -94,12 +100,25 @@
           <span>{% if transcribed %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}transcribed</span>
           <b>{{ transcribed_count }}</b></a></li>
         {% endif %}
-        <li><a class="{{ 'on' if annotated == 'me' }}"
-               href="{{ filter_url(here, f, annotated=(none if annotated == 'me' else 'me')) }}"
-               title="{{ 'click to clear' if annotated == 'me'
-                         else 'decisions parked for a human' }}">
-          <span>{% if annotated == 'me' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@me</span>
-          <b data-count="annotated_me_{{ kind }}">{{ pipeline['annotated_me_' ~ kind] }}</b></a></li>
+        {% if view == 'review' %}
+        {# The one card state that is not readable off the content: the pass
+           adds what earns its place, and for most cards that is nothing, so a
+           card it finished and a card it never saw are the same file. Both
+           directions are offered because both are questions people ask: what
+           is left to do, and what has already been done. #}
+        <li><a class="{{ 'on' if augmented == 'no' }}"
+               href="{{ filter_url(here, f, augmented=(none if augmented == 'no' else 'no')) }}"
+               title="{{ 'click to clear' if augmented == 'no'
+                         else 'drafts `/augment` has not been over. Annotate one with n before running it and the pass reads the note as its brief' }}">
+          <span>{% if augmented == 'no' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}not augmented</span>
+          <b data-count="unaugmented">{{ pipeline.unaugmented }}</b></a></li>
+        <li><a class="{{ 'on' if augmented == 'yes' }}"
+               href="{{ filter_url(here, f, augmented=(none if augmented == 'yes' else 'yes')) }}"
+               title="{{ 'click to clear' if augmented == 'yes'
+                         else 'cards the pass has been over. Take the flag off a card to ask for it again' }}">
+          <span>{% if augmented == 'yes' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}augmented</span>
+          <b data-count="augmented">{{ pipeline.augmented }}</b></a></li>
+        {% endif %}
         <li><a class="{{ 'on' if annotated == 'none' }}"
                href="{{ filter_url(here, f, annotated=(none if annotated == 'none' else 'none')) }}"
                title="{{ 'click to clear' if annotated == 'none'
@@ -112,6 +131,12 @@
                          else 'requests for Claude, open until resolved' }}">
           <span>{% if annotated == 'claude' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@claude</span>
           <b data-count="annotated_claude_{{ kind }}">{{ pipeline['annotated_claude_' ~ kind] }}</b></a></li>
+        <li><a class="{{ 'on' if annotated == 'me' }}"
+               href="{{ filter_url(here, f, annotated=(none if annotated == 'me' else 'me')) }}"
+               title="{{ 'click to clear' if annotated == 'me'
+                         else 'decisions parked for a human' }}">
+          <span>{% if annotated == 'me' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}@me</span>
+          <b data-count="annotated_me_{{ kind }}">{{ pipeline['annotated_me_' ~ kind] }}</b></a></li>
       </ul>
     </details>
 
@@ -173,6 +198,19 @@
                 <span class="swatch c-{{ cell.colour or cell.kind }}" aria-hidden="true"></span>
                 <b>{{ cell.count }}</b>
               </a>
+              {% elif cell.marks %}
+              {# Marked, and no unit in view came from it. Drawn like a used
+                 cell and unclickable like an empty one, because both are true,
+                 and the count is marks, which is the only number there is.
+                 The grid is scoped to the state you are filtered to, so the
+                 reason is the scheme's to give: a pair `units_from` does not
+                 name never makes one, and a pair it does name has simply made
+                 none that this view is showing. #}
+              <span class="mg-cell unused"
+                    title="{{ cell.marks }} {{ cell.colour }} {{ cell.kind }} mark{{ '' if cell.marks == 1 else 's' }} here{% if cell.unit_making %}, and no unit among them in this view{% else %}, none of them a unit: `units_from` does not name {{ cell.key }}{% endif %}&#10;{{ cell.meaning }}">
+                <span class="swatch c-{{ cell.colour or cell.kind }}" aria-hidden="true"></span>
+                <b>{{ cell.marks }}</b>
+              </span>
               {% else %}
               {# Still drawn in its own colour. Five identical grey squares are
                  five things you cannot tell apart, and the dotted edge plus
@@ -270,15 +308,26 @@
      four screens down. Copied, not launched -- you paste it where you can
      watch it, so nothing writes cards with nobody looking. #}
   {% if commands is defined and commands %}
+  <div class="splitter y" data-splitter="commands"
+       title="drag to resize · double-click to reset"></div>
   <details class="rail-actions" id="rail-actions" open>
-    <summary>copy a command<span class="rail-actions-hint">scoped to what is on screen</span></summary>
+    {# The label is a span so the arrow can sit against it and the hint can be
+       pushed to the other end. `open` here is the default for a rail that has
+       never been folded; the script remembers what you did with it. #}
+    <summary><span class="rail-actions-what">copy a command</span>
+      <span class="rail-actions-hint">scoped to what is on screen</span></summary>
     <ul class="filter-list runs">
       {% for cmd in commands %}
       {% if cmd.kind == 'note' %}
       <li class="run-note">{{ cmd.label }}</li>
       {% else %}
       <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
-                  title="{{ cmd.why ~ '&#10;&#10;' if cmd.why }}}{{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
+                  {# A real newline, not `&#10;`: the entity is written by the
+                     template rather than by the browser, so Jinja escapes its
+                     `&` and the hover reads the entity out loud. An attribute
+                     keeps a literal newline, which is what a two-line tooltip
+                     needs. #}
+                  title="{{ cmd.why ~ '\n\n' if cmd.why }}{{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
         <span class="run-label">{{ cmd.label }}</span>
         {# What it does, in one sentence. The label says which pass and how
            much is waiting; it does not say what the pass *is*, and these are
@@ -291,4 +340,5 @@
     </ul>
   </details>
   {% endif %}
+  </div>
 </aside>

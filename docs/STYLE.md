@@ -64,7 +64,21 @@ instructions. **The vocabulary** fixes what each object is called, because rule
     claim in another file by recording the correction only in itself. Edit the
     original, or leave a one-line pointer there. When a limitation belongs to
     one line of code, it is a comment on that line and not a roadmap entry.
-13. **A restatement may only weaken.** [CLAUDE.md](../CLAUDE.md) states each
+13. **Name a card by its gist when the reader needs to know which card.** A
+    uid answers "which file"; six hex digits answer "which card" only for
+    somebody willing to go and look it up. In a report, a note, a commit
+    message or a sentence in chat, write `0068ff (predictive posterior)`, or
+    the gist alone where the file does not matter.
+
+    It is a judgement each time, not a formatting rule. The uid alone is
+    right when the identity is the point: a duplicate uid, a `requires` edge
+    being repaired, a file being moved. The gist alone is right in prose about
+    the mathematics. Both, when somebody may want to act on the card you are
+    naming. A card with no gist has only its uid, and that is worth noticing:
+    `forge units --ungisted` and `/gist` exist because a deck of uids is a
+    deck you cannot talk about.
+
+14. **A restatement may only weaken.** [CLAUDE.md](../CLAUDE.md) states each
     invariant in one line and [CONTRACT.md](CONTRACT.md) states it in full.
     The short form may drop a qualifier; it may never add a guarantee the long
     form does not make. This is the live hazard in having two of them.

@@ -10,98 +10,87 @@ Worth asking for when the repo has several: conventions are per source, and a
 pass that hops between two books is one that has to reload the setting between
 every card.
 
-**This is not the command for working my annotations** — that is `/triage`.
-And run this *before* approval: augmenting an approved card changes its
+**`/triage` is still the command for working my annotations in general**:
+it covers units, approved cards and `@me`, none of which this pass touches.
+What this one does is answer the `@claude` notes on the drafts it is already
+augmenting, because making the edit and leaving the line behind would block
+the card's sync over a request that has been carried out.
+
+Run this *before* approval: augmenting an approved card changes its
 `content_hash`, which correctly drops it back to draft and means re-reviewing
 it. Augment first, review once.
 
-Load the book before you start, for the same reason `/extract-cards` does:
+## Dispatch one augmenter per batch
 
-```
-uv run forge context <unit-id>     # per card: the frame it was printed in
-uv run forge source-text <source>   # the whole book, when you need it
-```
+Augmenting reads the page each card was printed on, the same eleven thousand
+characters per card that `/extract-cards` pays, so a draft pile is as long as
+a queue was. **One `augmenter` agent per batch, dispatched in parallel.**
 
-`context` prints the page the equation was printed on. Read it — conditions
-are usually printed around an identity, not inside it.
-
-Then **check the mathematics yourself**. The page is evidence, not an oracle:
-an identity can require a condition the source never bothered to state. If
-the mathematics needs it, it belongs in `## conditions`; if you are adding
-something the source does not say, say so in `## notes` so the disagreement
-is visible.
-
-**Not by searching for it.** `context` ends with a section headed *looking
-things up*, which says whether web research is permitted for that unit. It is
-off unless somebody granted it. The card's own frontmatter may carry `web:`,
-which overrides; the review view shows the resolved answer next to the
-gradings. When it says no, a gap in the source is a `@me` note, not a search —
-the web has a cleaner statement of nearly every result on these pages, and
-substituting one produces a card that reads better than a correct one until
-the hypothesis the paper had turns out to be the whole point. When it says
-allowed, use it for what the source assumes and does not state, and say in
-`## notes` what came from off the page.
-
-1. Find them — cards with only `## front` and `## back`:
+1. Find the drafts this pass has not been over, without reading them into
+   this session:
 
    ```
-   uv run forge check --json
+   grep -l "^status: draft" cards/<SOURCE>/*.md | xargs grep -L "^augmented: true"
    ```
 
-   ...and read the card files under `cards/` directly. Work on
-   `status: draft` cards only; never touch an approved one (editing it would
-   silently reset it to draft, which is correct but rude to do in bulk).
+   Then the ones somebody has asked about since, whatever their flag says:
 
-2. For each, consult the **card-writing** skill and add what earns its place.
-   **Check `type:` first.** An `identity` takes everything below. An
-   `intuition` explains rather than states: it has no `## conditions` and no
-   `## verify` at all, and `check` refuses both. What it wants is a sharper
-   `## front`, the explanation in `## back`, and `## uses` where the point is
-   where this actually bites.
+   ```
+   grep -l "^status: draft" cards/<SOURCE>/*.md | xargs grep -l "^@claude"
+   ```
 
+   Take the union. A note written on a card *after* the pass has been over it
+   is a request for the pass to go again, which is exactly what withdrawing
+   the flag would have said and is one fewer thing to remember. Answering it
+   is part of augmenting: make the edit and delete the line, in the same pass.
 
-   - `## conditions` — when the identity is false without them. One line.
-     Name the source's declared layout when the shape depends on it, and only
-     then; a source that declares none gets no layout clause. Prefer the
-     source's own wording where it gives one; where it gives none and the
-     mathematics still needs a condition, state it and note the addition.
-     **Not on an `intuition` card** — it has no `conditions` section.
-   - `## proof` — only when short and load-bearing (2–4 lines).
-   - `## prose` — one sentence of intuition, or nothing.
-   - `## uses` — only where the answer alone leaves you asking *why would I
-     ever need this*. One clause, the setting in plain words with its formal
-     name in parentheses. Most cards should not have one.
-   - `gist` — a few words naming the card. **Write one where there is none,
-     and refine the one that is there** rather than leaving a stub's first
-     guess standing. A card written before this field existed has none, and a
-     card written from a unit that had a gist is showing the *unit's*, which
-     names the region rather than this card. At most about
-     sixty characters: "the adjugate in terms of the inverse", "why the bound
-     needs independence", "Lemma 2". It is a caption, so it is read wherever
-     the LaTeX front is not: a list, a link from another card, a graph node.
-     Never part of the card, never seen in Anki, and unhashed, so improving
-     the wording costs no re-review.
-   - `frequency` and `derivation` — **both, on every card.** `frequency` is
-     `core | common | rare`, `derivation` is `definitional | short | long`.
-     They are not decoration: `sync` introduces new cards in that order, most
-     useful first and then easiest first, and a card missing either sorts to
-     the back of the queue as unjudged. A stub left ungraded is a card you
-     will meet last.
-   - `requires` — uids this card's proof or notation rests on, if any.
-     It decides the order the deck is introduced in and it outranks the
-     gradings: without it a card can arrive before the result it is built
-     from. Only real dependencies; two cards on a theme are not one.
-   - `tags` — mechanical and reusable: topic, operation, structure.
-   - `verify: true` plus a `## verify` snippet where a stray transpose or sign
-     would survive proofreading.
+   **A card is in by default.** The flag records that the pass has been
+   over it, so a card that has never seen it carries nothing and is picked up
+   without anybody marking it ready. Nothing needs greenlighting; the chip in
+   the review view is for the other direction, saying "this one is done" or
+   withdrawing that to ask again.
 
-3. Verify what opted in, then check:
+   The review rail counts the first set as **not augmented**, and a card
+   carrying `augmented: true` has had the pass. **Running this twice over one
+   source is a no-op the second time** unless a note asks otherwise, which is
+   the point: nothing here is a second opinion about a card that already got
+   one and that nobody has queried.
+
+   A card that wants the pass again is one whose flag somebody withdrew, by
+   clicking the chip in the review view or by deleting the line. That is an
+   instruction rather than an accident, which is why it is a control and not
+   just something an agent writes.
+
+   Group them into batches of roughly twenty. Where the ids carry a section
+   (`<source>:<section>:<n>` in each card's `unit:`), group by that instead:
+   cards from one section share a page and a run of results on one theme, and
+   an agent that sees them together writes fewer near-duplicate `## prose`
+   lines than one that meets them scattered.
+
+2. Dispatch one `augmenter` per batch, in parallel — several `Agent` calls in
+   one message, each naming the card files it owns:
+
+   > Augment these draft cards in `<SOURCE>`: `<paths>`. Follow your
+   > instructions exactly — read the page each one came from, check the
+   > mathematics yourself, add only what earns its place, and record as `@me`
+   > any condition the source does not state. Drafts only; approve nothing.
+
+   **A card belongs to exactly one agent.** Nothing serialises two writers of
+   one card file the way the ledger lock serialises two writers of one unit,
+   so overlapping batches are the one way this pass can lose work.
+
+3. When they report back, verify mechanically rather than reading the
+   summaries:
 
    ```
    uv run forge verify --source <SOURCE>
    uv run forge check
    ```
 
-Do not rewrite `front` or `back` unless they are wrong — if they are, say so
-in your report rather than quietly reshaping the card. Leave everything
-`draft`; approval is a human at `forge serve`.
+   Then count what is left: every card an agent touched should carry
+   `augmented: true` now, so re-running the search from step 1 should return
+   nothing. A card still in it is one an agent skipped without saying so.
+
+4. Report: what was added per batch, every condition an agent added that the
+   source does not state, every card left alone and why, and any card whose
+   `front` or `back` an agent says is wrong.

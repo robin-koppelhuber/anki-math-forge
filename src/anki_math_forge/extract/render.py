@@ -93,6 +93,18 @@ DEFAULT_OPACITY = (0.85, 0.35)
 # Outlined kinds, the ones whose interior belongs to the page rather than to
 # the mark.
 OUTLINED = ("image", "ink", "note", "text")
+# How far a card's picture is pulled in from the box it was cut to, in points.
+#
+# An annotation's rectangle is stroked *on* its edge rather than inside it, so
+# a crop cut to exactly that box keeps about half the stroke all the way
+# round: a thin yellow frame on the figure. 1.6pt is the width this module
+# draws, a viewer that has written the annotation into the file draws about
+# the same, and half of that plus a little is what has to go.
+#
+# Small on purpose. It is trimming a border, not reframing a figure, and a
+# negative context is clamped below so a small box cannot be inset to nothing.
+CARD_INSET = 1.5
+
 # For a mark whose colour this project does not recognise. Drawn rather than
 # dropped: "something is marked here" is most of what a crop has to say.
 UNKNOWN_COLOUR = (0.55, 0.55, 0.55)
@@ -190,8 +202,9 @@ class CropRenderer:
     ) -> bytes:
         """PNG bytes for a 1-based page number and a top-left-origin bbox.
 
-        `context` widens the view by that many points on every side and
-        `outline` draws the unit's own box inside it. Together they make the
+        `context` widens the view by that many points on every side, or pulls
+        it in when it is negative, and `outline` draws the unit's own box
+        inside it. Together they make the
         two ways segmentation fails visible to whoever is looking: an equation
         split across units shows its missing lines just outside the box, and
         two equations merged into one show two numbers inside it. A bare crop
@@ -208,6 +221,12 @@ class CropRenderer:
             raise ValueError(f"unknown crop width {width!r}; expected one of {', '.join(WIDTHS)}")
         target = self._doc.load_page(page - 1)
         box = self._fitz.Rect(*bbox)
+        if context < 0:
+            # Pulling in, not widening. Never by more than a tenth of the
+            # shorter side: the caller is trimming a border it cannot see from
+            # where it stands, and on a box a few points across a fixed inset
+            # would leave nothing at all.
+            context = -min(-context, 0.1 * min(box.width, box.height))
         # Rect + tuple is PyMuPDF's expand operator, not concatenation.
         clip = (box + (-context, -context, context, context)) & target.rect  # noqa: RUF005
         if width == "page":

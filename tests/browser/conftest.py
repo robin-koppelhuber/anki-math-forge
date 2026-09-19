@@ -98,6 +98,12 @@ def lay_out(repo: Path) -> None:
     (repo / "forge.toml").write_text(CONFIG, encoding="utf-8")
     cards = repo / "cards" / "demo"
     cards.mkdir(parents=True, exist_ok=True)
+    # Replacing what the last test left means *all* of it. Rewriting only the
+    # cards this function knows about left any card a test had added standing,
+    # and the next test counted it: one test adding a card to try something
+    # became three failures somewhere else.
+    for stale in cards.glob("*.md"):
+        stale.unlink()
     (repo / "sources" / "demo").mkdir(parents=True, exist_ok=True)
     (repo / "sources" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
     (repo / "sources" / "demo" / "units.jsonl").unlink(missing_ok=True)

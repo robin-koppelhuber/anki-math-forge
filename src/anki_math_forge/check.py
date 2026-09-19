@@ -55,6 +55,37 @@ class Finding:
         }
 
 
+def _prose_only(text: str) -> str:
+    """The section with its maths taken out, for the one check that counts
+    lines.
+
+    `to_anki_html` turns a newline into a `<br>` **outside** maths only:
+    inside a span it collapses the whitespace, because a `<br>` in the middle
+    of a formula splits the text node and breaks the render. So a newline
+    inside `$$...$$` is not a hard break on the card, and neither is the one
+    that ends a display block.
+
+    That distinction is the whole point here. A proof is meant to be written
+    as steps, one display block per line (see the card-writing skill), and an
+    `aligned` environment is four lines of one formula. Counting raw lines
+    reported every one of those as wrapped prose -- a lint firing on exactly
+    the shape the guidance asks for, which teaches you to stop reading the
+    lint.
+
+    Display spans come out entirely, so a line that was one of them is left
+    empty and stops counting. Inline spans keep their place but lose their
+    newlines, since a wrapped `$x +\n y$` is not a wrapped sentence either.
+    """
+    out: list[str] = []
+    cursor = 0
+    for span in latex.math_spans(text):
+        out.append(text[cursor : span.start])
+        out.append("" if span.display else " ".join(span.tex.split()))
+        cursor = span.end
+    out.append(text[cursor:])
+    return "".join(out)
+
+
 def check_card(
     card: Card,
     config: Config,
@@ -83,6 +114,13 @@ def check_card(
                 f"{field_name}-unknown",
                 f"{field_name}: {value!r} is not one of {', '.join(vocabulary)}",
             )
+
+    # `augmented` is a receipt, so it is a yes or a no. A string here reads as
+    # true to Python and as a date or a name to a person, and the two would
+    # disagree about a card nobody looks at twice.
+    stamp = card.frontmatter.get("augmented")
+    if stamp is not None and not isinstance(stamp, bool):
+        add(ERROR, "augmented-not-a-flag", f"augmented: {stamp!r} is not true or false")
 
     # -- identity ---------------------------------------------------------
     if not card.uid:
@@ -178,14 +216,14 @@ def check_card(
     for section in card.sections:
         if section.name in ("notes", "verify"):
             continue
-        body = section.body.strip()
+        body = _prose_only(section.body.strip())
         if len(body.splitlines()) > 1 and all(line.strip() for line in body.splitlines()):
             add(
                 WARN,
                 "section-wrapped",
-                f"`## {section.name}` is wrapped across lines; each newline "
-                "becomes a <br> on the card. Write it as one line unless the "
-                "break is deliberate",
+                f"`## {section.name}`: prose is wrapped across lines, and "
+                "each newline outside maths becomes a <br> on the card. Write "
+                "the sentence as one line unless the break is deliberate",
             )
 
     uses = latex.rendered_length(card.section("uses") or "")
@@ -221,8 +259,47 @@ def check_card(
 
     if card.verify_enabled and not (card.section("verify") or "").strip():
         add(ERROR, "verify-missing", "`verify: true` but there is no `## verify` section")
+    elif card.verify_enabled and not _samples_anything(card):
+        # A warning, not an error: a closed form checked at one point is a
+        # legitimate thing to write. But an *identity* checked at one fixed
+        # point usually passes because both sides were typed from the same
+        # expression, and a check that cannot fail is worse than no check --
+        # it reports coverage the deck does not have.
+        add(
+            WARN,
+            "verify-fixed",
+            "`## verify` draws nothing random, so it checks one fixed case. "
+            f"Sample with {', '.join(sorted(VERIFY_DRAWS)[:3])} or `rng` unless the "
+            "claim really is about one point",
+        )
 
     return findings
+
+
+#: The helpers a `## verify` snippet draws inputs from. A snippet touching
+#: none of them evaluates one fixed case every trial, which is what
+#: `verify-fixed` is about.
+VERIFY_DRAWS = frozenset({"randn", "spd", "sym", "invertible", "orth", "rng"})
+
+
+def _samples_anything(card: Card) -> bool:
+    """Whether the snippet draws its inputs rather than writing them out.
+
+    By name over the parsed tree: `spd_cache = 1` is not a draw. A snippet
+    that does not parse is left alone, because `verify` reports the syntax
+    error and one complaint about it is enough.
+    """
+    import ast
+
+    from .verify import code_of
+
+    try:
+        tree = ast.parse(code_of(card))
+    except SyntaxError:
+        return True
+    return any(
+        isinstance(node, ast.Name) and node.id in VERIFY_DRAWS for node in ast.walk(tree)
+    )
 
 
 def check_requires(cards: list[Card]) -> list[Finding]:
@@ -334,6 +411,7 @@ def check_deck(
         findings.extend(check_card(card, config, checker=tex, for_sync=for_sync))
 
     findings.extend(check_requires(cards))
+    findings.extend(check_images(cards, config))
 
     by_uid: dict[str, list[Card]] = defaultdict(list)
     for card in cards:
@@ -365,6 +443,67 @@ def check_deck(
                 )
             )
 
+    return findings
+
+
+def check_images(cards: list[Card], config: Config) -> list[Finding]:
+    """Every picture a card asks for can actually be drawn.
+
+    A card names a unit and `sync` renders its crop from the source document
+    (invariant 3: geometry, never image files). That is three things which can
+    each be true today and false tomorrow -- the unit is in the ledger, it has
+    a bounding box, and the document is on this machine -- and all three fail
+    silently at the far end, as a broken image on a card somebody approved
+    weeks ago.
+
+    Deck-level rather than per card, because it reads ledgers: one per source,
+    loaded once, however many cards point into it.
+    """
+    from .ledger import Ledger
+
+    findings: list[Finding] = []
+    ledgers: dict[str, Ledger | None] = {}
+
+    def ledger_for(source: str) -> Ledger | None:
+        if source not in ledgers:
+            path = config.units_path(source)
+            ledgers[source] = Ledger.load(path) if path.exists() else None
+        return ledgers[source]
+
+    for card in cards:
+        def add(code: str, message: str, where: Card = card) -> None:
+            findings.append(Finding(ERROR, code, message, path=where.path, uid=where.uid))
+
+        for image in card.images():
+            if not image.unit:
+                add(
+                    "image-unresolved",
+                    f"`{image.raw}` names no unit and the card has none of its own; "
+                    "write `![...](unit:<id>)`",
+                )
+                continue
+            source = image.unit.split(":", 1)[0]
+            ledger = ledger_for(source)
+            unit = ledger.get(image.unit) if ledger else None
+            if unit is None:
+                add("image-unit-unknown", f"`{image.raw}`: no unit {image.unit!r}")
+                continue
+            if not unit.has_crop:
+                # A unit from a `.tex` source has no geometry at all, and one
+                # whose box was lost in a re-extraction has none any more.
+                add(
+                    "image-no-geometry",
+                    f"`{image.raw}`: unit {image.unit} has no page geometry, so "
+                    "there is nothing to render",
+                )
+                continue
+            document = config.document_for(source, unit.locator.document)
+            if document is None or not document.exists():
+                add(
+                    "image-document-missing",
+                    f"`{image.raw}`: the source document for {source!r} is not here "
+                    f"({document or 'unset'}); crops are rendered from it at sync",
+                )
     return findings
 
 

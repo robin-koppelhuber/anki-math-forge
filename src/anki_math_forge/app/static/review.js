@@ -63,7 +63,14 @@ function paintAnnotations(item, card) {
     list = document.createElement("ul");
     list.className = "annotations";
     const meta = item.querySelector(".meta");
-    meta.insertBefore(list, item.querySelector(".notes") || item.querySelector("figure.crop"));
+    /* The same order the template renders: what people wrote, then what the
+       linter made of it. A list inserted below the findings would put a note
+       you just wrote underneath a machine's reading of the card it is about. */
+    meta.insertBefore(
+      list,
+      item.querySelector(".notes, .checks-what, .findings, .checks-ok") ||
+        item.querySelector("figure.crop"),
+    );
   }
   list.textContent = "";
   card.annotations.forEach((note, index) => {
@@ -75,13 +82,19 @@ function paintAnnotations(item, card) {
     const what = document.createElement("span");
     what.className = "what";
     what.textContent = note.text;
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.className = "edit-note";
+    edit.dataset.editNote = String(index);
+    edit.title = "edit this note, keeping it open";
+    edit.textContent = "edit";
     const drop = document.createElement("button");
     drop.type = "button";
     drop.className = "resolve";
     drop.dataset.resolve = String(index);
     drop.title = "resolve: deletes the line, which is the only thing that unblocks sync. Undo puts it back";
     drop.textContent = "resolve";
-    row.append(who, what, drop);
+    row.append(who, what, edit, drop);
     list.appendChild(row);
   });
 }
@@ -251,6 +264,25 @@ async function cycleCardWeb(item) {
   );
 }
 
+/* Two states, and no inherit: a card has had the pass or it has not. */
+async function toggleAugmented(item) {
+  const button = item.querySelector("[data-card-augmented]");
+  const result = await post(`/api/cards/${item.dataset.uid}/augmented`, {
+    augmented: !button.classList.contains("on"),
+    mtime: item.dataset.mtime,
+  });
+  /* The rail counts this one. "not augmented" is the row you work the augment
+     queue through, so a chip that moves a card without moving the tally leaves
+     the number wrong in exactly the view you clicked it from. */
+  repaintCounts(result.pipeline);
+  refresh(item, result.card);
+  toast(
+    result.card.augmented
+      ? "marked augmented"
+      : "withdrawn: `/augment` will pick this card up again",
+  );
+}
+
 function paintGrades(item, card) {
   [["frequency", card.frequency], ["derivation", card.derivation]].forEach(([key, value]) => {
     const button = item.querySelector(`[data-grade="${key}"]`);
@@ -258,6 +290,11 @@ function paintGrades(item, card) {
     button.textContent = value || `no ${key}`;
     button.classList.toggle("missing", !value);
   });
+  const done = item.querySelector("[data-card-augmented]");
+  if (done) {
+    done.textContent = card.augmented ? "augmented" : "not augmented";
+    done.classList.toggle("on", Boolean(card.augmented));
+  }
   const web = item.querySelector("[data-card-web]");
   if (!web) return;
   web.textContent = card.web ? "web: allowed" : "web: no";
@@ -275,6 +312,8 @@ document.addEventListener("click", (event) => {
   }
   const web = event.target.closest("[data-card-web]");
   if (web) oneAtATime(() => cycleCardWeb(web.closest(".item"))).catch(() => {});
+  const done = event.target.closest("[data-card-augmented]");
+  if (done) oneAtATime(() => toggleAugmented(done.closest(".item"))).catch(() => {});
 });
 
 async function openEditor() {
@@ -340,7 +379,43 @@ async function resolveAnnotation(index) {
   toast(`resolved. The line is gone from ## notes · ${undoKeyName()} undoes`);
 }
 
+/* Rewording one, which is the other half of resolving one.
+
+   The line keeps its place and stays open: this is for a typo, or for a
+   request that came back misunderstood and wants saying again. It is not on
+   the undo stack, because `restore` puts a note *back* and putting back what
+   this replaced would leave the card carrying both. Undoing a wording is
+   editing it again. */
+async function editAnnotation(index) {
+  const item = currentOf(deck);
+  if (!item) return;
+  const button = item.querySelector(`[data-edit-note="${index}"]`);
+  const row = button && button.closest(".annotation");
+  if (!row) return;
+  const who = row.querySelector(".who");
+  const what = row.querySelector(".what");
+  /* The whole line, prefix and all. The audience is part of what you are
+     editing: dropping the `@me` off the front sends the note to Claude,
+     exactly as it would in the file. */
+  const current = `${who ? who.textContent : "@claude"} ${what ? what.textContent : ""}`.trim();
+  const text = await ask("edit this note", current);
+  if (!text || text === current) return;
+  const result = await post(`/api/cards/${item.dataset.uid}/edit-annotation`, {
+    mtime: item.dataset.mtime,
+    index,
+    text,
+  });
+  repaintCounts(result.pipeline);
+  refresh(item, result.card);
+  toast("note reworded. Still open, so the card is still held out of sync");
+}
+
 document.addEventListener("click", (event) => {
+  const edit = event.target.closest("[data-edit-note]");
+  if (edit) {
+    editAnnotation(Number(edit.dataset.editNote)).catch(() => {});
+    return;
+  }
   const button = event.target.closest("[data-resolve]");
   if (!button) return;
   resolveAnnotation(Number(button.dataset.resolve)).catch(() => {});

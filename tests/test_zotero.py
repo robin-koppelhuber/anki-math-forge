@@ -8,6 +8,7 @@ here rather than in a card six weeks later.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from anki_math_forge.config import ZoteroConfig
@@ -413,6 +414,57 @@ def test_the_stub_carries_your_tags_and_invents_none(tmp_path: Path) -> None:
     text = path.read_text(encoding="utf-8")
     assert '"anki"' in text and '"Statistics - Machine Learning"' in text
     assert "documents = []" in text
+
+
+def test_the_stub_carries_the_scheme_it_inherits(tmp_path: Path) -> None:
+    """An override replaces rather than merges, so what you need in front of
+    you before changing one is the value you are replacing."""
+    path = tmp_path / "book" / "source.toml"
+    scheme = zcfg(
+        "highlight/green",
+        "note/yellow",
+        meanings={"highlight/green": "a claim", "note/yellow": "a thought"},
+    )
+    write_source_stub(path, Item(key="X", title="A Book"), scheme=scheme)
+
+    text = path.read_text(encoding="utf-8")
+    assert '# units_from = ["highlight/green", "note/yellow"]' in text
+    assert '# "highlight/green" = "a claim"' in text
+    assert "# [meanings]" in text
+
+
+def test_the_stub_is_valid_toml_once_uncommented(tmp_path: Path) -> None:
+    """The old stub documented `green = "..."`, which the loader refuses: the
+    one example in front of a reader was a `ConfigError` waiting to happen."""
+    import tomllib
+
+    path = tmp_path / "book" / "source.toml"
+    scheme = zcfg("highlight/green", meanings={"highlight/green": "a claim"})
+    write_source_stub(path, Item(key="X", title="A Book"), scheme=scheme)
+
+    # Only the settings, not the prose around them: one of those sentences
+    # quotes `units_from = "declared"` and would uncomment into nonsense.
+    setting = re.compile(r'^# (\[meanings\]|units_from = |"[a-z]+/[a-z]+" = )')
+    live = [
+        line[2:]
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if setting.match(line)
+    ]
+    parsed = tomllib.loads("\n".join(live))
+
+    assert parsed["units_from"] == ["highlight/green"]
+    assert parsed["meanings"] == {"highlight/green": "a claim"}
+
+
+def test_the_meanings_table_is_last(tmp_path: Path) -> None:
+    """A bare key written after a table header lands inside the table."""
+    path = tmp_path / "book" / "source.toml"
+    write_source_stub(path, Item(key="X", title="A Book"), scheme=zcfg("note/yellow"))
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    header = next(i for i, line in enumerate(lines) if line == "# [meanings]")
+    after = [ln for ln in lines[header + 1 :] if "units_from" in ln or "documents" in ln]
+    assert after == [], "a key after the table header would land inside it"
 
 
 def test_the_stub_has_no_tags_when_the_item_has_none(tmp_path: Path) -> None:

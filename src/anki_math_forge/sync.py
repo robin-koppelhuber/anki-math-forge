@@ -103,17 +103,104 @@ def tags_for(card: Card, config: Config) -> list[str]:
     return sorted(_TAG_SAFE.sub("_", t).strip("_") for t in tags if t.strip())
 
 
+def media_name(card: Card, image: model.ImageRef) -> str:
+    """What Anki stores this picture as.
+
+    The card and the slot, and nothing about the unit: a card that swaps which
+    unit it shows should overwrite its own picture rather than leave the old
+    one behind under a name no note references. Prefixed, because Anki's media
+    folder is one flat namespace shared with everything else in the
+    collection.
+    """
+    return f"forge-{card.uid}-{image.index}.png"
+
+
+def _with_images(body: str, card: Card, section: str) -> str:
+    """Swap this section's `![...](unit:...)` for the `<img>` Anki shows.
+
+    After the escaping rather than before it: `to_anki_html` escapes
+    everything outside maths, which would turn a tag written first into
+    visible angle brackets. A reference survives that escaping unchanged
+    except for its alt text, so the same escaping is applied to what we look
+    for.
+    """
+    for image in card.images():
+        if image.section != section:
+            continue
+        tag = (
+            f'<img src="{media_name(card, image)}"'
+            f' alt="{html.escape(image.alt, quote=True)}">'
+        )
+        body = body.replace(html.escape(image.raw, quote=False), tag)
+    return body
+
+
 def fields_for(card: Card, config: Config) -> dict[str, str]:
+    def rendered(name: str) -> str:
+        return _with_images(to_anki_html(card.section(name) or ""), card, name)
+
     fields = {
         "uid": card.uid,
-        "Front": to_anki_html(card.section("front") or ""),
-        "Back": to_anki_html(card.section("back") or ""),
+        "Front": rendered("front"),
+        "Back": rendered("back"),
         "Source": html.escape(card.source, quote=False),
     }
     for name, section in OPTIONAL_FIELD_SECTIONS.items():
-        fields[name] = to_anki_html(card.section(section) or "")
+        fields[name] = rendered(section)
     # `## notes` and `## verify` never reach any field (§9).
     return fields
+
+
+def upload_images(client: AnkiConnect, config: Config, card: Card) -> list[str]:
+    """Render every picture this card asks for and put it in Anki's media.
+
+    Before the note is written, so a field naming a file that is not there
+    cannot be left behind by a failure halfway. `check` has already said the
+    unit, its geometry and the document are all present -- this is where they
+    are actually used, so a renderer that is not installed still surfaces
+    here, as a refusal rather than a broken card.
+    """
+    from base64 import b64encode
+
+    from .extract import render as render_mod
+    from .ledger import Ledger
+
+    stored: list[str] = []
+    ledgers: dict[str, Ledger | None] = {}
+    for image in card.images():
+        source = image.unit.split(":", 1)[0]
+        if source not in ledgers:
+            path = config.units_path(source)
+            ledgers[source] = Ledger.load(path) if path.exists() else None
+        ledger = ledgers[source]
+        unit = ledger.get(image.unit) if ledger else None
+        geometry = unit.crop_geometry() if unit else None
+        document = config.document_for(source, unit.locator.document) if unit else None
+        if unit is None or geometry is None or document is None or not document.exists():
+            raise AnkiError(f"cannot render {image.raw}: see `forge check`")
+        try:
+            png = render_mod.render_crop(
+                document,
+                *geometry,
+                # No outline and no marks painted back on. Those are
+                # triage's: they say "here is what you marked, is the box
+                # right". On a card the picture *is* the content, and a
+                # rectangle round it is an artefact of the tool rather than
+                # something the source printed.
+                #
+                # Pulled in by a hair on top of that, for the copy of that
+                # rectangle that lives in the PDF itself when a reader has
+                # their annotations written back to the file. Nothing here can
+                # switch that one off.
+                context=-render_mod.CARD_INSET,
+                width=config.crop_width_for(source, from_a_mark=unit.crops_to_page),
+            )
+        except (render_mod.PdfUnavailable, ValueError) as exc:
+            raise AnkiError(f"cannot render {image.raw}: {exc}") from exc
+        name = media_name(card, image)
+        client.store_media_file(name, b64encode(png).decode("ascii"))
+        stored.append(name)
+    return stored
 
 
 # -- planning and execution ------------------------------------------------
@@ -122,12 +209,19 @@ def fields_for(card: Card, config: Config) -> dict[str, str]:
 @dataclass
 class CardOutcome:
     uid: str
-    action: str  # setup | add | update | unchanged | skip | error
+    action: str  # setup | add | update | unchanged | move | skip | error
     detail: str = ""
+    # The few words naming the card. A uid answers "which file"; a report you
+    # read to decide whether something went wrong is asking "which card", and
+    # a column of six hex digits answers that only if you go and look each one
+    # up. Empty for a card with no gist and for the deck-level lines, which
+    # are about no card at all.
+    gist: str = ""
 
     def format(self) -> str:
         suffix = f" -- {self.detail}" if self.detail else ""
-        return f"{self.action:9} {self.uid}{suffix}"
+        named = f"{self.uid}  {self.gist}" if self.gist else self.uid
+        return f"{self.action:9} {named}{suffix}"
 
 
 @dataclass
@@ -144,7 +238,12 @@ class SyncReport:
         return not check.errors(self.findings) and self.count("error") == 0
 
     def summary(self) -> str:
-        actions = ("add", "update", "unchanged", "skip", "error")
+        # `move` only when something moved: a deck change is rare, and a line
+        # reading "0 move" on every sync is a number nobody reads, which is
+        # how the one that is not zero gets missed.
+        actions = ["add", "update", "unchanged", "skip", "error"]
+        if self.count("move"):
+            actions.insert(3, "move")
         parts = [f"{self.count(a)} {a}" for a in actions]
         prefix = "would sync: " if self.dry_run else "synced: "
         return prefix + ", ".join(parts)
@@ -157,7 +256,9 @@ def syncable(cards: list[Card]) -> tuple[list[Card], list[CardOutcome]]:
     for card in cards:
         if card.annotations():
             # §8: refused regardless of status. "Not ready" is mechanical.
-            skipped.append(CardOutcome(card.uid, "skip", "open @claude annotation"))
+            skipped.append(
+                CardOutcome(card.uid, "skip", "open @claude annotation", gist=card.gist)
+            )
         elif card.effective_status != "approved":
             # Say *why* a card that claims to be approved is not going: an
             # edit since approval is a different situation from a draft.
@@ -166,7 +267,7 @@ def syncable(cards: list[Card]) -> tuple[list[Card], list[CardOutcome]]:
                 if card.status == "approved"
                 else f"status is {card.status}"
             )
-            skipped.append(CardOutcome(card.uid, "skip", detail))
+            skipped.append(CardOutcome(card.uid, "skip", detail, gist=card.gist))
         else:
             ready.append(card)
     return ready, skipped
@@ -591,8 +692,14 @@ def run(
     dry_run: bool = False,
     reposition_new: bool = False,
     templates: bool = False,
+    move_decks: bool = False,
 ) -> SyncReport:
-    """Lint, then upsert every approved card."""
+    """Lint, then upsert every approved card.
+
+    `move_decks` also files cards that predate a `deck` change under the name
+    the config now gives them. Off by default: everything else here adds to a
+    collection, and this moves something that may have been filed by hand.
+    """
     client = client or AnkiConnect(config.anki_url)
     report = SyncReport(dry_run=dry_run)
 
@@ -628,6 +735,32 @@ def run(
                 report.outcomes.append(CardOutcome(card.uid, "error", str(exc)))
 
     if ready:
+        # After the upserts, so a card added by this run is already where it
+        # belongs and only the ones that predate the setting are named.
+        named = {c.uid: c.gist for c in ready}
+        for moved in deck_drift(client, config, ready):
+            if move_decks and not dry_run:
+                client.change_deck(moved.cards, moved.wanted)
+                report.outcomes.append(
+                    CardOutcome(
+                        moved.uid,
+                        "move",
+                        f"{moved.now} -> {moved.wanted}",
+                        gist=named.get(moved.uid, ""),
+                    )
+                )
+            else:
+                report.outcomes.append(
+                    CardOutcome(
+                        moved.uid,
+                        "skip",
+                        f"filed under \"{moved.now}\" but this source now asks for "
+                        f"\"{moved.wanted}\"; `sync --move-decks` moves it",
+                        gist=named.get(moved.uid, ""),
+                    )
+                )
+
+    if ready:
         try:
             drift = template_drift(client, config)
             if drift and templates:
@@ -660,19 +793,71 @@ def run(
     return report
 
 
+@dataclass
+class DeckDrift:
+    """Cards sitting in a deck their source no longer asks for."""
+
+    uid: str
+    now: str
+    wanted: str
+    cards: list[int]
+
+
+def deck_drift(client: AnkiConnect, config: Config, cards: list[Card]) -> list[DeckDrift]:
+    """Approved cards whose notes are filed somewhere the config disagrees with.
+
+    Anki settles a card's deck when the note is added, so editing `deck`
+    afterwards changes where the *next* card goes and nothing else. Without
+    this the only symptom is one source spread over two decks, noticed weeks
+    later.
+
+    Two calls for the whole deck rather than two per card: every card of this
+    note type, then their decks in one batch.
+    """
+    wanted = {c.uid: config.deck_for(c.source_name, c.type) for c in cards}
+    if not wanted:
+        return []
+    found = client.cards_info(client.find_cards(f'"note:{config.note_type}"'))
+    where: dict[str, tuple[str, list[int]]] = {}
+    for info in found:
+        uid = str((info.get("fields", {}).get("uid") or {}).get("value", ""))
+        deck = str(info.get("deckName", ""))
+        card_id = int(info.get("cardId", 0))
+        if not uid or uid not in wanted:
+            continue
+        # A note can have several cards, and they can sit in different decks.
+        # The first deck seen names the drift; every card of the note moves.
+        here, ids = where.get(uid, (deck, []))
+        where[uid] = (here, [*ids, card_id])
+    return [
+        DeckDrift(uid, now, wanted[uid], ids)
+        for uid, (now, ids) in sorted(where.items())
+        if now != wanted[uid]
+    ]
+
+
 def _upsert(client: AnkiConnect, config: Config, card: Card, *, dry_run: bool) -> CardOutcome:
     fields = fields_for(card, config)
+    # Before the note, and not on a rehearsal: a dry run must not write to the
+    # media folder any more than it writes a note.
+    if card.images() and not dry_run:
+        upload_images(client, config, card)
     tags = tags_for(card, config)
     note_ids = client.find_notes(f'"note:{config.note_type}" "uid:{card.uid}"')
 
     if len(note_ids) > 1:
-        return CardOutcome(card.uid, "error", f"{len(note_ids)} notes already carry this uid")
+        return CardOutcome(
+            card.uid,
+            "error",
+            f"{len(note_ids)} notes already carry this uid",
+            gist=card.gist,
+        )
 
     if not note_ids:
         deck = config.deck_for(card.source_name, card.type)
         if not dry_run:
             client.add_note(deck, config.note_type, fields, tags)
-        return CardOutcome(card.uid, "add", f"-> {deck}")
+        return CardOutcome(card.uid, "add", f"-> {deck}", gist=card.gist)
 
     note_id = note_ids[0]
     info = client.notes_info([note_id])
@@ -681,7 +866,7 @@ def _upsert(client: AnkiConnect, config: Config, card: Card, *, dry_run: bool) -
     tag_changes = sorted(set(tags) - current_tags), sorted(current_tags - set(tags))
 
     if not field_changes and not any(tag_changes):
-        return CardOutcome(card.uid, "unchanged")
+        return CardOutcome(card.uid, "unchanged", gist=card.gist)
 
     if not dry_run:
         if field_changes:
@@ -696,7 +881,7 @@ def _upsert(client: AnkiConnect, config: Config, card: Card, *, dry_run: bool) -
         *(f"+{t}" for t in tag_changes[0]),
         *(f"-{t}" for t in tag_changes[1]),
     ]
-    return CardOutcome(card.uid, "update", ", ".join(changed))
+    return CardOutcome(card.uid, "update", ", ".join(changed), gist=card.gist)
 
 
 def _note_state(info: list[dict[str, Any]]) -> tuple[dict[str, str], set[str]]:

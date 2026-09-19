@@ -335,6 +335,58 @@ the defining equation is sitting next to the word, the word is glossed:
 `$\text{Tr}(\mathbf{X}^T\mathbf{X}) = \|\mathbf{X}\|_F^2$` defines the
 Frobenius norm on the spot, and repeating it in words is padding.
 
+### Vague is not plain
+
+The rule above bans a name that stands in for the meaning. This is the other
+direction: a paraphrase that stands in for a name the source has already
+earned.
+
+*"the random variable falls off fast"* is not the plain version of *"the
+random variable is sub-Gaussian"*. It is a weaker claim and a different one.
+Sub-Gaussian is an inequality you can check and use; "falls off fast" is a
+feeling about a plot. A card that teaches the feeling has taught something you
+cannot cite, cannot look up, and will not recognise when the next paper says
+the word.
+
+So, wherever the source has named the thing:
+
+**Use the most specific name the source licenses, and then define it the way
+the rule above says.** Both halves. The name is what the literature says and
+what you will meet again; the plain version is what makes the card answerable
+by somebody holding only this card.
+
+| Vague | Named |
+| --- | --- |
+| `$X$ falls off fast` | `$X$ is sub-Gaussian: $\mathbb{E}\,e^{\lambda(X-\mu)} \le e^{\lambda^2\sigma^2/2}$` |
+| `the error shrinks quickly` | `the error is $O(1/n)$` |
+| `for large $n$` | `for $n \ge 2d$` |
+
+The third is rule 3 under **Language** wearing a different hat: an unwitnessed
+"large" and an unwitnessed "often" fail for the same reason, which is that the
+reader cannot check either one.
+
+**Most specific, not most impressive.** "Light tail" is itself vague: lighter
+than exponential, sub-exponential and sub-Gaussian are all light to somebody.
+If the source proves a sub-Gaussian bound, the card says sub-Gaussian. If the
+source only says the tail decays and never says which class, the card says
+what the source says, and the imprecision is the source's rather than yours.
+
+**Some words name no property at all.** "Well-behaved", "nice", "reasonable":
+there is no more specific version of these because there is nothing there.
+Say which property the result actually needs, or cut the word.
+
+**Inside the source's scope, and that bound is structural.** A card must not
+name a term the source never introduces. The deck orders itself by `requires`,
+so a term no card here defines is a forward reference to nothing, and a reader
+meeting it has been tested on material this deck never taught. When the right
+word is outside the source, either it is a card of its own first, or the claim
+stays in the source's language and `## notes` records that a sharper name
+exists elsewhere.
+
+**An `intuition` card still has to explain.** Naming the class is the anchor,
+not the answer: a back that says "because it is sub-Gaussian" has answered
+"what is this called". Say what the property buys, and name it while you do.
+
 ### How far down to go
 
 The test: **would omitting it make the card false, or make a plausible reader
@@ -372,8 +424,98 @@ A proof section earns its place when the derivation is **short and load-bearing*
 memorised. Jacobi's formula for the log-det identity is worth it; "expand and
 collect terms" is not.
 
+**Write the steps, not a description of the steps.** Where the source prints a
+derivation, or a short standard one exists, give it as display maths line by
+line, one step per line, each following from the one above. Prose compressing
+three lines of algebra into a sentence is the failure to avoid: "expand,
+collect and use the cyclic property" is a sentence you can only follow if you
+could already do the derivation, which is the opposite of what a proof section
+is for.
+
+```markdown
+## proof
+$$\operatorname{tr}(ABC) = \operatorname{tr}(BCA)$$
+$$= \operatorname{tr}(CAB)$$
+```
+
+### Line up the relation symbol, where there is room for it
+
+Two or more display lines that all hang off the same relation are easier to
+read aligned on it than stacked: the eye finds the step by looking at what
+changed, which is the right-hand side, and an aligned block puts all of those
+in one column.
+
+```markdown
+$$\begin{aligned}
+\operatorname{tr}(ABC) &= \operatorname{tr}(BCA) \\
+                       &= \operatorname{tr}(CAB)
+\end{aligned}$$
+```
+
+**It is a judgement call every time, and the thing to judge is the width the
+right-hand side is left with.** An aligned block reserves as much width as the
+widest left-hand side, for every row. Where one side is a long expression and
+the other has real content, that column tax is paid by the part you are
+actually reading, and on a phone it is paid by wrapping or by shrinking the
+whole block. In that case keep the steps as separate display blocks and let
+each use the full width.
+
+The same goes for aligning things that are not the same relation. Lining up an
+`=` under a `\le` because both are relations produces a table, and a table of
+unrelated lines is harder to read than the lines were.
+
+Both shapes are one section either way: a newline inside `$$...$$`, and the
+newline that ends a display block, are not hard breaks on the card. `check`
+only counts the ones that fall in prose.
+
+Prose belongs around the steps, not instead of them: one clause naming the
+move, where the move is not evident from the line, and the line itself
+underneath. Where the source's own derivation is longer than a card can hold,
+prefer the two or three steps that carry the result over a summary of all of
+them; a partial derivation you can follow beats a complete one you cannot.
+
 Leave it out for definitional facts and for anything whose proof is a page.
 A wrong or hand-wavy proof is worse than no proof.
+
+## Pictures
+
+A card can show a figure, a diagram or a table:
+
+```markdown
+![the graphical model, with the plate](unit:krause...:FI39W9FM)
+![the figure](unit)
+```
+
+The bare form means the unit the card was written from, which is the usual
+case. There is no image file anywhere: the reference names a unit, and the
+crop is rendered from the source document and uploaded when `sync` runs. So
+the unit has to be one with geometry -- an image or area annotation, or any
+mark on a PDF -- and `check` refuses the card if the picture cannot be drawn.
+
+**Which section it goes in is yours to decide, and it is the whole decision.**
+The same figure is three different cards depending on where you put it:
+
+- `## front` asks you to read it. "What does this diagram say about $X_1$ and
+  $X_n$?" The answer is in `## back`, in words.
+- `## back` makes it the answer. The front asks a question the picture
+  settles: "what does a directed graphical model of conditionally independent
+  $X_i$ look like?"
+- `## prose` supports an explanation that stands without it. The card is
+  already complete; the picture is there because seeing it once is worth a
+  paragraph.
+
+A figure on both sides is a card that answers itself. If the front and the
+back want the same picture, the card is a `## front` one and the question
+needs sharpening.
+
+**A picture is not an excuse for a vague front.** "Explain this figure" is the
+same failure as "everything about determinants": it admits many answers and
+grades none of them. Ask for the one thing the figure is on the card to
+teach.
+
+**Caption it for the reader who cannot see it.** The alt text becomes the
+card's `alt` attribute, and it is also what you will read in a diff six
+months from now: "the graphical model, with the plate" and not "figure".
 
 ## Uses
 
@@ -530,9 +672,27 @@ thread from.
 ## Verify
 
 Set `verify: true` and write a `## verify` snippet for identities where a
-stray transpose or sign would survive proofreading — Woodbury, block inverses,
-matrix-differential results with several transposes. Not for the easy ones;
-the point is coverage where the eye fails.
+stray transpose, index or sign would survive proofreading — Woodbury, block
+inverses, a density with several parameters, anything with a sum whose limits
+you had to think about. Not for the easy ones; the point is coverage where the
+eye fails.
+
+**The bar is high, and it is not about how important the card is.** Ask
+whether a plausible typo in this card would still pass the check you are about
+to write. If it would, the check is decoration: it reports coverage the deck
+does not have, and the next person reads a green `verify` badge as evidence.
+Three ways that happens:
+
+- **Both sides from one expression.** If `rhs` is `lhs` rearranged the way you
+  would rearrange it on paper, the snippet tests your algebra twice and the
+  card not at all. Write `rhs` from the card's *back*, independently.
+- **One fixed case.** A snippet that draws nothing random checks a single
+  point, usually a convenient one. `check` warns about this (`verify-fixed`).
+  Sample instead, and sample the shape that makes the claim falsifiable: a
+  rectangular matrix where the transpose matters, a non-symmetric one where
+  the symmetry does.
+- **Nothing to get wrong.** A definitional fact has no numerical content to
+  check. Leave `verify: false` and say so by omission.
 
 ``python
 X = invertible(4)

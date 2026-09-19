@@ -96,6 +96,16 @@ class AnkiConnect:
             },
         )
 
+    def store_media_file(self, filename: str, data: str) -> str:
+        """Write `data` (base64) into Anki's media folder as `filename`.
+
+        Replaces a file of that name, which is the point: every picture this
+        tool uploads is named after the card and the slot it fills, so a
+        re-sync overwrites rather than accumulating a second copy under a
+        name nothing will ever reference again.
+        """
+        return str(self.invoke("storeMediaFile", filename=filename, data=data))
+
     def update_note_fields(self, note_id: int, fields: dict[str, str]) -> None:
         self.invoke("updateNoteFields", note={"id": note_id, "fields": fields})
 
@@ -142,6 +152,16 @@ class AnkiConnect:
             newValues=[flag],
             warning_check=True,
         )
+
+    def change_deck(self, card_ids: list[int], deck: str) -> None:
+        """Move cards into `deck`, creating it if it is not there.
+
+        The only write this tool makes to a card rather than to a note, and
+        the only one that moves something you may have filed by hand, which is
+        why nothing calls it without being asked.
+        """
+        if card_ids:
+            self.invoke("changeDeck", cards=card_ids, deck=deck)
 
     def find_cards(self, query: str) -> list[int]:
         return list(self.invoke("findCards", query=query))

@@ -46,12 +46,21 @@ become a card by inheritance.
 
 Enforced by `content_hash`, which covers the card's content and nothing else.
 Outside it: `status`, `content_hash`, `## notes`, `## verify`, `verify`,
-`requires`, `frequency`, `derivation`, `web`, `gist`.
+`requires`, `frequency`, `derivation`, `web`, `gist`, `augmented`.
 
-The last five are not claims the card makes. Three decide when you meet it, one
+The last six are not claims the card makes. Three decide when you meet it, one
 is a permission granted to whoever writes it, one is the caption it appears
 under in a list, and approving a card is not approving its position in the
 queue.
+
+`augmented` is the odd one, and the reason it is stored at all. Every other
+state of a card is read off the card: a stub has no optional sections, an
+unjudged one has no gradings, a held approval has a digest that no longer
+matches. Augmentation cannot be, because its usual right answer is to add
+nothing -- most cards should come out of it with no conditions and no proof --
+so a card the pass finished and a card it never opened are the same file. It
+records that the work happened, which is why hashing it would mean the pass
+un-approving every card it decided to leave alone.
 
 Nothing rewrites a file to enforce this. An approval that no longer holds is
 reported by `Card.demotion` and counts as a draft everywhere it matters, so
@@ -120,8 +129,8 @@ the wording costs no re-review, and it never reaches Anki.
 
 **The card stage** is where content is settled. `/extract-cards` and `/augment`
 pull whatever context the unit was granted (the page it was printed on, the
-pages either side, the source's conventions, web lookups where those were
-granted) and iterate until `check` passes and a human can approve.
+pages either side or the whole chapter, the source's conventions, web lookups
+where those were granted) and iterate until `check` passes and a human can approve.
 
 Depth belongs here. At triage it buys nothing and costs the throughput the
 stage exists for.
@@ -295,7 +304,11 @@ Discovery does not guess.
 
 `forge.toml` keeps what is genuinely repo-wide: `[cards] language`, the note
 type, `[anki] deck` as a fallback, `[cards] web` as the floor under every
-source's permission, `[zotero]` defaults. A `[sources.<name>]` block there still
+source's permission, `[zotero]` defaults. A source imported from Zotero falls
+back to `Zotero::<title>` rather than to `[anki] deck`: a shelf you are
+reading through is not the deck you have decided to keep, and one parent is
+what makes an import studiable or removable in one move. Naming a `deck` in
+the source overrides it. A `[sources.<name>]` block there still
 works for a repo that has not moved yet. Conventions are the one thing it does
 not keep.
 
@@ -311,3 +324,8 @@ not keep.
   compute rather than checking against the wrong one. The two agree on every
   square matrix, so a mismatch would pass review and first bite on a
   rectangular one.
+
+  **That gate applies to a card that takes a derivative, and to no other.** A
+  snippet that never calls `grad` has no layout to get wrong, and demanding a
+  declared convention of every card read every source as though it were a book
+  of matrix calculus.

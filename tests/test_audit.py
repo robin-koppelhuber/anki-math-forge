@@ -7,7 +7,7 @@ from pathlib import Path
 
 from anki_math_forge import audit, extract
 from anki_math_forge.config import Config
-from anki_math_forge.ledger import Ledger, Locator, Unit
+from anki_math_forge.ledger import Ledger, Locator, Mark, Unit
 
 
 def ledger_of(tmp_path: Path, units: list[Unit]) -> Ledger:
@@ -258,3 +258,64 @@ def test_a_deliberate_refusal_is_not_a_gap(tmp_path: Path) -> None:
     codes = {f.code: f.message for f in audit.audit(led, "s").findings}
     assert "1 untriaged units" in codes["transcription-missing"]
     assert "1 units were read" in codes["transcription-declined"]
+
+
+# -- the colour scheme moved under the ledger -------------------------------
+
+
+def anchored(unit_id: str, colour: str, near: list[Mark] | None = None) -> Unit:
+    key = unit_id.split(":")[-1]
+    return Unit(
+        id=unit_id,
+        locator=Locator(section="s", page=1, bbox=[0.0, 0.0, 1.0, 1.0]),
+        marks=[Mark(key=key, kind="highlight", colour=colour), *(near or [])],
+    )
+
+
+def test_a_unit_whose_colour_stopped_making_one_is_reported(tmp_path: Path) -> None:
+    led = ledger_of(tmp_path, [anchored("s:a", "blue")])
+
+    report = audit.audit(led, "s", lambda kind, colour: colour == "green")
+
+    said = [f for f in report.findings if f.code == "scheme-orphan"]
+    assert len(said) == 1 and "highlight/blue" in said[0].message
+
+
+def test_a_neighbour_that_would_now_be_a_unit_is_reported(tmp_path: Path) -> None:
+    """The ledger already records what was marked nearby, so widening
+    `units_from` is visible without asking Zotero anything."""
+    near = [Mark(key="b", kind="highlight", colour="blue")]
+    led = ledger_of(tmp_path, [anchored("s:a", "green", near)])
+
+    report = audit.audit(led, "s", lambda kind, colour: True)
+
+    said = [f for f in report.findings if f.code == "scheme-unimported"]
+    assert len(said) == 1 and "1 mark(s) of highlight/blue" in said[0].message
+
+
+def test_one_neighbour_near_two_units_is_one_missing_unit(tmp_path: Path) -> None:
+    """A mark rides along on every unit within a few pages of it, so counting
+    appearances would report the same mark twice."""
+    near = [Mark(key="b", kind="highlight", colour="blue")]
+    led = ledger_of(tmp_path, [anchored("s:a", "green", near), anchored("s:c", "green", near)])
+
+    report = audit.audit(led, "s", lambda kind, colour: True)
+
+    said = next(f for f in report.findings if f.code == "scheme-unimported")
+    assert "1 mark(s)" in said.message
+
+
+def test_a_scheme_that_still_matches_says_nothing(tmp_path: Path) -> None:
+    led = ledger_of(tmp_path, [anchored("s:a", "green")])
+
+    report = audit.audit(led, "s", lambda kind, colour: colour == "green")
+
+    assert [f for f in report.findings if f.code.startswith("scheme-")] == []
+
+
+def test_without_a_scheme_nothing_is_checked(tmp_path: Path) -> None:
+    """Most callers are asking about a segmented book, where no colour scheme
+    applies at all."""
+    led = ledger_of(tmp_path, [anchored("s:a", "blue")])
+
+    assert [f for f in audit.audit(led, "s").findings if f.code.startswith("scheme-")] == []

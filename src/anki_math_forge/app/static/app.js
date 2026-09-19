@@ -373,6 +373,29 @@ try {
   if (button) button.addEventListener("click", toggleFilters);
 });
 
+/* The commands panel, open or shut, remembered. Every view here is rendered
+   by the server, so a panel folded on one click came back open on the next --
+   which is the same tax as the rail itself, and it is pinned to the bottom of
+   the rail taking a third of it. */
+const COMMANDS_KEY = "anki-forge.commands";
+
+(function rememberCommands() {
+  const panel = document.getElementById("rail-actions");
+  if (!panel) return;
+  try {
+    if (localStorage.getItem(COMMANDS_KEY) === "closed") panel.open = false;
+  } catch {
+    /* private window, or storage disabled: it opens, which is the default */
+  }
+  panel.addEventListener("toggle", () => {
+    try {
+      localStorage.setItem(COMMANDS_KEY, panel.open ? "open" : "closed");
+    } catch {
+      /* the fold still works for this page */
+    }
+  });
+})();
+
 /* The guide cycles through three sizes rather than toggling two, because
    the question it answers changes: mid-session you want the counts, and only
    occasionally the whole explanation. Remembered, since which size suits you
@@ -469,6 +492,20 @@ const SPLITS = {
     right: "--split-beside-bottom",
     fallback: 220,
     axis: "y",
+  },
+  /* The filter rail's, between the list and the commands pinned under it.
+     `from: "bottom"` because the sized pane is the lower one here: the list
+     takes the slack, so what a drag decides is how much room the panel gets,
+     measured up from the bottom of the rail. The guide is the other way
+     round, and the rails themselves already read left-to-right or
+     right-to-left for the same reason. */
+  commands: {
+    key: "anki-forge.split.commands",
+    left: "--split-commands",
+    right: "--split-commands-top",
+    fallback: 220,
+    axis: "y",
+    from: "bottom",
   },
 };
 
@@ -627,9 +664,14 @@ function applyRail(name, px) {
     // A vertical split reads the same way down the other axis. One helper for
     // both, because two hand-rolled drag loops is how they end up behaving
     // differently -- and only the axis actually differs.
-    if ((SPLITS[drag.name] || {}).axis === "y") {
-      // The pointer's offset into the box *is* the height of the top pane.
-      applySplit(drag.name, event.clientY - box.top);
+    const split = SPLITS[drag.name] || {};
+    if (split.axis === "y") {
+      // The pointer's offset into the box *is* the height of the sized pane,
+      // measured from whichever end that pane is anchored to.
+      applySplit(
+        drag.name,
+        split.from === "bottom" ? box.bottom - event.clientY : event.clientY - box.top,
+      );
       return;
     }
     if (box.width) applySplit(drag.name, (event.clientX - box.left) / box.width);
@@ -984,12 +1026,29 @@ function openMachine() {
   if (dialog) dialog.showModal();
 }
 
+/* The crop, full size. The image is already in the page and in the cache, so
+   this sets a `src` it has and lets the browser do nothing. */
+function openCrop(button) {
+  const dialog = document.getElementById("crop-view");
+  const image = document.getElementById("crop-view-image");
+  const unit = document.getElementById("crop-unit");
+  if (!dialog || !image) return;
+  image.setAttribute("src", button.dataset.crop || "");
+  image.setAttribute("alt", `source crop for ${button.dataset.unit || "this card"}`);
+  if (unit) unit.textContent = button.dataset.unit || "";
+  dialog.showModal();
+}
+
 (function wirePanels() {
   /* Guarded one at a time. Both dialogs come from the same block in
      `base.html`, but a missing element used to take the *other* one's wiring
      down with it, which is the kind of coupling that only shows up on the one
      page that lacks it. */
-  const closes = { settings: "settings-close", machine: "machine-close" };
+  const closes = {
+    settings: "settings-close",
+    machine: "machine-close",
+    "crop-view": "crop-close",
+  };
   Object.entries(closes).forEach(([id, button]) => {
     const dialog = document.getElementById(id);
     const close = document.getElementById(button);
@@ -998,6 +1057,11 @@ function openMachine() {
   document.addEventListener("click", (event) => {
     if (event.target.closest("#config-open, [data-settings]")) openSettings();
     if (event.target.closest("[data-machine]")) openMachine();
+    /* A value, not just the attribute. The units view marks its crop with a
+       bare `data-crop` so a missing PDF can be caught by the error handler
+       above, and matching that opened the dialog on an empty `src`. */
+    const crop = event.target.closest("[data-crop]");
+    if (crop && crop.dataset.crop) openCrop(crop);
   });
 })();
 

@@ -36,5 +36,9 @@ cards/*
 sources/*/text.md
 sources/*/text-*.md
 
+# The private half of the roadmap: what is worth carding and which sources to
+# import, which is about this deck rather than about the tool.
+docs/ROADMAP.private.md
+
 # Scratch dumps from `--json` runs.
 *.tmp.json

@@ -486,6 +486,52 @@ def test_todo_filters_on_audience(
     assert "check the transpose" not in mine
 
 
+def test_todo_filters_on_source(
+    repo: Path, config: Config, card_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every other verb here is source-scoped, and the notes are source-shaped
+    work for the same reason: conventions are per source, so one list covering
+    two books means reloading the setting between every item."""
+    run(repo, "extract")
+    ledger = Ledger.load(config.units_path("demo"))
+    ledger.annotate("demo:1:1", "worth carding?")
+    ledger.save()
+    card = model.load(card_path)
+    card.add_annotation("check the transpose")
+    card.save()
+    drain(capsys)
+
+    run(repo, "todo", "--source", "demo", "--json")
+    here = json.loads(out(capsys))
+    assert {i["source"] for i in here} == {"demo"}
+    assert len(here) == 2, "the card names a demo unit, so it is demo's work"
+
+    run(repo, "todo", "--source", "elsewhere")
+    assert "matching that filter" in out(capsys)
+
+
+def test_a_card_that_names_no_source_is_never_filtered_away(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Same rule as the review view: a card whose units name no source belongs
+    to all of them. It is misfiled, and a note nobody can reach is a note that
+    blocks sync for ever."""
+    homeless = repo / "cards" / "ab12cd-loose.md"
+    homeless.write_text(
+        "---\nuid: ab12cd\ntype: identity\nstatus: draft\n"
+        'source: "Nowhere"\ntags: []\nverify: false\n---\n\n'
+        "## front\n$a$\n\n## back\n$b$\n\n## notes\n@claude where does this go?\n",
+        encoding="utf-8",
+    )
+    drain(capsys)
+
+    run(repo, "todo", "--source", "demo", "--json")
+    items = json.loads(out(capsys))
+
+    assert [i["ref"] for i in items] == ["ab12cd"]
+    assert items[0]["source"] == ""
+
+
 def test_todo_says_when_a_filter_emptied_the_list(
     repo: Path, card_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

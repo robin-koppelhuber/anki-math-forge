@@ -114,15 +114,34 @@ def test_nothing_downstream_consumes_it() -> None:
     as the human's instruction, with nothing to tell the two apart -- and the
     pass would then be taking dictation from its own earlier guess.
     """
-    from anki_math_forge import check, context, sync
+    from anki_math_forge import check, context, model, sync
 
-    # `context` builds what a card writer reads and `sync` builds what reaches
-    # Anki. A gist in either becomes an instruction or becomes content, which
-    # is the whole failure this field is shaped to avoid.
-    for module in (context, sync):
-        assert ".gist" not in Path(module.__file__).read_text(encoding="utf-8"), (
-            f"{module.__name__} reads the gist; it is a window, not a wire"
-        )
+    # `context` builds what a card writer reads. A gist in there comes back one
+    # pass later as the human's instruction, which is the failure above.
+    assert ".gist" not in Path(context.__file__).read_text(encoding="utf-8"), (
+        "context reads the gist; it is a window, not a wire"
+    )
+
+    # `sync` builds what reaches Anki, where a gist would become content. It
+    # does mention the caption, to name a card in the report it prints, and a
+    # line on your terminal is not a channel into a collection. So the
+    # question is asked of the payload rather than of the source, which also
+    # catches a leak through a path that never writes `.gist` at all.
+    card = model.parse(
+        "---\nuid: aa11bb\ntype: identity\nstatus: approved\n"
+        'gist: a caption that must not travel\nsource: "S"\nunit: "demo:1:1"\n'
+        "---\n\n## front\n$a$\n\n## back\n$b$\n"
+    )
+    config = config_mod.load(Path(__file__).resolve().parents[1])
+    escaped = "a caption that must not travel"
+    assert not [v for v in sync.fields_for(card, config).values() if escaped in v], (
+        "the caption reached an Anki field"
+    )
+    assert not [t for t in sync.tags_for(card, config) if escaped in t], (
+        "the caption reached an Anki tag"
+    )
+    # And it *is* in the report, which is the thing the textual check banned.
+    assert escaped in sync.CardOutcome("aa11bb", "add", gist=card.gist).format()
 
     # `check` is the exception, and a narrow one: it may measure the caption's
     # length, because linting a field is not consuming it. It may not let the

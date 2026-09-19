@@ -18,6 +18,7 @@ suspect ones rather than eyeballing seven hundred.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import pairwise
 
@@ -71,7 +72,14 @@ class Report:
         )
 
 
-def audit(ledger: Ledger, source: str = "") -> Report:
+def audit(
+    ledger: Ledger,
+    source: str = "",
+    makes_a_unit: Callable[[str, str], bool] | None = None,
+) -> Report:
+    """`makes_a_unit` is the source's `units_from` as a question, and it is
+    optional because most callers are asking about a segmented book, where no
+    colour scheme applies."""
     report = Report(source=source or (ledger.path.parent.name if ledger.path else ""))
     units = list(ledger)
     report.total = len(units)
@@ -84,7 +92,57 @@ def audit(ledger: Ledger, source: str = "") -> Report:
     _check_numbering(report, numbered, seen)
     _check_geometry(report, units)
     _check_transcription(report, units)
+    if makes_a_unit is not None:
+        _check_scheme(report, units, makes_a_unit)
     return report
+
+
+def _check_scheme(
+    report: Report, units: list[Unit], makes_a_unit: Callable[[str, str], bool]
+) -> None:
+    """Has `units_from` moved since the last import?
+
+    Both directions are visible without Zotero, because the ledger records the
+    marks it saw: the mark a unit came from is its first one, and everything
+    marked nearby rides along on the unit as a neighbour. So a unit whose own
+    mark no longer starts one is a leftover, and a *neighbour* whose colour now
+    does start one is a unit the last import would have made had the scheme
+    said so.
+
+    It sees what the last import saw and no more. A colour you have started
+    using on pages nowhere near an existing unit is invisible here, because
+    nothing recorded it -- that is a question only Zotero can answer, and
+    answering it is what re-running the import is for.
+    """
+    orphans: dict[str, int] = {}
+    # By key, not by appearance: one mark rides along on every unit within a
+    # few pages of it, so counting appearances would report the same mark
+    # three times and call it three missing units.
+    missed: dict[str, set[str]] = {}
+    anchors = {u.marks[0].key for u in units if u.marks}
+    for unit in units:
+        for position, mark in enumerate(unit.marks):
+            pair = f"{mark.kind}/{mark.colour}" if mark.colour else mark.kind
+            if position == 0:
+                if not makes_a_unit(mark.kind, mark.colour):
+                    orphans[pair] = orphans.get(pair, 0) + 1
+            elif makes_a_unit(mark.kind, mark.colour) and mark.key not in anchors:
+                missed.setdefault(pair, set()).add(mark.key)
+    for pair, count in sorted(orphans.items()):
+        _flag(
+            report,
+            "scheme-orphan",
+            f"{count} unit(s) came from {pair}, which `units_from` no longer names. "
+            "Re-run the import: untouched ones are forgotten and anything you "
+            "triaged is kept",
+        )
+    for pair, keys in sorted(missed.items()):
+        _flag(
+            report,
+            "scheme-unimported",
+            f"{len(keys)} mark(s) of {pair} are recorded but are not units, and "
+            "`units_from` now names that pair. Re-run the import to make them",
+        )
 
 
 def _flag(report: Report, code: str, message: str, unit_id: str = "") -> None:

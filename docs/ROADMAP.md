@@ -4,6 +4,10 @@ What is left, what the Cookbook taught us about its own extraction, and what
 was rejected and why. The milestones in [DESIGN.md](DESIGN.md) §13 are built
 and gone from this file; git history has them.
 
+This file is about the tool. What is worth carding, and which sources to
+import, is about one deck and lives in an untracked `ROADMAP.private.md`
+beside it.
+
 **The numbers are names, not an order.** Code cites them (`ROADMAP.md §1`,
 `§9`), so a section keeps its number wherever it moves to and a new one takes
 the next free number.
@@ -62,30 +66,6 @@ continuation line in §6.2 and §7.7–7.9 ends in `×` or `+`.
 - **Nothing writes an `intuition` card yet.** Teaching the card-writing skill
   the second kind is guidance, not code, and it belongs with the first prose
   source that has marks worth explaining.
-
-## 10. A card that carries a picture
-
-A card can only say things in text. Anki fields take an `<img>` and
-AnkiConnect takes `storeMediaFile`; neither is used, so a figure or a diagram
-cannot be carded at all. The material exists: Zotero's image and area
-annotations arrive as units with a box and no text, and `extract/render.py`
-renders a crop from any unit's geometry.
-
-- **No image files in the repo.** Invariant 3: extraction produces geometry,
-  never image files. A card names a unit and the crop is rendered from the
-  source document at sync time, so the picture is reproducible rather than a
-  binary somebody has to carry.
-- **The reference lives in `## front` or `## back`**, which puts it inside
-  `content_hash` for free. A picture is content: swapping it must un-approve
-  the card the way swapping a formula does.
-- **`sync` renders, uploads and rewrites**, under one deterministic media name
-  per card and slot, so a re-sync overwrites rather than accumulating orphans.
-- **`check` gates it:** the unit exists, it has geometry, and the document is
-  present. A card whose picture cannot be rendered is refused rather than
-  pushed broken, which is invariant 1 applied to media.
-
-**Trigger:** the first marked-up paper where an area annotation is the point
-rather than a note on it.
 
 ## 11. Pulling context from Obsidian notes
 
@@ -167,10 +147,12 @@ math is lost the same way, fraction rules included, which TeX draws as thin
 filled rectangles and which are a font-independent "there is math here"
 signal. The Cookbook has neither, which is why this has never bitten.
 
-**Two of the three blockers dissolved:** Zotero's image and area annotations
-are figure units already, and "a figure card needs a `type` beyond `identity`"
-stopped being one when `intuition` landed. What is left is segmenter work, and
-the segmenter is frozen. §10 is the other half.
+**All three blockers dissolved for a marked-up source:** Zotero's image and
+area annotations are figure units already, "a figure card needs a `type`
+beyond `identity`" stopped being one when `intuition` landed, and a card can
+now carry a picture (`![...](unit:<id>)`, rendered and uploaded by `sync`).
+What is left is segmenter work -- finding a figure in a book nobody marked up
+-- and the segmenter is frozen.
 
 Worth doing alone if the fallback segmenter is ever touched: fraction rules
 from the vector layer as a math signal in `score_line`, which would make it

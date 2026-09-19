@@ -384,9 +384,33 @@ def test_the_app_re_reads_from_disk_on_every_request(client: TestClient, card_pa
 
 def test_check_findings_are_shown_next_to_the_card(client: TestClient, card_path: Path) -> None:
     card = model.load(card_path)
+    card.set_section("prose", "one line\nand a second one")
+    card.save()
+
+    body = client.get("/review").text
+
+    assert "section-wrapped" in body
+    # And it says whose opinion it is. Stacked unlabelled in the same column
+    # as the lines somebody wrote on the card, a lint about a wrapped section
+    # reads as one more note nobody remembers writing.
+    assert body.index("check</p>") < body.index("section-wrapped")
+
+
+def test_the_linter_does_not_print_the_note_it_just_read(
+    client: TestClient, card_path: Path
+) -> None:
+    """The note is already on the card, as a row with a resolve button on it.
+    `annotation-open` printed its first 70 characters again, one block above,
+    in the machine's voice. It stays in `forge check`, which shows no rows."""
+    card = model.load(card_path)
     card.add_annotation("needs a proof")
     card.save()
-    assert "annotation-open" in client.get("/review").text
+
+    body = client.get("/review").text
+
+    assert "needs a proof" in body, "the note itself is there, with its buttons"
+    assert "annotation-open" not in body
+    assert body.count("needs a proof") == 1
 
 
 # -- crops are rendered, not stored ----------------------------------------
@@ -875,6 +899,39 @@ def test_the_full_diagram_keeps_a_legible_minimum_width() -> None:
     assert smallest * scale >= 6.5, (
         f"at {floor.group(1)}px the smallest label renders at {smallest * scale:.1f}px"
     )
+
+
+def test_the_crop_in_review_opens_full_size(
+    pdf_client: TestClient, pdf_units: Config
+) -> None:
+    """A crop cut to page width is unreadable in a 240px aside, which is every
+    crop from a marked-up source (invariant 8). It was the one thing in the
+    view you could see and not read."""
+    unit = Ledger.load(pdf_units.units_path("book")).units[0]
+    write_card(pdf_units, "aaa111", unit.id)
+    page = pdf_client.get("/review?source=book&status=all").text
+
+    assert 'class="crop-open"' in page, "the thumbnail is the control"
+    assert 'id="crop-view"' in page, "and there is somewhere for it to open"
+    opener = re.search(r'<button type="button" class="crop-open"[^>]*>', page)
+    assert opener and 'data-crop="/crop/' in opener.group(0)
+
+
+def test_the_crop_dialog_agrees_with_the_script_that_opens_it() -> None:
+    """Three files name the same four ids. A rename in one of them is silent:
+    the picture simply stops opening, and nothing in the page says why."""
+    from pathlib import Path as _Path
+
+    app = _Path(__file__).resolve().parents[1] / "src" / "anki_math_forge" / "app"
+    markup = (app / "templates" / "base.html").read_text(encoding="utf-8")
+    script = (app / "static" / "app.js").read_text(encoding="utf-8")
+    review = (app / "templates" / "review.html").read_text(encoding="utf-8")
+
+    for name in ("crop-view", "crop-view-image", "crop-unit", "crop-close"):
+        assert f'id="{name}"' in markup, f"{name} is not in the dialog"
+        assert name in script, f"{name} is not in the script that fills it"
+    assert "data-crop" in review and "data-crop" in script
+    assert "crop-view" in (app / "static" / "app.css").read_text(encoding="utf-8")
 
 
 def test_the_guide_remembers_its_two_widths_separately() -> None:
@@ -1478,6 +1535,98 @@ def test_resolve_hands_back_the_line_so_undo_can_put_it_there_again(
     assert model.load(path).annotations() == ["@claude flagged 1: check the sign"]
 
 
+def test_edit_route_rewords_one_annotation_in_place(pdf_source: Config) -> None:
+    """The line keeps its place and stays open. Resolving deletes it, and
+    fixing a typo by deleting the only copy and retyping it is how a note
+    imported from Anki gets lost."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@claude chekc the sign")
+    path = next(pdf_source.cards_dir.rglob("aaa111-*.md"))
+    second = model.load(path)
+    second.add_annotation("@me and the layout")
+    second.save()
+    client = TestClient(create_app(pdf_source))
+
+    response = client.post(
+        "/api/cards/aaa111/edit-annotation",
+        json={"mtime": mtime(path), "index": 0, "text": "@claude check the sign"},
+    )
+
+    assert response.status_code == 200
+    assert model.load(path).annotations() == [
+        "@claude check the sign",
+        "@me and the layout",
+    ]
+
+
+def test_editing_a_note_can_move_it_to_the_other_audience(pdf_source: Config) -> None:
+    """The prefix is part of what you are editing, exactly as in the file."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@claude is this the right layout?")
+    path = next(pdf_source.cards_dir.rglob("aaa111-*.md"))
+    client = TestClient(create_app(pdf_source))
+
+    client.post(
+        "/api/cards/aaa111/edit-annotation",
+        json={"mtime": mtime(path), "index": 0, "text": "@me is this the right layout?"},
+    )
+
+    assert model.load(path).annotations() == ["@me is this the right layout?"]
+
+
+def test_an_edited_note_still_holds_the_card_out_of_sync(pdf_source: Config) -> None:
+    """Rewording is not answering. The one thing that unblocks sync is the
+    line being gone."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    path = next(pdf_source.cards_dir.rglob("aaa111-*.md"))
+    card = model.load(path)
+    card.approve()
+    card.save()
+    client = TestClient(create_app(pdf_source))
+
+    client.post(
+        "/api/cards/aaa111/edit-annotation",
+        json={"mtime": mtime(path), "index": 0, "text": "@me a decision, by Friday"},
+    )
+
+    assert model.load(path).effective_status == "draft"
+    assert model.load(path).demotion == "annotated"
+
+
+def test_an_empty_edit_is_refused(pdf_source: Config) -> None:
+    """Emptying the box is not how you delete a note: resolve is, and it hands
+    the line back for undo where this would not."""
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    path = next(pdf_source.cards_dir.rglob("aaa111-*.md"))
+    client = TestClient(create_app(pdf_source))
+
+    response = client.post(
+        "/api/cards/aaa111/edit-annotation",
+        json={"mtime": mtime(path), "index": 0, "text": "   "},
+    )
+
+    assert response.status_code == 400
+    assert model.load(path).annotations() == ["@me a decision"]
+
+
+def test_the_aside_shows_the_crop_triage_showed(pdf_units: Config) -> None:
+    """The question you ask beside a draft is the one you asked at triage, and
+    a box cut to the mark answers it with one line of a page. So the aside
+    carries the same picture the units view does: the page around the box, an
+    outline on it, and the marks painted back on.
+
+    It was the tight box, on the argument that a picture this size is
+    provenance rather than evidence.
+    """
+    from anki_math_forge.app import _card_payload, crop_url, pdf_context
+
+    unit = next(iter(Ledger.load(pdf_units.units_path("book"))))
+    card = model.load(write_card(pdf_units, "aaa111", unit.id))
+    payload = _card_payload(card, [], pdf_units)
+
+    assert payload["unit_image"] == crop_url(unit, context=pdf_context(pdf_units, "book"))
+    assert "outline=1" in payload["unit_image"]
+    assert "context=" in payload["unit_image"]
+
+
 def test_restoring_a_note_twice_leaves_one(pdf_source: Config) -> None:
     """Undo is idempotent against a note that is already back, which is what a
     second press after a reload would be."""
@@ -1543,8 +1692,8 @@ def test_empty_html_still_shows_when_the_repo_has_no_cards(client: TestClient) -
 
 
 def action_rows(body: str) -> dict[str, tuple[bool, str]]:
-    """The `action required` rows, as {label: (active, href)}."""
-    block = re.search(r"<summary>action required</summary>(.*?)</details>", body, re.S).group(1)
+    """The `properties` rows, as {label: (active, href)}."""
+    block = re.search(r"<summary>properties</summary>(.*?)</details>", body, re.S).group(1)
     rows = {}
     for li in re.findall(r"<li>(.*?)</li>", block, re.S):
         href = re.search(r'href="([^"]+)"', li).group(1).replace("&amp;", "&")
@@ -2022,3 +2171,196 @@ def test_a_card_whose_unit_is_gone_falls_back_to_its_id(config: Config) -> None:
 
     card = model.Card(frontmatter={"uid": "aa11bb", "unit": "demo:2.4:61"}, sections=[])
     assert card_section(card, config) == "2.4"
+
+
+# -- the augmentation receipt ----------------------------------------------
+
+
+def _mark(config: Config, uid: str, **frontmatter: object) -> Path:
+    path = next(config.cards_dir.rglob(f"{uid}-*.md"))
+    card = model.load(path)
+    for key, value in frontmatter.items():
+        card.set_grade(key, value)
+    card.save()
+    return path
+
+
+def test_the_flag_filters_both_ways(pdf_source: Config) -> None:
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "demo:2.4:61")
+    _mark(pdf_source, "aaa111", augmented=True)
+    client = TestClient(create_app(pdf_source))
+
+    done = client.get("/review?status=all&augmented=yes").text
+    left = client.get("/review?status=all&augmented=no").text
+
+    assert "aaa111" in done and "bbb222" not in done
+    assert "bbb222" in left and "aaa111" not in left
+
+
+def test_it_composes_with_the_other_filters(pdf_source: Config) -> None:
+    """Every filter here is a set intersection, and a new one that quietly
+    replaced the others would be the worst kind of wrong: it would look like
+    it worked."""
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    write_card(pdf_source, "bbb222", "demo:2.4:61")
+    annotate(pdf_source, "aaa111", "demo:2.4:61", "@me a decision")
+    _mark(pdf_source, "aaa111", augmented=True)
+    _mark(pdf_source, "bbb222", augmented=True)
+    client = TestClient(create_app(pdf_source))
+
+    both = client.get("/review?status=all&augmented=yes&annotated=me").text
+
+    assert "aaa111" in both, "augmented and annotated"
+    assert "bbb222" not in both, "augmented, but not annotated"
+
+
+def test_the_count_is_drafts_only(pdf_source: Config) -> None:
+    """`/augment` refuses an approved card, so counting one as outstanding
+    would be counting work the pass would decline to do."""
+    from anki_math_forge.app import pipeline_counts
+
+    path = write_card(pdf_source, "aaa111", "demo:2.4:61")
+    card = model.load(path)
+    card.approve()
+    card.save()
+    write_card(pdf_source, "bbb222", "demo:2.4:61")
+
+    counts = pipeline_counts(pdf_source)
+
+    assert counts["unaugmented"] == 1, "the approved one is not outstanding work"
+    assert counts["augmented"] == 0
+
+
+def test_the_chip_writes_and_withdraws(pdf_source: Config) -> None:
+    path = write_card(pdf_source, "aaa111", "demo:2.4:61")
+    client = TestClient(create_app(pdf_source))
+
+    on = client.post(
+        "/api/cards/aaa111/augmented", json={"augmented": True, "mtime": mtime(path)}
+    )
+    assert on.status_code == 200 and model.load(path).augmented is True
+
+    off = client.post(
+        "/api/cards/aaa111/augmented", json={"augmented": False, "mtime": mtime(path)}
+    )
+    assert off.status_code == 200 and model.load(path).augmented is False
+
+
+def test_marking_it_does_not_un_approve(pdf_source: Config) -> None:
+    path = write_card(pdf_source, "aaa111", "demo:2.4:61")
+    card = model.load(path)
+    card.approve()
+    card.save()
+    client = TestClient(create_app(pdf_source))
+
+    client.post(
+        "/api/cards/aaa111/augmented", json={"augmented": True, "mtime": mtime(path)}
+    )
+
+    assert model.load(path).effective_status == "approved"
+
+
+# -- the rail says which filter is on ---------------------------------------
+
+
+def property_rows(body: str) -> dict[str, tuple[bool, bool]]:
+    """`{label: (active, offers the way out)}` for the `properties` group."""
+    block = body[body.index("<summary>properties</summary>") :]
+    block = block[: block.index("</details>")]
+    rows: dict[str, tuple[bool, bool]] = {}
+    for li in re.findall(r"<li>(.*?)</li>", block, re.S):
+        label = re.sub(r"<[^>]+>", "", li).replace("&times;", "").strip()
+        label = re.sub(r"\s*\d+$", "", label).strip()
+        rows[label] = ('class="on"' in li, "clear-mark" in li)
+    return rows
+
+
+def test_every_property_filter_marks_its_own_row(pdf_source: Config) -> None:
+    """A filter the view resolves but does not hand the template is one whose
+    links are right and whose row never lights up. `augmented` was exactly
+    that: it was in `filters`, which builds the hrefs, and missing from the
+    context, which decides what is active.
+
+    Both halves are checked, because an inactive row draws no `x` and the `x`
+    is the only way back out of a filter.
+    """
+    write_card(pdf_source, "aaa111", "demo:2.4:61")
+    client = TestClient(create_app(pdf_source))
+    asked = {
+        "augmented=no": "not augmented",
+        "augmented=yes": "augmented",
+        "annotated=claude": "@claude",
+        "annotated=me": "@me",
+        "annotated=none": "no notes",
+    }
+
+    for query, label in asked.items():
+        rows = property_rows(client.get(f"/review?status=all&{query}").text)
+        assert label in rows, f"{query}: no row labelled {label!r}"
+        active, way_out = rows[label]
+        assert active, f"{query} left {label!r} unlit"
+        assert way_out, f"{query} left {label!r} with no way to clear it"
+        # And only that one: two lit rows would mean the group is reading a
+        # filter it does not own.
+        assert [name for name, (on, _) in rows.items() if on] == [label]
+
+
+def test_the_units_rail_marks_its_own_rows_too(config: Config) -> None:
+    """The same context, assembled separately for the other view."""
+    from anki_math_forge import extract
+
+    extract.run(config, "demo")
+    client = TestClient(create_app(config))
+
+    for query, label in (
+        ("suggested=1", "suggested"),
+        ("transcribed=1", "transcribed"),
+        ("annotated=none", "no notes"),
+    ):
+        rows = property_rows(client.get(f"/units?state=all&{query}").text)
+        assert rows.get(label, (False, False))[0], f"{query} left {label!r} unlit"
+
+
+# -- the settled list -------------------------------------------------------
+
+
+def test_the_card_separates_the_three_kinds_of_note(pdf_source: Config) -> None:
+    """`## notes` holds three different things: prose the writer left, open
+    requests, and the record of settled ones. They were two, and a settled
+    record would have landed in the prose block, which is where invariant 7
+    puts conditions the source does not state."""
+    from anki_math_forge.app import _card_payload
+
+    path = write_card(pdf_source, "aaa111", "demo:2.4:61")
+    card = model.load(path)
+    card.set_section("notes", "The source states this only for symmetric X.")
+    card.add_annotation("@claude check the sign")
+    card.resolve_annotation(0, "right as written; said so in ## prose")
+    card.add_annotation("@me is this two cards?")
+    card.save()
+
+    payload = _card_payload(model.load(path), [], pdf_source)
+
+    assert payload["plain_notes"] == "The source states this only for symmetric X."
+    assert [a["text"] for a in payload["annotations"]] == ["is this two cards?"]
+    assert payload["resolved"] == [
+        "check the sign \u2014 right as written; said so in ## prose"
+    ]
+
+
+def test_the_settled_list_is_shut_until_it_is_asked_for(pdf_source: Config) -> None:
+    """It answers "why is this not what I remember", which is a question you
+    ask sometimes. The open notes above it are the ones to act on."""
+    path = write_card(pdf_source, "aaa111", "demo:2.4:61")
+    card = model.load(path)
+    card.add_annotation("@claude too thin")
+    card.resolve_annotation(0, "added the derivation")
+    card.save()
+
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft").text
+
+    assert 'class="settled-notes"' in body
+    assert "too thin" in body
+    # A `<details>` with no `open`, so it renders shut.
+    assert '<details class="settled-notes">' in body

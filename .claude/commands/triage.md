@@ -1,6 +1,6 @@
 ---
 description: Work the open @claude annotations
-argument-hint: [claude|me|cards|units|<status>|<state>]
+argument-hint: [claude|me|cards|units|<status>|<state>|--source NAME]
 ---
 
 Resolve open annotations on cards and units.
@@ -12,6 +12,9 @@ Arguments: `$ARGUMENTS` — optional, and any combination of these filters:
 - **`cards`** or **`units`** — one side of the pipeline only.
 - a card status (`draft`, `approved`, `rejected`) or a unit state (`new`,
   `queued`, `skipped`, `carded`) — only things at that stage.
+- **`--source NAME`** — one book's notes. Worth reaching for whenever the repo
+  has more than one: conventions are per source, so a list that hops between
+  two books makes you reload the setting between every item.
 - nothing — everything open.
 
 **`/triage claude` is the common case**: every note you can actually act on,
@@ -38,6 +41,7 @@ the urgent ones queue behind the speculative ones.
    ```
    uv run forge todo --audience claude --json
    uv run forge todo --audience claude --kind unit --status queued
+   uv run forge todo --audience claude --source <name>
    ```
 
    Then say in your report how many you left untouched, so the rest are not
@@ -55,12 +59,29 @@ the urgent ones queue behind the speculative ones.
    - *"this duplicates 4b2e1c"* — compare, keep the better one, delete the
      other file. Say which you kept and why.
 
-4. **Resolving means deleting the `@claude` line** from `## notes` and making
-   the edit. Both, in the same pass. A note left behind keeps blocking sync.
+4. **Resolving means settling the `@claude` line** in `## notes` and making
+   the edit. Both, in the same pass. A line left addressed keeps blocking
+   sync.
 
-   Before deleting one whose text is worth keeping — a segmentation map, a
-   correction, an argument — append it to `sources/<name>/notes-archive.md`
-   first. `cards/` and the ledger have no other undo.
+   **Replace it with what you did**, on the same line, unaddressed:
+
+   ```
+   resolved: <what was asked> — <what you did about it>
+   ```
+
+   `resolved:` is not an address, so the line is a record rather than work and
+   does not hold the card out of sync. Keep the question in it: "fixed" is the
+   thing nobody can act on six weeks later, and the person reading this will
+   be trying to tell whether the point they made was taken. Say what changed,
+   in the card's own terms, and say so plainly when the answer is that nothing
+   needed changing: *"the sign was right; the condition it needs was missing
+   and is now in `## conditions`"*, not *"checked"*.
+
+   There is no notes archive to append to, and none to create. Deleting a
+   note used to be unrecoverable, which is the whole reason one existed;
+   `cards/` is tracked now, so a card's own history holds every line it has
+   ever carried. For any other source an archive would be gitignored
+   alongside the ledger it was archiving, which is no protection at all.
 
    The edit changes `content_hash`, so an approved card drops back to `draft`
    and re-enters review automatically. That is the intended behaviour — do not

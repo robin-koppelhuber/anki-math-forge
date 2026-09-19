@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .. import zotero as api
-from ..config import ZoteroConfig
+from ..config import ZoteroConfig, zotero_deck
 from ..ledger import Locator, Mark, Unit
 
 # How many pages either side of a unit come with it. One catches an idea that
@@ -227,13 +227,28 @@ def units_for(
     return units
 
 
-def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ()) -> bool:
+def write_source_stub(
+    path: Path,
+    item: api.Item,
+    *,
+    tags: tuple[str, ...] = (),
+    scheme: ZoteroConfig | None = None,
+) -> bool:
     """Give a freshly imported source its `source.toml`, if it has none.
 
     Without one the units exist and the source does not: `config.source()` has
     never heard of it, so nothing can resolve its deck or its conventions. The
     import is the only moment that knows the title and the citation, so it is
     the right moment to write them down.
+
+    **The two override keys are written out, commented, carrying the values
+    this source is inheriting.** An override replaces rather than merges, so
+    the thing you need in front of you before changing one is what you are
+    replacing -- and an example invented here would be a scheme nobody uses.
+    Uncomment, delete the lines you do not want, and the file says what it
+    does. They were an empty `[meanings]` header and one bare-colour example
+    before, which the loader now refuses: uncommenting the documentation
+    raised a `ConfigError`.
 
     **No `conventions.md`.** An empty placeholder saying "nothing recorded yet"
     is indistinguishable from a real one to everything that reads it, and
@@ -266,20 +281,62 @@ def write_source_stub(path: Path, item: api.Item, *, tags: tuple[str, ...] = ())
         "# the same thing, since marks made in one are not marks in the other.",
         "documents = []",
         "",
-        "# What your marks mean here, when this document is not read the way",
-        "# the rest of the shelf is. Anything you set replaces the repo-wide",
-        "# scheme for this source; leave it out to inherit.",
-        "# [meanings]",
-        '# green = "a claim or result worth a card"',
+        "# Which deck these cards land in. The line below is the default this",
+        "# source already has, written out so you can see it: anything imported",
+        "# from Zotero goes under `Zotero::`, which keeps a shelf you are",
+        "# reading through apart from the deck you have decided to keep.",
+        "# Uncomment and edit to send them somewhere else; `forge sync` says so",
+        "# when cards are already filed under the old name. `[decks]` in",
+        "# forge.toml splits one source across subdecks by card type, when a",
+        "# restatement and an explanation want different new-card rates.",
+        f"# deck = \"{zotero_deck(item.title, item.key)}\"",
+        "",
+        "# How much of the document whoever writes a card here is handed: pages",
+        '# either side of the unit, or "chapter" for the whole chapter it is in.',
+        "# Uncomment to read this document wider than the rest of the shelf; a",
+        "# unit can still ask for more than this on its own.",
+        "# context_pages = 1",
         "",
         "# Conventions -- the ambient setting a card writer has to know -- go",
         "# in `conventions.md` beside this file. There is none until you write",
         "# one, and `forge context` says so rather than pretending.",
         "",
+        *_override_block(scheme),
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines), encoding="utf-8")
     return True
+
+
+def _override_block(scheme: ZoteroConfig | None) -> list[str]:
+    """The two per-source keys, commented out and carrying what is inherited.
+
+    `[meanings]` is a table, so it goes last: a bare key written after it would
+    land inside it. The pairs are sorted so a diff between two sources is about
+    the scheme rather than about dictionary order.
+    """
+    pairs = sorted(scheme.unit_pairs) if scheme else []
+    meanings = sorted((scheme.meanings if scheme else {}).items())
+    listed = ", ".join(f'"{p}"' for p in pairs)
+    return [
+        "# Editing either key below takes effect on the next `forge zotero`, which",
+        "# adds the units the new marks make and forgets untouched ones it orphans.",
+        "# `forge audit` says whether this file and the ledger still agree.",
+        "",
+        "# Which marks start a unit here, by the same `\"kind/colour\"` name the",
+        "# meanings use. Uncomment to read this document differently from the rest",
+        "# of the shelf; an override replaces the list rather than adding to it.",
+        '# `units_from = "declared"` instead takes every pair named below.',
+        f"# units_from = [{listed}]" if listed else "# units_from = []",
+        "",
+        "# What your marks mean here. Uncomment to override the repo-wide scheme;",
+        "# anything you set replaces it whole, because a half-inherited colour",
+        "# scheme is the failure this exists to prevent. Delete the lines that do",
+        "# not apply to this document.",
+        "# [meanings]",
+        *(f'# "{name}" = "{text}"' for name, text in meanings),
+        "",
+    ]
 
 
 def build(

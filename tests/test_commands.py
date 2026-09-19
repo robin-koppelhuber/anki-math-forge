@@ -32,11 +32,44 @@ def test_it_offers_card_writing_only_when_something_is_queued() -> None:
     assert not any("/extract-cards" in r for r in runs("units", base, {"queued": 0}))
 
 
+def test_it_offers_naming_the_units_before_writing_them_up() -> None:
+    """`/gist` gives each queued unit a line saying what a card from it would
+    be about. It is worth doing before the stubs exist, because it is what the
+    list, the graph and every link to a card read as afterwards."""
+    base = {"source": "book", "state": "queued"}
+    out = runs("units", base, {"queued": 6, "ungisted": 6})
+    assert any("/gist" in r for r in out)
+    assert out.index(next(r for r in out if "/gist" in r)) < out.index(
+        next(r for r in out if "/extract-cards" in r)
+    ), "before the stubs, not after"
+
+    named = runs("units", base, {"queued": 6, "ungisted": 0})
+    assert not any("/gist" in r for r in named)
+
+
+def test_the_way_back_from_anki_is_offered_without_a_count() -> None:
+    """Nothing here can know you flagged a card in Anki last night: until
+    `feedback` runs, that comment is not a note on anything and no list in
+    this app is showing it. A row gated on a count would be a row you only
+    see once it is too late to be told."""
+    out = runs("review", {"source": "book"}, {"draft": 0, "approved": 0})
+    assert any("forge feedback" in r for r in out)
+
+
+def test_working_the_notes_stays_on_the_source_you_are_looking_at() -> None:
+    """`todo` spans the repo, and conventions are per source: a list that hops
+    between two books makes you reload the setting between every item."""
+    out = runs("review", {"source": "book"}, {"annotated_claude_card": 3})
+    triage = next(r for r in out if "/triage" in r)
+    assert triage == '/triage claude --source "book"'
+
+
 def test_every_command_names_the_source() -> None:
     """Three sources in a repo and none of these verbs defaults to one. A
     `/extract-cards` with no source writes stubs for every queued unit in the
     repo, which is not what the person filtering to one paper asked for."""
-    for run in runs("units", {"source": "book", "state": "new"}, {"new": 2, "queued": 2}):
+    counts = {"new": 2, "queued": 2, "ungisted": 2}
+    for run in runs("units", {"source": "book", "state": "new"}, counts):
         assert '--source "book"' in run
 
 
@@ -102,10 +135,21 @@ def test_a_marked_up_source_says_why_rather_than_going_quiet() -> None:
 
 
 def test_the_review_view_offers_review_things() -> None:
-    out = runs("review", {"source": "book"}, {"draft": 4})
+    out = runs("review", {"source": "book"}, {"draft": 4, "unaugmented": 4})
     assert any("/augment" in r for r in out)
     assert any("sync --dry-run" in r for r in out)
     assert not any("/transcribe" in r for r in out)
+
+
+def test_augment_is_offered_on_what_is_left_not_on_every_draft() -> None:
+    """A deck whose drafts have all had the pass does not want it again. A
+    panel that goes on suggesting it is one you learn to ignore, and running
+    it is a second opinion about cards nobody asked about twice."""
+    done = runs("review", {"source": "book"}, {"draft": 4, "unaugmented": 0})
+    assert not any("/augment" in r for r in done)
+
+    left = runs("review", {"source": "book"}, {"draft": 4, "unaugmented": 1})
+    assert any("/augment" in r for r in left)
 
 
 def test_augment_is_not_offered_with_no_drafts() -> None:

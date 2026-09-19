@@ -1,9 +1,8 @@
 """`verify` -- opt-in numeric check of an identity (DESIGN.md §7).
 
-Sample random conforming matrices, evaluate both sides, assert agreement.
-Default off; worth enabling on the gnarly ones -- Woodbury, block inverses --
-where a stray transpose survives proofreading and then gets memorised
-confidently.
+Sample random conforming inputs, evaluate both sides, assert agreement.
+Default off; worth enabling where a stray transpose, index or sign survives
+proofreading and then gets memorised confidently.
 
 A `## verify` section is a Python snippet that sets `lhs` and `rhs`:
 
@@ -17,6 +16,17 @@ It runs once per trial with a fresh `rng`, so a lucky draw cannot hide a bug.
 Gradients come from central differences (§15.4: numpy only, no torch/jax), so
 tolerances are loose enough for numerical noise and tight enough to catch a
 flipped sign or transpose.
+
+**Every card may have one.** What a source declares is checked by the helper
+it decides: `grad` computes one layout convention, so calling it in a source
+that has not declared which one it means raises, and a card that never calls
+it never meets the question. An identity between two Gaussians has no layout.
+
+The bar is editorial rather than mechanical. `verify: true` is worth writing
+where a stray transpose, index or sign would survive proofreading, and the
+card-writing skill says so; a snippet that cannot fail is worse than none,
+because it reports coverage that is not there. `check` warns about the
+clearest case of that, a snippet that draws nothing random.
 """
 
 from __future__ import annotations
@@ -60,6 +70,12 @@ def code_of(card: Card) -> str:
     return (match.group("code") if match else body).strip()
 
 
+class LayoutUndeclared(Exception):
+    """A snippet took a derivative in a source that has not said which layout
+    its derivatives use. Raised by `grad`, at the call, so the card that never
+    calls it is never asked."""
+
+
 def grad(fn: Callable[[np.ndarray], float], x: np.ndarray, step: float = STEP) -> np.ndarray:
     """Central-difference gradient of a scalar function of a matrix.
 
@@ -81,8 +97,12 @@ def grad(fn: Callable[[np.ndarray], float], x: np.ndarray, step: float = STEP) -
     return out
 
 
-def namespace(rng: np.random.Generator) -> dict[str, Any]:
-    """What a `## verify` snippet may use. Deliberately small."""
+def namespace(rng: np.random.Generator, layout: str = "denominator") -> dict[str, Any]:
+    """What a `## verify` snippet may use. Deliberately small.
+
+    `layout` is the convention the *source* declares. It reaches exactly one
+    name in here, because it decides exactly one thing.
+    """
 
     def randn(*shape: int) -> np.ndarray:
         return rng.standard_normal(shape if shape else ())
@@ -112,11 +132,31 @@ def namespace(rng: np.random.Generator) -> dict[str, Any]:
         "round": round, "sum": sum, "tuple": tuple, "zip": zip, "print": print,
     }  # fmt: skip
 
+    def checked_grad(
+        fn: Callable[[np.ndarray], float], x: np.ndarray, step: float = STEP
+    ) -> np.ndarray:
+        """`grad`, refusing a convention it does not compute.
+
+        It computes the denominator-layout gradient and nothing else. The two
+        conventions agree on every square matrix, so checking a numerator
+        source against it would pass most cards and fail the rectangular ones
+        for a reason nobody would guess, and assuming one for a source that
+        declared nothing would do the same thing more quietly.
+        """
+        if layout != "denominator":
+            raise LayoutUndeclared(
+                f"source uses {layout} layout; `grad` computes denominator layout only"
+                if layout
+                else "this snippet takes a derivative and the source declares no "
+                "layout; `verify` will not guess which one it means"
+            )
+        return grad(fn, x, step)
+
     return {
         "__builtins__": safe_builtins,
         "np": np,
         "rng": rng,
-        "grad": grad,
+        "grad": checked_grad,
         "randn": randn,
         "spd": spd,
         "sym": sym,
@@ -125,7 +165,9 @@ def namespace(rng: np.random.Generator) -> dict[str, Any]:
     }
 
 
-def verify_card(card: Card, *, trials: int = TRIALS, seed: int = 0) -> VerifyResult:
+def verify_card(
+    card: Card, *, trials: int = TRIALS, seed: int = 0, layout: str = "denominator"
+) -> VerifyResult:
     """Run a card's `## verify` snippet. Cards without one are skipped."""
     if card.type != "identity":
         # There is nothing numeric to check about an explanation. Saying so
@@ -145,9 +187,13 @@ def verify_card(card: Card, *, trials: int = TRIALS, seed: int = 0) -> VerifyRes
 
     worst = 0.0
     for trial in range(trials):
-        env = namespace(np.random.default_rng(seed + trial))
+        env = namespace(np.random.default_rng(seed + trial), layout)
         try:
             exec(compiled, env)
+        except LayoutUndeclared as exc:
+            # Not an error in the card: the snippet is fine and the source has
+            # not said enough about itself for it to be checked.
+            return VerifyResult(card.uid, SKIP, str(exc))
         except Exception as exc:
             return VerifyResult(card.uid, ERROR, f"trial {trial}: {type(exc).__name__}: {exc}")
 
@@ -189,32 +235,11 @@ def run(
     for card in cards:
         if only and card.uid != only:
             continue
-        # `grad` computes the denominator-layout gradient and nothing else. On
-        # a square matrix the two conventions are indistinguishable, so a
-        # numerator-layout source would pass most cards and fail the
-        # rectangular ones for a reason nobody would guess. Say so instead.
-        layout = config.layout_for(card.source_name)
-        if not layout:
-            # Not "assume denominator". `grad` computes one convention, the
-            # two agree on every square matrix, and a guess would pass review
-            # and first bite on a rectangular one.
-            results.append(
-                VerifyResult(
-                    card.uid,
-                    SKIP,
-                    f"source {card.source_name!r} declares no layout; "
-                    "`verify` will not guess which one its derivatives use",
-                )
+        results.append(
+            verify_card(
+                card, trials=trials, layout=config.layout_for(card.source_name)
             )
-            continue
-        if layout != "denominator":
-            results.append(
-                VerifyResult(
-                    card.uid,
-                    SKIP,
-                    f"source uses {layout} layout; `grad` computes denominator layout only",
-                )
-            )
-            continue
-        results.append(verify_card(card, trials=trials))
+        )
     return results
+
+

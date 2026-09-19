@@ -165,8 +165,74 @@ def test_verify_refuses_a_layout_its_gradient_cannot_compute(repo: Path) -> None
         "---\nuid: bbb222\ntype: identity\nstatus: draft\n"
         'unit: "book:1.1:1"\nverify: true\n---\n\n'
         "## front\n$a$\n\n## back\n$b$\n\n"
-        "## verify\n```python\nlhs = np.zeros(1)\nrhs = np.ones(1)\n```\n"
+        "## verify\n```python\n"
+        "X = spd(3)\n"
+        "lhs = grad(lambda M: float(np.trace(M)), X)\n"
+        "rhs = np.eye(3)\n"
+        "```\n"
     )
     results = verify.run([card], config)
     assert [r.status for r in results] == [verify.SKIP]
     assert "numerator" in results[0].detail
+
+
+def test_a_card_with_no_derivative_needs_no_declared_layout(repo: Path) -> None:
+    """Requiring one of every card was the Cookbook generalised into a rule: a
+    book of matrix derivatives, where the convention always decided the answer.
+    An identity between two Gaussians has no layout to declare."""
+    from anki_math_forge import config as config_mod
+
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
+    toml += '\n[sources.paper]\ntitle = "A Paper"\n'
+    (repo / "forge.toml").write_text(toml, encoding="utf-8")
+    config = config_mod.load(repo)
+
+    card = model.parse(
+        "---\nuid: ccc333\ntype: identity\nstatus: draft\n"
+        'unit: "paper:2.1:4"\nverify: true\n---\n\n'
+        "## front\n$a$\n\n## back\n$b$\n\n"
+        "## verify\n```python\n"
+        "x = randn(4)\n"
+        "lhs = float(np.sum(x**2))\n"
+        "rhs = float(x @ x)\n"
+        "```\n"
+    )
+
+    results = verify.run([card], config)
+
+    assert [r.status for r in results] == [verify.PASS], results[0].detail
+
+
+def test_the_layout_refusal_comes_from_the_helper_it_is_about() -> None:
+    """Asking every card whether it takes a derivative was the same overfit
+    one level up. Only `grad` has a layout, so only `grad` asks."""
+    import numpy as np
+
+    env = verify.namespace(np.random.default_rng(0), "numerator")
+    with pytest.raises(verify.LayoutUndeclared, match="numerator"):
+        env["grad"](lambda m: float(m.sum()), np.eye(2))
+
+    undeclared = verify.namespace(np.random.default_rng(0), "")
+    with pytest.raises(verify.LayoutUndeclared, match="declares no layout"):
+        undeclared["grad"](lambda m: float(m.sum()), np.eye(2))
+
+    fine = verify.namespace(np.random.default_rng(0), "denominator")
+    assert fine["grad"](lambda m: float(m.sum()), np.eye(2)).shape == (2, 2)
+
+
+def test_a_snippet_that_does_not_parse_is_reported_not_skipped(repo: Path) -> None:
+    """A syntax error is more useful than a skip about a convention."""
+    from anki_math_forge import config as config_mod
+
+    config = config_mod.load(repo)
+    card = model.parse(
+        "---\nuid: ddd444\ntype: identity\nstatus: draft\n"
+        'unit: "paper:2.1:5"\nverify: true\n---\n\n'
+        "## front\n$a$\n\n## back\n$b$\n\n"
+        "## verify\n```python\nlhs = grad(\n```\n"
+    )
+
+    results = verify.run([card], config)
+
+    assert [r.status for r in results] == [verify.ERROR]
+    assert "syntax error" in results[0].detail

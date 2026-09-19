@@ -39,6 +39,7 @@ FRONTMATTER_ORDER = (
     "tags",
     "verify",
     "web",
+    "augmented",
 )
 
 # Two optional judgements about a card, both coarse on purpose.
@@ -123,6 +124,12 @@ UNHASHED_SECTIONS = frozenset({"notes", "verify"})
 # not cost a re-review of mathematics nobody touched. Safe to add without
 # re-stamping anything: no card carries the key yet, so exempting it changes no
 # digest that exists.
+#
+# `augmented` records that a pass has been over the card, which is a fact about
+# the work and not about the claim. It is also the one state here that cannot
+# be read off the content: augmentation's right answer is usually to add
+# nothing, so a finished card and an untouched one are the same file. Hashing
+# it would mean the pass un-approved every card it decided to leave alone.
 UNHASHED_FRONTMATTER = frozenset({
     "status",
     "content_hash",
@@ -132,6 +139,7 @@ UNHASHED_FRONTMATTER = frozenset({
     "derivation",
     "web",
     "gist",
+    "augmented",
 })
 
 # What `content_hash` used to cover. Kept so that widening the exemption above
@@ -161,6 +169,13 @@ STATUSES = ("draft", "approved", "rejected")
 # is addressed. `@claude` is work for the model -- fix this, check that.
 # `@me` is a decision only the human can make, parked where it will be found
 # again. Both block sync, because both mean "this is not finished".
+#: What a settled annotation is written back as. Deliberately not an address:
+#: `annotation_audience` reads a prefix only at the start of a line, so this
+#: is not an annotation, does not hold the card out of sync, and is not work
+#: the next pass will pick up. It is the same shape `Ledger.answer` leaves on
+#: a unit, with a marker on the front so the view can group them.
+RESOLVED_PREFIX = "resolved:"
+
 ANNOTATION_PREFIX = "@claude"
 ANNOTATION_PREFIXES = ("@claude", "@me")
 
@@ -179,6 +194,44 @@ def annotation_audience(line: str) -> str:
     return ""
 
 
+def resolved_line(asked: str, reply: str) -> str:
+    """One settled annotation: what was asked, and what was done about it.
+
+    The question is most of what makes the answer worth keeping. "Fixed" on
+    its own is the thing you cannot act on six weeks later, and it is what you
+    get when the line that prompted it has been deleted.
+    """
+    asked = " ".join(note_body(asked).split()).strip()
+    reply = " ".join(reply.split()).strip()
+    if not reply:
+        # No answer, no record. The same call `Ledger.answer` makes: a note
+        # that was a reminder rather than a request leaves nothing worth
+        # keeping, and "resolved: have another look" has kept the half that
+        # was never the point.
+        return ""
+    body = f"{asked} \u2014 {reply}" if asked else reply
+    return f"{RESOLVED_PREFIX} {body}"
+
+
+def is_resolved(line: str) -> bool:
+    return line.strip().lower().startswith(RESOLVED_PREFIX)
+
+
+def resolved_body(line: str) -> str:
+    """A record without its marker, for showing."""
+    return line.strip()[len(RESOLVED_PREFIX) :].strip() if is_resolved(line) else line.strip()
+
+
+def note_body(note: str) -> str:
+    """An annotation without its `@claude` / `@me` prefix.
+
+    Stripping only what is actually there, rather than a fixed width, so a
+    hand-edited note that does not carry the exact prefix survives intact.
+    """
+    audience = annotation_audience(note)
+    return note.strip() if not audience else note.strip()[len(audience) + 1 :].strip()
+
+
 def annotation_line(text: str) -> str:
     """One annotation as it is written to a file: collapsed, and addressed.
 
@@ -193,6 +246,37 @@ def annotation_line(text: str) -> str:
     if text and not annotation_audience(text):
         text = f"{ANNOTATION_PREFIX} {text}"
     return text
+
+
+#: A picture on a card: `![what it shows](unit:<id>)`, or `![...](unit)` for
+#: the unit the card was written from. Markdown's own image syntax, with a
+#: unit where a filename would go -- because there is no file: the crop is
+#: rendered from the source document at sync time.
+#:
+#: **Where it goes is the writer's call.** A figure that *is* the answer
+#: belongs in `## back`; one you are asked to read belongs in `## front`; a
+#: diagram that supports an explanation belongs in `## prose`. No rule here
+#: can tell those apart, and every section this matches is inside
+#: `content_hash`, so swapping the picture un-approves the card either way.
+IMAGE_RE = re.compile(r"!\[([^\]\n]*)\]\(unit(?::([^)\s]+))?\)")
+
+#: Sections a picture cannot go in. `verify` is Python and `notes` never
+#: reaches Anki, so an image in either is one nobody will ever see.
+UNRENDERED_SECTIONS = frozenset({"notes", "verify"})
+
+
+@dataclass(frozen=True)
+class ImageRef:
+    """One `![...](unit:...)` on a card, resolved."""
+
+    raw: str  # exactly as written, so a rewrite can replace it
+    alt: str
+    unit: str  # the unit named, or the card's own when none was
+    section: str
+    # Where among this card's images it falls. The media name Anki stores is
+    # built from this, so it is stable across a re-sync and a second sync
+    # overwrites rather than leaving an orphan behind.
+    index: int = 0
 
 
 UID_RE = re.compile(r"^[0-9a-f]{6}$")
@@ -369,6 +453,21 @@ class Card:
         return [str(t) for t in raw]
 
     @property
+    def augmented(self) -> bool:
+        """Whether `/augment` has been over this card.
+
+        Recorded rather than derived, and it is the only thing here that is.
+        The pass considers every optional section and adds the ones that earn
+        their place, which for most cards is none of them -- so a card it
+        finished and a card it never saw are the same file, and nothing in the
+        content can tell them apart.
+
+        Outside `content_hash`: it says what has been done to the card, not
+        what the card claims. Take it off to ask for the pass again.
+        """
+        return bool(self.frontmatter.get("augmented", False))
+
+    @property
     def verify_enabled(self) -> bool:
         return bool(self.frontmatter.get("verify", False))
 
@@ -397,6 +496,42 @@ class Card:
     def remove_section(self, name: str) -> None:
         self.sections = [s for s in self.sections if s.name != name]
 
+    # -- pictures ----------------------------------------------------------
+    def images(self) -> list[ImageRef]:
+        """Every picture this card asks for, in reading order.
+
+        `![alt](unit)` with no id means the unit the card was written from,
+        which is the common case and the one worth not repeating: the card
+        already says which unit it came from in its frontmatter. A card that
+        names no unit and writes the bare form has an unresolvable reference,
+        which `check` reports rather than this silently dropping.
+        """
+        found: list[ImageRef] = []
+        for section in self.canonical().sections:
+            if section.name in UNRENDERED_SECTIONS:
+                continue
+            for match in IMAGE_RE.finditer(section.body):
+                found.append(
+                    ImageRef(
+                        raw=match.group(0),
+                        alt=match.group(1).strip(),
+                        unit=(match.group(2) or self.unit).strip(),
+                        section=section.name,
+                        index=len(found),
+                    )
+                )
+        return found
+
+    @property
+    def has_image(self) -> bool:
+        return bool(IMAGE_RE.search(self.body_text()))
+
+    def body_text(self) -> str:
+        """Every section that reaches Anki, joined. For a cheap scan."""
+        return "\n".join(
+            s.body for s in self.sections if s.name not in UNRENDERED_SECTIONS
+        )
+
     # -- annotations (DESIGN.md §8) ---------------------------------------
     def annotations(self) -> list[str]:
         """Open `@claude ...` / `@me ...` lines from `## notes`, verbatim."""
@@ -416,21 +551,65 @@ class Card:
         body = self.section("notes")
         self.set_section("notes", f"{body}\n{line}" if body else line)
 
-    def resolve_annotation(self, index: int) -> str:
-        """Drop the `index`-th annotation from `## notes` and return it.
+    def edit_annotation(self, index: int, text: str) -> str:
+        """Rewrite the `index`-th annotation in place, and return what it says.
 
-        Resolving a note *is* deleting it: there is no reply and no done-flag,
-        because a note that is still there still blocks sync. Non-annotation
-        lines in `## notes` are left where they are, so a resolve never
-        touches the prose around it.
+        Editing, not resolving: the line keeps its position and stays open, so
+        the card stays out of sync until somebody answers it. A note is a
+        scratchpad, and what you first wrote on it is often not what you meant;
+        the alternative was resolve-and-retype, which deletes the only copy of
+        the line before its replacement exists.
+
+        `annotation_line` decides what is written, so a reworded note is
+        byte-identical to one typed by hand, and dropping the `@me` off the
+        front of one moves it to `@claude` exactly as editing the file would.
+        """
+        line = annotation_line(text)
+        if not line:
+            raise CardError(f"an empty annotation cannot replace {index} on card {self.uid}")
+        lines = (self.section("notes") or "").splitlines()
+        marked = [i for i, existing in enumerate(lines) if annotation_audience(existing)]
+        if not 0 <= index < len(marked):
+            raise CardError(f"no annotation {index} on card {self.uid}")
+        lines[marked[index]] = line
+        self.set_section("notes", "\n".join(lines).strip())
+        return line
+
+    def resolve_annotation(self, index: int, reply: str = "") -> str:
+        """Settle the `index`-th annotation and return the line it removed.
+
+        Resolving a note is deleting it **as an annotation**: a line that is
+        still addressed still blocks sync, so there is no reply-in-place and
+        no done-flag.
+
+        With a `reply`, what it asked and what was done are written back
+        unaddressed, in its position. That is the same trade `Ledger.answer`
+        makes on a unit: deleting the line throws away the question, and the
+        question is most of what made the answer worth keeping. Without one
+        the line goes outright, which is right when the note was a reminder
+        rather than a request.
+
+        Non-annotation lines in `## notes` are left where they are, so a
+        resolve never touches the prose around it.
         """
         lines = (self.section("notes") or "").splitlines()
         marked = [i for i, line in enumerate(lines) if annotation_audience(line)]
         if not 0 <= index < len(marked):
             raise CardError(f"no annotation {index} on card {self.uid}")
-        removed = lines.pop(marked[index])
+        at = marked[index]
+        removed = lines[at]
+        record = resolved_line(removed, reply)
+        if record:
+            lines[at] = record
+        else:
+            lines.pop(at)
         self.set_section("notes", "\n".join(lines).strip())
         return removed
+
+    def resolved(self) -> list[str]:
+        """Every settled annotation on this card, oldest first, as written."""
+        body = self.section("notes") or ""
+        return [line.strip() for line in body.splitlines() if is_resolved(line)]
 
     # -- hashing (DESIGN.md §3.5, §8) -------------------------------------
     def content_hash(self, *, legacy: bool = False) -> str:
@@ -521,8 +700,9 @@ class Card:
     def set_grade(self, key: str, value: Any) -> None:
         """Change one unhashed judgement, carrying any approval with it.
 
-        `frequency`, `derivation` and `web` are outside `content_hash`, so a
-        card stamped under today's rule survives this untouched. One stamped
+        `frequency`, `derivation`, `web` and `augmented` are outside
+        `content_hash`, so a card stamped under today's rule survives this
+        untouched. One stamped
         under the older rule does not -- its digest covers the very key being
         changed -- and it would come back as `edited`, which is a lie: nobody
         edited the mathematics, a grading moved.

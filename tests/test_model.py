@@ -410,3 +410,174 @@ def test_resolving_an_index_that_is_not_there_is_refused(card_path: Path) -> Non
     card = model.load(card_path)
     with pytest.raises(CardError):
         card.resolve_annotation(0)
+
+
+def test_edit_annotation_rewrites_the_line_where_it_stands(card_path: Path) -> None:
+    """Editing, not resolving. The note keeps its place and stays open, and
+    the prose around it is left alone."""
+    card = model.load(card_path)
+    card.set_section("notes", "a plain note that is not addressed to anyone")
+    card.add_annotation("@me a decison")
+    card.add_annotation("work for the agent")
+
+    written = card.edit_annotation(0, "@me a decision")
+
+    assert written == "@me a decision"
+    assert card.annotations() == ["@me a decision", "@claude work for the agent"]
+    assert "a plain note that is not addressed to anyone" in card.section("notes")
+
+
+def test_an_edit_may_move_a_note_to_the_other_audience(card_path: Path) -> None:
+    """The prefix is part of the line, so dropping it sends the note to
+    Claude exactly as editing the file would."""
+    card = model.load(card_path)
+    card.add_annotation("@me is this the right layout?")
+
+    card.edit_annotation(0, "is this the right layout?")
+
+    assert card.annotations() == ["@claude is this the right layout?"]
+
+
+def test_an_edited_note_still_holds_the_card(card_path: Path) -> None:
+    """Rewording is not answering: the one thing that unblocks sync is the
+    line being gone."""
+    card = model.load(card_path)
+    card.add_annotation("@me a decision")
+    card.approve()
+    before = card.content_hash()
+
+    card.edit_annotation(0, "@me a decision, by Friday")
+
+    assert card.content_hash() == before, "`## notes` is outside the hash"
+    assert card.effective_status == "draft"
+    assert card.demotion == "annotated"
+
+
+def test_editing_an_index_or_an_empty_line_is_refused(card_path: Path) -> None:
+    """Emptying the box is not how a note is deleted: resolve is, and resolve
+    hands the line back for undo where this would not."""
+    card = model.load(card_path)
+    with pytest.raises(CardError):
+        card.edit_annotation(0, "still nothing there")
+
+    card.add_annotation("@me a decision")
+    with pytest.raises(CardError):
+        card.edit_annotation(0, "   ")
+    assert card.annotations() == ["@me a decision"]
+
+
+# -- the one state that is not readable off the content ---------------------
+
+
+def test_augmented_is_outside_the_content_hash(card_path: Path) -> None:
+    """The pass's right answer is usually to add nothing, so hashing its
+    receipt would un-approve every card it decided to leave alone."""
+    card = model.load(card_path)
+    card.approve()
+    card.save()
+
+    again = model.load(card_path)
+    again.set_grade("augmented", True)
+    again.save()
+
+    settled = model.load(card_path)
+    assert settled.augmented is True
+    assert settled.effective_status == "approved", "recording the pass is not an edit"
+
+
+def test_withdrawing_it_is_how_you_ask_again(card_path: Path) -> None:
+    card = model.load(card_path)
+    card.set_grade("augmented", True)
+    card.set_grade("augmented", "")
+    card.save()
+
+    assert model.load(card_path).augmented is False
+    assert "augmented" not in model.load(card_path).frontmatter, "removed, not false"
+
+
+def test_a_card_says_nothing_about_it_by_default(card_path: Path) -> None:
+    assert model.load(card_path).augmented is False
+
+
+# -- what a settled annotation leaves behind --------------------------------
+
+
+def test_a_reply_keeps_the_question_it_answered(card_path: Path) -> None:
+    """Deleting the line threw away both halves, and the question is most of
+    what makes the answer worth having: "fixed" tells you nothing six weeks
+    later about whether the point you made was taken."""
+    card = model.load(card_path)
+    card.add_annotation("@claude check the sign on the second term")
+
+    card.resolve_annotation(0, "the sign was right; the condition it needs is now stated")
+
+    assert card.annotations() == []
+    assert card.resolved() == [
+        "resolved: check the sign on the second term \u2014 "
+        "the sign was right; the condition it needs is now stated"
+    ]
+
+
+def test_a_record_is_not_an_annotation(card_path: Path) -> None:
+    """The whole reason a settled note can stay on the card: it carries no
+    address, so nothing reads it as work and it does not hold the card back.
+    `sync` refuses an annotated card whatever its status."""
+    card = model.load(card_path)
+    card.add_annotation("@claude too thin")
+    card.resolve_annotation(0, "added the derivation in ## proof")
+
+    assert card.annotations() == []
+    assert model.annotation_audience(card.resolved()[0]) == ""
+
+
+def test_a_record_does_not_withdraw_an_approval(card_path: Path) -> None:
+    """`## notes` is outside `content_hash`, so settling a note restores the
+    approval rather than costing a re-review. That is the same rule resolving
+    already relied on, and it has to survive the line staying."""
+    card = model.load(card_path)
+    card.add_annotation("@claude check the sign")
+    card.approve()
+    before = card.content_hash()
+
+    card.resolve_annotation(0, "the sign was right")
+
+    assert card.content_hash() == before
+    assert card.effective_status == "approved"
+    assert card.demotion == ""
+
+
+def test_no_reply_still_deletes_outright(card_path: Path) -> None:
+    """Right when the note was a reminder rather than a request. A record of
+    "remember to look at this" and nothing else is noise on the card."""
+    card = model.load(card_path)
+    card.add_annotation("@claude have another look")
+
+    card.resolve_annotation(0)
+
+    assert card.annotations() == [] and card.resolved() == []
+
+
+def test_the_record_keeps_the_line_s_place(card_path: Path) -> None:
+    """Settled in order, so reading down the list is reading the history of
+    the card rather than a pile in the order somebody happened to answer."""
+    card = model.load(card_path)
+    card.add_annotation("@claude first")
+    card.add_annotation("@claude second")
+
+    card.resolve_annotation(0, "did the first")
+
+    notes = (card.section("notes") or "").splitlines()
+    assert notes[0].startswith("resolved: first")
+    assert notes[1] == "@claude second"
+
+
+def test_prose_in_notes_is_left_alone(card_path: Path) -> None:
+    """Invariant 7 puts real content in `## notes`: any condition added that
+    the source does not state. Settling a note must not disturb it."""
+    card = model.load(card_path)
+    card.set_section("notes", "The source states this only for symmetric X.")
+    card.add_annotation("@claude check the sign")
+
+    card.resolve_annotation(0, "right as written")
+
+    assert "The source states this only for symmetric X." in (card.section("notes") or "")

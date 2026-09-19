@@ -70,8 +70,8 @@ class SourceConfig:
     # `box` or `page`; empty inherits, and what it inherits depends on where
     # the geometry came from -- see `Config.crop_width_for`.
     crop_width: str = ""
-    # Pages either side handed to a card writer; -1 inherits.
-    context_pages: int = -1
+    # Pages either side handed to a card writer, or `chapter`; -1 inherits.
+    context_pages: int | str = -1
     # The Zotero item this source was imported from, when it was. Not used to
     # find anything -- the units carry their own attachment keys -- but it is
     # what makes "where did this come from" answerable without opening Zotero.
@@ -95,6 +95,9 @@ class SourceConfig:
     # read last week, and a scheme that is wrong is worse than none.
     units_from: frozenset[str] = frozenset()
     meanings: Mapping[str, str] = field(default_factory=dict)
+    # The word that asks for a convention here, when this document is read in
+    # another language than the rest of the shelf. Empty inherits.
+    convention_keyword: str = ""
     # What is ambient in this source, as keys rather than prose: `[conventions]`
     # in `source.toml`. Free-form -- see `CONVENTIONS_ACTED_ON`. There is no
     # repo-wide counterpart, deliberately: a default convention is a claim
@@ -153,6 +156,73 @@ DEFAULT_MEANINGS: Mapping[str, str] = {
 # cannot have made.
 COLOURLESS_KINDS = frozenset({"ink"})
 
+#: Where a source imported from Zotero puts its cards when it names no deck
+#: of its own. A subtree rather than the repo default: what you have read is
+#: not yet what you have decided to keep, and one parent deck is what makes
+#: the whole import studiable, suspendable and deletable in one move.
+ZOTERO_DECK = "Zotero"
+
+
+def zotero_deck(title: str, key: str = "") -> str:
+    """`Zotero::<title>`, safe to hand to Anki.
+
+    `::` is Anki's subdeck separator, so a title carrying one would quietly
+    nest two levels deeper than anybody asked for. Whitespace is collapsed for
+    the same reason a deck called `Probabilistic  Artificial Intelligence`
+    with two spaces in it is a deck you will mistype once and then wonder
+    about.
+    """
+    name = " ".join(str(title or key or "unnamed").replace("::", ":").split())
+    return f"{ZOTERO_DECK}::{name}"
+
+
+#: The one window size that is not a number of pages. A card writer is given
+#: the unit's page and some number either side; between "ten pages" and "the
+#: whole book" the size you actually want is the chapter, because a chapter is
+#: the span a book states its standing assumptions in and no count of pages
+#: either side knows where it starts. Stored as the word, in the ledger and in
+#: both TOML files, so the file says what it means.
+CHAPTER = "chapter"
+
+
+def context_size(value: Any, where: str) -> int | str:
+    """A window: a number of pages either side, or `chapter`.
+
+    Both TOML levels and the ledger accept either, and all three keep whichever
+    was written. A number that is out of range is not refused -- 999 is how you
+    ask for the whole document, and `_pages` simply skips the pages that are
+    not there.
+    """
+    if isinstance(value, str):
+        word = value.strip().lower()
+        if word == CHAPTER:
+            return CHAPTER
+        if word.lstrip("-").isdigit():
+            return int(word)
+        raise ConfigError(f"{where} = {value!r}; expected a number of pages or {CHAPTER!r}")
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ConfigError(f"{where} = {value!r}; expected a number of pages or {CHAPTER!r}")
+    return value
+
+
+def context_asked(value: int | str) -> bool:
+    """Whether this level has an opinion about the window.
+
+    A negative number is how a number says it does not; `chapter` always does.
+    """
+    return value == CHAPTER or (isinstance(value, int) and value >= 0)
+
+
+#: What a comment has to open with to be asking for a convention rather than
+#: a card. Configurable because it is a word you type while reading, in
+#: whatever language you read in, and overridable per source for the same
+#: reason the colour scheme is: one document is not read the way the shelf is.
+CONVENTION_KEYWORD = "convention"
+
+#: What may stand between the keyword and the proposal. Anything else means
+#: the comment merely starts with the same letters.
+SEPARATORS = ":-,.\u2014 \t\n"
+
 # `units_from = "declared"`: every pair `[zotero.meanings]` names, rather than
 # a list you keep in step with it by hand. For a document you mark sparingly,
 # where writing a colour down at all means you expect a card out of it.
@@ -200,6 +270,30 @@ class ZoteroConfig:
     #: known until a source's override has been applied over the repo's.
     units_from: frozenset[str] = frozenset()
     meanings: Mapping[str, str] = field(default_factory=dict)
+    #: The word that turns a comment into a request for a convention. A
+    #: convention governs every card written here afterwards and has no review
+    #: gate of its own, so what this produces is a proposal parked for you,
+    #: never a line written into `conventions.md`.
+    convention_keyword: str = CONVENTION_KEYWORD
+
+    def convention_in(self, comment: str) -> str:
+        """What this comment proposes as a convention, or "".
+
+        The keyword has to open the comment and end where it ends, so a note
+        beginning "conventional choice of sign" is a note about the maths. What
+        comes back is the rest of it, which is the proposal itself.
+        """
+        text = comment.strip()
+        word = self.convention_keyword.strip()
+        if not word or not text.lower().startswith(word.lower()):
+            return ""
+        # The character the keyword ends on, before anything is stripped:
+        # stripping first eats the space that separates `convention entries
+        # are real` from `conventional choice of sign`.
+        tail = text[len(word) :]
+        if tail[:1] and tail[:1] not in SEPARATORS:
+            return ""
+        return tail.lstrip(SEPARATORS).strip()
 
     @property
     def unit_pairs(self) -> frozenset[str]:
@@ -270,7 +364,7 @@ class Config:
     front_char_cap: int
     crop_context: float
     crop_width: str
-    context_pages: int
+    context_pages: int | str
     anki_url: str
     deck: str
     note_type_name: str
@@ -341,14 +435,19 @@ class Config:
         `data_dir` is a fact about the machine, so it never varies per source;
         the meanings do, and an override replaces rather than merges, because
         a half-inherited colour scheme is the failure this exists to prevent.
+
+        The keyword is the third thing a source may read differently, for the
+        plainest reason of the three: it is a word you type while reading, and
+        you do not always read in the same language.
         """
         spec = self.sources.get(source)
-        if spec is None or (not spec.units_from and not spec.meanings):
+        if spec is None or not (spec.units_from or spec.meanings or spec.convention_keyword):
             return self.zotero
         return ZoteroConfig(
             data_dir=self.zotero.data_dir,
             units_from=spec.units_from or self.zotero.units_from,
             meanings=dict(spec.meanings) or dict(self.zotero.meanings),
+            convention_keyword=spec.convention_keyword or self.zotero.convention_keyword,
         )
 
     def crop_context_for(self, source: str) -> float:
@@ -386,17 +485,18 @@ class Config:
             return self.crop_width
         return "page" if from_a_mark else "box"
 
-    def context_pages_for(self, source: str, unit: int | None = None) -> int:
-        """How many pages either side a card writer gets, most specific first.
+    def context_pages_for(self, source: str, unit: int | str | None = None) -> int | str:
+        """The window a card writer gets, most specific first.
 
-        The unit wins, because triage is where you can see that this theorem's
-        hypotheses are two pages back. Then the source, because how much a page
-        carries is a fact about how a book is set. Then the repo.
+        A number of pages either side, or `chapter`. The unit wins, because
+        triage is where you can see that this theorem's hypotheses are two
+        pages back. Then the source, because how much a page carries is a fact
+        about how a book is set. Then the repo.
         """
         if unit is not None:
             return unit
         spec = self.sources.get(source)
-        if spec and spec.context_pages >= 0:
+        if spec and context_asked(spec.context_pages):
             return spec.context_pages
         return self.context_pages
 
@@ -427,7 +527,10 @@ class Config:
 
         Per source, because two books are two subjects far more often than
         they are one. A card that names no source falls back to the repo
-        default rather than going nowhere.
+        default rather than going nowhere, and one imported from Zotero falls
+        back to `Zotero::<title>`: a shelf you are reading through is not the
+        deck you have decided to keep, and the parent is what makes an import
+        studiable or removable in one move.
 
         Per *type* as well, when a source says so, because a restatement and an
         explanation want different new-card rates: five mechanical facts a day
@@ -438,7 +541,14 @@ class Config:
         spec = self.sources.get(source)
         if spec and card_type and spec.decks.get(card_type):
             return spec.decks[card_type]
-        return spec.deck if spec and spec.deck else self.deck
+        if spec and spec.deck:
+            return spec.deck
+        if spec and spec.zotero_key:
+            # Imported reading, which is not the deck you curated. Said here
+            # rather than written into the source file, so it is one decision
+            # in one place and a source overrides it by naming a deck.
+            return zotero_deck(spec.title, spec.zotero_key)
+        return self.deck
 
     def conventions_for(self, source: str) -> Mapping[str, str]:
         """What is ambient in this source, as keys: `[conventions]`.
@@ -550,7 +660,9 @@ def load(root: Path | None = None) -> Config:
             order=_order(spec.get("order", "printed"), f"[sources.{name}]"),
             crop_context=float(spec.get("crop_context", 0.0)),
             crop_width=_crop_width(spec.get("crop_width", ""), f"[sources.{name}]"),
-            context_pages=int(spec.get("context_pages", -1)),
+            context_pages=context_size(
+                spec.get("context_pages", -1), f"[sources.{name}] context_pages"
+            ),
             zotero_key=str(spec.get("zotero", "") or ""),
             decks={str(k): str(v) for k, v in (spec.get("decks") or {}).items()},
             tags=tuple(str(x) for x in spec.get("tags", ())),
@@ -558,6 +670,7 @@ def load(root: Path | None = None) -> Config:
             units_from=_units_from(
                 spec.get("units_from", ()), f"[sources.{name}] units_from"
             ),
+            convention_keyword=str(spec.get("convention_keyword", "") or ""),
             meanings=_meanings(spec.get("meanings") or {}, f"[sources.{name}.meanings]"),
         )
 
@@ -570,7 +683,7 @@ def load(root: Path | None = None) -> Config:
         front_char_cap=int(cards.get("front_char_cap", 160)),
         crop_context=float(cards.get("crop_context", 0.0)),
         crop_width=_crop_width(cards.get("crop_width", ""), "[cards]"),
-        context_pages=int(cards.get("context_pages", 1)),
+        context_pages=context_size(cards.get("context_pages", 1), "[cards] context_pages"),
         study_order=_study_order(cards.get("study_order"), "[cards]"),
         web=bool(cards.get("web", False)),
         anki_url=os.environ.get("ANKI_CONNECT_URL", anki.get("url", "http://127.0.0.1:8765")),
@@ -783,6 +896,9 @@ def _zotero(raw: Any) -> ZoteroConfig:
         data_dir=Path(data_dir).expanduser(),
         units_from=_units_from(section.get("units_from", ()), "[zotero] units_from"),
         meanings=_meanings(section.get("meanings", {}), "[zotero.meanings]"),
+        convention_keyword=str(
+            section.get("convention_keyword", CONVENTION_KEYWORD) or CONVENTION_KEYWORD
+        ),
     )
 
 

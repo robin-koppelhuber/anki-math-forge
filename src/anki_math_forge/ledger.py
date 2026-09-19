@@ -16,13 +16,13 @@ from __future__ import annotations
 import json
 import os
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .model import ANNOTATION_PREFIX, annotation_audience, write_atomic
+from .model import ANNOTATION_PREFIX, annotation_audience, note_body, write_atomic
 
 STATES = ("new", "queued", "skipped", "carded")
 
@@ -199,12 +199,13 @@ class Unit:
     uids: list[str] = field(default_factory=list)  # cards produced from it
     notes: list[str] = field(default_factory=list)  # @claude annotations
     marks: list[Mark] = field(default_factory=list)  # what a reader marked here
-    # Pages either side of this one that a card writer should be handed. `None`
-    # inherits the source's setting, which inherits the repo's. Set during
-    # triage, where you can see that a theorem's hypotheses are two pages back
-    # and the default window would cut them off. Human-owned: extraction never
-    # touches it, so it survives a re-segmentation like `state` does.
-    context_pages: int | None = None
+    # Pages either side of this one that a card writer should be handed, or
+    # the word `chapter` for the whole chapter this unit is in. `None` inherits
+    # the source's setting, which inherits the repo's. Set during triage, where
+    # you can see that a theorem's hypotheses are two pages back and the
+    # default window would cut them off. Human-owned: extraction never touches
+    # it, so it survives a re-segmentation like `state` does.
+    context_pages: int | str | None = None
     # Whether whoever writes this card may look things up on the web. `None`
     # inherits the source, which inherits the repo, which is off. Human-owned
     # like `context_pages`, and granted here for the same reason: triage is
@@ -222,6 +223,42 @@ class Unit:
         """The transcription to show: source LaTeX if we have it, else the
         one `/transcribe` read off the crop."""
         return self.tex_source or self.tex_auto
+
+    @property
+    def own_mark(self) -> Mark | None:
+        """The mark this unit came from, when it came from one.
+
+        The first mark carries the unit's own key; the rest are what was
+        marked on the pages around it.
+        """
+        for mark in self.marks:
+            if mark.key and mark.key in self.id:
+                return mark
+        return None
+
+    @property
+    def drawn_box(self) -> bool:
+        """Whether this unit's box was drawn rather than inferred.
+
+        Invariant 8 cuts a mark's crop to the page width, because a
+        highlight's left and right edges are wherever a sentence happened to
+        start and stop. An image or an ink annotation is the exception the
+        invariant implies: somebody dragged that rectangle around a figure, so
+        its edges mean exactly what they say and widening it to the page would
+        hand over the paragraph beside the figure as well.
+        """
+        mark = self.own_mark
+        return bool(mark and mark.kind in ("image", "ink"))
+
+    @property
+    def crops_to_page(self) -> bool:
+        """Whether this unit's crop should be widened to the page.
+
+        The `from_a_mark` answer `Config.crop_width_for` asks for, in one
+        place, because the app renders these for the screen and `sync` renders
+        them for Anki and a card is approved on the strength of the first.
+        """
+        return bool(self.marks) and not self.drawn_box
 
     @property
     def has_crop(self) -> bool:
@@ -296,11 +333,10 @@ class Unit:
 def _note_body(note: str) -> str:
     """An annotation without its `@claude` / `@me` prefix.
 
-    Stripping only what is actually there, rather than a fixed width, so a
-    hand-edited note that does not carry the exact prefix survives intact.
+    The card side settles its own annotations the same way and needs the same
+    stripping, so there is one of these rather than two that agree today.
     """
-    audience = annotation_audience(note)
-    return note.strip() if not audience else note.strip()[len(audience) + 1 :].strip()
+    return note_body(note)
 
 
 class Ledger:
@@ -427,6 +463,37 @@ class Ledger:
             dropped.append(unit)
         removed = len(self.units) - len(dropped)
         self.units = dropped
+        return removed, kept
+
+    def drop_from_scheme(self, makes_a_unit: Callable[[str, str], bool]) -> tuple[int, int]:
+        """Forget untouched units whose own mark no longer starts one.
+
+        Returns `(dropped, kept)`, the same trade `drop_from_documents` makes
+        and for the same reason: narrowing `units_from` leaves the earlier
+        import behind, and those units are indistinguishable from real work in
+        every count, filter and command the app generates.
+
+        **Only units nothing human has touched**: still `new`, no cards, no
+        notes, no suggestion acted on. A unit you triaged is a decision, and a
+        config change is about what to import next rather than about undoing
+        one. That guard is also what keeps a card's `unit:` from dangling: a
+        unit with `uids` has a card and is never forgotten.
+
+        A unit with no marks came from a segmenter rather than from a reader,
+        so no colour scheme has anything to say about it.
+        """
+        keeping, kept = [], 0
+        for unit in self.units:
+            anchor = unit.marks[0] if unit.marks else None
+            if anchor is None or makes_a_unit(anchor.kind, anchor.colour):
+                keeping.append(unit)
+                continue
+            if unit.state == "new" and not unit.uids and not unit.notes and not unit.suggestion:
+                continue  # forget it
+            kept += 1
+            keeping.append(unit)
+        removed = len(self.units) - len(keeping)
+        self.units = keeping
         return removed, kept
 
     def suggest(self, unit_id: str, state: str, reason: str, detail: str, by: str) -> Unit:

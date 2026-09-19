@@ -263,7 +263,11 @@ def test_the_source_facts_say_when_nothing_is_declared(zotero_config: Config) ->
     assert facts["conventions"] is False
     assert facts["origin"] == "zotero"
     assert facts["crop_width"] == "box", "nothing said, and nothing asked about marks"
-    assert facts["deck"] == zotero_config.deck, "inherited, and shown as the resolved value"
+    # Resolved, not inherited from `[anki] deck`: a source that came from
+    # Zotero and names no deck of its own falls back to `Zotero::<title>`, and
+    # the panel shows where the cards will actually land rather than the
+    # repo-wide setting they do not use.
+    assert facts["deck"] == "Zotero::A Paper"
 
 
 # -- the scheme has a floor -------------------------------------------------

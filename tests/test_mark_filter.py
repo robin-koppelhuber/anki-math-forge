@@ -171,3 +171,99 @@ def test_each_cell_carries_what_you_said_it_means(repo: Path) -> None:
 def test_a_source_with_no_marks_gets_no_rail(config: Config) -> None:
     """So the Cookbook's rail is exactly what it was."""
     assert mark_matrix([Unit(id="demo:2.4:61")], config, "demo") == {}
+
+
+# -- marked, and never a unit ----------------------------------------------
+
+
+def test_a_mark_that_never_made_a_unit_still_shows_what_you_drew(repo: Path) -> None:
+    """The cell was empty, which is what a combination nobody has ever drawn
+    looks like. Two facts, one square: `units_from` is narrower than the way
+    you are marking, and that is the thing worth seeing."""
+    units = [
+        a_unit("a", ("highlight", "green"), ("highlight", "purple")),
+        a_unit("b", ("highlight", "green"), ("highlight", "purple")),
+    ]
+
+    matrix = mark_matrix(units, declared(repo), "demo")
+
+    purple = cells(matrix, "highlight")["purple"]
+    assert purple["count"] == 0, "no unit came from a purple highlight"
+    assert purple["marks"] == 2, "but two were drawn"
+
+
+def test_one_mark_beside_two_units_is_counted_once(repo: Path) -> None:
+    """A mark rides along on every unit within a few pages of it."""
+    shared = Mark(key="shared", kind="highlight", colour="purple")
+    units = [
+        Unit(id="demo:a", marks=[Mark(key="a", kind="highlight", colour="green"), shared]),
+        Unit(id="demo:b", marks=[Mark(key="b", kind="highlight", colour="green"), shared]),
+    ]
+
+    matrix = mark_matrix(units, declared(repo), "demo")
+
+    assert cells(matrix, "highlight")["purple"]["marks"] == 1
+
+
+def test_a_combination_nobody_drew_is_still_empty(repo: Path) -> None:
+    """The state this one has to stay distinguishable from."""
+    matrix = mark_matrix([a_unit("a", ("highlight", "green"))], declared(repo), "demo")
+
+    blue = cells(matrix, "highlight")["blue"]
+    assert blue["count"] == 0 and blue["marks"] == 0
+
+
+def test_the_axis_totals_stay_unit_counts(repo: Path) -> None:
+    """The header sits over a column of unit counts; a total in a different
+    unit of measure is a number nobody can add up."""
+    units = [a_unit("a", ("highlight", "green"), ("highlight", "purple"))]
+
+    matrix = mark_matrix(units, declared(repo), "demo")
+
+    row = next(r for r in matrix["rows"] if r["kind"] == "highlight")
+    purple_column = next(c for c in matrix["colours"] if c["colour"] == "purple")
+    assert row["count"] == 1
+    assert purple_column["count"] == 0
+
+
+# The fixture's config declares what marks *mean* and not which of them start
+# a unit, so a test about that has to say it.
+UNITS_FROM = '\n[zotero]\nunits_from = ["highlight/green", "note/yellow"]\n'
+
+
+def test_a_pair_units_from_does_not_name_says_so(repo: Path) -> None:
+    """The scope-free reason. The grid is built from the state you are
+    filtered to, so "no units here" and "no units ever" are different claims
+    and only the scheme can tell them apart."""
+    config = declared(repo, UNITS_FROM + MEANINGS)
+    units = [a_unit("a", ("highlight", "green"), ("highlight", "purple"))]
+
+    matrix = mark_matrix(units, config, "demo")
+
+    assert cells(matrix, "highlight")["purple"]["unit_making"] is False
+    assert cells(matrix, "highlight")["green"]["unit_making"] is True
+
+
+def test_a_named_pair_with_no_unit_in_view_is_not_blamed_on_the_scheme(repo: Path) -> None:
+    """`note/yellow` starts a unit here. A view holding none of them is a
+    filter, not a scheme that stopped naming it."""
+    config = declared(repo, UNITS_FROM + MEANINGS)
+    units = [a_unit("a", ("highlight", "green"), ("note", "yellow"))]
+
+    matrix = mark_matrix(units, config, "demo")
+
+    yellow = cells(matrix, "note")["yellow"]
+    assert (yellow["count"], yellow["marks"]) == (0, 1)
+    assert yellow["unit_making"] is True, "the tooltip blames the filter, not units_from"
+
+
+def test_a_marked_cell_with_no_units_is_not_clickable(repo: Path) -> None:
+    """A filter that can only ever return nothing is a dead control, so it
+    carries the count and no link."""
+    units = [a_unit("a", ("highlight", "green"), ("highlight", "purple"))]
+
+    matrix = mark_matrix(units, declared(repo), "demo")
+
+    purple = cells(matrix, "highlight")["purple"]
+    assert purple["key"] == "highlight/purple", "it still names itself for the tooltip"
+    assert purple["count"] == 0, "and the template keys the link off the unit count"

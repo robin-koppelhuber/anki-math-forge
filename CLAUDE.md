@@ -25,7 +25,8 @@ Tests cite these by number. Each links to the reasoning.
    must not become a card by inheritance.
 5. **Editing an approved card un-approves it.** `content_hash` covers content
    and nothing else. Outside it: `status`, `content_hash`, `## notes`,
-   `## verify`, `verify`, `requires`, `frequency`, `derivation`, `web`, `gist`.
+   `## verify`, `verify`, `requires`, `frequency`, `derivation`, `web`, `gist`,
+   `augmented`.
    Nothing rewrites a file to enforce this; `Card.demotion` reports it, and
    fixing the cause restores the approval with no re-review.
 6. **Card content guidelines live in the skill, not in code.** The Python never
@@ -51,13 +52,21 @@ source and every loader `rglob`s.
 Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
 `unit`, `tags`, `verify`, and optionally `frequency` (`core | common | rare`),
-`derivation` (`definitional | short | long`), `web` and `gist` (a few words
-naming the card, for a list or a graph node; never reaches Anki). An unrecognised
-`frequency` or `derivation` is a `check` error.
+`derivation` (`definitional | short | long`), `web`, `gist` (a few words
+naming the card, for a list or a graph node; never reaches Anki) and
+`augmented` (whether `/augment` has been over it: the one card state that
+cannot be read off the content, since that pass's usual right answer is to add
+nothing). An unrecognised `frequency` or `derivation` is a `check` error.
 
 Sections: `## front` and `## back` required; `conditions`, `prose`, `uses`,
 `proof`, `verify`, `notes` optional. Math is `$...$` / `$$...$$`. `## notes`
 and `## verify` never reach Anki.
+
+A picture is `![what it shows](unit:<id>)`, or `![...](unit)` for the card's
+own unit. There is no image file: the crop is rendered from the source
+document and uploaded when `sync` runs, so it stays reproducible and
+re-segmenting the unit fixes every card that shows it. Which section it goes
+in is the writer's call. `check` refuses a card whose picture cannot be drawn.
 
 `identity` states a fact and `verify` can check it numerically. `intuition`
 explains one and has no `## verify` and no `## conditions`.
@@ -88,7 +97,8 @@ uv run forge classify           # *propose* skips; applies nothing
 uv run forge audit              # is the index trustworthy? 1..N, no gaps
 uv run forge crops --section 2.4 --untranscribed --out DIR --json
 uv run forge context <unit-id>  # the page it was printed on (--pages N for more,
-                                #   counted *either side*: 3 hands over seven),
+                                #   counted *either side*: 3 hands over seven;
+                                #   --pages chapter for the chapter it is in),
                                 #   plus whether web lookups are allowed here
 uv run forge units --id <id> --web yes|no|inherit   # grant or refuse them
 uv run forge source-text <src>  # the book text, for card-writing context

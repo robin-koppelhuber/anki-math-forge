@@ -26,7 +26,7 @@ from . import extract as extract_mod
 from . import latex, model, todo, verify
 from . import ledger as ledger_mod
 from .anki import AnkiConnect, AnkiError
-from .config import SOURCE_TOML, Config, ConfigError, load
+from .config import CHAPTER, SOURCE_TOML, Config, ConfigError, context_size, load
 
 OK, FAILED, MISUSE = 0, 1, 2
 
@@ -65,6 +65,18 @@ def _force_utf8() -> None:
         if reconfigure is not None:
             with contextlib.suppress(ValueError, OSError):
                 reconfigure(encoding="utf-8", errors="replace")
+
+
+def _window(value: str) -> int | str:
+    """`--pages` / `--context-pages`: a number of pages, or `chapter`.
+
+    The same vocabulary the TOML files take, so what you widen one call with is
+    what you write onto the unit afterwards.
+    """
+    try:
+        return context_size(value, "--pages")
+    except ConfigError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -146,13 +158,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("unit", help="unit id, shaped <source>:<section>:<equation>")
     p.add_argument(
         "--pages",
-        type=int,
+        type=_window,
         default=None,
         metavar="N",
         help=(
-            "pages either side to print. Defaults to whatever the unit, its "
-            "source or the repo asks for, so a unit marked during triage as "
-            "needing more gets it without the caller knowing"
+            "pages either side to print, or `chapter` for the whole chapter "
+            "this unit is in. Defaults to whatever the unit, its source or the "
+            "repo asks for, so a unit marked during triage as needing more "
+            "gets it without the caller knowing"
         ),
     )
     p.add_argument("--json", action="store_true")
@@ -176,14 +189,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--context-pages",
-        type=int,
+        type=_window,
         default=None,
         metavar="N",
         help=(
-            "how many pages either side a card writer should get for --id. "
-            "Set it during triage, when you can see the hypotheses are two "
-            "pages back. A large number means the whole document; -1 goes "
-            "back to inheriting the source's setting"
+            "how many pages either side a card writer should get for --id, or "
+            "`chapter` for the chapter it is in. Set it during triage, when "
+            "you can see the hypotheses are two pages back. A large number "
+            "means the whole document; -1 goes back to inheriting the "
+            "source's setting"
         ),
     )
     p.add_argument(
@@ -344,6 +358,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--status", default=None, help="a card status or a unit state, e.g. approved, queued"
     )
+    p.add_argument(
+        "--source",
+        default=None,
+        help=(
+            "one source's notes. Worth reaching for on a repo with several: "
+            "conventions are per source, so working two books' notes in one "
+            "list means reloading the setting between every item"
+        ),
+    )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_todo)
 
@@ -365,6 +388,17 @@ def build_parser() -> argparse.ArgumentParser:
             "also put cards already in Anki into study order: frequency "
             "core-to-rare, then derivation definitional-to-long. Only cards "
             "you have not started are moved"
+        ),
+    )
+    p.add_argument(
+        "--move-decks",
+        action="store_true",
+        help=(
+            "also file cards that predate a `deck` change under the name the "
+            "config now gives them. Anki settles a deck when a note is added, "
+            "so without this a changed setting only moves the next card. Off "
+            "by default: everything else here adds to your collection, and "
+            "this moves cards you may have filed by hand"
         ),
     )
     p.add_argument("--json", action="store_true")
@@ -465,13 +499,21 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
             reports.append((source, item, report))
             if not args.dry_run and report.units:
                 stub = config.sources_dir / source / SOURCE_TOML
-                fresh = zotero_units.write_source_stub(stub, item)
+                scheme = config.zotero_for(source)
+                # The scheme in force, written into the stub commented out, so
+                # the first thing you see when you go to override one of these
+                # keys is the value you are replacing.
+                fresh = zotero_units.write_source_stub(stub, item, scheme=scheme)
                 ledger = ledger_mod.Ledger.load(config.units_path(source))
                 added, refreshed = ledger.upsert(report.units)
                 # Narrowing `documents` leaves the earlier import behind,
                 # describing a PDF this source has stopped reading. Untouched
                 # units go; anything decided stays and is reported.
                 dropped, kept = ledger.drop_from_documents(report.excluded)
+                # And narrowing `units_from` leaves behind units whose colour
+                # no longer starts one. Same trade, for the same reason: this
+                # run is the moment the scheme and the ledger are both in hand.
+                orphans, decided = ledger.drop_from_scheme(scheme.makes_a_unit)
                 ledger.save()
                 # And the text layer cached for a document nothing reads any
                 # more. `source-text` prints every one it finds, so leaving it
@@ -479,10 +521,14 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                 for key in report.excluded:
                     extract_mod.source_text_path(config, source, key).unlink(missing_ok=True)
                 report_line = f"{added} new, {refreshed} refreshed"
-                if dropped:
-                    report_line += f", {dropped} dropped"
+                if dropped or orphans:
+                    report_line += f", {dropped + orphans} dropped"
                 if kept:
                     report_line += f"; {kept} triaged units kept from excluded documents"
+                if decided:
+                    report_line += (
+                        f"; {decided} triaged units kept whose mark no longer makes one"
+                    )
                 if fresh:
                     report_line += f"; wrote {stub.relative_to(config.root)}"
             else:
@@ -817,11 +863,19 @@ def _mutate_unit(
                     return FAILED
                 # -1 is how you take the override off again, rather than
                 # guessing which number meant "inherit".
-                target.context_pages = None if args.context_pages < 0 else args.context_pages
+                asked_for = args.context_pages
+                target.context_pages = (
+                    None if isinstance(asked_for, int) and asked_for < 0 else asked_for
+                )
                 led.save()
                 asked = config.context_pages_for(target.source, target.context_pages)
                 print(
-                    f"{args.id}: card writers get {asked} page(s) either side"
+                    f"{args.id}: card writers get "
+                    + (
+                        "the chapter it is in"
+                        if asked == CHAPTER
+                        else f"{asked} page(s) either side"
+                    )
                     + ("" if target.context_pages is not None else " (inherited)")
                 )
             if args.gist is not None:
@@ -1039,7 +1093,12 @@ def cmd_audit(args: argparse.Namespace, config: Config) -> int:
         print("no units ledger yet; run `forge extract`", file=sys.stderr)
         return FAILED
 
-    reports = [audit_mod.audit(led, name) for name, led in ledgers.items()]
+    # The scheme goes in too: for a marked-up source, "is this index
+    # trustworthy" includes "does it still match what you said starts a unit".
+    reports = [
+        audit_mod.audit(led, name, config.zotero_for(name).makes_a_unit)
+        for name, led in ledgers.items()
+    ]
     if args.json:
         print(
             json.dumps(
@@ -1175,6 +1234,12 @@ def cmd_todo(args: argparse.Namespace, config: Config) -> int:
         items = [i for i in items if i.kind == args.kind]
     if args.status:
         items = [i for i in items if i.status == args.status]
+    if args.source:
+        # Same rule as `app.card_in_source`: a card whose units name no source
+        # belongs to all of them. It is misfiled, and a filter that hides it is
+        # worse than one that shows it twice -- an open note nobody can reach
+        # is an open note that blocks sync for ever.
+        items = [i for i in items if i.source in ("", args.source)]
     if args.json:
         print(json.dumps([i.as_dict() for i in items], indent=2, ensure_ascii=False))
         return OK
@@ -1188,7 +1253,7 @@ def cmd_todo(args: argparse.Namespace, config: Config) -> int:
 
 
 def _todo_filtered(args: argparse.Namespace) -> bool:
-    return bool(args.audience or args.kind or args.status)
+    return bool(args.audience or args.kind or args.status or args.source)
 
 
 def cmd_feedback(args: argparse.Namespace, config: Config) -> int:
@@ -1218,6 +1283,7 @@ def cmd_sync(args: argparse.Namespace, config: Config) -> int:
         dry_run=args.dry_run,
         reposition_new=args.reposition,
         templates=args.templates,
+        move_decks=args.move_decks,
     )
     if args.json:
         print(

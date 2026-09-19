@@ -204,6 +204,9 @@ class FakeAnki(AnkiConnect):
         # wherever the collection already was.
         self.cards: dict[int, dict[str, Any]] = {}
         self.calls: list[str] = []
+        # Anki's media folder: name -> base64. One flat namespace, like the
+        # real one.
+        self.media: dict[str, str] = {}
         self._next_id = 1000
         self._next_position = 1
         # Set to an action name to make it raise, for the paths where a write
@@ -222,6 +225,12 @@ class FakeAnki(AnkiConnect):
     # -- actions ----------------------------------------------------------
     def _do_version(self) -> int:
         return 6
+
+    def _do_storeMediaFile(self, filename: str, data: str) -> str:
+        # Keyed by name, which is the property worth having: a second sync of
+        # the same card must replace its picture rather than add one.
+        self.media[filename] = data
+        return filename
 
     def _do_deckNames(self) -> list[str]:
         return list(self.decks)
@@ -335,6 +344,15 @@ class FakeAnki(AnkiConnect):
     def _do_findCards(self, query: str) -> list[int]:
         deck = query.split('deck:"', 1)[-1].rstrip('"') if 'deck:"' in query else ""
         return [c["cardId"] for c in self.cards.values() if not deck or c["deck"] == deck]
+
+    def _do_changeDeck(self, cards: list[int], deck: str) -> None:
+        if deck not in self.decks:
+            self.decks.append(deck)
+        for card_id in cards:
+            self.cards[card_id]["deck"] = deck
+            # The note follows its cards: a note type with one card has no
+            # other answer, and this fake produces exactly one.
+            self.notes[self.cards[card_id]["note"]]["deck"] = deck
 
     def _do_cardsInfo(self, cards: list[int]) -> list[dict[str, Any]]:
         return [

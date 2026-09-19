@@ -24,6 +24,10 @@ class TodoItem:
     where: str  # file path or ledger path
     status: str = ""
     audience: str = "claude"  # who it is addressed to: claude | me
+    # Which source's work this is. Empty only for a card whose units name no
+    # source, which is a misfiled card rather than a card belonging nowhere --
+    # see the filter in `cmd_todo`.
+    source: str = ""
 
     def format(self) -> str:
         status = f" [{self.status}]" if self.status else ""
@@ -38,6 +42,7 @@ class TodoItem:
             "where": self.where,
             "status": self.status,
             "audience": self.audience,
+            "source": self.source,
         }
 
 
@@ -52,10 +57,11 @@ def collect(config: Config) -> list[TodoItem]:
                 TodoItem(
                     "card", card.uid, note, where, card.status,
                     model.annotation_audience(note) or "claude",
+                    source=card.source_name,
                 )
             )
 
-    for ledger in open_ledgers(config.sources_dir).values():
+    for name, ledger in open_ledgers(config.sources_dir).items():
         where = str(_relative(ledger.path, config.root))
         for unit in ledger:
             for note in unit.notes:
@@ -63,6 +69,9 @@ def collect(config: Config) -> list[TodoItem]:
                     TodoItem(
                         "unit", unit.id, note, where, unit.state,
                         model.annotation_audience(note) or "claude",
+                        # The ledger it was read from, not the id's prefix:
+                        # the file is where it actually lives.
+                        source=name,
                     )
                 )
 

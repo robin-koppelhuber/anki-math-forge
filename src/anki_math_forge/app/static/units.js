@@ -63,6 +63,10 @@ function paintState(item, unit) {
   }
 }
 
+/* The writes that leave a unit's state alone. Their undo has no state to
+   report, so it says what it put back instead. */
+const LEAVES_THE_STATE = new Set(["context size", "web lookups"]);
+
 async function undo() {
   const step = undoStack.pop();
   saveUndo("units", undoStack);
@@ -78,7 +82,12 @@ async function undo() {
   board.dataset.mtime = result.mtime;
   repaintCounts(result.pipeline);
   if (item) {
+    /* All three, because `restore` puts all three back: the snapshot carries
+       the state, the brief, the window and the web grant, and a repaint that
+       covers one of them leaves the other two showing what you just undid. */
     paintState(item, result.unit);
+    paintContext(item, result.unit);
+    paintWeb(item, result.unit);
     delete item.dataset.settled;
     const banner = item.querySelector(".settled");
     if (banner) banner.remove();
@@ -94,7 +103,14 @@ async function undo() {
     }
     deck.show(deck.items.indexOf(item));
   }
-  toast(`undone: ${step.what} → back to ${result.unit.state}`);
+  /* A state change is the only thing whose undo has a state to report. The
+     window and the web grant leave the state where it was, and naming it
+     there would print "back to new" about something that never moved. */
+  toast(
+    LEAVES_THE_STATE.has(step.what)
+      ? `undone: ${step.what} is back where it was`
+      : `undone: ${step.what} → back to ${result.unit.state}`,
+  );
 }
 
 async function setState(state, reason) {
@@ -262,7 +278,11 @@ function cycleContext() {
   const steps = Array.from(item.querySelectorAll("[data-context-step]"));
   const at = steps.findIndex((b) => b.classList.contains("on"));
   const next = steps[(at + 1) % steps.length];
-  return next ? setContext(item, Number(next.dataset.contextStep)) : undefined;
+  /* The step verbatim, not a number: one of the sizes is the word `chapter`,
+     and `Number("chapter")` is NaN, which the server would read as no size at
+     all. The server parses it, because it is the same vocabulary the TOML
+     files and `--pages` take. */
+  return next ? setContext(item, next.dataset.contextStep) : undefined;
 }
 
 async function setContext(item, pages) {
@@ -298,9 +318,11 @@ function paintContext(item, unit) {
 }
 
 function contextLabel(pages) {
-  if (pages === 0) return "this page only";
-  if (pages >= 100) return "the whole document";
-  return `${pages} page${pages === 1 ? "" : "s"} either side — ${2 * pages + 1} in all`;
+  if (pages === "chapter") return "the chapter it is in";
+  const size = Number(pages);
+  if (size === 0) return "this page only";
+  if (size >= 100) return "the whole document";
+  return `${size} page${size === 1 ? "" : "s"} either side — ${2 * size + 1} in all`;
 }
 
 /* Whether whoever writes this card may look things up on the web.
@@ -648,7 +670,11 @@ document.addEventListener("click", (event) => {
   if (step) {
     event.preventDefault();
     const item = step.closest(".item");
-    if (item) setContext(item, Number(step.dataset.contextStep));
+    /* Verbatim, like the key that cycles these: one of the sizes is the word
+       `chapter`, `Number("chapter")` is NaN, and a NaN posted as JSON is
+       `null` -- which the server reads as "no size given" and takes the
+       override *off*. Clicking chapter cleared the setting instead. */
+    if (item) setContext(item, step.dataset.contextStep);
     return;
   }
   const grant = event.target.closest("[data-web-set]");

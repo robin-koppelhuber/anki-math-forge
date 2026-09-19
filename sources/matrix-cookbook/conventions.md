@@ -24,9 +24,9 @@ invertibility, conformability, the shapes.
 
 That is deliberate and it is the normal case here, which is why no card says
 so. It was recorded on ninety of them once -- "source states no conditions;
-squareness added" -- and 140 such notes were archived to
-[notes-archive.md](notes-archive.md) because a sentence repeated on every card
-stops being read, and an open note blocks `sync`.
+squareness added" -- and 140 such notes were cut, because a sentence repeated
+on every card stops being read, and an open note blocks `sync`. The cards
+carry their own history now, so the lines are in git rather than in a list.
 
 A `@me` note is for what a card cannot show by itself: the source being wrong,
 this card's relation to another, or something still undecided. If the note

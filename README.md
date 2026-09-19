@@ -46,7 +46,8 @@ deck = "Mathematics::Matrix Calculus"   # optional; falls back to [anki] deck
 ```
 
 For a Zotero source instead: run Zotero (version 7+) with its local API enabled
-(*Settings > Advanced*), tag the item `anki`, and skip the `source.toml`.
+(*Settings > Advanced*), tag the item `anki`, and skip the `source.toml`. Its
+cards go to `Zotero::<title>` unless the generated `source.toml` names a deck.
 
 ```
 uv run forge extract <name>            # or: uv run forge zotero --tag anki
@@ -81,6 +82,7 @@ uv run forge zotero --list            # what Zotero has, and what is already a s
 uv run forge zotero --tag anki        # every item tagged `anki` -> units
 
 # both routes
+/gist --source <source>               # one line per unit: what its card would be about
 uv run forge serve                    # triage units, then review cards
 /extract-cards --source <source>      # queued units -> draft cards
 /augment --source <source>            # conditions, proof, prose, tags
@@ -107,7 +109,7 @@ Every session:
 |---|---|
 | `serve` | the web app: triage, review, dependency canvas |
 | `check` | lint; blocks sync on error |
-| `sync` | approved cards -> Anki, upsert by uid. `--dry-run`, `--templates`, `--reposition` |
+| `sync` | approved cards -> Anki, upsert by uid. `--dry-run`, `--templates`, `--reposition`, `--move-decks` |
 | `feedback` | Anki comments and flags -> notes on the card |
 | `todo` | open annotations, `@claude` and `@me` |
 
@@ -129,7 +131,7 @@ In the order the pipeline runs them:
 | `/gist --source NAME` | one line per unit on what its card would be about |
 | `/extract-cards --source NAME` | queued units -> draft cards |
 | `/augment --source NAME` | conditions, proof, prose, tags on drafts. Run before approving |
-| `/triage claude` | work the open `@claude` annotations |
+| `/triage claude [--source NAME]` | work the open `@claude` annotations |
 
 Mostly called by the skills, or from a script:
 
@@ -154,7 +156,8 @@ Mostly called by the skills, or from a script:
 ## Debugging
 - "cannot reach AnkiConnect" means Anki is closed.
 - `sync` does not push the card template; `sync --templates` does.
-- Changing a source's deck sends new notes there, does not move old ones.
+- Changing a source's deck sends new notes there. `sync` names the cards left
+  behind, and `sync --move-decks` moves them.
 - `[decks]` in `source.toml` splits `identity` and `intuition` into subdecks, so each gets its own new-card limit.
 - Study order: `frequency`, then `derivation`, then printed order;
  `requires` overrides. `sync --reposition` moves cards you have not

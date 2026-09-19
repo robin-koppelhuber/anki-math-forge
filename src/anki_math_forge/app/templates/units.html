@@ -49,7 +49,7 @@
          and hiding it until it had been overridden meant never seeing what you
          were overriding. Click any size, or `c` to walk them. #}
       <span class="badge context-chip{{ ' own' if unit.context_own }}" data-context-chip
-            title="pages either side of this unit's own page, handed to whoever writes its card. 3 means seven pages in all. Inherited from the source until set here.">
+            title="how much of the document is handed to whoever writes this unit's card: pages either side of its own page, 3 meaning seven in all, or the whole chapter it is printed in. Inherited from the source until set here.">
         <i class="chip-what">context</i>
         {% for step in unit.context_steps %}
         <button type="button" class="ctx-step{{ ' on' if step.on }}"
@@ -307,4 +307,4 @@
 {% include "_keys.html" %}
 {% endblock %}
 
-{% block scripts %}<script defer src="/static/units.js"></script>{% endblock %}
+{% block scripts %}<script defer src="/static/units.js?b={{ app_build }}"></script>{% endblock %}

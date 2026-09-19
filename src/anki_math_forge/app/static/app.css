@@ -231,6 +231,27 @@ main {
 }
 .crop img { max-width: 100%; height: auto; }
 .crop.small { padding: 0.4rem; margin-top: 1rem; }
+/* The thumbnail is the control. No border or background of its own: the
+   figure already draws the frame, and a button inside a frame reads as two
+   things stacked. */
+.crop-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+}
+.crop-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.crop-open img { display: block; }
+.crop-open:hover img { opacity: 0.85; }
+
+/* Full size means full size: the crop is rendered at a fixed width, so it is
+   shown at that width and the dialog scrolls rather than shrinking it back
+   down to something you cannot read. */
+.gallery.crop-view[open] { display: flex; flex-direction: column; }
+.crop-view-body { overflow: auto; padding: 0 1rem 1rem; }
+.crop-view-body img { display: block; margin: 0 auto; max-width: none; }
 .crop figcaption { font-size: 11px; color: var(--muted); margin-top: 0.3rem; }
 
 .transcription {
@@ -306,7 +327,61 @@ main {
 }
 .path { word-break: break-all; }
 
-.findings { list-style: none; padding: 0; margin: 0.8rem 0; }
+/* The history of what was asked of this card. Quiet: it is a record rather
+   than something to do, and the open notes above it are the things to do. */
+.settled-notes { margin: 0.6rem 0; font-size: 12px; color: var(--muted); }
+.settled-notes > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.2rem 0;
+}
+.settled-notes > summary::-webkit-details-marker { display: none; }
+.settled-notes > summary::before {
+  content: "▸";
+  order: -1;
+  font-size: 9px;
+}
+.settled-notes[open] > summary::before { content: "▾"; }
+.settled-notes > summary:hover { color: var(--ink); }
+.settled-hint { opacity: 0.7; }
+.settled-notes ul { list-style: none; margin: 0.2rem 0 0; padding: 0 0 0 0.9rem; }
+.settled-notes li {
+  padding: 0.25rem 0;
+  border-top: 1px solid var(--line);
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+/* Who is talking. The rows below are a machine reading the card, stacked in
+   the same column as the lines a person wrote on it, and the only thing that
+   told them apart was the colour of a left border. */
+.checks-what {
+  margin: 0.8rem 0 0.3rem;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+/* A picture on a card. Capped by the height of the pane rather than by its
+   width: a figure cropped from a page is usually wider than it is tall, and
+   left uncapped one filled the card and pushed the answer off the screen.
+   Centred, because a figure that is narrower than the column and hard against
+   its left edge reads as a mistake. */
+.card-image {
+  display: block;
+  margin: 0.6rem auto;
+  max-width: 100%;
+  max-height: 46vh;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
+.badge.image { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+.findings { list-style: none; padding: 0; margin: 0.3rem 0 0.8rem; }
 .findings li {
   padding: 0.4rem 0.55rem;
   border-left: 3px solid var(--warn);
@@ -561,7 +636,7 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   overflow-y: auto;
   padding: 0.2rem 0.6rem 0.6rem;
   font-size: 13px;
-  flex: 1;
+  min-height: 0;
 }
 
 /* The rail's own header: what it is, and the way to fold it away. */
@@ -595,19 +670,38 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 /* What to run next, pinned to the bottom of the rail rather than left at the
    end of the scroll. With sixty-four sections above it, the one panel that
    says what to do next was four screens down. */
+/* -- the filter rail's two panes -----------------------------------------
+   The same arrangement as the guide, one rail over: a column that scrolls and
+   a panel under it with a height, and a handle between them. */
+.rail-panes {
+  display: grid;
+  /* The **last** track is the one with a height here, which is the one
+     difference from the guide: there the diagram is sized and the legend
+     takes the slack, and here it is the other way round, because the panel is
+     pinned to the bottom and the list of sections is what wants the room.
+
+     `fit-content(33%)` is the old hard cap, said as a default instead of a
+     rule: the panel is the height of its commands, and never more than a
+     third of the rail, until you drag it. A third because every pixel it
+     takes is one the section list and the mark grid do not get, and adding a
+     sentence to each command pushed the grid off the bottom.
+
+     `auto` in the middle rather than a fixed 14px: with no commands there is
+     no splitter and no panel, and the last two tracks collapse to nothing. */
+  grid-template-rows: minmax(0, 1fr) auto var(--split-commands, fit-content(33%));
+  flex: 1;
+  min-height: 0;
+}
+/* A panel you have put away should not keep the room you dragged for it. */
+.rail-panes:has(> .rail-actions:not([open])) {
+  grid-template-rows: minmax(0, 1fr) auto max-content;
+}
 .rail-actions {
-  border-top: 1px solid var(--line);
   padding: 0.3rem 0.6rem 0.6rem;
   font-size: 13px;
   background: var(--panel);
-  flex: none;
-  /* A third, not nearly a half. This panel is pinned to the bottom and the
-     filters scroll above it, so every pixel it takes is one the section list
-     and the mark grid do not get -- and adding a sentence to each command
-     pushed the grid off the bottom of the rail. It scrolls inside itself, so
-     the cap costs nothing but a scroll on a view with four commands. */
-  max-height: 33%;
   overflow-y: auto;
+  min-height: 0;
 }
 .rail-actions > summary {
   cursor: pointer;
@@ -617,11 +711,23 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   text-transform: uppercase;
   letter-spacing: 0.02em;
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
   gap: 0.4rem;
+  list-style: none;
 }
 .rail-actions > summary:hover { color: var(--ink); }
+/* A flex summary has no disclosure triangle, in any browser. Without one this
+   panel is four commands you cannot see a way to put away, on the rail where
+   the section list is already fighting for the room. Same arrow as the scheme
+   panel above it. */
+.rail-actions > summary::-webkit-details-marker { display: none; }
+.rail-actions > summary::before {
+  content: "▾";
+  order: -1;
+  font-size: 9px;
+}
+.rail-actions:not([open]) > summary::before { content: "▸"; }
+.rail-actions-what { margin-right: auto; }
 .rail-actions-hint { text-transform: none; letter-spacing: 0; opacity: 0.7; font-size: 10.5px; }
 .rail-actions .run-note {
   font-size: 11.5px;
@@ -754,6 +860,14 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 /* A unit that no longer matches the active filter stays in the deck rather
    than vanishing, so `k` can still reach it after a mis-pressed key. */
 .settled {
+  /* Across the whole row, because a review card is a three-column grid whose
+     children are placed by order: body, splitter, aside. The banner is
+     prepended, so without this it took the body's column and pushed every
+     other child one to the right. The body landed in the 18px splitter
+     column, which renders a card as a vertical ribbon of single letters, and
+     the aside fell off the end of the grid. Ignored on the units view, where
+     the item is not a grid. */
+  grid-column: 1 / -1;
   margin: 0 0 0.8rem;
   padding: 0.35rem 0.6rem;
   border-radius: 5px;
@@ -1007,7 +1121,7 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .annotations { list-style: none; margin: 0.6rem 0; padding: 0; display: grid; gap: 0.35rem; }
 .annotation {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto;
   gap: 0.4rem;
   align-items: start;
   padding: 0.35rem 0.45rem;
@@ -1018,7 +1132,8 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 .annotation.me { border-left-color: var(--accent); }
 .annotation .who { font-weight: 600; opacity: 0.75; white-space: nowrap; }
 .annotation .what { white-space: pre-wrap; }
-.annotation .resolve {
+.annotation .resolve,
+.annotation .edit-note {
   font: inherit;
   cursor: pointer;
   border: 1px solid var(--line);
@@ -1026,9 +1141,13 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   background: transparent;
   color: inherit;
   padding: 0 0.4rem;
-  opacity: 0.6;
 }
-.annotation .resolve:hover { opacity: 1; border-color: var(--accent); }
+.annotation .resolve { opacity: 0.6; }
+/* Quieter than resolve, and no border until you are on it: it is the small
+   correction beside the decision, not a second thing to weigh. */
+.annotation .edit-note { opacity: 0.45; border-color: transparent; font-size: 0.9em; }
+.annotation .resolve:hover,
+.annotation .edit-note:hover { opacity: 1; border-color: var(--accent); }
 
 /* The x on an active filter. It is the affordance that says the row can be
    turned off; without it the only clue was that clicking might do something. */
@@ -1709,15 +1828,25 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
    only ever return nothing is a dead control -- but still its own colour, so
    the grid stays readable as a map of the scheme rather than as a wall of
    grey. Dotted border and no count is what says "nothing here". */
+/* Marked but never a unit. Between the two: its own colour and its count,
+   because you did draw these, and no border, because there is nothing to
+   click. */
+.mg-cell.unused { cursor: default; border-color: transparent; color: var(--muted); }
+.mg-cell.unused .swatch { filter: saturate(0.4); opacity: 0.6; }
 .mg-cell.empty { cursor: default; border-style: dotted; }
 .mg-cell.empty .swatch { filter: saturate(0.2); opacity: 0.3; }
 
 /* -- the guide's two panes ----------------------------------------------- */
 .guide-panes {
   display: grid;
-  /* Same: the diagram's own height until you drag, then exactly what you
-     dragged to. */
-  grid-template-rows: var(--split-guide, max-content) 14px minmax(0, 1fr);
+  /* The diagram's own height until you drag, then exactly what you dragged to
+     -- capped, because `max-content` here was not a cap at all. At the rail's
+     default width the diagram is about 950px tall in a 724px column, so the
+     track pushed the handle and the legend below the bottom of the window:
+     the one control that could have fixed it was the one you could not
+     reach. `fit-content` is the same idea as the commands panel's, one rail
+     over. */
+  grid-template-rows: var(--split-guide, fit-content(55%)) auto minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -2365,6 +2494,27 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 }
 
 /* The way into the canvas, under the lines it is the whole-source version of. */
+/* The one control in a pane of facts, so it is drawn as one. Accent text on
+   its own would read as another line of the legend around it. */
+.to-machine { margin: 0.5rem 0 0; }
+.machine-open {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 5px;
+  padding: 0.35rem 0.5rem;
+  cursor: pointer;
+  text-align: center;
+}
+.machine-open:hover {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
 .to-graph {
   color: var(--muted);
   text-decoration: none;

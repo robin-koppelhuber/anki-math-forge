@@ -17,149 +17,58 @@ Arguments: `$ARGUMENTS`
 Pass both straight through to the `forge` commands below. The units view
 writes this line for you from whatever you had filtered to.
 
-## Where you are in the pipeline
+## Dispatch one writer per section
 
-**The unit stage already decided two things and neither is yours to revisit:**
-that this is worth a card at all, and roughly what the card is about. If a
-unit carries an `@claude` brief, that second answer is written down — read it
-before anything else, because it is the only instruction this pass gets and it
-routinely says something the crop cannot ("two cards, one per convention",
-"this is about *why* the bound is tight, not the bound").
+Writing a card reads the page the unit was printed on: one `forge context`
+block is about eleven thousand characters, so a queue of five hundred units is
+more context than any one session has. The answer is `/transcribe`'s: **one
+`card-writer` agent per section, dispatched in parallel**, each with a slice
+nothing else touches.
 
-**Everything else is yours.** This is the stage where depth belongs: the exact
-wording, the hypotheses, which of two readings the source meant, whether it
-needs a proof. Pull as much context as the unit was granted and iterate — a
-draft can be revised any number of times before anyone approves it, and
-nothing you write here is final until a human says so.
-
-The one thing that *is* yours to revisit is whether the unit is cardable at
-all — a fragment, a heading, something unreadable. Say so with a suggestion
-rather than deciding (see **What not to card**).
-
-## Load the context first
-
-A card is only as good as the context you had when you wrote it. Before
-writing anything:
-
-```
-uv run forge source-text <source>
-```
-
-That is the source's whole text layer. Read it rather than a snippet if it
-fits; where it does not, read these two parts, which are the ones that matter:
-
-- **The front matter**, before the numbered body starts. This is where a
-  source defines its symbols, and it is the one place that says what its
-  notation means. Skipping it means guessing at exactly the symbols that make
-  a card wrong. (`forge context <unit>` gives you the page a unit came
-  from; the front matter you have to go and read.)
-- **The neighbourhood of each unit.** A run of results on one theme is the
-  usual shape of a reference work, and knowing you are inside one is what
-  stops you writing ten near-duplicate cards.
-
-The mathematics in that text layer is mangled — it is context for *deciding*,
-never a transcription. The crop is the authority for what a unit says.
-
-## Then work the queue
-
-1. Read the work list:
+1. See what is waiting, and group it:
 
    ```
    uv run forge units --source <SOURCE> --state queued --json
    ```
 
-2. **Read each unit's `notes` and do what they say.** They are the instruction
-   you were left at triage time — "two cards, one per layout convention", "the
-   transcription is wrong, read the crop", "merge with the unit above". This is
-   greenlight gate: the human queued this unit *and told you how to card it*.
+   Group by `locator.section`. Aim at a few dozen units per agent: enough that
+   dispatch overhead is worth it, few enough that one agent's context holds the
+   section and the book's front matter beside it. Split anything much larger;
+   combine neighbouring small ones. A source whose ids carry no section leaves
+   `locator.section` empty, so group by page instead.
 
-   Annotations are **addressed**. `@claude ...` is work for you. `@me ...` is a
-   decision the human parked for themselves — read it for context, **never act
-   on it, and never clear it**.
+2. Dispatch one `card-writer` per section, in parallel — several `Agent` calls
+   in one message:
 
-   When you have acted on the ones addressed to you, clear only those:
+   > Write stub cards for every queued unit in section `<SECTION>` of
+   > `<SOURCE>`. Your work list is
+   > `uv run forge units --source <SOURCE> --section <SECTION> --state queued --json`.
+   > Read each unit's `@claude` notes and do what they say: that is the brief
+   > you were left at triage. Follow your instructions exactly — check the
+   > mathematics yourself, write stubs only, approve nothing, and propose a
+   > skip rather than taking one.
 
-   ```
-   uv run forge units --id <unit-id> --resolve-notes --audience claude
-   ```
+   **A section is the unit of work because it is the unit of collision.** Two
+   agents pointed at one queue would card the same unit twice; two agents on
+   different sections cannot, and the writes themselves are already safe,
+   since `forge new` marks the unit inside `Ledger.edit` and that takes the
+   ledger's lock.
 
-   `--audience claude` is the default; `--audience all` also deletes the
-   `@me` decision parked on the same unit, so reach for it only when that is
-   what you mean.
-
-   If a note is ambiguous, **leave it open, skip that unit, and say why** in
-   your report. Guessing is worse than asking.
-
-3. **Read the page, then check the mathematics yourself.**
-
-   ```
-   uv run forge context <unit-id>
-   ```
-
-   That prints the page the equation was printed on, prose and all. Conditions
-   are usually printed *around* an identity rather than inside it, so the crop
-   cannot carry them and the page usually can.
-
-   Then do the part no tool does: **work out whether the identity is actually
-   true as stated.** A derivative of an inverse needs the matrix to be
-   invertible whether or not the page says so. A trace identity may need the
-   product to be square. If the mathematics requires a condition, it goes in
-   `## conditions` — the page not mentioning it is not evidence that it does
-   not hold.
-
-   Two directions to be wrong in, and they are not symmetric. Omitting a real
-   condition makes a card that teaches something false. Adding one the source
-   does not have makes a card that disagrees with the book you are learning.
-   When the source states a condition, use its wording. When you believe one
-   is needed and the source is silent, state it and say so in `## notes`.
-
-   If you cannot settle it, **leave the card in draft and say why in
-   `## notes`**.
-
-3. **Decide the boundary before the content.** `context` lists every unit on
-   the page in reading order. A display equation the segmenter cut into three
-   is three units and one identity — card it whole:
-
-   ```
-   uv run forge new --unit <a> --unit <b> --unit <c> --front '...' --back '...'
-   ```
-
-   All three are marked carded and point at the same card. The reverse also
-   happens: one unit stating two independent facts is two cards, each citing
-   that unit.
-
-   Neither is the common case. Most units are one card. Merge when the pieces
-   are meaningless apart, split when a single card would have two answers.
-
-3. Decide what card(s) the unit should produce. Use the **card-writing** skill
-   for what makes a good front and back. Usually one card; occasionally zero
-   (annotate the unit and move on) or two.
-
-   The **crop is authoritative**. `tex_auto` is a transcription that may be
-   wrong — where the two disagree, read the crop. If a unit's transcription is
-   `failed` and you cannot read the crop, annotate rather than guess.
-
-4. Write each stub. This writes the file and marks the unit `carded`:
-
-   ```
-   uv run forge new --unit <unit-id> \
-     --front '$\frac{\partial}{\partial X}\log\det X$' \
-     --back '$X^{-\top}$' \
-     --gist 'derivative of log det' \
-     --tag matrix-calculus --tag derivatives
-   ```
-
-   **`--gist` is a few words naming the card**, at most about sixty
-   characters. You have just decided what this card is, which is the cheapest
-   moment to say so: every later pass is reading it back off the LaTeX. It is
-   a caption for a list, a dependency link or a graph node, it never reaches
-   Anki, and `/augment` refines it. Write one on every card.
-
-5. Check the result:
+3. When they report back, verify mechanically rather than reading the
+   summaries:
 
    ```
    uv run forge check
+   uv run forge units --source <SOURCE> --state queued --json   # what is left
    ```
+
+   A section that comes back with units still queued and no reason given is a
+   section to re-dispatch, not to accept.
+
+4. Report: how many cards per section, every unit deliberately not carded with
+   its reason, and anything an agent flagged as systematically wrong — a
+   mangled text layer, a run of fragments, a notation the front matter never
+   defines.
 
 ## Rules
 

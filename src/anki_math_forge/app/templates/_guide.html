@@ -44,6 +44,20 @@
       <div class="at-a-glance">
         {% include "_fsm_mini.html" %}
 
+        {# Directly under the picture it enlarges. This pane is the one size
+           where the rail shows the machine at all, and it is also the size
+           where the prose that used to be the only way to the full diagram is
+           hidden -- so the person most likely to want it had no way to ask.
+           A bordered button rather than a line of accent text: it is the only
+           control in a pane of facts, and what it opens is four times the
+           size of what is above it. #}
+        <p class="to-machine">
+          <button type="button" class="machine-open" data-machine
+                  title="every state a unit and its card can be in, full width">
+            the whole machine &rarr;
+          </button>
+        </p>
+
         {# The order Anki introduces new cards in, stated rather than drawn:
            the rule is four keys long and a picture of four keys is worse than
            the four keys. The *graph* the last one makes is a picture worth
@@ -379,10 +393,14 @@
           rail to review only what is actually waiting on you.</dd>
       <dt><b>{{ key('resolve-note') }}</b> resolve</dt>
       <dd>Resolve the card's first annotation, or click <b>resolve</b> on any
-          one of them. <b>Resolving is deleting the line.</b> There is no
-          reply and no done-flag, because a note still in the file still
-          blocks sync, so answering one with a second annotation leaves two
-          notes blocking the card. Resolve a <code>@claude</code> note once
+          one of them. <b>Resolving takes the address off the line.</b> There
+          is no reply and no done-flag, because a note still <em>addressed</em>
+          still blocks sync, so answering one with a second annotation leaves
+          two notes blocking the card. What a pass leaves behind instead is a
+          `resolved:` line saying what was asked and what it did, which is a
+          record rather than work: the card folds those away under
+          <b>settled</b>, and that is where to look when an edit is not the
+          one you remember asking for. Resolve a <code>@claude</code> note once
           the work is done, and a <code>@me</code> note once you have taken
           the decision it was holding open. The edit is to
           <code>## notes</code>, which is outside <code>content_hash</code>,
@@ -391,7 +409,10 @@
           matters most for one you did not write:
           <code>forge feedback</code> turns a comment or flag from Anki into
           an annotation and erases it there as it takes it, so the line here
-          is the only copy of it.</dd>
+          is the only copy of it. To fix a typo, or say a request again that
+          came back misunderstood, click <b>edit</b> beside it: the line is
+          rewritten where it stands and stays open, which is the half of this
+          that resolve cannot do without destroying the note first.</dd>
       <dt><b>{{ key('next') }}</b> / <b>{{ key('prev') }}</b></dt>
       <dd>Next / previous. Approving or rejecting moves you on to the next
           card still awaiting a decision; the one you just acted on stays in
