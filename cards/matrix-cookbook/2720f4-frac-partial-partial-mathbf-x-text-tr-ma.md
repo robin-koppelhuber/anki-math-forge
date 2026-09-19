@@ -2,7 +2,7 @@
 uid: 2720f4
 type: identity
 status: approved
-content_hash: 09fbb0d77f284841
+content_hash: 23be45df9fba22a2
 source: "Matrix Cookbook §2.5, eq. 106, p. 13"
 unit: "matrix-cookbook:2.5:106"
 gist: the derivative of the trace of X squared
@@ -25,6 +25,11 @@ $\mathbf{X} \in \mathbb{R}^{n \times n}$. Denominator layout.
 $\text{Tr}(\mathbf{X}^2) = \sum_{ij} X_{ij} X_{ji}$ pairs each entry with its mirror, which is where the transpose comes from; $\text{Tr}(\mathbf{X}^T\mathbf{X})$ pairs each entry with itself and gives $2\mathbf{X}$.
 
 ## proof
-$\text{Tr}(\mathbf{X}^2) = \sum_{kl} X_{kl}X_{lk}$. Differentiating in $X_{ij}$ picks out the two terms that contain it, $X_{ij}X_{ji}$ and $X_{ji}X_{ij}$, giving $2X_{ji}$ — which is entry $(i,j)$ of $2\mathbf{X}^T$.
-
-## notes
+Entrywise, differentiating $\text{Tr}(\mathbf{X}^2) = \sum_{kl} X_{kl}X_{lk}$ in $X_{ij}$ picks out the two terms containing it, and $2X_{ji}$ is entry $(i,j)$ of $2\mathbf{X}^T$:
+$$\frac{\partial}{\partial X_{ij}} \sum_{kl} X_{kl}X_{lk} = 2X_{ji}$$
+Or by the product rule on the differential, reading the answer off $df = \text{Tr}(\mathbf{G}^T d\mathbf{X})$ with $\mathbf{G} = \partial f/\partial \mathbf{X}$, and using the cyclic property on the first trace:
+$$\begin{aligned}
+d\,\text{Tr}(\mathbf{X}^2) &= \text{Tr}\big((d\mathbf{X})\mathbf{X}\big) + \text{Tr}\big(\mathbf{X}(d\mathbf{X})\big) \\
+&= 2\,\text{Tr}(\mathbf{X}\,d\mathbf{X})
+\end{aligned}$$
+so $\mathbf{G}^T = 2\mathbf{X}$, that is $\mathbf{G} = 2\mathbf{X}^T$.
