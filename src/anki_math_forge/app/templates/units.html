@@ -89,8 +89,13 @@
        never an empty panel. A unit from a mark has no transcription and never
        will, and "no transcription; read the crop" took half the width from the
        crop it was telling you to read. #}
-    {% set reads = unit.sample or not unit.marks %}
-    {% set aside = reads or unit.marks %}
+    {# `marks.count`, not `marks`: the payload is always a dict, so `not
+       unit.marks` was always false and two branches below were unreachable.
+       A unit with neither a sample nor marks nor a crop showed an empty
+       column and no explanation. #}
+    {% set marked = unit.marks.count %}
+    {% set reads = unit.sample or (not marked and not unit.image) %}
+    {% set aside = reads or marked %}
     <div class="side-by-side {{ 'one-column' if not aside }}">
       {% if unit.image %}
       <figure class="crop">
@@ -131,13 +136,11 @@
            formula. A unit proposed rather than segmented has only this. #}
         {% if unit.sample and unit.lang != 'latex' %}
         <pre class="code">{{ unit.sample }}</pre>
-        {% elif unit.tex and unit.transcription == 'ok' %}
-        <div class="math">$${{ unit.tex }}$$</div>
-        {% elif unit.tex %}
-        <pre class="raw">{{ unit.tex }}</pre>
+        {% elif unit.sample and unit.transcription == 'ok' %}
+        <div class="math">$${{ unit.sample }}$$</div>
+        {% elif unit.sample %}
+        <pre class="raw">{{ unit.sample }}</pre>
         <p class="muted">does not parse under KaTeX. Trust the crop</p>
-        {% elif unit.image %}
-        <p class="muted">no transcription; read the crop</p>
         {% else %}
         <p class="muted">nothing to read here but the gist</p>
         {% endif %}
