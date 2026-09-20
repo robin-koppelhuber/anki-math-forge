@@ -9,6 +9,32 @@ transcription. `state` tracks human triage:
 `extract` is re-runnable: `upsert` preserves the state of everything already
 in the file and only adds genuinely new ids, so working through a book is an
 incrementally resumable queue rather than a one-shot dump.
+
+## What a frontend owes
+
+This file is the IR, and there are three ways into it: `extract` segments a
+document, `zotero` reads what somebody marked up, and `/propose` writes
+units for a subject with no document to segment. Everything after the ledger
+reads a unit without asking which door it came in by (invariant 3), which is
+what lets one triage, one review and one sync serve all three.
+
+A frontend owes exactly five things:
+
+* **a stable id that survives a re-run.** `extract` takes the book's own
+  numbering, `zotero` the annotation key, `/propose` the slug of the subject.
+  Re-running then adds what is new instead of duplicating what is there.
+* **a locator, as much of one as it has.** Empty is allowed and means empty:
+  `has_crop` is false, `document_for` answers `None`, and the views say so
+  rather than drawing a broken picture.
+* **something scannable**, so triage is not guesswork. `tex_auto` for a
+  formula, `preview` and `lang` for anything else.
+* **a subject, not a draft.** A gist, that sample, the references it stands
+  on. The moment a frontend emits a front and a back, triage has become
+  review and the unit stage has no job left (invariant 9).
+* **`state: new`**, and no opinion about anything after it.
+
+`forge units --add` is the door for a frontend that is not a segmenter, so a
+pass writing units needs no code here.
 """
 
 from __future__ import annotations

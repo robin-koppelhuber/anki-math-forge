@@ -164,6 +164,16 @@ class ProjectConfig:
     # Card type -> deck, for a source whose restatements and explanations want
     # different new-card rates. Empty means every type lands in `deck`.
     decks: Mapping[str, str] = field(default_factory=dict)
+    # Tag -> deck, for a project whose cards split by subject rather than by
+    # kind: containers, algorithms, ownership. **File order decides**, so a
+    # card carrying two of these lands somewhere predictable rather than
+    # somewhere alphabetical. TOML preserves the order you wrote them in and
+    # so does this.
+    #
+    # (Not "by type:" at the start of a line above, deliberately: mypy reads
+    # a comment opening `# type:` as an annotation and fails to parse the
+    # file.)
+    tag_decks: Mapping[str, str] = field(default_factory=dict)
     # Free labels, so a picker with fifty papers in it can be narrowed. Not a
     # hierarchy: a source is one thing that may be several kinds of thing.
     # **Yours to invent.** Nothing writes one for you: a label the tool made up
@@ -626,7 +636,9 @@ class Config:
     def units_path(self, project: str) -> Path:
         return self.projects_dir / project / "units.jsonl"
 
-    def deck_for(self, project: str, card_type: str = "") -> str:
+    def deck_for(
+        self, project: str, card_type: str = "", tags: Sequence[str] = ()
+    ) -> str:
         """Which Anki deck this source's cards belong in.
 
         Per source, because two books are two subjects far more often than
@@ -641,8 +653,22 @@ class Config:
         is comfortable and five pieces of intuition a day is not, and a
         per-deck limit is the only way Anki lets you say that. Subdecks under a
         shared parent, so studying the parent still sees both.
+
+        And per *tag*, which is how a project on a subject splits: its cards
+        are not two kinds of thing, they are about different things.
+        `[decks.by_tag]` in file order, so a card carrying two of them lands
+        somewhere you can predict. Re-tagging a card moves it and does not
+        un-approve it, because filing is not what a reviewer read
+        (ROADMAP.md 10).
+
+        Most specific first: a tag names one card's subject, a type names a
+        whole class of card, and the project's own deck is the fallback.
         """
         spec = self.projects.get(project)
+        if spec:
+            for tag, deck in spec.tag_decks.items():
+                if tag in tags:
+                    return deck
         if spec and card_type and spec.decks.get(card_type):
             return spec.decks[card_type]
         if spec and spec.deck:
@@ -765,7 +791,8 @@ def load(root: Path | None = None) -> Config:
             context_pages=context_size(
                 spec.get("context_pages", -1), f"[projects.{name}] context_pages"
             ),
-            decks={str(k): str(v) for k, v in (spec.get("decks") or {}).items()},
+            decks=_deck_map(spec.get("decks"), "by_type"),
+            tag_decks=_deck_map(spec.get("decks"), "by_tag"),
             tags=tuple(str(x) for x in spec.get("tags", ())),
         )
 
@@ -824,6 +851,27 @@ def _refuse_a_project_wide_document(spec: Mapping[str, Any], where: str) -> None
                 f"{where} {key} describes a document, and a project may read several, "
                 f"so it belongs in a [[sources]] table as `{moved}`"
             )
+
+
+def _deck_map(raw: Any, which: str) -> dict[str, str]:
+    """`[decks.by_type]` or `[decks.by_tag]`, in the order they were written.
+
+    Two tables rather than one, because a type and a tag are different
+    questions and a single map would silently answer one with the other the
+    first time somebody named a tag `identity`.
+
+    A flat `[decks]` is read as the type map, which is what it always was.
+    """
+    table = dict(raw or {})
+    inner = table.get(which)
+    if isinstance(inner, dict):
+        return {str(k): str(v) for k, v in inner.items()}
+    if which != "by_type":
+        return {}
+    # The older flat form: every key that is not one of the two sub-tables.
+    return {
+        str(k): str(v) for k, v in table.items() if k not in ("by_type", "by_tag")
+    }
 
 
 def _sources(root: Path, spec: dict[str, Any], where: str) -> tuple[SourceConfig, ...]:

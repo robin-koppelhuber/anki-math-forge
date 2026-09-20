@@ -35,7 +35,9 @@ left. A proposal is a subject, not a draft.
 
 2. **Outline what the subject contains, before proposing anything.** One
    short line each, no detail, in `projects/<name>/topics.md` under a
-   heading naming the subject, with the ask recorded verbatim above it.
+   heading naming the subject. If the ask is not recorded there yet,
+   `forge topic --project <name> '<subject>' --ask '<what you want>'`
+   writes the heading; the entries you add by editing the file.
 
    This step is the whole defence against stopping halfway. A single pass
    asked for forty proposals writes twelve and stops, because it is

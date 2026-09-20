@@ -25,6 +25,8 @@ from . import classify as classify_mod
 from . import extract as extract_mod
 from . import latex, model, todo, verify
 from . import ledger as ledger_mod
+from . import projects as projects_mod
+from . import topics as topics_mod
 from .anki import AnkiConnect, AnkiError
 from .config import CHAPTER, PROJECT_TOML, Config, ConfigError, context_size, load
 
@@ -159,6 +161,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="what a card's `source` line says when nothing more specific does",
     )
     p.set_defaults(run=cmd_project)
+
+    p = subs.add_parser(
+        "topic",
+        help="record what you want cards for, in a project that reads no book",
+    )
+    p.add_argument("--project", required=True)
+    p.add_argument("name", help="the subject, in your own words")
+    p.add_argument(
+        "--ask",
+        default="",
+        help=(
+            "what you want from it: 'choosing between them and invalidation, "
+            "not the full API'. The unit says what a card is about; only this "
+            "says what you wanted from the subject"
+        ),
+    )
+    p.set_defaults(run=cmd_topic)
 
     p = subs.add_parser("serve", help="the companion app: units triage + card review")
     p.add_argument("--host", default=None)
@@ -781,61 +800,58 @@ def cmd_export(args: argparse.Namespace, config: Config) -> int:
 def cmd_project(args: argparse.Namespace, config: Config) -> int:
     """Scaffold a project that reads nothing.
 
-    A project with a book behind it is created by importing the book, and
-    `forge zotero` writes its file. One on a subject has nothing to import,
-    so without this the only way to start is to write the TOML by hand and
-    guess at the key names.
-
-    It declares no `[[sources]]`, and that absence is what says the project
-    has no authoritative source: there is no kind key to set. Add a table
-    later if you find a work worth reading against, or leave it and keep the
-    reference material in `references.md`.
-
-    Never overwrites: everything written here is a starting point you will
-    edit, and re-running the command must not undo that.
+    The writing lives in `projects.scaffold`, because the setup stage in the
+    app offers the same thing and the two must produce the same file: that
+    is invariant 2, and the way to keep it true is one function rather than
+    two that agree today.
     """
-    name = model.slugify(args.name)
+    made = projects_mod.scaffold(
+        config,
+        args.name,
+        title=args.title,
+        deck=args.deck,
+        citation=args.citation,
+    )
+    if made is None:
+        if not re.search(r"[a-zA-Z0-9]", args.name):
+            print(f"{args.name!r} has nothing to make a name from", file=sys.stderr)
+            return MISUSE
+        print(
+            f"{config.projects_dir / model.slugify(args.name) / PROJECT_TOML}"
+            " is already there, left alone",
+            file=sys.stderr,
+        )
+        return FAILED
+    print(f"{config.projects_dir / made / PROJECT_TOML}")
+    print(f"  propose into it with: forge units --project {made} --add '<subject>'")
+    return OK
+
+
+def cmd_topic(args: argparse.Namespace, config: Config) -> int:
+    """Record an ask, and say what is still open under it.
+
+    The same append the setup stage makes, through the same function: two
+    ways to write one file is how the two drift, and invariant 2 is only
+    true while they cannot.
+    """
+    if args.project not in config.projects:
+        known = ", ".join(sorted(config.projects)) or "(none)"
+        print(f"no project {args.project!r}; configured: {known}", file=sys.stderr)
+        return FAILED
     if not re.search(r"[a-zA-Z0-9]", args.name):
-        print(f"{args.name!r} has nothing to make a name from", file=sys.stderr)
+        print(f"{args.name!r} has nothing to make a topic from", file=sys.stderr)
         return MISUSE
 
-    folder = config.projects_dir / name
-    path = folder / PROJECT_TOML
-    if path.exists():
-        print(f"{path} is already there, left alone", file=sys.stderr)
-        return FAILED
-
-    title = args.title or args.name
-    lines = [
-        f'title = "{title}"',
-        f'citation = "{args.citation or title}"',
-    ]
-    if args.deck:
-        lines.append(f'deck = "{args.deck}"')
-    lines += [
-        "",
-        "# No `[[sources]]` table: this project reads no document, and that",
-        "# absence is the whole of what that means. Add one when you have a",
-        "# work to read against:",
-        "#",
-        "# [[sources]]",
-        '# url = "https://example.org/the-reference"',
-        "",
-        "# Reference material goes in `references.md` beside this file, as",
-        "# prose. It is a shelf to check a card against, never a set of things",
-        "# to card, and `forge context` hands it to whoever writes one.",
-        "",
-        "# What is ambient here goes in `conventions.md`. With no book to read",
-        "# it off, this file *decides* it rather than describing it: which",
-        "# language version, how an example is written, what is assumed. Write",
-        "# it before the first proposal, not after the first batch reads",
-        "# inconsistent.",
-        "",
-    ]
-    folder.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines), encoding="utf-8")
-    print(f"{path}")
-    print(f"  propose into it with: forge units --project {name} --add '<subject>'")
+    before = {t.slug for t in topics_mod.read(config, args.project)}
+    topic = topics_mod.append(config, args.project, args.name, args.ask)
+    print(f"{topics_mod.path_for(config, args.project)}")
+    if topic.slug in before:
+        print(f"  {topic.name} was already there, left alone")
+    else:
+        print(f"  {topic.name}")
+    print(
+        f"  outline it with: /propose --project {args.project} '{args.name}'"
+    )
     return OK
 
 

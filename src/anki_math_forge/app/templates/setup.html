@@ -119,9 +119,21 @@
   {# Reference material and what is ambient. Both are prose files handed to
      whoever writes a card, shown here so you can see whether they say
      anything before a pass reads them and finds they do not. #}
-  <section class="setup-block">
+  <section class="setup-block" id="shelf">
     <h3>the shelf</h3>
-    {% if shelf %}<pre class="setup-prose">{{ shelf }}</pre>
+    {% if shelf_lines %}
+    <p class="muted">Reference material, checked against rather than carded.
+      Dropping a line is how you say you do not want one, which is the same
+      shape as resolving an annotation by deleting it.</p>
+    <ul class="setup-list shelf-list">
+      {% for line in shelf_lines %}
+      <li class="shelf-line">
+        <span>{{ line }}</span>
+        <button type="button" class="drop" data-drop-reference="{{ line }}"
+                title="drop this line from references.md">&times;</button>
+      </li>
+      {% endfor %}
+    </ul>
     {% else %}<p class="muted">No <code>references.md</code>. With no authoritative
       source, this is all that keeps a card off the model's memory alone.</p>{% endif %}
   </section>
@@ -132,6 +144,22 @@
     {% else %}<p class="muted">No <code>conventions.md</code>. With no book to read
       it off, that file <em>decides</em> what the deck does rather than describing
       it, so whoever writes a card here is guessing until it exists.</p>{% endif %}
+  </section>
+
+  {# Starting another one. Here because this is the screen about what a
+     project is, and because the gallery's "add a source" corner is about
+     importing a document, which is the other kind. #}
+  <section class="setup-block">
+    <h3>start another project</h3>
+    <p class="muted">One that reads no document, for a subject rather than a
+      book. <code>forge project</code> writes the same file.</p>
+    <form class="setup-add" id="start-project">
+      <input type="text" id="project-name" placeholder="what is it about?"
+             autocomplete="off" aria-label="the project's name">
+      <input type="text" id="project-deck" placeholder="which Anki deck (optional)"
+             autocomplete="off" aria-label="the deck">
+      <button type="submit">start it</button>
+    </form>
   </section>
 </div>
 {% endblock %}

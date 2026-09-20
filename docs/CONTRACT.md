@@ -198,9 +198,19 @@ work. It has no `## verify`, because there is nothing numeric to check, and no
 `## conditions`, because a hypothesis belongs to a statement and anything
 needing one is an identity wearing the wrong type.
 
-Both reach Anki as a `type::` tag, and a source may send each to its own
-subdeck under `[decks]`. Five restatements a day is comfortable; five pieces of
-intuition a day is not.
+Both reach Anki as a `type::` tag, and a project may send each to its own
+subdeck under `[decks.by_type]`. Five restatements a day is comfortable; five
+pieces of intuition a day is not.
+
+`[decks.by_tag]` does the same by subject, which is how a project on a topic
+splits: its cards are not two kinds of thing, they are about different
+things. File order decides, so a card carrying two of them lands somewhere
+you can predict. A tag outranks a type, because a tag names one card's
+subject and a type names a whole class of card.
+
+Re-tagging a card moves it between decks and does not un-approve it: the
+content hash covers what a reviewer read, and filing is not read. `sync`
+reports what is left behind under the old name, and `--move-decks` moves it.
 
 ### Study order
 

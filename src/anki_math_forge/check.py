@@ -222,7 +222,7 @@ def check_card(
     # `<br>`, so a section wrapped at some column renders with hard breaks
     # mid-sentence on the card. `verify` is code and never reaches Anki.
     for section in card.sections:
-        if section.name in ("notes", "verify"):
+        if section.name in model.UNRENDERED_SECTIONS:
             continue
         body = _prose_only(section.body.strip())
         if len(body.splitlines()) > 1 and all(line.strip() for line in body.splitlines()):

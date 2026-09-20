@@ -24,6 +24,7 @@ import subprocess
 import sys
 import time
 import tomllib
+from dataclasses import replace
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -38,15 +39,18 @@ from markupsafe import Markup
 
 from .. import check, latex, model, study
 from .. import graph as graph_mod
+from .. import projects as projects_mod
 from .. import topics as topics_mod
 from ..config import (
     CHAPTER,
     DECLARED,
     DEFAULT_MEANINGS,
+    REFERENCES_FILE,
     Config,
     ConfigError,
     context_asked,
     context_size,
+    load,
     save_study_order,
 )
 from ..ledger import Ledger, Unit, open_ledgers
@@ -168,6 +172,37 @@ def _with_images(chunk: str, unit: str) -> str:
 
 def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="forge", docs_url=None, redoc_url=None)
+
+    def reread() -> Config:
+        """The config as it is on disk right now.
+
+        DESIGN.md §6 says the app holds no state and re-reads on every
+        request, and every *file* it shows already worked that way. The
+        config did not: it was read once at start, so a project created
+        while the server was running was one it had never heard of, and
+        editing a deck in `project.toml` showed the old one until a restart.
+
+        Only the handful of places that list projects or read a project's
+        spec call this. Everything else takes the `config` it was handed,
+        which is the same object with the same values for everything a
+        request does not change.
+
+        **Only the project table is taken from disk.** The rest is whatever
+        the caller passed, because `create_app(config)` is handed a config
+        and must honour it: a test that remaps a key builds one in memory,
+        and re-reading the whole file would quietly throw that away.
+        """
+        try:
+            fresh = load(config.root)
+        except ConfigError:
+            # A half-written TOML is a thing you are in the middle of typing.
+            # Showing the last good one beats a 500 on every view until you
+            # finish the line.
+            return config
+        if fresh.projects == config.projects:
+            return config
+        return replace(config, projects=fresh.projects)
+
     templates = Jinja2Templates(directory=str(TEMPLATES))
     templates.env.filters["body"] = render_body
 
@@ -273,6 +308,7 @@ def create_app(config: Config) -> FastAPI:
         mark: str = "",
         counts_scope: str = "",
     ) -> Any:
+        config = reread()
         ledgers = _ledgers(config)
         if not ledgers:
             return templates.TemplateResponse(
@@ -350,11 +386,9 @@ def create_app(config: Config) -> FastAPI:
             unsectioned = [u for u in unsectioned if tag in u.tags]
         everything = list(ledger)
         known = {u.id for u in everything}
-        # Whether this source was read and marked up, or segmented. It decides
-        # which passes are offered and how wide a crop is cut, and it is a
-        # property of the units rather than a setting: a source is what it is.
-        from_marks = any(u.marks for u in everything)
-        pipeline = pipeline_counts(config, name)
+        shared = project_context(config, name, everything)
+        from_marks = shared["from_marks"]
+        pipeline = shared["pipeline"]
         filters = {
             "project": name,
             "tag": tag,
@@ -379,8 +413,7 @@ def create_app(config: Config) -> FastAPI:
                 **filters,
                 **key_context(config, "units"),
                 "config": config,
-                "project": name,
-                "projects": project_names(config),
+                **shared,
                 "units": [_unit_payload(u, config, known) for u in units],
                 "counts": ledger.counts(),
                 "sections": ledger.sections(),
@@ -410,15 +443,13 @@ def create_app(config: Config) -> FastAPI:
                 "filters": filters,
                 "commands": commands_for(
                     "units", filters, pipeline, from_marks=from_marks,
-                    has_document=bool(config.project(name).sources),
+                    has_document=shared["has_document"],
                 ),
                 "tag_rows": tag_rows([u.tags for u in everything], tag),
                 "mark": mark,
                 "mark_matrix": mark_matrix(
                     ledger.select(state=state or "all", section=section or None), config, name
                 ),
-                "scheme": scheme_legend(scheme_rows(everything, config, name)),
-                "project_facts": project_facts(config, name, from_marks=from_marks),
                 "fsm_counts": (
                     scoped_counts(config, name, filters)
                     if counts_scope == "filtered"
@@ -452,6 +483,7 @@ def create_app(config: Config) -> FastAPI:
         derivation: str = "",
         counts_scope: str = "",
     ) -> Any:
+        config = reread()
         name = resolve_project(config, project)
         cards, findings = _checked(config)
         everywhere = cards  # kept: the filters below rebind `cards`
@@ -582,9 +614,10 @@ def create_app(config: Config) -> FastAPI:
             "counts_scope": counts_scope,
         }
         counts = {s: sum(1 for c in cards if c.effective_status == s) for s in model.STATUSES}
-        pipeline = pipeline_counts(config, name)
         units_here = list(_ledgers(config).get(name, Ledger(config.units_path(name))))
-        from_marks = any(u.marks for u in units_here)
+        shared = project_context(config, name, units_here)
+        from_marks = shared["from_marks"]
+        pipeline = shared["pipeline"]
         return templates.TemplateResponse(
             request,
             "review.html",
@@ -602,19 +635,16 @@ def create_app(config: Config) -> FastAPI:
                 "pipeline": pipeline,
                 "total": len(cards),
                 "status": status,
-                "project": name,
-                "projects": project_names(config),
+                **shared,
                 "annotated": annotated,
                 "section": section,
                 "filters": filters,
                 "commands": commands_for(
                     "review", filters, pipeline, from_marks=from_marks,
-                    has_document=bool(config.project(name).sources),
+                    has_document=shared["has_document"],
                 ),
                 "tag_rows": tag_rows([c.tags for c in in_project], tag),
                 "grade_rows": grade_rows(in_project, frequency, derivation),
-                "scheme": scheme_legend(scheme_rows(units_here, config, name)),
-                "project_facts": project_facts(config, name, from_marks=from_marks),
                 "section_tree": section_rows(
                     in_project,
                     {c.uid for c in unsectioned},
@@ -671,6 +701,7 @@ def create_app(config: Config) -> FastAPI:
         from ..context import shelf as project_shelf
         from ..context import source_conventions
 
+        config = reread()
         name = resolve_project(config, project)
         spec = config.projects.get(name)
         ledger = _ledgers(config).get(name)
@@ -709,6 +740,14 @@ def create_app(config: Config) -> FastAPI:
                 ],
                 "coverage": cover,
                 "shelf": project_shelf(config, name),
+                # One entry per line, so a line can be dropped. Only
+                # the list items: a shelf is prose, and the sentence
+                # above the list is not a reference.
+                "shelf_lines": [
+                    line.strip()
+                    for line in project_shelf(config, name).splitlines()
+                    if line.strip().startswith(("-", "*"))
+                ],
                 "conventions": source_conventions(config, name),
                 "untopiced": [
                     u.id
@@ -722,6 +761,52 @@ def create_app(config: Config) -> FastAPI:
                 ],
             },
         )
+
+    @app.post("/api/projects")
+    def add_project(body: dict[str, Any] = Body(...)) -> Any:
+        """Start a project that reads no document.
+
+        A file edit with no model behind it, which is what §12 is about:
+        `forge project` writes the same file, and this is that call with a
+        text box in front of it. The app re-reads the project table per
+        request, so the one you just made is on the picker without a
+        restart.
+        """
+        name = str(body.get("name", "")).strip()
+        made = projects_mod.scaffold(
+            config,
+            name,
+            title=str(body.get("title", "")),
+            deck=str(body.get("deck", "")),
+        )
+        if made is None:
+            raise HTTPException(status_code=400, detail=f"cannot start a project from {name!r}")
+        return {"ok": True, "project": made}
+
+    @app.post("/api/references/{project}")
+    def edit_references(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Keep or drop one line of the shelf.
+
+        `references.md` is prose with no schema, and dropping a line is how
+        you say you do not want a reference -- the same shape as resolving
+        an annotation by deleting it. Rewritten line by line, which is the
+        machinery the card views already use, pointed at another file.
+        """
+        line = str(body.get("line", "")).strip()
+        if not line:
+            raise HTTPException(status_code=400, detail="which line?")
+        path = config.projects_dir / project / REFERENCES_FILE
+        if not path.exists():
+            raise HTTPException(status_code=404, detail="no references.md here")
+        kept = [
+            existing
+            for existing in path.read_text(encoding="utf-8").splitlines()
+            if existing.strip() != line
+        ]
+        if len(kept) == len(path.read_text(encoding="utf-8").splitlines()):
+            raise HTTPException(status_code=404, detail="no such line")
+        model.write_atomic(path, "\n".join(kept).rstrip("\n") + "\n")
+        return {"ok": True}
 
     @app.post("/api/topics/{project}")
     def add_topic(project: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -853,6 +938,7 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/api/projects")
     def projects_api() -> Any:
+        config = reread()
         """Every source with its counts, for the picker.
 
         On demand rather than on every page, because it walks every ledger and
@@ -1647,6 +1733,34 @@ def _canvas_tags(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if any(row["on"] for row in rows) and not any(row["on"] for row in shown):
         shown = [*shown[: CANVAS_TAGS - 1], next(row for row in rows if row["on"])]
     return shown
+
+
+def project_context(config: Config, name: str, units: list[Unit]) -> dict[str, Any]:
+    """What every view says about the project it is showing.
+
+    The views each assembled this by hand, and they had already drifted
+    once: the same fact computed twice is two facts the moment somebody
+    changes one of them. Resolved here, so a widget and a pass cannot read
+    different answers about the same project (ROADMAP.md 10).
+
+    `units` is the project's whole ledger rather than the filtered deck,
+    because every one of these is a property of the project and not of what
+    a filter happens to be leaving.
+    """
+    # Whether this project was read and marked up, or segmented. It decides
+    # which passes are offered and how wide a crop is cut, and it is a
+    # property of the units rather than a setting: a project is what it is.
+    from_marks = any(u.marks for u in units)
+    spec = config.projects.get(name)
+    return {
+        "project": name,
+        "projects": project_names(config),
+        "pipeline": pipeline_counts(config, name),
+        "from_marks": from_marks,
+        "has_document": bool(spec.sources) if spec else False,
+        "project_facts": project_facts(config, name, from_marks=from_marks),
+        "scheme": scheme_legend(scheme_rows(units, config, name)),
+    }
 
 
 def tag_rows(tagged: list[list[str]], chosen: str) -> list[dict[str, Any]]:

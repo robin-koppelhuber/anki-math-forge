@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from anki_math_forge import cli, topics
@@ -273,3 +274,164 @@ def test_a_real_refusal_is_an_answer_and_not_a_gap() -> None:
     # And where zero is a real value, it is only `-1` that means nobody said.
     assert config_mod.settled(0, 3, empty=-1) == 0
     assert config_mod.settled(-1, 3, empty=-1) == 3
+
+
+# -- the rest of the file edits §12 asks for --------------------------------
+
+
+def test_a_project_can_be_started_from_the_view(repo: Path) -> None:
+    """A file edit with no model behind it. `forge project` writes the same
+    file, through the same function, which is how invariant 2 stays true."""
+    answer = client(repo).post("/api/projects", json={"name": "Modern C++", "deck": "Cpp"})
+
+    assert answer.status_code == 200
+    assert answer.json()["project"] == "modern-c"
+    assert config_mod.load(repo).project("modern-c").deck == "Cpp"
+
+
+def test_the_new_project_is_on_the_picker_without_a_restart(repo: Path) -> None:
+    """The app read its config once at start, so a project created while it
+    was running was one it had never heard of. DESIGN.md §6 already said it
+    re-reads from disk on every request; the config was the part that did
+    not."""
+    app = create_app(config_mod.load(repo))
+    live = TestClient(app)
+    assert "later" not in {row["name"] for row in live.get("/api/projects").json()["projects"]}
+
+    live.post("/api/projects", json={"name": "later"})
+
+    assert "later" in {row["name"] for row in live.get("/api/projects").json()["projects"]}
+
+
+def test_starting_one_twice_leaves_the_first_alone(repo: Path) -> None:
+    client(repo).post("/api/projects", json={"name": "cpp", "deck": "Mine"})
+
+    assert client(repo).post("/api/projects", json={"name": "cpp"}).status_code == 400
+    assert config_mod.load(repo).project("cpp").deck == "Mine"
+
+
+def test_a_shelf_line_can_be_dropped(repo: Path) -> None:
+    """Deleting the line is how you say you do not want a reference, the
+    same shape as resolving an annotation."""
+    folder = a_project(repo, outline="")
+    (folder / "references.md").write_text(
+        "# References\n\n- cppreference\n- a blog post I am not sure about\n", encoding="utf-8"
+    )
+
+    answer = client(repo).post(
+        "/api/references/cpp", json={"line": "- a blog post I am not sure about"}
+    )
+
+    assert answer.status_code == 200
+    left = (folder / "references.md").read_text(encoding="utf-8")
+    assert "cppreference" in left
+    assert "blog post" not in left
+
+
+def test_dropping_a_line_that_is_not_there_is_refused(repo: Path) -> None:
+    folder = a_project(repo, outline="")
+    (folder / "references.md").write_text("- cppreference\n", encoding="utf-8")
+
+    assert client(repo).post("/api/references/cpp", json={"line": "- nope"}).status_code == 404
+
+
+# -- routing a deck by tag --------------------------------------------------
+
+
+def with_decks(repo: Path, block: str) -> config_mod.Config:
+    a_project(repo, outline="")
+    path = repo / "projects" / "cpp" / "project.toml"
+    path.write_text(f'title = "C++"\ndeck = "Cpp"\n\n{block}', encoding="utf-8")
+    return config_mod.load(repo)
+
+
+BY_TAG = (
+    "[decks.by_tag]\ncontainers = \"Cpp::Containers\"\nalgorithms = \"Cpp::Algorithms\"\n"
+)
+
+
+def test_a_tag_routes_a_card_to_its_own_deck(repo: Path) -> None:
+    """A project on a subject splits by what its cards are about, not by
+    what kind of card they are."""
+    config = with_decks(repo, BY_TAG)
+
+    assert config.deck_for("cpp", "identity", ["containers"]) == "Cpp::Containers"
+    assert config.deck_for("cpp", "identity", ["nothing"]) == "Cpp"
+
+
+def test_file_order_settles_a_card_with_two(repo: Path) -> None:
+    """Somewhere predictable rather than somewhere alphabetical."""
+    config = with_decks(repo, BY_TAG)
+
+    assert config.deck_for("cpp", "", ["algorithms", "containers"]) == "Cpp::Containers"
+
+
+def test_a_tag_outranks_a_type(repo: Path) -> None:
+    """A tag names one card's subject; a type names a whole class of card."""
+    config = with_decks(repo, BY_TAG + '\n[decks.by_type]\nintuition = "Cpp::Ideas"\n')
+
+    assert config.deck_for("cpp", "intuition", ["containers"]) == "Cpp::Containers"
+    assert config.deck_for("cpp", "intuition", []) == "Cpp::Ideas"
+
+
+def test_the_flat_form_is_still_the_type_map(repo: Path) -> None:
+    """`[decks]` meant type to deck before there were two tables."""
+    config = with_decks(repo, '[decks]\nintuition = "Cpp::Ideas"\n')
+
+    assert config.deck_for("cpp", "intuition", []) == "Cpp::Ideas"
+
+
+def test_re_tagging_moves_the_deck_without_un_approving(repo: Path) -> None:
+    """The two halves of this had to land together: routing by tag is no use
+    if re-tagging demotes the card, and the exemption is no use without
+    something that routes."""
+    from anki_math_forge import model
+
+    config = with_decks(repo, BY_TAG)
+    path = repo / "cards" / "cpp" / "aa11bb-x.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "---\nuid: aa11bb\ntype: identity\nstatus: draft\n"
+        'source: "C++"\nunit: "cpp:x"\ntags: ["containers"]\n---\n\n'
+        "## front\n\n$a$\n\n## back\n\n$b$\n",
+        encoding="utf-8",
+    )
+    card = model.load(path)
+    card.approve()
+    card.save()
+    assert config.deck_for("cpp", card.type, card.tags) == "Cpp::Containers"
+
+    card = model.load(path)
+    card.frontmatter["tags"] = ["algorithms"]
+    card.save()
+
+    moved = model.load(path)
+    assert moved.effective_status == "approved", "filing is not what a reviewer read"
+    assert config.deck_for("cpp", moved.type, moved.tags) == "Cpp::Algorithms"
+
+
+def test_the_command_and_the_view_write_the_same_file(
+    repo: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Two ways to write one file is how the two drift, so both go through
+    one function. Invariant 2 is only true while they cannot disagree."""
+    a_project(repo, outline="")
+    run(repo, "topic", "--project", "cpp", "the standard containers", "--ask", "why")
+    by_command = (repo / "projects" / "cpp" / "topics.md").read_text(encoding="utf-8")
+
+    other = tmp_path_factory.mktemp("other")
+    (other / "forge.toml").write_text(
+        '[repo]\ncards_dir = "cards"\nprojects_dir = "projects"\n', encoding="utf-8"
+    )
+    (other / "cards").mkdir()
+    a_project(other, outline="")
+    client(other).post(
+        "/api/topics/cpp", json={"name": "the standard containers", "ask": "why"}
+    )
+    by_view = (other / "projects" / "cpp" / "topics.md").read_text(encoding="utf-8")
+
+    assert by_command == by_view
+
+
+def test_the_command_refuses_a_project_that_is_not_there(repo: Path) -> None:
+    assert run(repo, "topic", "--project", "nope", "a subject") == 1

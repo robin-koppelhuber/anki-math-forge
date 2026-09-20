@@ -20,3 +20,32 @@ if (form) {
     location.reload();
   });
 }
+
+/* Dropping a line from the shelf. Same shape as resolving an annotation:
+   the way to say you do not want a reference is to delete the line, and the
+   app does by hand exactly what you would do in an editor. */
+for (const button of document.querySelectorAll("[data-drop-reference]")) {
+  button.addEventListener("click", async () => {
+    const project = new URL(location.href).searchParams.get("project") || "";
+    await post(`/api/references/${encodeURIComponent(project)}`, {
+      line: button.dataset.dropReference,
+    });
+    button.closest(".shelf-line").remove();
+  });
+}
+
+/* Starting a project. The picker is filled from the config, which the app
+   re-reads per request, so the new one is there the moment this returns. */
+const startForm = document.getElementById("start-project");
+if (startForm) {
+  startForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = document.getElementById("project-name").value.trim();
+    if (!name) return;
+    const answer = await post("/api/projects", {
+      name,
+      deck: document.getElementById("project-deck").value,
+    });
+    if (answer && answer.project) location.href = `/setup?project=${answer.project}`;
+  });
+}

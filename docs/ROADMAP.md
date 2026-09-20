@@ -673,8 +673,9 @@ because the reasoning is the part worth having later.
    actually run. The context chip is absent where there are no pages.
 7. Docs: the DESIGN diagram shows three doors rather than one, CLAUDE.md and
    CONTRACT.md carry the vocabulary, and the assets are re-rendered. **The
-   README's prose is still the author's to write**, and what it lacks is a
-   paragraph on a deck with no book behind it, and one on pictures.
+   README's prose is still the author's to write.** Pictures on cards and
+   code on cards both work; the README does not yet say a card can carry
+   either, and it says nothing about a deck with no book behind it.
 8. End to end over both halves: `tests/test_end_to_end_project.py` for the
    pipeline and `tests/browser/test_project_view.py` for the screens.
 
@@ -715,15 +716,26 @@ is a file edit. A button for them is not the thing "Triggering Claude from
 the website" rejects, which is about pushing a prompt into a session. The
 aim is that every command with no model behind it is reachable from the app.
 
-Two kinds, and the easy kind is worth doing first. **A file edit** writes a
-directory or rewrites a line and answers immediately: create a project, add
-a source, write a topic, keep or drop a reference. The app already rewrites
-card markdown line by line, so this is that machinery pointed at another
-file, and it needs nothing new. **A long run** is `zotero`, `sync`,
-`extract`. Those want a job to stream and cancel, which the app has none of.
-Build that when a button is what you actually miss.
+Two kinds. **A file edit** writes a directory or rewrites a line and
+answers immediately. Three are built, all on the setup stage: starting a
+project, recording an ask, and dropping a line from the shelf. Each goes
+through the same function the command does, which is how invariant 2 stays
+true rather than being asserted. Adding a *source* to a project is the one
+left, and it is the awkward one: a `[[sources]]` table has a marking scheme
+and crop settings in it, so a form for it is a form for the whole of
+`SourceConfig`, and editing the TOML is still the better answer until
+somebody has done it twice.
 
-**Trigger:** the first project you create by hand while the app is open.
+Making those work needed one fix behind them. The app read `forge.toml`
+once at start, so a project created while it was running was one it had
+never heard of, and an edited deck showed the old name until a restart.
+DESIGN.md §6 already promised it re-reads from disk on every request; now
+the project table does too. Only that table, because `create_app` is handed
+a config and must honour it.
+
+**A long run** is `zotero`, `sync`, `extract`. Those want a job to stream
+and cancel, which the app has none of. Build that when a button is what you
+actually miss.
 
 ## 4. Publishing, what is left
 

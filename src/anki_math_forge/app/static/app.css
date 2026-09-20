@@ -2972,3 +2972,14 @@ body.with-order-rail .graph-stage { right: var(--order-rail-w); }
   border-radius: 4px;
 }
 .setup-add button { justify-self: start; }
+/* A shelf line and the button that drops it. The button sits at the end of
+   the row rather than beside the text: a line can wrap, and a control that
+   moves with the wrap is one you have to look for. */
+.shelf-list > li.shelf-line {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem;
+}
+.shelf-line .drop {
+  flex: none; border: 0; background: none; cursor: pointer;
+  color: var(--muted); font-size: 15px; line-height: 1; padding: 0 2px;
+}
+.shelf-line .drop:hover { color: var(--bad); }
