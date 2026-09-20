@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% set view = "setup" %}
+
+{% block title %}setup · {{ project | default('', true) }} · forge{% endblock %}
+
+{# The stage before triage. Every project has had one all along -- which
+   item, which files, which marks become units, which deck, what is ambient --
+   and it happened by editing TOML because it had no screen. For a project
+   with no document it is *all* of the pre-unit work.
+
+   Read mostly, and deliberately: the files are the source of truth and this
+   is a view over them (invariant 2). The one thing it writes is a new ask,
+   which is a heading appended to a markdown file and is the thing you cannot
+   conveniently do from anywhere else. #}
+{% block main %}
+<div class="setup">
+
+  {# What the project is, as settings rather than as prose. `project_facts`
+     is the same panel the guide shows, given room it never had in a 240px
+     rail. #}
+  <section class="setup-block">
+    <h2>{{ project_facts.title or project }}</h2>
+    <dl class="setup-facts">
+      <dt>deck</dt><dd>{{ project_facts.deck }}</dd>
+      {% if project_facts.citation %}<dt>cited as</dt><dd>{{ project_facts.citation }}</dd>{% endif %}
+      <dt>material</dt><dd>{{ project_facts.origin or 'nothing declared' }}</dd>
+      {% if project_facts.tags %}<dt>labels</dt><dd>{{ project_facts.tags | join(', ') }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  {# The works it reads. Absent for a project that reads none, and that
+     absence is the whole of what "no document" means: there is no kind key
+     to show, so there is nothing to say here rather than a row saying none. #}
+  {% if sources %}
+  <section class="setup-block">
+    <h3>sources</h3>
+    <p class="muted">What this project reads. A marking scheme and a crop
+      width are facts about a document, so they live with the work rather
+      than with the deck.</p>
+    <ul class="setup-list">
+      {% for work in sources %}
+      <li>
+        <div class="setup-row">
+          <b>{{ work.title }}</b>
+          <span class="badge{{ ' out' if not work.authoritative }}">{{
+            'authoritative' if work.authoritative else 'reference' }}</span>
+          <span class="muted">{{ work.units }} units</span>
+        </div>
+        {% if work.files %}<p class="muted">files: {{ work.files | join(', ') }}</p>{% endif %}
+        {% if work.zotero %}<p class="muted">Zotero item {{ work.zotero }}{{
+          ', attachments: ' ~ work.attachments | join(', ') if work.attachments }}</p>{% endif %}
+        {% if work.url %}<p class="muted"><a href="{{ work.url }}" rel="noreferrer">{{ work.url }}</a></p>{% endif %}
+        {% if work.scheme %}<p class="muted">marks that start a unit: {{ work.scheme | join(', ') }}</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {# Topics, and the only thing here you cannot read off a file: which entries
+     of an ask have a unit and which are still waiting. A pass that stopped
+     halfway looks exactly like a subject that was smaller than you thought,
+     and this is the difference. #}
+  <section class="setup-block" id="topics">
+    <h3>topics</h3>
+    <p class="muted">What you asked for, and what each ask means to cover.
+      Optional: most projects have a source doing this job. The outline is
+      prose in <code>topics.md</code>, and deleting a line is how you say a
+      subject is not wanted.</p>
+
+    {% if coverage.topics %}
+    <p class="setup-total">{{ coverage.covered }} of {{ coverage.entries }}
+      outline entries have a unit{{ ', ' ~ coverage.open ~ ' still open' if coverage.open }}</p>
+    {% endif %}
+
+    <ul class="setup-list">
+      {% for topic in coverage.topics %}
+      <li>
+        <div class="setup-row">
+          <b>{{ topic.name }}</b>
+          <span class="muted">{{ topic.covered }}/{{ topic.outline | length }}</span>
+        </div>
+        {% if topic.ask %}<p class="setup-ask">{{ topic.ask }}</p>{% endif %}
+        <ul class="outline">
+          {% for entry in topic.outline %}
+          <li class="{{ 'covered' if entry.covered else 'open' }}">
+            <span class="outline-mark" aria-hidden="true">{{ '·' if entry.covered else '○' }}</span>
+            {% if entry.covered %}
+            <a href="{{ filter_url('/units', {'project': project}, state='all') }}#{{ entry.units[0] }}">{{ entry.text }}</a>
+            {% else %}
+            {{ entry.text }}
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </li>
+      {% endfor %}
+    </ul>
+
+    {# The one write. A heading appended to a markdown file: instant, local,
+       no model behind it, and doable by hand exactly as this does it. #}
+    <form class="setup-add" id="add-topic">
+      <input type="text" id="topic-name" placeholder="what do you want cards for?"
+             autocomplete="off" aria-label="the subject">
+      <textarea id="topic-ask" rows="2" aria-label="what you want from it"
+                placeholder="what you want from it, in your own words"></textarea>
+      <button type="submit">record the ask</button>
+      <p class="muted">Then run <code>/propose --project {{ project }} '&lt;the subject&gt;'</code>
+        to outline it and write the units.</p>
+    </form>
+
+    {% if untopiced %}
+    <p class="muted">{{ untopiced | length }} proposed units match no outline entry.
+      Either the ask was edited after they were written, or they were proposed
+      without one.</p>
+    {% endif %}
+  </section>
+
+  {# Reference material and what is ambient. Both are prose files handed to
+     whoever writes a card, shown here so you can see whether they say
+     anything before a pass reads them and finds they do not. #}
+  <section class="setup-block">
+    <h3>the shelf</h3>
+    {% if shelf %}<pre class="setup-prose">{{ shelf }}</pre>
+    {% else %}<p class="muted">No <code>references.md</code>. With no authoritative
+      source, this is all that keeps a card off the model's memory alone.</p>{% endif %}
+  </section>
+
+  <section class="setup-block">
+    <h3>what is ambient here</h3>
+    {% if conventions %}<pre class="setup-prose">{{ conventions }}</pre>
+    {% else %}<p class="muted">No <code>conventions.md</code>. With no book to read
+      it off, that file <em>decides</em> what the deck does rather than describing
+      it, so whoever writes a card here is guessing until it exists.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}<script defer src="/static/setup.js?b={{ app_build }}"></script>{% endblock %}

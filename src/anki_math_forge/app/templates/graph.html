@@ -22,6 +22,11 @@
   <button type="button" class="ctx-step" id="graph-all"
           title="every card in the source, including the ones with no dependency either way ({{ key('every-card') }})">every card</button>
 </span>
+{# Which subject is drawn, filled in from the payload: the canvas is the
+   third view that narrows by tag, and "filter on these in the graph view"
+   was half of what the rail answers on the other two. Hidden when nothing
+   here carries a tag. #}
+<span class="badge tool-group" id="graph-tags" hidden></span>
 <button type="button" class="tool" id="graph-add"
         title="put a card with no dependencies on the canvas, so you can connect it ({{ key('add-card') }})">
   <b class="tool-sign" aria-hidden="true">+</b>add a card</button>

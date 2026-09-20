@@ -628,9 +628,44 @@ function describe() {
     : `No cards in ${data.project} yet. Card some units first.`;
 }
 
+/* Which subject is being looked at alone, or "" for all of them. Kept in
+   the URL as well as here, so the picture you are looking at is a link you
+   can send -- the same promise the two list views make about their filters. */
+let tag = new URL(location.href).searchParams.get("tag") || "";
+
+/* The subjects this source's cards carry, as a row of toggles beside the
+   `drawn` group. A select would hide the counts, and the counts are how you
+   tell a tag worth looking at alone from one on two cards. */
+function paintTags() {
+  const box = document.getElementById("graph-tags");
+  if (!box) return;
+  const rows = data.tags || [];
+  box.hidden = rows.length === 0;
+  box.replaceChildren();
+  if (!rows.length) return;
+  box.appendChild(el("i", "chip-what", "subject"));
+  for (const row of rows) {
+    const button = el("button", `ctx-step${row.on ? " on" : ""}`, `${row.name} ${row.count}`);
+    button.type = "button";
+    button.title = row.on ? "click to draw every subject" : `only ${row.name}`;
+    button.addEventListener("click", () => {
+      tag = row.on ? "" : row.name;
+      const url = new URL(location.href);
+      if (tag) url.searchParams.set("tag", tag);
+      else url.searchParams.delete("tag");
+      history.replaceState(null, "", url);
+      load({ recentre: true });
+    });
+    box.appendChild(button);
+  }
+}
+
 async function load({ recentre: centre = true } = {}) {
   const project = stage.dataset.project;
-  const query = everything ? "?all=1" : "";
+  const parts = [];
+  if (everything) parts.push("all=1");
+  if (tag) parts.push(`tag=${encodeURIComponent(tag)}`);
+  const query = parts.length ? `?${parts.join("&")}` : "";
   const response = await fetch(`/api/graph/${encodeURIComponent(project)}${query}`);
   if (!response.ok) {
     toast(`could not load the graph: ${response.status}`, "bad");
@@ -644,6 +679,7 @@ async function load({ recentre: centre = true } = {}) {
   hoverEdge = null;
   document.getElementById("graph-all").classList.toggle("on", everything);
   document.getElementById("graph-linked").classList.toggle("on", !everything);
+  paintTags();
   describe();
   /* The panel is a second reading of the same payload, so it is repainted
      from the same place rather than by each caller that happens to reload. */

@@ -57,6 +57,23 @@
     <span class="pick-icon" aria-hidden="true">▦</span>
     <span class="project-pick-name">{{ src or 'no project' }}</span>
   </button>
+  {# The stage before triage, from anywhere. A project with no document
+     spends all of its pre-unit work here, and one with a book still has
+     settings worth reading without opening the TOML. Points back from the
+     page itself, like the canvas below. #}
+  {% if view | default('') == 'setup' %}
+  <a class="icon-button" href="{{ filter_url('/units', {}, project=src, state='new') }}"
+     title="back to triage" aria-label="units">&larr;</a>
+  {% else %}
+  <a class="icon-button" href="{{ filter_url('/setup', {}, project=src) }}"
+     title="what this project is set up as: its sources, its asks, what is ambient"
+     aria-label="setup">
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <path d="M2 4h12M2 8h12M2 12h7" fill="none" stroke="currentColor"
+            stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+  </a>
+  {% endif %}
   {# The dependency canvas, from anywhere. It was reachable only from the
      `needs` block of a card in the review view, which is the right place to
      *notice* you want it and a poor place to be the only one -- the units view

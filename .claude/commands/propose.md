@@ -70,7 +70,9 @@ left. A proposal is a subject, not a draft.
    already there is left alone. That is what makes this safe to run twice.
 
 5. **Report** how many were proposed, which outline entries have no unit
-   yet, and anything you could not find a reference for.
+   yet, and anything you could not find a reference for. `/setup` in the app
+   shows the same thing as a count and a list, so the human can see what is
+   still open without re-reading the file.
 
 ## What goes in each field
 

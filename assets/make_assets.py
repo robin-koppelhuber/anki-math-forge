@@ -242,8 +242,12 @@ class Serving:
         self.base = f"http://127.0.0.1:{self.port}"
 
     def __enter__(self) -> Serving:
+        # `--no-sync`: this runs inside an environment that is already set up,
+        # and re-installing first fails outright while any other `forge` is
+        # running, because the executable it would replace is locked. A
+        # screenshot run should not depend on whether you left a server open.
         self.proc = subprocess.Popen(
-            ["uv", "run", "forge", "serve", "--port", str(self.port)],
+            ["uv", "run", "--no-sync", "forge", "serve", "--port", str(self.port)],
             cwd=ROOT,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -329,7 +333,7 @@ def urls() -> dict[str, str]:
     dropped, and a screenshot of an empty deck is worse than none at all: it
     looks like the feature does not work.
     """
-    from anki_math_forge.app import source_origin
+    from anki_math_forge.app import project_origin
     from anki_math_forge.config import load
     from anki_math_forge.ledger import open_ledgers
 
@@ -340,7 +344,7 @@ def urls() -> dict[str, str]:
         return [
             name
             for name in config.projects
-            if (source_origin(config, name) == "zotero") is marked_up and ledgers.get(name)
+            if (project_origin(config, name) == "zotero") is marked_up and ledgers.get(name)
         ]
 
     def tagged_demo(name: str) -> bool:
@@ -353,7 +357,7 @@ def urls() -> dict[str, str]:
 
     def units(source: str) -> str:
         return "/units?" + urllib.parse.urlencode(
-            {"source": source, "state": state_of(source)}
+            {"project": source, "state": state_of(source)}
         )
 
     out: dict[str, str] = {}
@@ -367,7 +371,7 @@ def urls() -> dict[str, str]:
             for c in (config.cards_dir / segmented).glob("*.md")
         )
         out["review"] = "/review?" + urllib.parse.urlencode(
-            {"source": segmented, "status": "approved" if approved else "all"}
+            {"project": segmented, "status": "approved" if approved else "all"}
         )
         # The canvas draws `requires`, so a source with none is a blank window
         # with a line of explanation in the middle of it. That is the correct
@@ -381,7 +385,7 @@ def urls() -> dict[str, str]:
             # the other half and the queue itself, and a picture of the view
             # with it shut shows neither.
             out["graph"] = "/graph?" + urllib.parse.urlencode(
-                {"source": segmented, "order": "1"}
+                {"project": segmented, "order": "1"}
             )
     # The marked-up shot is opt-in, and that is the whole point of it. This
     # screenshot is a legible page of whatever you were reading, so taking it

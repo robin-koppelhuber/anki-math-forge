@@ -75,6 +75,15 @@ def lay_out(repo: Path) -> None:
     (folder / "units.jsonl").write_text(
         "\n".join(json.dumps(row) for row in lines) + "\n", encoding="utf-8"
     )
+    (folder / "topics.md").write_text(
+        "# What this deck is for\n\n"
+        "## the standard containers\n\n"
+        "Choosing between them and invalidation, not the full API.\n\n"
+        "- vector erase-remove\n"
+        "- when a vector invalidates\n"
+        "- deque vs vector\n",
+        encoding="utf-8",
+    )
     (repo / "cards" / "cpp").mkdir(parents=True, exist_ok=True)
 
 
@@ -191,3 +200,56 @@ def test_triage_still_queues_a_unit(page, live, served) -> None:  # type: ignore
 
     ledger = (repo / "projects" / "cpp" / "units.jsonl").read_text(encoding="utf-8")
     assert '"state": "queued"' in ledger
+
+
+# -- the setup stage --------------------------------------------------------
+
+
+def test_the_setup_view_shows_the_outline_and_what_is_open(page, live) -> None:  # type: ignore[no-untyped-def]
+    """The one thing you cannot read off the file.
+
+    One entry of the three has a unit. The other two are open, and one of
+    them is the case worth seeing: a unit called `deque-invalidation` exists
+    but the entry says "deque vs vector", so nothing joins them. That is the
+    ask having been reworded after the proposal, and it should read as open
+    rather than quietly as covered."""
+    page.goto(f"{live}/setup?project=cpp")
+    page.wait_for_selector("#topics")
+
+    assert "1 of 3" in page.locator(".setup-total").inner_text()
+    assert page.locator(".outline li.open").count() == 2
+    open_text = page.locator(".outline").inner_text()
+    assert "deque vs vector" in open_text
+
+
+def test_the_setup_view_reaches_the_unit_an_entry_produced(page, live) -> None:  # type: ignore[no-untyped-def]
+    """A covered entry is a link, because the next thing you want after
+    seeing that something was proposed is to look at it."""
+    page.goto(f"{live}/setup?project=cpp")
+    page.click('.outline li.covered a:has-text("vector erase-remove")')
+    page.wait_for_selector('[data-id="cpp:vector-erase-remove"]')
+
+    assert "/units" in page.url
+
+
+def test_recording_an_ask_from_the_view(page, live, served) -> None:  # type: ignore[no-untyped-def]
+    """The one write this screen makes, and it is a file edit."""
+    _, repo = served
+    page.goto(f"{live}/setup?project=cpp")
+    page.fill("#topic-name", "iterator invalidation")
+    page.fill("#topic-ask", "when each container invalidates.")
+    page.click('#add-topic button[type="submit"]')
+    page.wait_for_selector('text=iterator invalidation')
+
+    text = (repo / "projects" / "cpp" / "topics.md").read_text(encoding="utf-8")
+    assert "## iterator invalidation" in text
+    assert "when each container invalidates." in text
+
+
+def test_the_setup_view_is_reachable_from_triage(page, live) -> None:  # type: ignore[no-untyped-def]
+    """A screen nobody can find is a screen nobody uses."""
+    triage(page, live)
+    page.click('[aria-label="setup"]')
+    page.wait_for_selector("#topics")
+
+    assert "/setup" in page.url

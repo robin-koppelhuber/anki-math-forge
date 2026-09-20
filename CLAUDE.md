@@ -117,8 +117,12 @@ uv run forge units --ungisted   # no one-line subject yet; `/gist` fills them
 uv run forge units --id <id> --gist 'Lemma 2'
 uv run forge new --unit <id> --front '$...$' --back '$...$' --gist 'what it is'
 uv run forge todo               # open annotations, @claude and @me
-uv run forge serve              # units triage, card review, the dependency canvas
-                                #   (`[app] graph = false` turns the canvas off)
+uv run forge serve              # project setup, units triage, card review, the
+                                #   dependency canvas (`[app] graph = false`
+                                #   turns the canvas off). `/setup` is the stage
+                                #   before triage: what a project reads, what
+                                #   you asked for, and which asks still have
+                                #   outline entries with no unit
 uv run forge sync --dry-run     # then without --dry-run
 uv run forge feedback           # Anki review comments/flags -> @claude notes
 uv run forge verify             # opt-in numeric check

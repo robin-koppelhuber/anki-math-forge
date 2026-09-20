@@ -643,46 +643,48 @@ the picture worth having anyway.
 
 ### Build order
 
-Steps 1, 2, 3 and 5 are built, along with the end to end pass over what they
-compose. What they left is listed after them.
+**Built.** The eight steps below are done, and what each one settled is kept
+because the reasoning is the part worth having later.
 
-1. **Done.** A project with no source walks from `units --add` to a note in
-   Anki, covered by `tests/test_end_to_end_project.py`. The premise holds:
-   only the first layer changed.
-2. **Done, bar one thing.** The config split, the rename, the `forge.toml`
-   pass, `units --add` with slug ids, unit tags, the preview, the reference
-   list, the migration and the `tags` exemption. **The walk-up resolver is
-   not built**: settings still resolve through a fixed unit, source,
-   project, repo ladder, so a parent relation or a topic layer is a change
-   at four call sites rather than one link. Worth doing before either lands,
-   and pointless before that.
-3. **Done.** `forge context` says plainly when nothing settles a card, and
-   hands over the unit's references and the project's shelf where the page
+1. A project with no source walks from `units --add` to a note in Anki,
+   covered by `tests/test_end_to_end_project.py`. The premise held: only the
+   first layer changed.
+2. The config split, the rename, the `forge.toml` pass, `units --add` with
+   slug ids, unit tags, the preview, the reference list, the migration and
+   the `tags` exemption. Settings resolve through one walk outwards
+   (`config.settled`) rather than a ladder written out at each call site, so
+   a parent relation or a layer for topics is one more argument and not four
+   edits.
+3. `forge context` says plainly when nothing settles a card, and hands over
+   the unit's references, the project's shelf and the ask where the page
    would be.
-5. **Done.** Fenced code through `check` and `sync`, highlighted by Pygments
-   at sync as an optional extra. No note type version bump: the CSS changed,
-   so the first sync wants `--templates`, and a new model name would orphan
-   every note on the old one.
+4. The setup stage, at `/setup`: what a project reads, what you asked for,
+   and which outline entries still have no unit. That last is the only thing
+   on it you cannot read off a file, and it is where a pass that stopped
+   halfway stops looking like a subject that was smaller than you thought.
+   One write, recording an ask, which is a heading appended to `topics.md`.
+5. Fenced code through `check` and `sync`, highlighted by Pygments at sync
+   as an optional extra. No note type version bump: the CSS changed, so the
+   first sync wants `--templates`, and a new model name would orphan every
+   note on the old one.
+6. Both lists and the canvas filter by tag, the rail offers the tags in use
+   with a search box past a handful, `frequency` and `derivation` are rows
+   you can click, and the commands panel offers the passes a project can
+   actually run. The context chip is absent where there are no pages.
+7. Docs: the DESIGN diagram shows three doors rather than one, CLAUDE.md and
+   CONTRACT.md carry the vocabulary, and the assets are re-rendered. **The
+   README's prose is still the author's to write**, and what it lacks is a
+   paragraph on a deck with no book behind it, and one on pictures.
+8. End to end over both halves: `tests/test_end_to_end_project.py` for the
+   pipeline and `tests/browser/test_project_view.py` for the screens.
 
-What is left, in order:
-
-4. The setup stage, topics and outlines first. Nothing else waits on it, and
-   it is where the breadth problem becomes visible.
-6. **Mostly done.** Both views filter by tag, the rail offers the tags that
-   are actually in use with a search box past a handful, `frequency` and
-   `derivation` are rows you can click rather than chips you can only read,
-   and the commands panel offers `/propose` where there is no document and
-   the crop passes where there is. `/propose` itself is written, and
-   `forge context` hands over the ask. The context chip is absent on a unit
-   with no page, since every size it offers counts pages either side of one.
-   **Left: a chip for choosing among references instead**, and the graph,
-   which takes no filters at all yet.
-7. Docs, README and assets, once the screens have stopped moving. `README`
-   already shows the `[[sources]]` shape; what it still lacks is prose about
-   a deck with no book behind it, and about pictures on cards.
-8. End to end tests over the topic half: a topic written, an outline
-   filled, the browser driving the setup stage. The pipeline half of this
-   is built.
+**Not built, and deliberately.** A chip for choosing among a unit's
+references. It was listed here while the context chip was still offering
+page counts to a unit with no pages; fixing that made the case for it
+disappear. `forge context` hands over every reference a unit names, a unit
+names one or two, and a setting nobody would change is worse than no
+setting. Build it the first time you have a unit with five references and
+want three of them.
 
 ### What no property settles
 

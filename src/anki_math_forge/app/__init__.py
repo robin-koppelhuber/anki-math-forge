@@ -38,6 +38,7 @@ from markupsafe import Markup
 
 from .. import check, latex, model, study
 from .. import graph as graph_mod
+from .. import topics as topics_mod
 from ..config import (
     CHAPTER,
     DECLARED,
@@ -645,6 +646,97 @@ def create_app(config: Config) -> FastAPI:
         if not config.graph:
             raise HTTPException(404, OFF)
 
+    @app.get("/setup", response_class=HTMLResponse)
+    def setup_view(request: Request, project: str = "") -> Any:
+        """What a project is set up as, before any of it is triaged.
+
+        Every project already has this stage: which item, which files, which
+        marks become units, what the colours mean, which deck, what is
+        ambient. It had no view, so it happened by editing TOML, and for a
+        project with no document it is *all* of the pre-unit work
+        (ROADMAP.md 10).
+
+        A list of what the project holds, and a panel for whatever is
+        selected. Sources for a project that reads something, topics for one
+        that decides its own coverage, and usually not both.
+
+        **The outline is what makes it worth opening.** Configuration alone
+        would rot, because you would edit the file instead; what you cannot
+        get from the file is which entries of an ask have units and which
+        are still waiting, and that is the only place the breadth problem is
+        visible.
+        """
+        # Local, like the other reader of this module: `context` pulls in the
+        # extraction package, and the app should not pay for that at import.
+        from ..context import shelf as project_shelf
+        from ..context import source_conventions
+
+        name = resolve_project(config, project)
+        spec = config.projects.get(name)
+        ledger = _ledgers(config).get(name)
+        units = list(ledger) if ledger else []
+        cover = topics_mod.coverage(config, name, ledger)
+        return templates.TemplateResponse(
+            request,
+            "setup.html",
+            {
+                **key_context(config, "units", ("projects", "guide")),
+                "config": config,
+                "project": name,
+                "projects": project_names(config),
+                "pipeline": pipeline_counts(config, name),
+                "project_facts": project_facts(
+                    config, name, from_marks=any(u.marks for u in units)
+                ),
+                "sources": [
+                    {
+                        "key": work.key,
+                        "title": work.title or work.key or work.url,
+                        "url": work.url,
+                        "files": [f.name for f in work.files],
+                        "zotero": work.zotero_key,
+                        "attachments": list(work.attachments),
+                        "authoritative": work.authoritative,
+                        "units": sum(
+                            1
+                            for u in units
+                            if u.locator.document in (work.key, *work.attachments)
+                            or (not u.locator.document and work.authoritative)
+                        ),
+                        "scheme": sorted(work.units_from),
+                    }
+                    for work in (spec.sources if spec else ())
+                ],
+                "coverage": cover,
+                "shelf": project_shelf(config, name),
+                "conventions": source_conventions(config, name),
+                "untopiced": [
+                    u.id
+                    for u in units
+                    if ":" in u.id and u.id.count(":") == 1
+                    and not any(
+                        entry.slug == u.id.split(":", 1)[1]
+                        for topic in cover.topics
+                        for entry in topic.outline
+                    )
+                ],
+            },
+        )
+
+    @app.post("/api/topics/{project}")
+    def add_topic(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Record a new ask. The one write this view needs to be usable.
+
+        Appending to a markdown file, which is what §12 means by a command
+        with no model behind it: instant, local, and doable by hand in an
+        editor exactly as the app does it (invariant 2).
+        """
+        name = str(body.get("name", "")).strip()
+        if not name:
+            raise HTTPException(status_code=400, detail="a topic needs a name")
+        topic = topics_mod.append(config, project, name, str(body.get("ask", "")))
+        return {"ok": True, "slug": topic.slug, "name": topic.name}
+
     @app.get("/graph", response_class=HTMLResponse)
     def graph_view(request: Request, project: str = "") -> Any:
         """The dependency canvas, one source at a time (ROADMAP.md §1).
@@ -690,9 +782,11 @@ def create_app(config: Config) -> FastAPI:
         )
 
     @app.get("/api/graph/{project}")
-    def graph_api(project: str, all: str = "") -> Any:
+    def graph_api(project: str, all: str = "", tag: str = "") -> Any:
         graph_enabled()
-        return project_graph(config, resolve_project(config, project), everything=bool(all))
+        return project_graph(
+            config, resolve_project(config, project), everything=bool(all), tag=tag
+        )
 
     @app.post("/api/graph/{project}/positions")
     def graph_positions_api(project: str, body: dict[str, Any] = Body(default={})) -> Any:
@@ -1537,6 +1631,24 @@ def pipeline_counts(
     return counts
 
 
+#: How many subjects the canvas offers before it stops. Eight fits one line
+#: at the width the toolbar has; past that the row wraps into a band deeper
+#: than the picture it is describing.
+CANVAS_TAGS = 8
+
+
+def _canvas_tags(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The most used subjects, and the one in force whatever its rank.
+
+    Keeping the chosen one is the same rule the rail follows: a filter you
+    cannot see is a filter you cannot turn off.
+    """
+    shown = rows[:CANVAS_TAGS]
+    if any(row["on"] for row in rows) and not any(row["on"] for row in shown):
+        shown = [*shown[: CANVAS_TAGS - 1], next(row for row in rows if row["on"])]
+    return shown
+
+
 def tag_rows(tagged: list[list[str]], chosen: str) -> list[dict[str, Any]]:
     """Every tag in view, with how many carry it, most used first.
 
@@ -2274,7 +2386,9 @@ def card_gist(card: Card, config: Config) -> str:
     return unit.gist if unit else ""
 
 
-def project_graph(config: Config, project: str, *, everything: bool = False) -> dict[str, Any]:
+def project_graph(
+    config: Config, project: str, *, everything: bool = False, tag: str = ""
+) -> dict[str, Any]:
     """Everything the canvas draws for one source, laid out and positioned.
 
     Scoped to a source because that is the only scope where the graph means
@@ -2290,6 +2404,13 @@ def project_graph(config: Config, project: str, *, everything: bool = False) -> 
     """
     everywhere = _cards(config)
     here = [c for c in everywhere if card_in_source(c, project)]
+    # A subject, looked at alone. Narrowing *this source's* cards and then
+    # letting the dependency walk below pull in what they rest on: a
+    # foundation outside the tag is still the thing they rest on, and hiding
+    # it would draw them as foundations they are not, which is the one
+    # mistake this picture must not make.
+    if tag:
+        here = [c for c in here if tag in c.tags]
     mine = {c.uid for c in here}
     wanted = {n for c in here for n in c.requires} | mine
     foreign = [
@@ -2320,6 +2441,19 @@ def project_graph(config: Config, project: str, *, everything: bool = False) -> 
     drawn = {n.id for n in shown.nodes}
     return {
         "project": project,
+        "tag": tag,
+        # Offered from this source's cards before the filter, so the control
+        # does not empty itself out on the first click.
+        #
+        # Capped, unlike the rail's. This one is a row across the top of the
+        # picture with no room to scroll and no search box, and a deck with
+        # forty subjects turned it into a band deeper than the canvas. The
+        # most used ones are what you would look at alone anyway; the long
+        # tail of two-card subjects is a question for the list views, which
+        # have the control for it.
+        "tags": _canvas_tags(
+            tag_rows([c.tags for c in everywhere if card_in_source(c, project)], tag)
+        ),
         **shown.as_dict(),
         # Where each node sits before anyone has dragged it, and what has been
         # dragged. Two maps rather than one merged one: the canvas has to be

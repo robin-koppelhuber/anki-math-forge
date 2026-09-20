@@ -20,23 +20,35 @@ A small toolbox for turning mathematical source material into good Anki cards, w
 Cards are **files in a git repo**, and **Claude Code is the generator**. The Python contains no LLM API code.
 
 ```
-  source PDF/tex
-        │
-        ▼
-   extract ──→ units.jsonl ──→ [ triage ] ──→ [Claude Code] ──→ cards/*.md
-   + transcribe   (ledger)      web app        writes stubs        │
-                                                                   ▼
-                                          check ──→ [ review ] ──→ sync ──→ Anki
-                                          (lint)     web app      (AnkiConnect)
-                                                        │
-                                    @claude annotations ┘ ──→ triage → back to draft
+  a PDF or a tex ────→ extract ──┐
+  a marked-up PDF ───→ zotero ───┤
+  a subject, no book ─→ propose ─┘
+                                 │
+                                 ▼
+                            units.jsonl ──→ [ triage ] ──→ [Claude Code] ──→ cards/*.md
+                              (ledger)       web app        writes stubs        │
+                                                                                ▼
+                                              check ──→ [ review ] ──→ sync ──→ Anki
+                                              (lint)     web app      (AnkiConnect)
+                                                            │
+                                        @claude annotations ┘ ──→ triage → back to draft
 ```
+
+**Three doors in, one pipeline after them.** A frontend owes a stable id, a
+locator as far as it has one, something scannable, and `state: new` -- and
+nothing past that, because a unit is a decision and a card is the content
+(invariant 9). Everything after the ledger reads a unit without asking which
+door it came in by, which is what lets a deck on a subject with no book
+behind it use the same triage, the same review and the same sync
+(ROADMAP.md 10).
 
 Python verbs:
 
 | Verb | Does |
 |---|---|
-| `extract` | Segments a source into units, attempts a first-pass transcription, updates the ledger. Never writes cards. |
+| `extract` | Segments a document into units, attempts a first-pass transcription, updates the ledger. Never writes cards. |
+| `project` | Starts a project that reads no document, for a subject rather than a book. |
+| `units --add` | The door a proposing pass writes through, where there is nothing to segment. |
 | `serve` | The companion app: units triage + card review + annotations. |
 | `units` | CLI view of the ledger, for scripting and for Claude Code. |
 | `check` | Lints card files. Structural only. |

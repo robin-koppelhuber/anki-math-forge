@@ -2930,3 +2930,45 @@ body.with-order-rail .graph-stage { right: var(--order-rail-w); }
   padding: 0.2rem 1.1rem 0.4rem;
 }
 .machine-body .fsm { margin: 0; }
+
+/* -- the setup stage ------------------------------------------------------
+   The screen before triage. A column of blocks rather than a list and a
+   panel: what a project holds is short -- a work or two, an ask or two, two
+   prose files -- and a master/detail layout over four items is two clicks
+   where none were needed. */
+.setup { max-width: 62em; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
+.setup-block { margin: 0 0 2rem; }
+.setup-block h2 { margin: 0 0 0.6rem; font-size: 20px; }
+.setup-block h3 {
+  margin: 0 0 0.3rem; font-size: 12px; letter-spacing: 0.09em;
+  text-transform: uppercase; color: var(--muted);
+}
+.setup-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.setup-facts dt { color: var(--muted); font-size: 13px; }
+.setup-facts dd { margin: 0; font-size: 13px; }
+.setup-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
+.setup-list > li {
+  margin: 0 0 0.9rem; padding: 0.6rem 0.8rem;
+  background: var(--panel); border-radius: 6px;
+}
+.setup-row { display: flex; align-items: baseline; gap: 0.6rem; }
+.setup-list p { margin: 0.25rem 0 0; font-size: 13px; }
+.setup-ask { font-style: italic; }
+.setup-total { margin: 0.4rem 0 0; font-size: 13px; }
+/* One line per outline entry, and the only thing here you cannot read off a
+   file: an open circle is an entry nothing has been proposed for. */
+.outline { list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 13px; }
+.outline li { display: flex; gap: 0.5rem; line-height: 1.6; }
+.outline .outline-mark { color: var(--muted); width: 1em; }
+.outline li.open { color: var(--muted); }
+.setup-prose {
+  white-space: pre-wrap; margin: 0.4rem 0 0; font-size: 13px; line-height: 1.55;
+  font-family: inherit;
+}
+.setup-add { display: grid; gap: 0.4rem; margin: 1rem 0 0; max-width: 34em; }
+.setup-add input, .setup-add textarea {
+  font: inherit; font-size: 13px; padding: 5px 8px; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line, rgba(127, 127, 127, 0.3));
+  border-radius: 4px;
+}
+.setup-add button { justify-self: start; }

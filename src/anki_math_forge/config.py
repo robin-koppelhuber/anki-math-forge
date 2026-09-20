@@ -54,6 +54,27 @@ class ConfigError(Exception):
     pass
 
 
+def settled(*asked: Any, empty: Any = None) -> Any:
+    """The first answer somebody actually gave, walking outwards.
+
+    Every per-unit setting resolves the same way: the unit, then the work,
+    then the project, then the repo, most specific first. Written out at each
+    call site that was four `if`s apiece, and adding a level meant editing
+    every one of them -- so a parent relation or a layer for topics was a
+    change in four places rather than one more argument here (ROADMAP.md 10).
+
+    `empty` is what counts as "nobody said". `None` for a tri-state, because
+    `False` is an answer; `""` for a string; `-1` for the window, whose zero
+    means "just this page". Passing it explicitly is what keeps a real `False`
+    from falling through to the next level, which is the bug this shape is
+    most likely to hide.
+    """
+    for answer in asked:
+        if answer is not empty:
+            return answer
+    return empty
+
+
 @dataclass(frozen=True)
 class SourceConfig:
     """One work inside a project: a book, a paper, a page on the web.
@@ -536,9 +557,10 @@ class Config:
 
         spec = self.projects.get(project)
         work = spec.source(document) if spec else None
-        if work and work.crop_context:
-            return work.crop_context
-        return self.crop_context or TRIAGE_CONTEXT
+        return float(
+            settled(work.crop_context if work else 0.0, self.crop_context, TRIAGE_CONTEXT,
+                    empty=0.0)
+        )
 
     def crop_width_for(self, project: str, from_a_mark: bool = False, document: str = "") -> str:
         """`box` or `page`: how wide this source's crops are cut.
@@ -556,11 +578,14 @@ class Config:
         """
         spec = self.projects.get(project)
         work = spec.source(document) if spec else None
-        if work and work.crop_width:
-            return work.crop_width
-        if self.crop_width:
-            return self.crop_width
-        return "page" if from_a_mark else "box"
+        return str(
+            settled(
+                work.crop_width if work else "",
+                self.crop_width,
+                "page" if from_a_mark else "box",
+                empty="",
+            )
+        )
 
     def context_pages_for(self, project: str, unit: int | str | None = None) -> int | str:
         """The window a card writer gets, most specific first.
@@ -570,12 +595,9 @@ class Config:
         pages back. Then the source, because how much a page carries is a fact
         about how a book is set. Then the repo.
         """
-        if unit is not None:
-            return unit
         spec = self.projects.get(project)
-        if spec and context_asked(spec.context_pages):
-            return spec.context_pages
-        return self.context_pages
+        asked = spec.context_pages if spec and context_asked(spec.context_pages) else None
+        return settled(unit, asked, self.context_pages)
 
     def document_for(self, project: str, document: str = "") -> Path | None:
         """The file a unit's page and bbox refer to.
@@ -673,11 +695,10 @@ class Config:
         Wikipedia did not. Granting it per unit is the honest shape: you grant
         it when you can see why this particular unit needs it.
         """
-        if unit is not None:
-            return unit
         spec = self.projects.get(source)
-        if spec is not None and spec.web is not None:
-            return spec.web
+        answer = settled(unit, spec.web if spec else None)
+        if answer is not None:
+            return bool(answer)
         return self.web
 
     def scratch(self, *parts: str) -> Path:

@@ -32,6 +32,9 @@ dependencies = [
 browser = [
     { name = "playwright" },
 ]
+code = [
+    { name = "pygments" },
+]
 pdf = [
     { name = "pymupdf" },
 ]
@@ -52,11 +55,12 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.44" },
+    { name = "pygments", marker = "extra == 'code'", specifier = ">=2.17" },
     { name = "pymupdf", marker = "extra == 'pdf'", specifier = ">=1.24" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
-provides-extras = ["pdf", "browser"]
+provides-extras = ["pdf", "browser", "code"]
 
 [package.metadata.requires-dev]
 dev = [
