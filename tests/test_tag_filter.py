@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from anki_math_forge import cli
 from anki_math_forge import config as config_mod
-from anki_math_forge.app import create_app, tag_rows
+from anki_math_forge.app import commands_for, create_app, tag_rows
 
 
 def run(repo: Path, *args: str) -> int:
@@ -185,3 +185,33 @@ def test_the_whole_vocabulary_is_offered(repo: Path) -> None:
 
     for value in ("core", "common", "rare", "definitional", "short", "long", "ungraded"):
         assert f">{value}</span>" in page, value
+
+
+# -- what the commands panel offers -----------------------------------------
+
+
+def test_a_project_with_no_document_is_offered_propose(repo: Path) -> None:
+    """The passes that read a crop have nothing to read here, and the pass
+    that writes units has to be reachable from somewhere."""
+    a_project(repo)
+    propose(repo, "vector erase", "containers")
+
+    page = client(repo).get("/units?project=cpp&state=new").text
+
+    assert "/propose --project" in page and "cpp" in page
+
+    # The panel itself, not the page: the guide beside it explains the whole
+    # pipeline and names `/transcribe` whether or not it applies here.
+    runs = [row.get("run", "") for row in commands_for("units", {"project": "cpp"},
+                                                       {"new": 1}, has_document=False)]
+    assert any("/propose" in run for run in runs)
+    assert not [run for run in runs if "/transcribe" in run], "nothing to transcribe"
+
+
+def test_a_project_with_a_document_is_offered_the_crop_passes(repo: Path) -> None:
+    """Keyed on what the project has, not on what kind it is."""
+    runs = [row.get("run", "") for row in commands_for("units", {"project": "demo"},
+                                                       {"new": 1}, has_document=True)]
+
+    assert not [run for run in runs if "/propose" in run]
+    assert any("/transcribe" in run for run in runs)

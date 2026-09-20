@@ -668,10 +668,15 @@ What is left, in order:
 
 4. The setup stage, topics and outlines first. Nothing else waits on it, and
    it is where the breadth problem becomes visible.
-6. The tag filter and the property filters, and the chip and the commands
-   panel reading the unit. Units carry tags now and nothing shows them, so
-   this is the first gap somebody using it would hit. Then `/propose` and
-   the outline pass.
+6. **Mostly done.** Both views filter by tag, the rail offers the tags that
+   are actually in use with a search box past a handful, `frequency` and
+   `derivation` are rows you can click rather than chips you can only read,
+   and the commands panel offers `/propose` where there is no document and
+   the crop passes where there is. `/propose` itself is written, and
+   `forge context` hands over the ask. **Left: the context chip**, whose
+   steps are still a fixed tuple of page counts, so a unit with references
+   and no pages is offered a window it does not have. And the graph takes
+   no filters at all yet.
 7. Docs, README and assets, once the screens have stopped moving. `README`
    already shows the `[[sources]]` shape; what it still lacks is prose about
    a deck with no book behind it, and about pictures on cards.

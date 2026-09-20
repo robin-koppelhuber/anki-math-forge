@@ -407,7 +407,10 @@ def create_app(config: Config) -> FastAPI:
                 "suggested": suggested,
                 "counts_scope": counts_scope,
                 "filters": filters,
-                "commands": commands_for("units", filters, pipeline, from_marks=from_marks),
+                "commands": commands_for(
+                    "units", filters, pipeline, from_marks=from_marks,
+                    has_document=bool(config.project(name).sources),
+                ),
                 "tag_rows": tag_rows([u.tags for u in everything], tag),
                 "mark": mark,
                 "mark_matrix": mark_matrix(
@@ -603,7 +606,10 @@ def create_app(config: Config) -> FastAPI:
                 "annotated": annotated,
                 "section": section,
                 "filters": filters,
-                "commands": commands_for("review", filters, pipeline, from_marks=from_marks),
+                "commands": commands_for(
+                    "review", filters, pipeline, from_marks=from_marks,
+                    has_document=bool(config.project(name).sources),
+                ),
                 "tag_rows": tag_rows([c.tags for c in in_project], tag),
                 "grade_rows": grade_rows(in_project, frequency, derivation),
                 "scheme": scheme_legend(scheme_rows(units_here, config, name)),
@@ -2605,6 +2611,7 @@ def commands_for(
     counts: dict[str, int],
     *,
     from_marks: bool = False,
+    has_document: bool = True,
 ) -> list[dict[str, str]]:
     """What to run next, scoped to the source and section on screen.
 
@@ -2617,6 +2624,12 @@ def commands_for(
     reason to run `/extract-cards` next. Counting only what is on screen would
     hide that step at exactly the moment you earned it, so the number in each
     label says which population it is talking about.
+
+    `has_document` says the project reads a work at all. One that does not
+    is proposed into rather than segmented, so the passes that read a crop
+    have nothing to read and the pass that writes units has to be offered
+    somewhere. Keyed on what the project has rather than on what kind it is,
+    like everything else here.
 
     `from_marks` says the units came from someone marking the document up
     rather than from segmenting it. Both crop-reading passes are off for those:
@@ -2631,7 +2644,17 @@ def commands_for(
     out: list[dict[str, str]] = []
 
     if view == "units":
-        if from_marks:
+        if not has_document:
+            out.append({
+                "label": "propose units for a subject",
+                "why": "there is no document to segment here, so a pass"
+                " writes the units instead: a subject, a line on what a card"
+                " from it would be about, and the page it read. Subjects,"
+                " never drafts.",
+                "run": f"/propose{src} '<what you want cards for>'",
+                "kind": "claude",
+            })
+        elif from_marks:
             # Not "a mark carries its own text", which this said and which is
             # false for the two cases you would actually want transcribed: a
             # boxed region carries no text at all, and a highlight over a
