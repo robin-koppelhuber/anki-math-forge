@@ -215,3 +215,16 @@ def test_a_project_with_a_document_is_offered_the_crop_passes(repo: Path) -> Non
 
     assert not [run for run in runs if "/propose" in run]
     assert any("/transcribe" in run for run in runs)
+
+
+def test_a_unit_with_no_page_is_not_offered_a_page_window(repo: Path) -> None:
+    """Every size the chip offers counts pages either side of one. A unit
+    that was proposed rather than printed has no page, so the control would
+    be a row of numbers that change nothing."""
+    a_project(repo)
+    propose(repo, "vector erase", "containers")
+
+    page = client(repo).get("/units?project=cpp&state=new").text
+
+    assert "data-context-chip" not in page
+    assert "data-web-chip" in page, "the permission still applies and still shows"

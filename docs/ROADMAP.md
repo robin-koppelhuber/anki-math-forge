@@ -673,10 +673,10 @@ What is left, in order:
    `derivation` are rows you can click rather than chips you can only read,
    and the commands panel offers `/propose` where there is no document and
    the crop passes where there is. `/propose` itself is written, and
-   `forge context` hands over the ask. **Left: the context chip**, whose
-   steps are still a fixed tuple of page counts, so a unit with references
-   and no pages is offered a window it does not have. And the graph takes
-   no filters at all yet.
+   `forge context` hands over the ask. The context chip is absent on a unit
+   with no page, since every size it offers counts pages either side of one.
+   **Left: a chip for choosing among references instead**, and the graph,
+   which takes no filters at all yet.
 7. Docs, README and assets, once the screens have stopped moving. `README`
    already shows the `[[sources]]` shape; what it still lacks is prose about
    a deck with no book behind it, and about pictures on cards.

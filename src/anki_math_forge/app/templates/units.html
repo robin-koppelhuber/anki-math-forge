@@ -47,7 +47,15 @@
          things to decode and this way the chip reads as a sentence with the
          answer in it. Always visible: it is a number you are deciding *about*,
          and hiding it until it had been overridden meant never seeing what you
-         were overriding. Click any size, or `c` to walk them. #}
+         were overriding. Click any size, or `c` to walk them.
+
+         Absent for a unit with no page. Every size it offers counts pages
+         either side of one, so a unit that was proposed rather than printed
+         is being offered a window it does not have, and setting one changes
+         nothing. What such a unit is handed is its references, and a chip
+         for choosing among *those* is a different control that does not
+         exist yet (ROADMAP.md 10). #}
+      {% if unit.image or unit.locator %}
       <span class="badge context-chip{{ ' own' if unit.context_own }}" data-context-chip
             title="how much of the document is handed to whoever writes this unit's card: pages either side of its own page, 3 meaning seven in all, or the whole chapter it is printed in. Inherited from the source until set here.">
         <i class="chip-what">context</i>
@@ -57,6 +65,7 @@
         {% endfor %}
         <i class="chip-whose">{{ 'this unit' if unit.context_own else 'project' }}</i>
       </span>
+      {% endif %}
 
       {# Whether whoever writes this card may look anything up. Same shape as
          the context chip and for the same reason: it is a decision you take
