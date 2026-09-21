@@ -100,7 +100,7 @@ def test_a_slug_already_there_is_left_alone(repo: Path) -> None:
 
 def test_adding_without_a_project_is_a_misuse(repo: Path) -> None:
     a_project(repo)
-    assert run(repo, "units", "--add", "vector erase-remove") == 2
+    assert run(repo, "units", "add", "vector erase-remove") == 2
 
 
 def test_an_unknown_project_is_reported_not_guessed(repo: Path) -> None:

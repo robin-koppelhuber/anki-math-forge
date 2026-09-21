@@ -59,7 +59,7 @@ def test_the_way_back_from_anki_is_offered_without_a_count() -> None:
     this app is showing it. A row gated on a count would be a row you only
     see once it is too late to be told."""
     out = runs("review", {"project": "book"}, {"draft": 0, "approved": 0})
-    assert any("forge feedback" in r for r in out)
+    assert any("forge anki pull" in r for r in out)
 
 
 def test_working_the_notes_stays_on_the_source_you_are_looking_at() -> None:
@@ -140,7 +140,7 @@ def test_a_marked_up_source_leaves_out_the_pass_without_explaining_itself() -> N
 def test_the_review_view_offers_review_things() -> None:
     out = runs("review", {"project": "book"}, {"draft": 4, "unaugmented": 4})
     assert any("/augment" in r for r in out)
-    assert any("sync --dry-run" in r for r in out)
+    assert any("forge anki" in r for r in out)
     assert not any("/transcribe" in r for r in out)
 
 

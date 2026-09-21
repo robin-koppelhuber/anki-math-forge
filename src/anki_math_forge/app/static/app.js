@@ -1244,7 +1244,13 @@ const COUNT_POLL_MS = 4000;
     paintFsm(params.get("counts_scope") === "filtered" ? payload.fsm : payload.pipeline);
     if (payload.stale) showStale();
 
-    const signature = JSON.stringify(payload.pipeline);
+    /* The counts *and* when the files last moved. The counts alone missed
+       every write that changes no number: a `units extract` over a book with
+       nothing new in it, an import that found no marks, a card edited in
+       an editor beside the browser. The page then learned about it from
+       its own stale guard refusing the next keystroke, which is several
+       seconds too late to be a warning. */
+    const signature = JSON.stringify([payload.pipeline, payload.files ?? ""]);
     if (baseline === null) baseline = signature;
     else if (signature !== baseline) showReload();
   }

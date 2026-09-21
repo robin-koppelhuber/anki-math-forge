@@ -43,10 +43,10 @@
         {% if card.verify %}<span class="badge verify">verify</span>{% endif %}
         {# A label rather than a filter: it says what this card is while you
            are looking at it. The picture itself is in the body beside it, so
-           this is for the list and for knowing that `sync` has a crop to
+           this is for the list and for knowing that `anki push` has a crop to
            render and upload before this card can go. #}
         {% if card.has_image %}<span class="badge image"
-             title="this card carries a picture: `sync` renders the crop from the source document and uploads it">image</span>{% endif %}
+             title="this card carries a picture: `anki push` renders the crop from the source document and uploads it">image</span>{% endif %}
       </div>
       {# A few words naming the card. The front beside it is the thing to
          review; this is the thing to recognise it by in a list, in a link from

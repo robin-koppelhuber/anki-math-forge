@@ -33,7 +33,7 @@ A frontend owes exactly five things:
   review and the unit stage has no job left (invariant 9).
 * **`state: new`**, and no opinion about anything after it.
 
-`forge units --add` is the door for a frontend that is not a segmenter, so a
+`forge units add` is the door for a frontend that is not a segmenter, so a
 pass writing units needs no code here.
 """
 
@@ -427,9 +427,23 @@ class Ledger:
                     raise ValueError(f"{path}:{lineno}: bad unit record: {exc}") from exc
         return cls(path, units)
 
-    def save(self) -> None:
+    def save(self) -> bool:
+        """Write the ledger, unless it already says this. True if it wrote.
+
+        The skip is not about saving a write, it is about the mtime. The app
+        hands every open deck the ledger's mtime and refuses a decision made
+        against an older one, so a rewrite is a signal to whoever is
+        triaging: reload, what you were looking at has moved. `extract` and
+        `classify` rewrite the whole file whether or not they found
+        anything, which made the cheapest run in the tool the one that
+        interrupted a session for nothing.
+        """
         lines = [json.dumps(u.to_json(), ensure_ascii=False, sort_keys=True) for u in self.units]
-        write_atomic(self.path, "\n".join(lines) + ("\n" if lines else ""))
+        text = "\n".join(lines) + ("\n" if lines else "")
+        if self.path.exists() and self.path.read_text(encoding="utf-8") == text:
+            return False
+        write_atomic(self.path, text)
+        return True
 
     @classmethod
     @contextmanager

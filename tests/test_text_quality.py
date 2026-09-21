@@ -20,7 +20,7 @@ from anki_math_forge import context as context_mod
 from anki_math_forge.config import Config
 from anki_math_forge.extract import source_text_quality, text_quality
 
-HEADER = "<!-- demo: text layer, cached by `forge extract`.\n     Generated. -->\n\n"
+HEADER = "<!-- demo: text layer, cached by `forge units extract`.\n     Generated. -->\n\n"
 GOOD = HEADER + "\n\n".join(
     f"## page {n}\n\nThe determinant of a product is the product of the "
     f"determinants, provided both are square."

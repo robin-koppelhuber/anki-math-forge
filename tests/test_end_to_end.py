@@ -49,7 +49,7 @@ def test_a_pdf_becomes_an_approved_note_and_a_comment_comes_back(
     repo = pdf_source.root
 
     # -- extract: geometry, never cards (invariant 3) ----------------------
-    assert run(repo, "extract", "book") == 0
+    assert run(repo, "units", "extract", "book") == 0
     ledger = Ledger.load(pdf_source.units_path("book"))
     assert len(list(ledger)) > 0
     assert all(u.state == "new" for u in ledger), "a unit arrives untriaged"
@@ -175,7 +175,7 @@ def test_a_figure_travels_the_same_road_and_arrives_as_a_picture(
     has to be the same bytes in the browser and in Anki.
     """
     repo = pdf_source.root
-    assert run(repo, "extract", "book") == 0
+    assert run(repo, "units", "extract", "book") == 0
     unit_id = only_unit(pdf_source)
     assert run(repo, "units", "--id", unit_id, "--set-state", "queued") == 0
 
@@ -223,7 +223,7 @@ def test_a_broken_picture_stops_at_the_gate(pdf_source: Config) -> None:
     the card was fine when it was approved, the document moved later, and
     without the gate Anki quietly shows a broken image on a card you trust."""
     repo = pdf_source.root
-    assert run(repo, "extract", "book") == 0
+    assert run(repo, "units", "extract", "book") == 0
     unit_id = only_unit(pdf_source)
     path = pdf_source.cards_dir / "figure.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -256,7 +256,7 @@ def test_a_window_set_at_triage_is_the_window_the_writer_reads_in(
     """`context_pages` is written by one command, stored by a second and read
     by a third. It has been three spellings of the same idea at once before."""
     repo = pdf_source.root
-    run(repo, "extract", "book")
+    run(repo, "units", "extract", "book")
     unit_id = only_unit(pdf_source)
 
     for asked, expect in (("3", 3), ("chapter", CHAPTER), ("-1", None)):
@@ -284,14 +284,14 @@ def test_a_re_extraction_does_not_undo_a_judgement(pdf_source: Config) -> None:
     triage that was done while looking at it. `state`, the brief, the window
     and the web grant are all human-owned."""
     repo = pdf_source.root
-    run(repo, "extract", "book")
+    run(repo, "units", "extract", "book")
     unit_id = only_unit(pdf_source)
     run(repo, "units", "--id", unit_id, "--set-state", "queued")
     run(repo, "units", "--id", unit_id, "--annotate", "two cards, one per case")
     run(repo, "units", "--id", unit_id, "--context-pages", "chapter")
     run(repo, "units", "--id", unit_id, "--web", "yes")
 
-    assert run(repo, "extract", "book") == 0
+    assert run(repo, "units", "extract", "book") == 0
 
     again = Ledger.load(pdf_source.units_path("book")).get(unit_id)
     assert again.state == "queued"
@@ -306,7 +306,7 @@ def test_editing_an_approved_card_sends_it_back_and_fixing_it_restores_it(
     """Invariant 5, over the whole road: the demotion is derived from the
     content, so nothing has to rewrite the file to enforce it and putting the
     content back is enough to get the approval back."""
-    run(pdf_source.root, "extract", "book")
+    run(pdf_source.root, "units", "extract", "book")
     unit_id = only_unit(pdf_source)
     path = pdf_source.cards_dir / "one.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -336,7 +336,7 @@ def test_editing_an_approved_card_sends_it_back_and_fixing_it_restores_it(
 def test_the_app_and_the_files_never_disagree(pdf_source: Config) -> None:
     """Invariant 2. The app caches nothing and re-reads per request, so a card
     changed in an editor is the card the next request serves."""
-    run(pdf_source.root, "extract", "book")
+    run(pdf_source.root, "units", "extract", "book")
     unit_id = only_unit(pdf_source)
     path = pdf_source.cards_dir / "one.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -365,7 +365,7 @@ def test_the_checks_a_deck_can_run_on_itself(pdf_source: Config) -> None:
     made for them, which is the only way the answer means anything.
     """
     repo = pdf_source.root
-    run(repo, "extract", "book")
+    run(repo, "units", "extract", "book")
     unit_id = only_unit(pdf_source)
     path = pdf_source.cards_dir / "verified.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -404,7 +404,7 @@ def test_the_checks_a_deck_can_run_on_itself(pdf_source: Config) -> None:
 def test_a_source_that_is_not_there_is_reported_not_guessed(pdf_source: Config) -> None:
     """Every verb takes a source name, and a typo in one is the cheapest
     mistake to make. It has to say so rather than acting on everything."""
-    assert run(pdf_source.root, "extract", "nosuchbook") != 0
+    assert run(pdf_source.root, "units", "extract", "nosuchbook") != 0
 
 
 # -- the settings and records added this round ------------------------------
@@ -482,7 +482,7 @@ def test_a_note_settled_by_a_pass_is_still_readable_afterwards(
     """
     from anki_math_forge.app import _card_payload
 
-    run(pdf_source.root, "extract", "book")
+    run(pdf_source.root, "units", "extract", "book")
     unit_id = only_unit(pdf_source)
     path = pdf_source.cards_dir / "settled.md"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -533,7 +533,7 @@ def test_the_window_the_picture_and_the_record_coexist_on_one_card(
     """Everything added this round on a single card, because each one writes
     to a different part of the same two files and the combination is what is
     never tested by a feature's own tests."""
-    run(pdf_source.root, "extract", "book")
+    run(pdf_source.root, "units", "extract", "book")
     unit_id = only_unit(pdf_source)
     run(pdf_source.root, "units", "--id", unit_id, "--context-pages", "chapter")
 

@@ -276,7 +276,7 @@ def write_source_stub(
         "# source already has, written out so you can see it: anything imported",
         "# from Zotero goes under `Zotero::`, which keeps a shelf you are",
         "# reading through apart from the deck you have decided to keep.",
-        "# Uncomment and edit to send them somewhere else; `forge sync` says so",
+        "# Uncomment and edit to send them somewhere else; `forge anki push` says so",
         "# when cards are already filed under the old name. `[decks]` in",
         "# forge.toml splits one source across subdecks by card type, when a",
         "# restatement and an explanation want different new-card rates.",

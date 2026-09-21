@@ -166,7 +166,7 @@ def test_rerunning_extract_never_destroys_a_transcription(config: Config) -> Non
     """Re-extract fixes geometry; it must not undo what `/transcribe` read.
 
     Regression: `tex_auto` and `transcription` used to be refreshed along with
-    the locator, so a single `forge extract` silently wiped every
+    the locator, so a single `forge units extract` silently wiped every
     transcription in the ledger.
     """
     extract.run(config, "demo")

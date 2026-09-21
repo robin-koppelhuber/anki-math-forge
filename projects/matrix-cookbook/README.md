@@ -10,7 +10,7 @@ The PDF is not committed (see `.gitignore`); fetch it with:
 curl -o projects/matrix-cookbook/matrixcookbook.pdf \
   https://www.math.uwaterloo.ca/~hwolkowi/matrixcookbook.pdf
 uv sync --extra pdf
-uv run forge extract matrix-cookbook
+uv run forge units extract matrix-cookbook
 ```
 
 ## Source form (DESIGN.md §15.3, decided)

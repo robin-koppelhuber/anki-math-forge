@@ -96,12 +96,16 @@ entry exists to stop.
 
 | Term | What it is | Do not call it |
 |---|---|---|
-| **source** | one book or paper, a folder under `projects/` | document, book, deck |
+| **project** | a folder under `projects/`: one ledger, one deck, one `conventions.md`, one graph. It reads one source or several | source, deck |
+| **source** | one work a project reads: a book, a paper, a website. Declared in a `[[sources]]` table, and what `Card.source` names | project, work, document |
 | **document** | one PDF inside a source. An item routinely carries a paper and its preprint | source, file |
 | **unit** | a located region of a source: document, page, bbox, section, label. Geometry, never an image file | item, region, equation, annotation |
 | **locator** | where a unit is. Carries the document, so re-filing never renames a unit | position, coordinates |
 | **ledger** | `projects/<name>/units.jsonl`, the units and their triage state | database, index, store |
 | **crop** | an image of a unit's box, rendered from the document on demand | asset, thumbnail |
+| **topic** | an optional grouping inside a project: a heading in `topics.md`, with what you want covered written under it. Zero by default, and one exists only because somebody wrote it | subject, ask, tag |
+| **ask** | the sentence under a topic's heading saying what you want cards for. Part of the topic, not a second name for it | topic, prompt, brief |
+| **outline** | the lines under the ask, one per thing to cover. An entry with no unit against it is what the setup stage counts | plan, syllabus, list |
 | **card** | a markdown file in `cards/` with `## front` and `## back` | note |
 | **note** | what a card becomes *in Anki*. Anki's word, used only about Anki | card |
 | **mark** | one Zotero annotation as the reader made it: kind, colour, covered text, comment, box | highlight (one kind of mark), annotation |
@@ -109,7 +113,7 @@ entry exists to stop.
 | **annotation** | a `@claude` or `@me` line in `## notes`. Blocks sync wherever it sits | note, comment, mark |
 | **brief** | the `@claude` annotation on a unit: the only instruction `/extract-cards` gets | note, prompt |
 | **gist** | a few words naming what something is about. On a unit, what a card from it would be about; on a card, what the card is. Read as a caption, never as instructions | summary, description, title |
-| **suggestion** | a state `classify` proposed. Never applied on its own | decision, skip |
+| **suggestion** | a state `units classify` proposed. Never applied on its own | decision, skip |
 | **triage** | the unit stage. Is this worth a card, and roughly about what | review, sorting |
 | **review** | the card stage. Is the content right | triage, checking |
 | **demotion** | why an approval is not holding: `edited` or `annotated`. The file still says `approved` | un-approval, rejection |
@@ -122,6 +126,12 @@ entry exists to stop.
 - **"annotation" on its own — dangerous.** It is a `## notes` line here and a
   Zotero mark in the Zotero literature, and both appear on the same screen.
   Use **mark** for the reader's, **annotation** for ours.
+- **"work" — say source.** The setup stage says work for the object the rest
+  of the tool calls a source: `Card.source`, `[[sources]]` and
+  `forge sources` all use the one name, so that is the name.
+- **"subject" — dangerous.** It names a topic on the command line
+  (`forge topic add 'a subject'`) and it names what a tag says a card is
+  about. Say **topic** for the first and **tag** for the second.
 - **"knob", "what this buys", "escape hatch", "this is structural" — banned.**
   Mechanism metaphors and empty emphasis. Name the thing being changed and
   state what changes.
@@ -153,4 +163,4 @@ entry exists to stop.
   outclaim the long one.
 - **The scope header, the note discipline, and the mathematical vocabulary.**
   Those belong to a paper about one result. The corresponding thing here is a
-  source's own `conventions.md`, which is per source by design.
+  project's own `conventions.md`, which is per project by design.

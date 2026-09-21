@@ -29,7 +29,7 @@ def run(repo: Path, *args: str) -> int:
 
 
 def a_project(repo: Path) -> None:
-    run(repo, "project", "cpp", "--title", "Modern C++", "--deck", "Cpp")
+    run(repo, "project", "new", "cpp", "--title", "Modern C++", "--deck", "Cpp")
 
 
 def propose(repo: Path, subject: str, *tags: str) -> None:

@@ -53,7 +53,7 @@ For a Zotero source instead: run Zotero (version 7+) with its local API enabled
 cards go to `Zotero::<title>` unless the generated `project.toml` names a deck.
 
 ```
-uv run forge extract <name>            # or: uv run forge zotero --tag anki
+uv run forge units extract <name>      # or: uv run forge zotero import --tag anki
 uv run forge serve                     # http://127.0.0.1:8000, press ? for the guide
 ```
 
@@ -61,7 +61,7 @@ Anki, once:
 
 1. Install AnkiConnect: *Tools > Add-ons > Get Add-ons*, code `2055492159`,
    restart Anki.
-2. Leave Anki running while you sync. `sync` talks to
+2. Leave Anki running while you sync. `anki push` talks to
    `http://127.0.0.1:8765`; `ANKI_CONNECT_URL` or `[anki] url` changes it.
 3. The deck and the note type are created on the first sync.
 
@@ -77,26 +77,26 @@ extract / import  ->  units  ->  triage  ->  cards  ->  review  ->  sync
 
 ```
 # route 1: a PDF
-uv run forge extract <project>        # PDF -> units. Never reads the maths
+uv run forge units extract <project>    # PDF -> units. Never reads the maths
 /transcribe --project <project>         # crops -> LaTeX, via subagents
 /classify --project <project>           # propose skips; applies nothing
 
 # route 2: a marked-up paper in Zotero (needs Zotero running, local API on)
-uv run forge zotero --list            # what Zotero has, and what is already a source
-uv run forge zotero --tag anki        # every item tagged `anki` -> units
+uv run forge zotero                     # what Zotero has, and what is already a source
+uv run forge zotero import --tag anki   # every item tagged `anki` -> units
 
 # route 3: a subject, with no document to segment
-uv run forge project <project>        # start one
-uv run forge topic 'a subject' --project <project> --ask '...'
+uv run forge project new <project>      # start one
+uv run forge topic add 'a subject' --project <project> --ask '...'
 /sources --project <project>            # what its cards can be checked against
 /propose --project <project> 'a subject'  # the ask -> units
 
 # every route
 /gist --project <project>               # one line per unit: what its card would be about
-uv run forge serve                    # triage units, then review cards
+uv run forge serve                      # triage units, then review cards
 /extract-cards --project <project>      # queued units -> draft cards
 /augment --project <project>            # conditions, proof, prose, tags
-uv run forge sync --dry-run           # then without --dry-run
+uv run forge anki                       # what would be pushed; then `anki push`
 ```
 
 
@@ -120,21 +120,22 @@ Every session:
 | `forge` | |
 |---|---|
 | `serve` | the web app: project setup, triage, review, dependency canvas. `--port` |
-| `check` | lint; blocks sync on error. `--anki` also checks uids against the live collection |
-| `sync` | approved cards -> Anki, upsert by uid. `--dry-run`, `--project`, `--templates`, `--reposition`, `--move-decks` |
-| `feedback` | Anki comments and flags -> notes on the card. `--dry-run` |
+| `check` | lint; blocks `anki push` on error. `--anki` also checks uids against the live collection |
+| `anki` | what `anki push` would do, pushing nothing |
+| `anki push` | approved cards -> Anki, upsert by uid. `--project`, `--templates`, `--reposition`, `--move-decks` |
+| `anki pull` | Anki comments and flags -> notes on the card. `--dry-run` |
 | `todo` | open annotations, `@claude` and `@me` |
 
 Once per project or source:
 
 | `forge` | |
 |---|---|
-| `project <name>` | start one with no document. `--title`, `--deck`, `--citation`; `--delete` takes it and its cards out, `--force` if it holds any |
-| `topic '<subject>' --project NAME` | what you want cards for; `--ask` what you want from it |
-| `extract [project]` | PDF -> units; never writes cards. `--pages` |
-| `zotero [item]` | Zotero marks -> units. `--list`, `--tag`, `--project`, `--dry-run` |
-| `sources` | every work in the repo, and which project reads it. `--remove KEY`, `--force`, `--dry-run` |
-| `export [project]` | a deck as `.apkg`; `--deck`, `--out`, `--scheduling` includes review history |
+| `project new <name>` | start one with no document. `--title`, `--deck`, `--citation`; `project delete <name>` takes it and its cards out, `--force` if it holds any |
+| `topic add '<subject>' --project NAME` | what you want cards for; `--ask` what you want from it |
+| `units extract [project]` | PDF -> units; never writes cards. `--pages` |
+| `zotero` | what Zotero holds, and what is already a source; `zotero import [item]` turns its marks into units. `--tag`, `--project`, `--dry-run` |
+| `sources` | every work in the repo, and which project reads it; `sources remove KEY --project NAME` takes one out. `--force`, `--dry-run` |
+| `anki export [project]` | a deck as `.apkg`; `--deck`, `--out`, `--scheduling` includes review history |
 | `audit` | is the ledger trustworthy: 1..N, no gaps |
 
 In the order the pipeline runs them:
@@ -154,12 +155,12 @@ Mostly called by the skills, or from a script:
 
 | `forge` | |
 |---|---|
-| `units` | view or change the ledger: state, gist, notes, transcription, web lookups. `--add SLUG` writes one where there was nothing to segment |
+| `units` | the ledger, filtered; `units set <id>` writes state, gist, notes, transcription or web lookups, and `units add SLUG` writes one where there was nothing to segment |
 | `context <unit-id>` | the page a unit was printed on, plus the source's conventions. `--pages N` either side, or `--pages chapter` |
 | `source-text [project]` | the document's cached text layer |
 | `crops` | render unit crops to a directory. `--out`, `--untranscribed`, `--ungisted` |
-| `classify` | propose skips; applies nothing. `--dry-run` records nothing either |
-| `new` | scaffold a draft card from a queued unit; repeat `--unit` to build one card from several |
+| `units classify` | propose skips; applies nothing. `--dry-run` records nothing either |
+| `cards new --unit <id>` | scaffold a draft card from a queued unit; repeat `--unit` to build one card from several |
 | `verify` | opt-in numeric check of identities. `--uid`, `--project`, `--trials` |
 
 | Keys | units | review | graph |
@@ -170,12 +171,12 @@ Mostly called by the skills, or from a script:
 
 ## Debugging
 - "cannot reach AnkiConnect" means Anki is closed.
-- `sync` does not push the card template; `sync --templates` does.
-- Changing a source's deck sends new notes there. `sync` names the cards left
-  behind, and `sync --move-decks` moves them.
+- `anki push` does not push the card template; `anki push --templates` does.
+- Changing a source's deck sends new notes there. `anki push` names the cards
+  left behind, and `anki push --move-decks` moves them.
 - `[decks]` in `project.toml` splits `identity` and `intuition` into subdecks, so each gets its own new-card limit.
 - Study order: `frequency`, then `derivation`, then printed order;
- `requires` overrides. `sync --reposition` moves cards you have not
+ `requires` overrides. `anki push --reposition` moves cards you have not
  studied yet.
 - Feedback: `E` in Anki writes the `Feedback` field, `Ctrl+1..7` sets a flag.
 

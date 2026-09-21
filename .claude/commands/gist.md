@@ -47,7 +47,7 @@ not a wire.
    > Gist section <section> of <source>. Render with
    > `uv run --no-sync forge crops --project <project> --section <section> --ungisted --out <temp dir> --json`,
    > read each crop and the `marked`/`comment` fields, and record with
-   > `uv run --no-sync forge units --id <id> --gist '<one line>'`.
+   > `uv run --no-sync forge units set <id> --gist '<one line>'`.
    > Follow your instructions exactly: a subject, not a summary; no maths; say
    > so when you cannot read it; change no unit's state.
 

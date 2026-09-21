@@ -468,6 +468,39 @@ Both shapes are one section either way: a newline inside `$$...$$`, and the
 newline that ends a display block, are not hard breaks on the card. `check`
 only counts the ones that fall in prose.
 
+### Naming the move behind each step
+
+A proof can close with one line giving the justification for each step, in the
+order the steps come:
+
+```markdown
+Step by step: the definition of conditional expectation; the definition of a
+conditional density; Fubini's theorem; the sum rule, then the definition of
+the expectation.
+```
+
+**Writing one is a call the writer makes each time, and the thing to weigh is
+clarity against clutter.** Where every step is a rearrangement a reader can
+see for themselves, a list saying so four times is noise. Where a step turns
+on a named theorem, or where two adjacent steps look alike and are doing
+different work, the list is what tells them apart.
+
+**Only canonical names, and leave a step out rather than invent one for it.**
+The list is worth reading because "Fubini's theorem" and "the sum rule" are
+things the reader can look up and has met before. A name coined on the spot
+for a step that has none, "the regrouping step", "the expansion move", looks
+exactly like one they should already know, and sends them hunting for a
+result that does not exist. Where the source names a move, use its name.
+Where a step is just algebra, say nothing about it: a list that covers three
+of four steps is honest, and the fourth reads as arithmetic, which is what it
+is.
+
+Use the trailing line rather than an annotation column inside the `aligned`
+block. A column pins each reason to its own row, which is how a textbook sets
+it, and it widens the block by the width of the longest reason. That width is
+what a phone has least of, and it is paid on every row including the ones
+whose reason nobody needed.
+
 Prose belongs around the steps, not instead of them: one clause naming the
 move, where the move is not evident from the line, and the line itself
 underneath. Where the source's own derivation is longer than a card can hold,
@@ -488,9 +521,10 @@ A card can show a figure, a diagram or a table:
 
 The bare form means the unit the card was written from, which is the usual
 case. There is no image file anywhere: the reference names a unit, and the
-crop is rendered from the source document and uploaded when `sync` runs. So
-the unit has to be one with geometry -- an image or area annotation, or any
-mark on a PDF -- and `check` refuses the card if the picture cannot be drawn.
+crop is rendered from the source document and uploaded when `anki push`
+runs. So the unit has to be one with geometry -- an image or area
+annotation, or any mark on a PDF -- and `check` refuses the card if the
+picture cannot be drawn.
 
 **Which section it goes in is yours to decide, and it is the whole decision.**
 The same figure is three different cards depending on where you put it:
@@ -529,7 +563,7 @@ v.erase(it, v.end());
 ````
 
 Nothing reads it as mathematics, the wrapped-prose lint leaves it alone, and
-`sync` renders it as a block with its newlines intact and its tokens
+`anki push` renders it as a block with its newlines intact and its tokens
 coloured. The file keeps plain code, so what you write is what a diff shows.
 
 **Keep it to the smallest thing that makes the point.** A snippet on a card
@@ -630,8 +664,8 @@ changing the back. Where you only suspect, card it as printed and say so.
 
 ## What earns a `@me` note
 
-A note is read by a human, blocks `sync` until resolved, and is the only part
-of a card nobody can skim past. Three things earn one:
+A note is read by a human, blocks `anki push` until resolved, and is the
+only part of a card nobody can skim past. Three things earn one:
 
 - the **source is wrong**, or its stated conditions are insufficient;
 - this card stands in a **relation to another card** -- it duplicates one,
@@ -805,7 +839,7 @@ crop. Where the two disagree,
 the crop wins, and if the crop is unreadable, annotate the unit rather than
 guessing.
 
-Keep the source citation exact — whatever `forge new` generated from the
+Keep the source citation exact — whatever `forge cards new` generated from the
 unit's locator, down to the section and the number — because the review view
 links back to it, and that is how a suspect card gets settled.
 

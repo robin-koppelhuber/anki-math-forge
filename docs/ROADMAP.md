@@ -50,8 +50,9 @@ evidence for both is in "What the Cookbook taught us".
   almost certainly a continuation of it. The contiguity oracle is satisfied
   either way, because the number exists.
 - **A numbered unit whose crop holds no relation symbol.** The mirror of the
-  `no-relation` rule `classify` already applies to unnumbered units. It would
-  have caught `matrix-cookbook:3.2:178`, which holds nothing but `(178)`.
+  `no-relation` rule `units classify` already applies to unnumbered units.
+  It would have caught `matrix-cookbook:3.2:178`, which holds nothing but
+  `(178)`.
 
 A third signal belongs to whatever segments next: **a line ending in a
 trailing binary operator cannot be the end of an equation.** Every
@@ -103,10 +104,10 @@ want cards for how to use the standard containers", a pass proposes units,
 you triage them the usual way, and the cards are written, reviewed and
 iterated like every other card.
 
-Only the first layer changes. `extract` and `zotero` are two frontends that
-fill one ledger, and everything after the ledger already ignores which door a
-unit came in by (invariant 3). This is a third frontend, plus generality in
-the middle.
+Only the first layer changes. `units extract` and `zotero import` are two
+frontends that fill one ledger, and everything after the ledger already
+ignores which door a unit came in by (invariant 3). This is a third
+frontend, plus generality in the middle.
 
 Worked through, it stops being one feature. It is four, and three of them
 improve the sources that already exist:
@@ -155,7 +156,7 @@ spellings working (below).
 
 What does not: **`Card.source`**, which is now exactly right. And **the
 `src::` Anki tag**, though not for the reason I first gave. It could be
-migrated, because `sync` diffs tags against the live note and adds and
+migrated, because `anki push` diffs tags against the live note and adds and
 removes them, so the next run would move every card over. It stays because
 it is fine: the tag's job is filtering inside Anki, "src" still reads as
 provenance, and renaming it breaks saved searches in a collection for no
@@ -331,7 +332,7 @@ do not have in the rail.
 
 Five steps. Two need Claude and three are file edits.
 
-1. **Ask.** `forge topic --new "how to use the standard containers"` records
+1. **Ask.** `forge topic add "how to use the standard containers"` records
    the ask and nothing else.
 2. **Sources, if you want them.** A pass appends what it found, as links
    with a line each on why. You add and delete.
@@ -346,7 +347,7 @@ has planned, no unit carrying the tag means nothing has been proposed. Same
 call as `has_crop`, and it is what keeps this from adding a second state
 machine beside the ledger's.
 
-**The gate is that the steps are separate commands.** `classify` already
+**The gate is that the steps are separate commands.** `units classify` already
 works this way: it proposes and applies nothing. Nothing mechanical enforces
 the pause, and nothing should. The pause is that you run the next command.
 
@@ -498,9 +499,9 @@ identical. A tag that changes what the question means belongs in
 
 What it costs: `check` stops noticing a tag typo on an approved card. That
 is already true of `frequency`, mitigated there by a vocabulary that free
-tags do not have. The rest is already wired, since `sync` diffs tags against
-the live note and `deck_drift` plus `--move-decks` move what the new deck
-says.
+tags do not have. The rest is already wired, since `anki push` diffs tags
+against the live note and `deck_drift` plus `--move-decks` move what the new
+deck says.
 
 ### Filtering, which is the UI work
 
@@ -563,7 +564,7 @@ is one extra link and no caller changes. Written as four hardcoded lookups,
 it is a rewrite each time.
 
 **The frontend contract is written down and has one door.** In `ledger.py`'s
-docstring, with `forge units --add` the only way in for a frontend that is
+docstring, with `forge units add` the only way in for a frontend that is
 not a segmenter.
 
 **The two views build their context by hand.** `/units` and `/review` each
@@ -602,7 +603,7 @@ rather than permanent, and it clears the way for the `tags` exemption above
 and for whatever the next one is.
 
 **The line is at the collection.** Repo files get migrated; a live Anki
-collection does not. Tags are safe because `sync` diffs them, so a renamed
+collection does not. Tags are safe because `anki push` diffs them, so a renamed
 tag would migrate itself. The note type is not: renaming it orphans every
 note and its review history, which is what `PREVIOUS_NAMES` is for and it
 stays.
@@ -628,9 +629,9 @@ Code does the thinking, and the commands panel is the handover.**
 ### Docs and pictures
 
 **Done.** The DESIGN.md §2 diagram shows all three doors into the ledger and
-the verb table names `zotero` and `sources`; §6 describes the shelf and the
-setup stage beside the three deck views; CLAUDE.md carries `forge sources`
-and says a convention belongs to a project.
+the verb table names `zotero import` and `sources`; §6 describes the shelf
+and the setup stage beside the three deck views; CLAUDE.md carries
+`forge sources` and says a convention belongs to a project.
 
 **Left:**
 
@@ -649,10 +650,10 @@ and says a convention belongs to a project.
 **Built.** The eight steps below are done, and what each one settled is kept
 because the reasoning is the part worth having later.
 
-1. A project with no source walks from `units --add` to a note in Anki,
+1. A project with no source walks from `units add` to a note in Anki,
    covered by `tests/test_end_to_end_project.py`. The premise held: only the
    first layer changed.
-2. The config split, the rename, the `forge.toml` pass, `units --add` with
+2. The config split, the rename, the `forge.toml` pass, `units add` with
    slug ids, unit tags, the preview, the reference list, the migration and
    the `tags` exemption. Settings resolve through one walk outwards
    (`config.settled`) rather than a ladder written out at each call site, so
@@ -682,7 +683,7 @@ because the reasoning is the part worth having later.
    references it stands on, and an outline entry joins to its units by slug,
    so it is a walk over what the ask produced. A third list in a file would
    be a fourth thing to keep in step, and it would go stale the first time a
-   pass proposed a unit against a work nobody had written down. `units --add`
+   pass proposed a unit against a work nobody had written down. `units add`
    takes `--document` for the same reason: a proposal from a cluster has to
    be able to say which paper.
 
@@ -729,16 +730,16 @@ because the reasoning is the part worth having later.
 
    **Narrow first, then the repo.** You are looking at one project, so the
    command about that project comes before the one about everything:
-   `sync --project` above `sync`, `zotero --project` above `zotero --tag
-   anki`. Both flags are new. Scoping a sync is safe because nothing there
-   deletes, and its lint stays repo-wide because a duplicate uid is a
-   repo-wide fact.
+   `anki push --project` above `anki push`, `zotero import --project` above
+   `zotero import --tag anki`. Both flags are new. Scoping a sync is safe
+   because nothing there deletes, and its lint stays repo-wide because a
+   duplicate uid is a repo-wide fact.
 
-   **A pass is offered only where it applies.** `extract` segments a
+   **A pass is offered only where it applies.** `units extract` segments a
    document in the repo, so a work that arrived from Zotero is offered
-   `zotero` instead: a command that does nothing is worse than no command.
-   A marked-up work is offered no transcription pass, which the triage rail
-   had known for a while and the setup column had not.
+   `zotero import` instead: a command that does nothing is worse than no
+   command. A marked-up work is offered no transcription pass, which the
+   triage rail had known for a while and the setup column had not.
 
    The rail gained the filter that matched: **works**, where a project reads
    more than one, and above the properties, because project, work, section,
@@ -761,7 +762,7 @@ because the reasoning is the part worth having later.
    Where they agree, which is nearly always, the rows merge and the legend is
    the one it always was. The guide's `units_from` row goes quiet with more
    than one work, the same way the crop rows do.
-5. Fenced code through `check` and `sync`, highlighted by Pygments at sync
+5. Fenced code through `check` and `anki push`, highlighted by Pygments at sync
    as an optional extra. No note type version bump: the CSS changed, so the
    first sync wants `--templates`, and a new model name would orphan every
    note on the old one.
@@ -856,9 +857,9 @@ command rather than of the list it lands in: `scope` runs `work`, `topic`,
 the repo-wide form is what you reach for afterwards. A condition is written
 once, so a work with nothing segmented out of it yet is offered the
 segmenter and not the passes that read a crop, on every screen at once. And
-a project of several works gets both doors, `zotero --project` and
-`extract`, which the branch-per-screen version could not express: it asked
-what kind the project was and there was only room for one answer.
+a project of several works gets both doors, `zotero import --project` and
+`units extract`, which the branch-per-screen version could not express: it
+asked what kind the project was and there was only room for one answer.
 
 Writing a condition once also makes it worth getting right. `/transcribe`
 was gated on the `new` count, which is a triage state standing in for
@@ -1049,12 +1050,12 @@ part of a book somebody is segmenting, whatever the addresses share.
 
 ### A source you can take out again
 
-`forge sources --remove <key> --project <p>`, and a folded control on the
+`forge sources remove <key> --project <p>`, and a folded control on the
 source's own panel, with the key typed to confirm.
 
 What goes: the `[[sources]]` table, and **the units that came out of it**.
 A unit whose work is gone has no crop to render, no scheme to read and no
-settings to resolve, and `extract` writes them again from the document if
+settings to resolve, and `units extract` writes them again from the document if
 it comes back. The document itself is never touched.
 
 Cards are the gate, as they are for a whole project: `--force` is how you
@@ -1078,10 +1079,11 @@ somebody retypes; not trying costs a title with a whole sentence in it.
 
 It is also one step away from being more than a reference, and the panel
 **proposes that step rather than taking it**: put the document in Zotero,
-mark up what is worth carding, and run `forge zotero <citekey> --project
-<name>`. That command writes the item key, the attachments and the marks
-together, which is what turns a reference into something units come out
-of. Declaring `zotero = "..."` by hand would name an item nobody marked.
+mark up what is worth carding, and run
+`forge zotero import <citekey> --project <name>`. That command writes the
+item key, the attachments and the marks together, which is what turns a
+reference into something units come out of. Declaring `zotero = "..."` by
+hand would name an item nobody marked.
 
 ### Authoritative is a property, not only a shape
 
@@ -1120,7 +1122,7 @@ out of** must survive `extract = false`: the units you already triaged
 keep naming its attachments, and asking for `authoritative` there left
 every one of them belonging to nothing the moment the switch went off,
 taking their crops, their scheme and their mark counts with them. **Which
-work do I segment now** must keep reading `extract`, or `forge extract`
+work do I segment now** must keep reading `extract`, or `forge units extract`
 is handed a work somebody refused.
 
 So they are two functions. `source(document)` is provenance and never
@@ -1224,7 +1226,7 @@ Nine places were not, and each had picked a different wrong synonym:
 
 - **"is this project made of anything"**, four views deep. A project with
   a Zotero item and a full ledger reported "nothing declared", lost the
-  import from its command rail and was offered `forge extract`, which
+  import from its command rail and was offered `forge units extract`, which
   errors. `project_origin` answers what the material *is*, and the switch
   does not change that.
 - **"are there units here to read"**, on the panel's command rail. It
@@ -1424,8 +1426,8 @@ out of a book read that book, and those are shown checked and fixed.
 
 ### An import declares the work
 
-`forge zotero <item> --project <name>` wrote the units and not the source.
-The only thing that ever wrote a `[[sources]]` table was
+`forge zotero import <item> --project <name>` wrote the units and not the
+source. The only thing that ever wrote a `[[sources]]` table was
 `write_source_stub`, which writes a whole `project.toml` and never
 overwrites, so it fired exactly once, for a project that did not exist
 yet. Two holes came out of that, and both look like the command doing
@@ -1455,7 +1457,7 @@ The item key and the files are what make a work authoritative, and writing
 those from a web page is the wrong shape twice over: the same document
 segmented twice is two ledgers of units and two notes per card in Anki,
 and deciding to segment something carries crop settings and a marking
-scheme with it. That decision is `forge zotero`, typed where you can see
+scheme with it. That decision is `forge zotero import`, typed where you can see
 it, and the setup stage proposes the command.
 
 It follows that "a work is extracted from by one project" is no longer a
@@ -1518,7 +1520,7 @@ want three of them.
 
 ### Deleting a project
 
-`forge project <name> --delete`, and a folded control on the project's own
+`forge project delete <name>`, and a folded control on the project's own
 panel. One function behind both (`projects.remove`), for the reason
 `scaffold` gives: two writers of the same thing drift.
 
@@ -1532,8 +1534,8 @@ as a project with nothing in it. The TOML edit is line-wise, like
 **Cards are the gate, units are not.** A project with no cards is a decision
 you can make again in one command; one with thirty-nine is weeks of review.
 So it refuses when cards are there and `--force` is how you say you mean it.
-Units are derived from a document and `extract` writes them again, so they
-are reported and not a gate.
+Units are derived from a document and `units extract` writes them again, so
+they are reported and not a gate.
 
 **The app never forces.** It offers the delete, refuses the same way, and
 names the flag. The override belongs in a terminal, where you type it.
@@ -1569,11 +1571,11 @@ has. Filed nowhere and declaring nothing, it still belongs to all of them,
 because that case is what the old rule was written for.
 
 Deliberately **not** the same question as which Anki deck it lands in.
-`sync` routes by what the card declares, and one that declares nothing takes
-the repo default rather than being moved into a project's deck by a rule
-about where its file happens to sit: a display fix should not move a note
-that is already in Anki. `check` warns (`unit-missing`), and writing `unit:`
-closes the gap in both directions.
+`anki push` routes by what the card declares, and one that declares nothing
+takes the repo default rather than being moved into a project's deck by a
+rule about where its file happens to sit: a display fix should not move a
+note that is already in Anki. `check` warns (`unit-missing`), and writing
+`unit:` closes the gap in both directions.
 
 ### What no property settles
 
@@ -1590,9 +1592,9 @@ it.** A book gives review a crop, and a wrong card is obvious in one glance.
 Without one there are two weaker nets: the references keep a card from being
 invented, and the loop catches the ones that are plausible and wrong, which
 is the annotation, `/triage`, the settled note that keeps what you asked,
-and `feedback` from Anki. Cost moves from triage to review, the opposite of
-the Cookbook, and the pressure that comes with it is a bulk approve. There
-is not one, and invariant 1 is the reason.
+and `anki pull`. Cost moves from triage to review, the opposite of the
+Cookbook, and the pressure that comes with it is a bulk approve. There is
+not one, and invariant 1 is the reason.
 
 **Trigger:** none needed. The first sourceless project is the test.
 
@@ -1625,10 +1627,11 @@ it looked like:
 ## 12. Running a command from the website
 
 The commands panel gives you a line to copy. Some of those commands need no
-Claude and no watching: `zotero`, `sync`, `check`, and everything in §10 that
-is a file edit. A button for them is not the thing "Triggering Claude from
-the website" rejects, which is about pushing a prompt into a session. The
-aim is that every command with no model behind it is reachable from the app.
+Claude and no watching: `zotero import`, `anki push`, `check`, and
+everything in §10 that is a file edit. A button for them is not the thing
+"Triggering Claude from the website" rejects, which is about pushing a
+prompt into a session. The aim is that every command with no model behind
+it is reachable from the app.
 
 Two kinds. **A file edit** writes a directory or rewrites a line and
 answers immediately. Three are built, all on the setup stage: starting a
@@ -1647,8 +1650,8 @@ DESIGN.md §6 already promised it re-reads from disk on every request; now
 the project table does too. Only that table, because `create_app` is handed
 a config and must honour it.
 
-**A long run** is `zotero`, `sync`, `extract`. Those want a job to start,
-report and finish, which the app has none of.
+**A long run** is `zotero import`, `anki push`, `units extract`. Those want
+a job to start, report and finish, which the app has none of.
 
 ### What a long run should look like
 
@@ -1662,15 +1665,15 @@ mostly right for the reason that makes this feature worth building at all.
 3. **No output at all**: these are wrappers around plain Python, so show the
    *result* rather than the transcript.
 
-**Three is right, with one piece of one.** The output of `sync` is not a log,
-it is a table: one row per card, an action, and a reason. `feedback` is a
-list of comments taken. `zotero` is a list of items, each with how many
-units it made. Every one of them is already a structured object in Python
-(`SyncReport`, `CardOutcome`) and gets flattened to lines only because a
-terminal has nothing else. `--json` exists on all of them for exactly this
-reason. Rendering a table of outcomes, with the skips explained and the
-errors first, is both easier to read than the console and *less* code than
-streaming: no transport, no buffering, no cancel semantics.
+**Three is right, with one piece of one.** The output of `anki push` is not
+a log, it is a table: one row per card, an action, and a reason. `anki pull`
+is a list of comments taken. `zotero import` is a list of items, each with
+how many units it made. Every one of them is already a structured object in
+Python (`SyncReport`, `CardOutcome`) and gets flattened to lines only
+because a terminal has nothing else. `--json` exists on all of them for
+exactly this reason. Rendering a table of outcomes, with the skips explained
+and the errors first, is both easier to read than the console and *less*
+code than streaming: no transport, no buffering, no cancel semantics.
 
 The piece worth keeping from one and two is **progress, not output**. A
 sync of 150 cards takes a while and a screen that says nothing looks
@@ -1679,10 +1682,10 @@ count when the run knows one (`42 of 150`), and the result rendered as a
 table when it finishes. No transcript, no chat.
 
 **Cancel is worth less than it looks.** None of these is long enough to
-abandon, and the two that write outside the repo (`sync`, `feedback`) are
-worse to stop halfway than to let finish: a half-pushed deck is a state
-nobody can read off the files. `extract` is the only one where cancel makes
-sense, and it is also the one you run from a terminal anyway.
+abandon, and the two that write outside the repo (`anki push`, `anki pull`)
+are worse to stop halfway than to let finish: a half-pushed deck is a state
+nobody can read off the files. `units extract` is the only one where cancel
+makes sense, and it is also the one you run from a terminal anyway.
 
 **A model-driven pass stays copied.** That line is the whole bargain
 (invariant 1 in spirit): you paste it where you can watch it, so nothing
@@ -1690,11 +1693,11 @@ writes cards with nobody looking. The commands panel says which end each one
 runs at, and only the plain-Python half is ever a candidate for a button.
 
 **What to build first**, when a button is what you actually miss: `POST
-/api/run/<verb>` for a named, argument-free subset (`check`, `sync
---dry-run`, `feedback --dry-run`), each returning the same structured
-report its `--json` already returns, and one component that renders an
-outcome table. The dry runs first, because a button that changes nothing is
-the one that needs no confirmation.
+/api/run/<verb>` for a named, argument-free subset (`check`, `anki`,
+`anki pull --dry-run`), each returning the same structured report its
+`--json` already returns, and one component that renders an outcome table.
+The dry runs first, because a button that changes nothing is the one that
+needs no confirmation.
 
 ## 14. A visual pass, and a theme you can swap
 
@@ -1862,6 +1865,20 @@ script knows how long to pause.
 LLM code in the tool. The committed ledger and the `.apkg` export are the
 mitigation: they show the output without running the half a stranger cannot.
 
+## 15. One word reads, two words write
+
+**Built**, and [VERBS.md](VERBS.md) is the table. Count the words before you
+press return: `forge units` prints the ledger and `forge units set` writes to
+it, `forge anki` is the dry run and `forge anki push` is the push. The three
+verbs that reach outside this repo sit under `anki`.
+
+The old names gave a reader nothing to count. `sync`, `feedback`, `extract`
+and `classify` share no shape, so which of them wrote was something you
+remembered rather than read. Each subcommand now carries an `effect` in the
+parser, `forge --help` groups by it, and a test refuses a writing parser
+reachable in one word. Every old spelling still runs, hidden from `--help`,
+and prints the new form once on stderr.
+
 ---
 
 # Ideas, not scheduled
@@ -1905,8 +1922,9 @@ signal. The Cookbook has neither, which is why this has never bitten.
 
 **All three blockers dissolved for a marked-up source:** Zotero's image and
 area annotations are figure units already, "a figure card needs a `type`
-beyond `identity`" stopped being one when `intuition` landed, and a card can
-now carry a picture (`![...](unit:<id>)`, rendered and uploaded by `sync`).
+beyond `identity`" stopped being one when `intuition` landed, and a card
+can now carry a picture (`![...](unit:<id>)`, rendered and uploaded by
+`anki push`).
 What is left is segmenter work -- finding a figure in a book nobody marked up
 -- and the segmenter is frozen.
 

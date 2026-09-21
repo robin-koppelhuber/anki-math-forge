@@ -8,15 +8,15 @@ Turn a subject into **units**, for a project with no book behind it.
 Arguments: `$ARGUMENTS`
 
 - **`--project NAME`** — which project. **Ask if it is not given.** Start one
-  with `forge project <name> --title '...' --deck '...'`.
+  with `forge project new <name> --title '...' --deck '...'`.
 - **the subject**, in your own words: "how to use the standard containers",
   "when a `vector` invalidates its iterators".
 
 ## Why this exists
 
-`extract` and `zotero` find units inside a document. A project on a subject
-has no document, so nothing can be segmented and there is nothing to triage.
-This pass writes the units instead.
+`units extract` and `zotero import` find units inside a document. A project
+on a subject has no document, so nothing can be segmented and there is
+nothing to triage. This pass writes the units instead.
 
 It is a **frontend**, and it owes exactly what the other two owe (ROADMAP.md
 10): a stable id, whatever locator it has, something scannable, and
@@ -36,7 +36,7 @@ left. A proposal is a subject, not a draft.
 2. **Outline what the subject contains, before proposing anything.** One
    short line each, no detail, in `projects/<name>/topics.md` under a
    heading naming the subject. If the ask is not recorded there yet,
-   `forge topic --project <name> '<subject>' --ask '<what you want>'`
+   `forge topic add '<subject>' --project <name> --ask '<what you want>'`
    writes the heading; the entries you add by editing the file.
 
    This step is the whole defence against stopping halfway. A single pass
@@ -54,10 +54,10 @@ left. A proposal is a subject, not a draft.
    adding the obvious gap costs three lines here and forty edits later. Wait
    for them.
 
-4. **Fill it in, one `forge units --add` per entry:**
+4. **Fill it in, one `forge units add` per entry:**
 
    ```
-   forge units --project <name> --add '<a few words: the id comes from this>' \
+   forge units add '<a few words: the id comes from this>' --project <name> \
      --gist '<what a card from it would be about>' \
      --preview '<a sample too small to run, enough to see the point>' \
      --lang cpp \

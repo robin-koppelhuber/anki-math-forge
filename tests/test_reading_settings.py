@@ -549,7 +549,7 @@ def test_the_passes_that_read_units_are_still_offered(tmp_path: Path) -> None:
 
     assert any("/transcribe" in run for run in offered)
     assert any("/classify" in run for run in offered)
-    assert not any("forge extract" in run for run in offered), "and no new ones"
+    assert not any("forge units extract" in run for run in offered), "and no new ones"
     assert not any(
         "nothing to run: a reference" in row["label"] for row in runs.propose("work", at)
     )
@@ -740,3 +740,26 @@ def test_the_repo_default_reaches_the_crop(tmp_path: Path) -> None:
     from anki_math_forge.extract.render import TRIAGE_CONTEXT
 
     assert config_mod.load(tmp_path).crop_context_for("cpp") == TRIAGE_CONTEXT
+
+
+def test_extract_sends_a_zotero_work_to_the_other_door(tmp_path: Path) -> None:
+    """`extract` refuses an imported item, which is right, and used to say
+    "set `files` or `tex`", which is the wrong advice for it: what it wants
+    is the import, not a path."""
+    from anki_math_forge import extract
+
+    config = a_repo(tmp_path, MARKED)
+
+    with pytest.raises(ConfigError, match="imported rather than segmented"):
+        extract.run(config, "cpp")
+
+
+def test_a_declared_file_that_is_missing_is_still_a_missing_file(tmp_path: Path) -> None:
+    """A Zotero work that also names a PDF has one. Sending that to the
+    import would answer a path problem with a trip to Zotero."""
+    from anki_math_forge import extract
+
+    config = a_repo(tmp_path, MARKED + 'files = ["projects/cpp/gone.pdf"]\n')
+
+    with pytest.raises(ConfigError, match=re.escape("gone.pdf")):
+        extract.run(config, "cpp")

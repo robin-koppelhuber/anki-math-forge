@@ -333,7 +333,7 @@ function drawEdge(edge) {
   const to = { x: at_.x - (PORT_R + 2), y: at_.y };
   const lit = hover && (edge.src === hover.id || edge.dst === hover.id);
   const on = picked.edge && picked.edge.src === edge.src && picked.edge.dst === edge.dst;
-  /* An approved card whose prerequisite is not approved. `sync` would
+  /* An approved card whose prerequisite is not approved. `anki push` would
      introduce it without its foundation, and `check` says so as
      `requires-unapproved` -- after the fact, in a list you read later. The
      arrow itself is where that belongs, because the arrow is the thing that

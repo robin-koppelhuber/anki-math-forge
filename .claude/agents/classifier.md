@@ -15,11 +15,11 @@ from a bug to whoever met it later.
 
 ## Why you exist
 
-There is a mechanical classifier already (`forge classify`). It knows two
-rules: units before the first numbered equation, and unnumbered units whose
-text layer holds no relation symbol. Both rules lean on *this* document being
-pdfTeX output with a clean text layer. Neither survives a scanned book, a
-Word-produced PDF, or a document that numbers nothing.
+There is a mechanical classifier already (`forge units classify`). It knows
+two rules: units before the first numbered equation, and unnumbered units
+whose text layer holds no relation symbol. Both rules lean on *this* document
+being pdfTeX output with a clean text layer. Neither survives a scanned book,
+a Word-produced PDF, or a document that numbers nothing.
 
 You look at the crop. That generalises.
 
@@ -37,13 +37,14 @@ You look at the crop. That generalises.
    is visible as a fragment.
 
 2. `Read` each one and decide what it actually is. If the unit already has a
-   transcription, read that too -- it is what `classify` now reads, and a
-   disagreement between crop and transcription is itself worth annotating.
+   transcription, read that too -- it is what `units classify` now reads,
+   and a disagreement between crop and transcription is itself worth
+   annotating.
 
 3. Where a unit should not be carded, propose it:
 
    ```
-   uv run forge units --id <UNIT-ID> --suggest skipped <reason> \
+   uv run forge units suggest <UNIT-ID> skipped <reason> \
      --detail 'what you saw, in one sentence' --by claude
    ```
 
@@ -74,7 +75,7 @@ You look at the crop. That generalises.
   numbered crop looks wrong, propose nothing and **annotate** it instead:
 
   ```
-  uv run forge units --id <UNIT-ID> --annotate 'crop holds two numbered results; segmentation merged them'
+  uv run forge units note <UNIT-ID> 'crop holds two numbered results; segmentation merged them'
   ```
 
 - An unnumbered display equation that states a relation. Books state plenty of

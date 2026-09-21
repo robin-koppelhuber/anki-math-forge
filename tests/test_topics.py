@@ -40,7 +40,7 @@ def run(repo: Path, *args: str) -> int:
 
 
 def a_project(repo: Path, outline: str = OUTLINE) -> Path:
-    run(repo, "project", "cpp", "--title", "Modern C++", "--deck", "Cpp")
+    run(repo, "project", "new", "cpp", "--title", "Modern C++", "--deck", "Cpp")
     folder = repo / "projects" / "cpp"
     if outline:
         (folder / "topics.md").write_text(outline, encoding="utf-8")
@@ -665,7 +665,7 @@ def test_the_command_and_the_view_write_the_same_file(
     """Two ways to write one file is how the two drift, so both go through
     one function. Invariant 2 is only true while they cannot disagree."""
     a_project(repo, outline="")
-    run(repo, "topic", "--project", "cpp", "the standard containers", "--ask", "why")
+    run(repo, "topic", "add", "--project", "cpp", "the standard containers", "--ask", "why")
     by_command = (repo / "projects" / "cpp" / "topics.md").read_text(encoding="utf-8")
 
     other = tmp_path_factory.mktemp("other")
@@ -683,7 +683,7 @@ def test_the_command_and_the_view_write_the_same_file(
 
 
 def test_the_command_refuses_a_project_that_is_not_there(repo: Path) -> None:
-    assert run(repo, "topic", "--project", "nope", "a subject") == 1
+    assert run(repo, "topic", "add", "--project", "nope", "a subject") == 1
 
 
 def test_a_cluster_is_not_badged_as_unconfigured(repo: Path) -> None:
@@ -735,7 +735,7 @@ def test_a_zotero_work_is_not_offered_extract(repo: Path) -> None:
     pane = page[at : at + 1200]
 
     assert "forge zotero" in pane
-    assert "forge extract" not in pane
+    assert "forge units extract" not in pane
 
 
 def test_a_file_work_is_offered_extract(repo: Path) -> None:
@@ -744,7 +744,7 @@ def test_a_file_work_is_offered_extract(repo: Path) -> None:
     page = client(repo).get("/setup?project=cpp").text
     at = page.index('data-runs="source:book"')
 
-    assert "forge extract" in page[at : at + 1200]
+    assert "forge units extract" in page[at : at + 1200]
 
 
 def test_creating_a_topic_is_not_called_recording_an_ask(repo: Path) -> None:
@@ -826,7 +826,7 @@ def test_a_marked_up_work_is_not_offered_the_transcription_pass(repo: Path) -> N
 
     assert "/transcribe" not in pane
     assert "run-note" not in pane, "left out, not explained: this pane has work in it"
-    assert "forge zotero" in pane and "forge extract" not in pane
+    assert "forge zotero" in pane and "forge units extract" not in pane
 
 
 # -- narrow first, then the whole repo --------------------------------------
@@ -845,8 +845,10 @@ def test_the_narrow_command_comes_before_the_repo_wide_one(repo: Path) -> None:
     rest = page[page.index('data-runs="project"') + 1 :]
     pane = rest[: rest.find("data-runs=")]
 
-    mine = pane.index("forge sync --project")
-    every = pane.index("uv run forge sync --dry-run")
+    mine = pane.index("forge anki --project")
+    # The repo-wide one is a *prefix* of the narrow one now, so `index`
+    # finds the narrow one twice. Anchor on the end of the element.
+    every = pane.index("uv run forge anki<")
     assert mine < every, "this project first"
 
 

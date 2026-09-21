@@ -45,7 +45,7 @@ a card exists costs a rewrite.
 3. Record it:
 
    ```
-   uv run --no-sync forge units --id <unit-id> --gist '<one line>'
+   uv run --no-sync forge units set <unit-id> --gist '<one line>'
    ```
 
 ## What a good gist looks like

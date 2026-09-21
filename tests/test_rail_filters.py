@@ -56,7 +56,7 @@ def a_repo(
     outline: str = TWO_ASKS,
     units: list[dict[str, object]] | None = None,
 ) -> Path:
-    run(repo, "project", "cpp", "--title", "Modern C++", "--deck", "Cpp")
+    run(repo, "project", "new", "cpp", "--title", "Modern C++", "--deck", "Cpp")
     folder = repo / "projects" / "cpp"
     if outline:
         (folder / "topics.md").write_text(outline, encoding="utf-8")
@@ -286,7 +286,7 @@ def test_no_project_named_lands_on_one_with_units_and_says_so(repo: Path) -> Non
     steps past an empty project stepped onto it. The script polls with
     `location.search`, so the URL has to carry where it landed."""
     a_repo(repo, outline="", units=[])
-    run(repo, "project", "later", "--title", "Later", "--deck", "Later")
+    run(repo, "project", "new", "later", "--title", "Later", "--deck", "Later")
     (repo / "projects" / "later" / "units.jsonl").write_text(
         json.dumps({"id": "later:one", "state": "new", "locator": {"document": "x.pdf"}}) + "\n",
         encoding="utf-8",

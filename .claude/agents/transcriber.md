@@ -34,7 +34,7 @@ transcriber.
 3. Record what you read:
 
    ```
-   uv run forge units --id <UNIT-ID> --tex-auto '<latex>'
+   uv run forge units set <UNIT-ID> --tex '<latex>'
    ```
 
    Quote the LaTeX in **single** quotes so the shell leaves backslashes alone.
@@ -48,7 +48,7 @@ transcriber.
   wrong to you, transcribe it as shown and *annotate* it:
 
   ```
-  uv run forge units --id <UNIT-ID> --annotate 'eq (N) looks wrong: <why>'
+  uv run forge units note <UNIT-ID> 'eq (N) looks wrong: <why>'
   ```
 
 - **Bare math only.** No `$` delimiters, no `\begin{equation}`, no equation
@@ -90,7 +90,7 @@ transcriber.
   cat > tex.tmp << 'EOF'
   ...your LaTeX, exactly as you mean it...
   EOF
-  uv run forge units --id <UNIT-ID> --tex-auto "$(cat tex.tmp)"
+  uv run forge units set <UNIT-ID> --tex "$(cat tex.tmp)"
   ```
 
   After recording anything containing `array`, `matrix`, `bmatrix`, `cases`
@@ -105,7 +105,7 @@ transcriber.
   real", a bullet list of properties, a sentence defining a term. Record it:
 
   ```
-  uv run forge units --id <UNIT-ID> --tex-auto '\text{The inverse of an orthogonal matrix is orthogonal too.}'
+  uv run forge units set <UNIT-ID> --tex '\text{The inverse of an orthogonal matrix is orthogonal too.}'
   ```
 
   Wrap it in `\text{...}`. Bare prose passes the gate but renders as a
@@ -119,7 +119,7 @@ transcriber.
 - **Do not guess.** If a crop is unreadable, cut off, or contains two
   equations, annotate it and move on:
   ```
-  uv run forge units --id <UNIT-ID> --annotate 'crop is cut off on the left'
+  uv run forge units note <UNIT-ID> 'crop is cut off on the left'
   ```
 
   A missing transcription is a small problem. A confident wrong one is a bad

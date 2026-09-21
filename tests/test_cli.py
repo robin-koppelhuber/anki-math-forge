@@ -55,7 +55,7 @@ def test_check_json_is_machine_readable(
 
 
 def test_extract_then_units(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert run(repo, "extract") == 0
+    assert run(repo, "units", "extract") == 0
     assert "units found via tex" in out(capsys)
 
     assert run(repo, "units", "--state", "new", "--json") == 0
@@ -68,7 +68,7 @@ def test_extract_then_units(repo: Path, capsys: pytest.CaptureFixture[str]) -> N
 def test_units_state_change_round_trips(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     assert run(repo, "units", "--id", "demo:1.1:2", "--set-state", "queued") == 0
     assert Ledger.load(config.units_path("demo")).get("demo:1.1:2").state == "queued"
 
@@ -78,7 +78,7 @@ def test_units_state_change_round_trips(
 
 
 def test_units_rejects_an_unknown_id(repo: Path) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     assert run(repo, "units", "--id", "demo:9:9", "--set-state", "queued") == 1
 
 
@@ -88,7 +88,7 @@ def test_units_rejects_an_unknown_id(repo: Path) -> None:
 def test_new_writes_a_stub_and_cards_the_unit(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     run(repo, "units", "--id", "demo:1.1:2", "--set-state", "queued")
     drain(capsys)
     assert (
@@ -125,9 +125,9 @@ def test_new_files_the_card_under_its_source(repo: Path, config: Config) -> None
     """One folder per source, so a second book does not land in the same
     thousand-file directory. Filing only: `unit:` is still what says where a
     card came from, and every loader rglobs, so a misfiled card still loads."""
-    run(repo, "extract")
+    run(repo, "units", "extract")
     run(repo, "units", "--id", "demo:1.1:2", "--set-state", "queued")
-    run(repo, "new", "--unit", "demo:1.1:2", "--front", "$a$", "--back", "$b$")
+    run(repo, "cards", "new", "--unit", "demo:1.1:2", "--front", "$a$", "--back", "$b$")
 
     written = list(config.cards_dir.rglob("*.md"))
     assert len(written) == 1
@@ -137,7 +137,7 @@ def test_new_files_the_card_under_its_source(repo: Path, config: Config) -> None
 
 def test_new_without_a_unit_stays_at_the_top(repo: Path, config: Config) -> None:
     """No unit means no source to file it under. It must not vanish."""
-    run(repo, "new", "--front", "$a$", "--back", "$b$")
+    run(repo, "cards", "new", "--front", "$a$", "--back", "$b$")
     written = list(config.cards_dir.rglob("*.md"))
     assert len(written) == 1
     assert written[0].parent == config.cards_dir
@@ -145,12 +145,12 @@ def test_new_without_a_unit_stays_at_the_top(repo: Path, config: Config) -> None
 
 
 def test_new_refuses_an_unknown_unit(repo: Path) -> None:
-    run(repo, "extract")
-    assert run(repo, "new", "--unit", "demo:9:9", "--front", "$a$", "--back", "$b$") == 1
+    run(repo, "units", "extract")
+    assert run(repo, "cards", "new", "--unit", "demo:9:9", "--front", "$a$", "--back", "$b$") == 1
 
 
 def test_new_reports_a_malformed_stub(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    assert run(repo, "new", "--front", r"$\frac{a}{b$", "--back", "$c$") == 1
+    assert run(repo, "cards", "new", "--front", r"$\frac{a}{b$", "--back", "$c$") == 1
     assert "latex-parse" in out(capsys)
 
 
@@ -174,7 +174,7 @@ def test_todo_lists_open_annotations(
 def test_todo_includes_units(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     ledger = Ledger.load(config.units_path("demo"))
     ledger.annotate("demo:1:1", "worth carding?")
     ledger.save()
@@ -204,7 +204,7 @@ def test_sync_dry_run_reports_without_writing(
     card.approve()
     card.save()
 
-    assert run(repo, "sync", "--dry-run") == 0
+    assert run(repo, "anki", "push", "--dry-run") == 0
     assert "would sync" in out(capsys)
     assert fake.notes == {}
 
@@ -220,7 +220,7 @@ def test_sync_refuses_a_card_with_an_open_annotation(
     card.add_annotation("not ready")
     card.save()
 
-    run(repo, "sync")
+    run(repo, "anki", "push")
     assert fake.notes == {}
     assert "open @claude annotation" in out(capsys)
 
@@ -238,7 +238,7 @@ def test_verify_reports_skips(
 def test_a_transcription_is_gated_before_it_is_stored(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     drain(capsys)
     assert run(repo, "units", "--id", "demo:1:1", "--tex-auto", r"X^{-\top}") == 0
     assert "ok" in out(capsys)
@@ -248,7 +248,7 @@ def test_a_transcription_is_gated_before_it_is_stored(
 def test_garbage_is_refused_and_nothing_is_stored(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     before = Ledger.load(config.units_path("demo")).get("demo:1:1").tex_auto
     drain(capsys)
     run(repo, "units", "--id", "demo:1:1", "--tex-auto", r"\frac{a}{b")
@@ -260,7 +260,7 @@ def test_unit_annotations_can_be_resolved(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """Without this a Gate 1 annotation would sit in `todo` for ever."""
-    run(repo, "extract")
+    run(repo, "units", "extract")
     run(repo, "units", "--id", "demo:1:1", "--annotate", "two cards please")
     assert Ledger.load(config.units_path("demo")).get("demo:1:1").notes
 
@@ -274,7 +274,7 @@ def test_unit_annotations_can_be_resolved(
 
 
 def test_audit_reports_the_numbering_oracle(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     drain(capsys)
     assert run(repo, "audit") == 0
     assert "4/4 numbered equations (complete)" in out(capsys)
@@ -283,7 +283,7 @@ def test_audit_reports_the_numbering_oracle(repo: Path, capsys: pytest.CaptureFi
 def test_source_text_is_cached_for_card_writing(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     drain(capsys)
     assert run(repo, "source-text", "demo") == 0
     text = out(capsys)
@@ -294,7 +294,7 @@ def test_source_text_is_cached_for_card_writing(
 def test_flagged_filters_to_the_suspect_units(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     drain(capsys)
     run(repo, "units", "--state", "all", "--flagged", "--json")
     # the tex source is clean, so nothing should be suspect
@@ -305,7 +305,7 @@ def test_crops_renders_working_files_with_a_manifest(
     repo: Path, pdf_source: Config, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
     """`crops` is how a transcriber subagent gets PNGs to read."""
-    run(repo, "extract")
+    run(repo, "units", "extract")
     drain(capsys)
     out = tmp_path / "crops"
     assert run(repo, "crops", "--project", "book", "--out", str(out), "--json") == 0
@@ -325,7 +325,7 @@ def test_crops_can_select_only_what_still_needs_reading(
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     units = Ledger.load(pdf_source.units_path("book")).units
     run(repo, "units", "--id", units[0].id, "--tex-auto", "a = b")
     drain(capsys)
@@ -341,7 +341,7 @@ def test_crops_can_select_only_what_still_needs_reading(
 def test_a_suggestion_is_recorded_but_not_applied(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     drain(capsys)
     assert (
         run(
@@ -370,7 +370,7 @@ def test_a_suggestion_is_recorded_but_not_applied(
 def test_accept_applies_a_suggestion(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     run(repo, "units", "--id", "demo:1:1", "--suggest", "skipped", "fragment")
     drain(capsys)
     assert run(repo, "units", "--id", "demo:1:1", "--accept") == 0
@@ -384,7 +384,7 @@ def test_accept_applies_a_suggestion(
 def test_dismiss_discards_a_suggestion(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     run(repo, "units", "--id", "demo:1:1", "--suggest", "skipped", "fragment")
     drain(capsys)
     assert run(repo, "units", "--id", "demo:1:1", "--dismiss") == 0
@@ -397,7 +397,7 @@ def test_dismiss_discards_a_suggestion(
 def test_suggested_filters_to_open_proposals(
     repo: Path, config: Config, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    run(repo, "extract")
+    run(repo, "units", "extract")
     run(repo, "units", "--id", "demo:1:1", "--suggest", "skipped", "fragment")
     drain(capsys)
     run(repo, "units", "--state", "all", "--suggested", "--json")
@@ -492,7 +492,7 @@ def test_todo_filters_on_source(
     """Every other verb here is source-scoped, and the notes are source-shaped
     work for the same reason: conventions are per source, so one list covering
     two books means reloading the setting between every item."""
-    run(repo, "extract")
+    run(repo, "units", "extract")
     ledger = Ledger.load(config.units_path("demo"))
     ledger.annotate("demo:1:1", "worth carding?")
     ledger.save()

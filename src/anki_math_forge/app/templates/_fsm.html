@@ -42,7 +42,7 @@
      from any of them, which is why its one outgoing arrow points at the sync
      gate. Arrows to individual boxes would claim something untrue.
    * Traffic to Anki is one-way with a single exception, and the exception is
-     an arrow: `feedback` takes a comment or a flag out of Anki and writes it
+     an arrow: `anki pull` takes a comment or a flag out of Anki and writes it
      as an annotation, erasing it there in the same pass. It arrives at the
      annotations box because that is what it becomes, not at a state.
 
@@ -124,7 +124,7 @@
     <path class="mark" d="M36.3,52.1 L17.9,52.0 L18.0,27.9 L31.2,27.9 L36.1,32.7 Z"/>
     <path class="mark thin" d="M31.2,27.9 L31.2,32.7 L36.1,32.7"/>
     <path class="mark thin" d="M22,39 h9 M22,43 h11 M22,47 h7"/>
-    <text x="44" y="42">forge extract</text>
+    <text x="44" y="42">forge units extract</text>
     <text class="sub" x="44" y="58">a PDF, segmented into numbered statements</text>
   </g>
   <g class="source{{ ' on' if sf.origin in ('zotero', 'mixed') else '' }}">
@@ -141,7 +141,7 @@
                                 L314.6,36.3 L309.4,36.3 L309.4,33.9 L318.4,34.0
                                 L319.0,35.3 L318.9,35.6 L313.0,42.9 L318.9,43.0
                                 L319.0,44.4 Z"/>
-    <text x="332" y="42">forge zotero</text>
+    <text x="332" y="42">forge zotero import</text>
     <text class="sub" x="332" y="58">the marks you made while reading:</text>
     {# This project's scheme, and no line at all without one. It used to
        fall back to three invented pairs, which read as the answer; saying
@@ -234,7 +234,7 @@
 
   <path class="edge" d="M130,628 V686" marker-end="url(#ar)"/>
   <path class="gate" d="M114,660 H146"/>
-  <text class="lbl" x="176" y="644">sync</text>
+  <text class="lbl" x="176" y="644">anki push</text>
   {# Anki, traced the same way: the rounded tile and its two stars. #}
   <g class="source">
     <path class="mark" d="M134.1,712.1 L122.3,712.1 L120.6,711.4 L119.6,710.4
@@ -319,17 +319,17 @@
     <text class="sub" x="408" y="712">pile, and resolving it restores the approval</text>
   </g>
   <path class="edge dash warn" d="M396,660 H150" marker-end="url(#ar)"/>
-  <text class="lbl warn" x="200" y="652">blocks sync</text>
+  <text class="lbl warn" x="214" y="652">blocks sync</text>
 
   {# The one flow back out of Anki, and the only arrow in the diagram that
-     runs the other way. `feedback` takes a comment from the Feedback field or
+     runs the other way. `anki pull` takes a comment from the Feedback field or
      a flag you set during review, writes it here as an annotation, and erases
      it in Anki in the same pass -- so it lands in the box where every other
      annotation lives rather than in a state of its own. Without it the
      picture said traffic was one-way, which is the one thing CONTRACT.md
      names an exception to. #}
   <path class="edge dash" d="M190,700 H392" marker-end="url(#ar)"/>
-  <text class="lbl" x="290" y="692">feedback</text>
+  <text class="lbl" x="290" y="692">anki pull</text>
   <text class="sub" x="206" y="716">a comment or a flag, erased there</text>
 </svg>
 </figure>

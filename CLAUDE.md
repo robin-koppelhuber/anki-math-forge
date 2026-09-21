@@ -5,6 +5,8 @@ Turns mathematical source material into reviewed Anki cards.
 Full reasoning behind every rule below: [docs/CONTRACT.md](docs/CONTRACT.md).
 Design doc: [docs/DESIGN.md](docs/DESIGN.md) (cited as DESIGN.md in code
 comments). What is left to build: [docs/ROADMAP.md](docs/ROADMAP.md).
+How the commands are named, and why one word never writes:
+[docs/VERBS.md](docs/VERBS.md).
 How prose here is written, and what each object is called:
 [docs/STYLE.md](docs/STYLE.md). Read it before writing docs, template text or
 anything in `.claude/`.
@@ -13,8 +15,8 @@ anything in `.claude/`.
 
 Tests cite these by number. Each links to the reasoning.
 
-1. **Nothing reaches Anki without human approval.** `sync` only touches
-   `status: approved`. The one flow back out is `feedback`, which erases what
+1. **Nothing reaches Anki without human approval.** `anki push` only touches
+   `status: approved`. The one flow back out is `anki pull`, which erases what
    it takes.
 2. **Files are the source of truth.** The web app is a view over them. Anything
    it does is also doable by editing a file.
@@ -64,12 +66,12 @@ and `## verify` never reach Anki.
 
 A picture is `![what it shows](unit:<id>)`, or `![...](unit)` for the card's
 own unit. There is no image file: the crop is rendered from the source
-document and uploaded when `sync` runs, so it stays reproducible and
+document and uploaded when `anki push` runs, so it stays reproducible and
 re-segmenting the unit fixes every card that shows it. Which section it goes
 in is the writer's call. `check` refuses a card whose picture cannot be drawn.
 
 Code is a fenced block, ```` ```cpp ````. It is not read as maths and not
-counted as wrapped prose, and `sync` renders it as a highlighted `<pre>`.
+counted as wrapped prose, and `anki push` renders it as a highlighted `<pre>`.
 The file keeps plain code;
 the colours are added on the way to Anki, so nobody needs an add-on.
 
@@ -95,56 +97,56 @@ load.
 ## Commands
 
 ```
-uv run forge extract [project]  # document -> units; never reads the maths
-uv run forge project <name>     # start one with no document, for a subject
-uv run forge project <name> --delete
-                                #   remove it: the folder, the cards filed
-                                #   under it, and its table in forge.toml.
-                                #   Refused when it holds cards unless
-                                #   --force; --dry-run says what would go.
-                                #   Notes already in Anki stay there
-uv run forge topic --project <p> 'a subject' --ask '...'
-                                #   what you want cards for, and what you
-                                #   want from it; `/propose` outlines it
-uv run forge units --project <p> --add 'a subject' --gist '...' --preview '...'
-                                #   the third door in, for `/propose`: a unit
-                                #   where there was nothing to segment
-uv run forge sources            # every work in the repo, and which project reads it
-uv run forge sources --project <p> --remove <key>
-                                #   take one out: its table and the units it
-                                #   owns. Refused while cards stand on it
-                                #   unless --force; --dry-run says what goes
-uv run forge zotero --list      # what Zotero has, and what is already a source
-uv run forge zotero --tag anki  # what you marked up in Zotero -> units
-uv run forge classify           # *propose* skips; applies nothing
-uv run forge audit              # is the index trustworthy? 1..N, no gaps
+uv run forge units extract [project]    # document -> units; never reads the maths
+uv run forge project new <name>         # start one with no document, for a subject
+uv run forge project delete <name>
+                                        #   remove it: the folder, the cards filed
+                                        #   under it, and its table in forge.toml.
+                                        #   Refused when it holds cards unless
+                                        #   --force; --dry-run says what would go.
+                                        #   Notes already in Anki stay there
+uv run forge topic add 'a subject' --project <p> --ask '...'
+                                        #   what you want cards for, and what you
+                                        #   want from it; `/propose` outlines it
+uv run forge units add 'a subject' --project <p> --gist '...' --preview '...'
+                                        #   the third door in, for `/propose`: a unit
+                                        #   where there was nothing to segment
+uv run forge sources                    # every work in the repo, and which project reads it
+uv run forge sources remove <key> --project <p>
+                                        #   take one out: its table and the units it
+                                        #   owns. Refused while cards stand on it
+                                        #   unless --force; --dry-run says what goes
+uv run forge zotero                     # what Zotero has, and what is already a source
+uv run forge zotero import --tag anki   # what you marked up in Zotero -> units
+uv run forge units classify             # *propose* skips; applies nothing
+uv run forge audit                      # is the index trustworthy? 1..N, no gaps
 uv run forge crops --section 2.4 --untranscribed --out DIR --json
-uv run forge context <unit-id>  # the page it was printed on (--pages N for more,
-                                #   counted *either side*: 3 hands over seven;
-                                #   --pages chapter for the chapter it is in),
-                                #   plus whether web lookups are allowed here
-uv run forge units --id <id> --web yes|no|inherit   # grant or refuse them
-                                #   how much a writer is handed is
-                                #   `[cards] context` or `[projects.x]
-                                #   context`: none | references | web.
-                                #   Per reference, `offer` says whether it
-                                #   is handed over at all
-uv run forge source-text <src>  # the book text, for card-writing context
-uv run forge check              # lint (always; blocks sync)
+uv run forge context <unit-id>          # the page it was printed on (--pages N for more,
+                                        #   counted *either side*: 3 hands over seven;
+                                        #   --pages chapter for the chapter it is in),
+                                        #   plus whether web lookups are allowed here
+uv run forge units set <id> --web yes|no|inherit   # grant or refuse them
+                                        #   how much a writer is handed is
+                                        #   `[cards] context` or `[projects.x]
+                                        #   context`: none | references | web.
+                                        #   Per reference, `offer` says whether it
+                                        #   is handed over at all
+uv run forge source-text <src>          # the book text, for card-writing context
+uv run forge check                      # lint (always; blocks `anki push`)
 uv run forge units --state queued --json
-uv run forge units --ungisted   # no one-line subject yet; `/gist` fills them
-uv run forge units --id <id> --gist 'Lemma 2'
-uv run forge new --unit <id> --front '$...$' --back '$...$' --gist 'what it is'
-uv run forge todo               # open annotations, @claude and @me
-uv run forge serve              # project setup, units triage, card review, the
-                                #   dependency canvas (`[app] graph = false`
-                                #   turns the canvas off). `/setup` is the stage
-                                #   before triage: what a project reads, what
-                                #   you asked for, and which asks still have
-                                #   outline entries with no unit
-uv run forge sync --dry-run     # then without --dry-run
-uv run forge feedback           # Anki review comments/flags -> @claude notes
-uv run forge verify             # opt-in numeric check
+uv run forge units --ungisted           # no one-line subject yet; `/gist` fills them
+uv run forge units set <id> --gist 'Lemma 2'
+uv run forge cards new --unit <id> --front '$...$' --back '$...$' --gist 'what it is'
+uv run forge todo                       # open annotations, @claude and @me
+uv run forge serve                      # project setup, units triage, card review, the
+                                        #   dependency canvas (`[app] graph = false`
+                                        #   turns the canvas off). `/setup` is the stage
+                                        #   before triage: what a project reads, what
+                                        #   you asked for, and which asks still have
+                                        #   outline entries with no unit
+uv run forge anki                       # what would be pushed; then `anki push`
+uv run forge anki pull                  # Anki review comments/flags -> @claude notes
+uv run forge verify                     # opt-in numeric check
 ```
 
 Every verb that prints for a human takes `--json`. That is the interface to

@@ -64,8 +64,8 @@ and `derivation` and nothing else.
    back that was.
 
    Then **say so in your report**: a unit whose hypotheses are two pages back
-   wants that recorded on the unit (`forge units --id <id> --context-pages 3`,
-   or `--context-pages chapter`), so the next pass gets them without knowing
+   wants that recorded on the unit (`forge units set <id> --pages 3`, or
+   `--pages chapter`), so the next pass gets them without knowing
    to ask. Widening your own call solves it for you; recording it solves it
    for everyone after you.
 
@@ -73,9 +73,9 @@ and `derivation` and nothing else.
    annotation has geometry and no text: nothing to transcribe, and the figure
    is the point. Write `![what it shows](unit)` in whichever section the
    figure belongs to -- see **Pictures** in the card-writing skill, which is
-   where that judgement is set out. No file is produced: `sync` renders the
-   crop from the source document, so the unit only has to exist and have a
-   box.
+   where that judgement is set out. No file is produced: `anki push` renders
+   the crop from the source document, so the unit only has to exist and
+   have a box.
 
    **When the page is not enough, read the book's front matter**:
 
@@ -144,9 +144,9 @@ and `derivation` and nothing else.
      never seen in Anki, and unhashed, so improving it costs no re-review.
    - `frequency` and `derivation` — **both, on every card.** `frequency` is
      `core | common | rare`, `derivation` is `definitional | short | long`.
-     They are not decoration: `sync` introduces new cards in that order, most
-     useful first and then easiest first, and a card missing either sorts to
-     the back of the queue as unjudged.
+     They are not decoration: `anki push` introduces new cards in that
+     order, most useful first and then easiest first, and a card missing
+     either sorts to the back of the queue as unjudged.
    - `requires` — uids this card's proof or notation rests on, if any. It
      outranks the gradings, so without it a card can arrive before the result
      it is built from. Only real dependencies; two cards on a theme are not

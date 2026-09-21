@@ -6,12 +6,12 @@ argument-hint: [--project NAME] [--section SECTION|--all] [haiku|sonnet|opus]
 Look at unit crops and **propose** which are not worth carding, so triage is
 not fifty-seven presses of `s` before the first real decision.
 
-**Run `/transcribe` first.** `classify` now reads a unit's transcription in
-preference to the PDF text layer, because a transcription is what somebody saw
-on the crop, while the text layer is whatever the document's producer happened
-to emit -- mangled or absent for anything unusual, and missing entirely from a
-scanned source. Classifying an untranscribed book still works;
-it is just working from the worse of the two sources.
+**Run `/transcribe` first.** `units classify` now reads a unit's
+transcription in preference to the PDF text layer, because a transcription is
+what somebody saw on the crop, while the text layer is whatever the document's
+producer happened to emit -- mangled or absent for anything unusual, and
+missing entirely from a scanned source. Classifying an untranscribed book
+still works; it is just working from the worse of the two sources.
 
 Arguments: `$ARGUMENTS` — `--project NAME` which project (**ask if it is not
 given and the repo has more than one**: nothing below defaults to a source, so
@@ -35,7 +35,7 @@ and a guess that silently moved units would be indistinguishable from a bug.
    exact where they apply:
 
    ```
-   uv run forge classify --project <PROJECT>
+   uv run forge units classify --project <PROJECT>
    ```
 
    It proposes `front-matter` and `no-relation` skips. It never touches a

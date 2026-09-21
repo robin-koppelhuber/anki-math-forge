@@ -51,8 +51,8 @@ nothing else touches.
    **A section is the unit of work because it is the unit of collision.** Two
    agents pointed at one queue would card the same unit twice; two agents on
    different sections cannot, and the writes themselves are already safe,
-   since `forge new` marks the unit inside `Ledger.edit` and that takes the
-   ledger's lock.
+   since `forge cards new` marks the unit inside `Ledger.edit` and that
+   takes the ledger's lock.
 
 3. When they report back, verify mechanically rather than reading the
    summaries:

@@ -244,19 +244,28 @@ def wait_for(url: str, timeout: float = 40.0) -> None:
 
 
 class Serving:
-    """`forge serve` on a spare port, stopped on the way out."""
+    """The app on a spare port, stopped on the way out.
+
+    Stopped means stopped: the process this starts is the server itself, so
+    there is nothing between `terminate()` and the thing holding the port.
+    """
 
     def __init__(self) -> None:
         self.port = spare_port()
         self.base = f"http://127.0.0.1:{self.port}"
 
     def __enter__(self) -> Serving:
-        # `--no-sync`: this runs inside an environment that is already set up,
-        # and re-installing first fails outright while any other `forge` is
-        # running, because the executable it would replace is locked. A
-        # screenshot run should not depend on whether you left a server open.
+        # This interpreter, running the CLI as a module. Not `uv run`, which
+        # is a middleman: it spawns `forge.exe` as a child, and `terminate()`
+        # below then kills the middleman and leaves the server behind. Three
+        # screenshot runs left three servers holding `forge.exe` open, which
+        # is the file `uv` has to replace, so every later `uv run` failed
+        # with a lock error nothing on screen connected to screenshots.
+        #
+        # It also drops the `--no-sync` this needed for the same reason: with
+        # no install step there is nothing to lock.
         self.proc = subprocess.Popen(
-            ["uv", "run", "--no-sync", "forge", "serve", "--port", str(self.port)],
+            [sys.executable, "-m", "anki_math_forge.cli", "serve", "--port", str(self.port)],
             cwd=ROOT,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

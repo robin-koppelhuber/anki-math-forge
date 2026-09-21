@@ -65,7 +65,7 @@ def lay_out(repo: Path) -> None:
 
 
 def _extract(repo: Path) -> None:
-    """`forge extract`, in-process, for units that carry real geometry."""
+    """`forge units extract`, in-process, for units that carry real geometry."""
     from anki_math_forge import config as config_mod
     from anki_math_forge import extract
 

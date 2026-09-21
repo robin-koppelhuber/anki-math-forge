@@ -182,7 +182,7 @@ def test_a_write_is_seen_without_anyone_invalidating_anything(
 ) -> None:
     """The cache key is the files themselves, which is what keeps this a view
     over them (invariant 2). A write from anywhere -- this app, an editor, a
-    subagent running `forge new` in another terminal -- moves an mtime and
+    subagent running `forge cards new` in another terminal -- moves an mtime and
     misses. Nothing is invalidated by hand, so nothing can forget to."""
     assert client.get("/api/counts").json()["pipeline"]["draft"] == 1
 
@@ -2503,6 +2503,6 @@ def test_the_shelf_commands_are_split_by_what_they_do(pdf_source: Config) -> Non
     # What you came for first: the action commands are the work, and the
     # ones that only look are what you check afterwards.
     assert page.index("action commands") < page.index("info commands")
-    assert page.index("forge zotero --tag anki") < page.index("forge check")
+    assert page.index("forge zotero import --tag anki") < page.index("forge check")
     # And each half folds on its own.
     assert page.count('class="runs-half"') == 2

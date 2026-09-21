@@ -65,7 +65,7 @@ parallel** — several `Agent` calls in one message.
    > Transcribe section `<SECTION>` of `<SOURCE>`. Render the crops with
    > `uv run forge crops --project <PROJECT> --section <SECTION> --untranscribed --json`,
    > read each one, and record it with
-   > `uv run forge units --id <id> --tex-auto '<latex>'`.
+   > `uv run forge units set <id> --tex '<latex>'`.
    > Follow your instructions exactly: transcribe what is printed, annotate
    > anything unreadable or suspicious, never guess.
 

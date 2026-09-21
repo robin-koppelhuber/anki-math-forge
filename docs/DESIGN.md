@@ -20,18 +20,18 @@ A small toolbox for turning mathematical source material into good Anki cards, w
 Cards are **files in a git repo**, and **Claude Code is the generator**. The Python contains no LLM API code.
 
 ```
-  a PDF or a tex ────→ extract ──┐
-  a marked-up PDF ───→ zotero ───┤
-  a subject, no book ─→ propose ─┘
-                                 │
-                                 ▼
-                            units.jsonl ──→ [ triage ] ──→ [Claude Code] ──→ cards/*.md
-                              (ledger)       web app        writes stubs        │
-                                                                                ▼
-                                              check ──→ [ review ] ──→ sync ──→ Anki
-                                              (lint)     web app      (AnkiConnect)
-                                                            │
-                                        @claude annotations ┘ ──→ triage → back to draft
+  a PDF or a tex ────→ units extract ──┐
+  a marked-up PDF ───→ zotero import ──┤
+  a subject, no book ─→ propose ───────┘
+                                       │
+                                       ▼
+                                  units.jsonl ──→ [ triage ] ──→ [Claude Code] ──→ cards/*.md
+                                    (ledger)       web app        writes stubs             │
+                                                                                           ▼
+                                                    check ──→ [ review ] ──→ anki push ──→ Anki
+                                                    (lint)     web app         (AnkiConnect)
+                                                                  │
+                                              @claude annotations ┘ ──→ triage → back to draft
 ```
 
 **Three doors in, one pipeline after them.** A frontend owes a stable id, a
@@ -46,16 +46,16 @@ Python verbs:
 
 | Verb | Does |
 |---|---|
-| `extract` | Segments a document into units, attempts a first-pass transcription, updates the ledger. Never writes cards. |
-| `zotero` | The second door: what you marked up in Zotero, as units. Imports rather than segments. |
+| `units extract` | Segments a document into units, attempts a first-pass transcription, updates the ledger. Never writes cards. |
+| `zotero import` | The second door: what you marked up in Zotero, as units. Imports rather than segments. |
 | `sources` | Every work in the repo and which project reads it, across projects. |
-| `project` | Starts a project that reads no document, for a subject rather than a book. |
-| `units --add` | The door a proposing pass writes through, where there is nothing to segment. |
+| `project new` | Starts a project that reads no document, for a subject rather than a book. |
+| `units add` | The door a proposing pass writes through, where there is nothing to segment. |
 | `serve` | The companion app: units triage + card review + annotations. |
 | `units` | CLI view of the ledger, for scripting and for Claude Code. |
 | `check` | Lints card files. Structural only. |
 | `todo` | Lists cards with open `@claude` annotations. |
-| `sync` | Pushes approved cards to Anki, upserting by `uid`. |
+| `anki push` | Pushes approved cards to Anki, upserting by `uid`. |
 | `verify` | Opt-in numeric check (§7). |
 
 ---
@@ -63,7 +63,7 @@ Python verbs:
 ## 3. Principles
 
 1. **Nothing reaches Anki without human approval.**
-2. **Idempotent.** Stable ids everywhere; `extract` and `sync` are both safe to re-run.
+2. **Idempotent.** Stable ids everywhere; `units extract` and `anki push` are both safe to re-run.
 3. **Files are the source of truth.** The web app is a view over them, never a store. Everything it does is also doable by editing a file.
 4. **Checks are mechanical or they don't exist.**
 5. **Editing an approved card un-approves it.** Enforced by a content hash.
@@ -111,7 +111,7 @@ You need to see the actual mathematics to decide whether a unit is worth carding
 - `skipped` — decided against, with a reason; **sticky**, never re-offered
 - `carded` — records the `uid`s produced
 
-Splitting `queued` from `carded` keeps human triage separate from generation. Re-running `extract` preserves all states and only adds genuinely new units, so processing a book is an incrementally resumable queue rather than a one-shot dump.
+Splitting `queued` from `carded` keeps human triage separate from generation. Re-running `units extract` preserves all states and only adds genuinely new units, so processing a book is an incrementally resumable queue rather than a one-shot dump.
 
 ### Stubs
 
@@ -248,7 +248,7 @@ Sample random conforming matrices, evaluate both sides (or compare a closed-form
 
 `## notes` is a scratchpad that **never syncs to Anki**. Lines starting `@claude` are open requests.
 
-- `sync` **refuses** any card with an open annotation, regardless of status. "Not ready" should be mechanical, not remembered.
+- `anki push` **refuses** any card with an open annotation, regardless of status. "Not ready" should be mechanical, not remembered.
 - `todo` lists them for Claude Code.
 - Resolving means deleting the line and making the edit. Git holds the history.
 - The edit changes `content_hash`, so the card drops back to `draft` and re-enters review automatically.
@@ -261,7 +261,7 @@ Not just for fixes: `@claude add a proof sketch`, `@claude split this into two c
 
 AnkiConnect on localhost. Note type created once via `createModel`, versioned in the repo with a version suffix in the name.
 
-`uid` is a real field, not a tag — `sync` queries it for add-vs-update. Tags assigned mechanically from frontmatter plus a `src::` tag from `source`, so a bad batch can be suspended wholesale. `## notes` and `## verify` never reach any field.
+`uid` is a real field, not a tag — `anki push` queries it for add-vs-update. Tags assigned mechanically from frontmatter plus a `src::` tag from `source`, so a bad batch can be suspended wholesale. `## notes` and `## verify` never reach any field.
 
 ---
 
@@ -317,9 +317,9 @@ Config in one TOML: deck name, note type version, character cap, Anki URL, sourc
 
 - **Parser round-trip**: file → model → file byte-stable. Everything depends on this.
 - **Lint fixtures**: deliberately broken cards, each failing on the right check.
-- **Ledger idempotency**: run `extract` twice, assert states preserved, no duplicates.
+- **Ledger idempotency**: run `units extract` twice, assert states preserved, no duplicates.
 - **Transcription gating**: unparseable OCR output flags `transcription: failed` rather than storing garbage.
-- **Annotation gating**: card with an open `@claude` is refused by `sync`.
+- **Annotation gating**: card with an open `@claude` is refused by `anki push`.
 - **Hash gating**: edit an approved card, assert `check` fails and status resets.
 - **App writes**: browser-made annotation is byte-identical to a hand-written one; stale-mtime write is refused.
 - **Sync idempotency**: mocked AnkiConnect, run twice, no second add.
@@ -333,9 +333,9 @@ Config in one TOML: deck name, note type version, character cap, Anki URL, sourc
 | M | Deliverable | Done when |
 |---|---|---|
 | **M0** | Skeleton + card parser + `check` | Hand-written card lints clean; broken fixtures fail correctly |
-| **M1** | `sync` + note type | 3 hand-written cards land in Anki; re-run adds nothing |
+| **M1** | `anki push` + note type | 3 hand-written cards land in Anki; re-run adds nothing |
 | **M2** | App: review view + annotations + `todo` | Full manual loop: write, review, annotate, triage, re-review |
-| **M3** | `extract` + transcription + ledger | Cookbook segmented; units carry readable math |
+| **M3** | `units extract` + transcription + ledger | Cookbook segmented; units carry readable math |
 | **M4** | App: units view | Triage a hundred units in a few minutes |
 | **M5** | `CLAUDE.md`, skill, commands + first batch | ~50 cards queued, stubbed, augmented, reviewed, synced |
 | **M6** | `verify` (opt-in) | Corrupted identities rejected on cards that opt in |

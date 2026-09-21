@@ -70,10 +70,10 @@
       <ul class="filter-list flow">
         <li><a class="{{ 'on' if view == 'review' and status == 'draft' }}"
                href="{{ filter_url('/review', shared, status='draft') }}">draft<b data-count="draft">{{ pipeline.draft }}</b></a></li>
-        <li class="step you" title="approve the card; sync pushes it to Anki">{{ key('approve') }}</li>
+        <li class="step you" title="approve the card; `anki push` sends it to Anki">{{ key('approve') }}</li>
         <li><a class="{{ 'on' if view == 'review' and status == 'approved' }}"
                href="{{ filter_url('/review', shared, status='approved') }}">approved<b data-count="approved">{{ pipeline.approved }}</b></a></li>
-        <li class="step">sync → Anki</li>
+        <li class="step">anki push → Anki</li>
         <li><a class="out {{ 'on' if view == 'review' and status == 'rejected' }}"
                href="{{ filter_url('/review', shared, status='rejected') }}">rejected<b data-count="rejected">{{ pipeline.rejected }}</b></a></li>
       </ul>

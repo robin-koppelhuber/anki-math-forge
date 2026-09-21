@@ -524,7 +524,7 @@ for (const form of document.querySelectorAll("[data-extract]")) {
 
 
 /* Whether a reference is handed to a card writer. No reload: nothing else
-   on the page reads it, unlike `extract`, which moves units. */
+   on the page reads it, unlike `units extract`, which moves units. */
 for (const form of document.querySelectorAll("[data-offer]")) {
   const box = form.querySelector("input");
   box.addEventListener("change", async () => {

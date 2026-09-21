@@ -56,7 +56,7 @@ from ..config import (
     load,
     save_study_order,
 )
-from ..ledger import Ledger, Unit, open_ledgers
+from ..ledger import Ledger, LockTimeout, Unit, open_ledgers
 from ..model import Card, StaleFileError
 from ..sync import (
     in_study_order,
@@ -396,7 +396,7 @@ def create_app(config: Config) -> FastAPI:
                 "empty.html",
                 {
                     "what": "units",
-                    "hint": "run `forge extract`",
+                    "hint": "run `forge units extract`",
                     "view": "units",
                     **key_context(config, "units", EMPTY_VIEW_KEYS),
                     "config": config,
@@ -923,7 +923,7 @@ def create_app(config: Config) -> FastAPI:
         queued = sum(1 for u in units if u.state == "queued")
         # Has this project anything a pass could segment. Counted over the
         # works that are switched on, not over the declared ones: a project
-        # whose only book has extraction off has nothing for `forge extract`
+        # whose only book has extraction off has nothing for `forge units extract`
         # to read, and `/propose` is the pass that can still make it a unit.
         segmentable = any(w.authoritative for w in (spec.sources if spec else ()))
         works_here = [
@@ -1089,7 +1089,7 @@ def create_app(config: Config) -> FastAPI:
 
         Read-only, and config only: it does not ask Zotero what is on the
         shelf, because that is a disk read of somebody else's database and
-        this is a list the config already knows. `forge zotero --list`
+        this is a list the config already knows. `forge zotero`
         answers the other question.
         """
         return {"sources": every_work(reread())}
@@ -1108,7 +1108,7 @@ def create_app(config: Config) -> FastAPI:
         the app does not write those: a second extraction of one document
         is two ledgers of units and two notes per card in Anki, and the
         decision to segment something belongs with the crop settings and
-        the marking scheme that come with it. `forge zotero <citekey>
+        the marking scheme that come with it. `forge zotero import <citekey>
         --project <name>` is that decision, typed where you can see it.
 
         Refused when the project already reads it. Two tables with one key is
@@ -1607,9 +1607,15 @@ def create_app(config: Config) -> FastAPI:
         name = "" if scope == "repo" else resolve_project(config, project)
         whole = pipeline_counts(config, name)
         if counts_scope != "filtered":
-            return {"pipeline": whole, "fsm": whole, "stale": code_is_newer_than_this_process()}
+            return {
+                "pipeline": whole,
+                "fsm": whole,
+                "files": _files_stamp(config, name),
+                "stale": code_is_newer_than_this_process(),
+            }
         return {
             "pipeline": whole,
+            "files": _files_stamp(config, name),
             "stale": code_is_newer_than_this_process(),
             "fsm": scoped_counts(
                 config,
@@ -2109,6 +2115,33 @@ def create_app(config: Config) -> FastAPI:
 # two halves of this app reload on completely different schedules and the
 # mismatch is silent.
 _STARTED_AT = time.time()
+
+
+def _files_stamp(config: Config, _project: str = "") -> str:
+    """When the files behind this page last moved, as one short string.
+
+    The counts poll used to notice a change only through the counts, so a
+    run that moved no number announced nothing: `extract` over a book with
+    nothing new in it, an import that found no marks, a card edited in an
+    editor beside the browser. The first thing you learned was your next
+    keystroke being refused, which is the app's own stale guard doing its
+    job several seconds too late to be useful.
+
+    Stat only, and over every ledger and every card rather than the ones
+    this project owns. Narrowing it would mean reading each card to find
+    out whose it is, which is a parse of every file on a four second tick
+    to buy a sharper answer to a question whose wrong answers are cheap: a
+    hint offered for somebody else's project costs a glance, and one not
+    offered costs the refused keystroke this exists to prevent.
+    """
+    latest = 0
+    for name in _ledgers(config):
+        path = config.units_path(name)
+        if path.exists():
+            latest = max(latest, path.stat().st_mtime_ns)
+    for card in config.cards_dir.rglob("*.md"):
+        latest = max(latest, card.stat().st_mtime_ns)
+    return str(latest)
 
 
 def code_is_newer_than_this_process() -> bool:
@@ -3348,7 +3381,7 @@ def project_origin(config: Config, project: str) -> str:
     # does not change when you stop segmenting one: a Zotero item is still
     # a Zotero item, and reading `extract` here reported a project with a
     # full ledger as "nothing declared", took away the import offer and
-    # offered `forge extract` in its place.
+    # offered `forge units extract` in its place.
     found = {work_origin(w) for w in spec.sources}
     found.discard("")
     if len(found) == 1:
@@ -4603,7 +4636,7 @@ def resolve_project(config: Config, project: str) -> str:
 # It stays a view over files (invariant 2) because the key is the files
 # themselves. Stat-ing all 109 cards costs **4.4 ms** against 96 ms to parse
 # them, and any write -- from this app, from an editor, from a subagent
-# running `forge new` in another terminal -- moves an mtime and misses the
+# running `forge cards new` in another terminal -- moves an mtime and misses the
 # cache. Nothing is invalidated by hand, so nothing can forget to.
 #
 # Size joins mtime in the signature because mtime resolution is a filesystem
@@ -5077,14 +5110,30 @@ def _mutate_ledger(
             {"error": f"{path.name} changed on disk; reload and retry", "stale": True},
             status_code=409,
         )
-    with Ledger.edit(path) as ledger:
-        # Captured inside the lock, before the action, so undo restores what
-        # was actually there rather than what the browser last happened to see.
-        before = ledger.snapshot(unit_id) if unit_id else {}
-        try:
-            unit = action(ledger)
-        except (KeyError, ValueError) as exc:
-            raise HTTPException(400, str(exc)) from exc
+    try:
+        with Ledger.edit(path) as ledger:
+            # Captured inside the lock, before the action, so undo restores
+            # what was actually there rather than what the browser last
+            # happened to see.
+            before = ledger.snapshot(unit_id) if unit_id else {}
+            try:
+                unit = action(ledger)
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(400, str(exc)) from exc
+    except LockTimeout:
+        # The same answer as a mtime that moved, because it is the same
+        # situation one moment earlier: somebody else is in the file. This
+        # went out as a 500, which is the one failure the stale path does
+        # not already handle gracefully, and the browser showed `error 500`
+        # where every other flavour of it says reload and retry.
+        return JSONResponse(
+            {
+                "error": f"{path.name} is being written by something else;"
+                " reload and retry",
+                "stale": True,
+            },
+            status_code=409,
+        )
     return {
         "unit": _unit_payload(unit, config),
         "mtime": _mtime(path),

@@ -31,7 +31,7 @@ the urgent ones queue behind the speculative ones.
    imported:
 
    ```
-   uv run forge feedback
+   uv run forge anki pull
    ```
 
 2. Read the list. `todo` filters on `--audience`, `--kind` and `--status`,
@@ -54,7 +54,7 @@ the urgent ones queue behind the speculative ones.
      fix it, or explain why it is right.
    - *"add a proof sketch"* — see the **card-writing** skill for when a proof
      earns its place.
-   - *"split this into two cards"* — `forge new` for the second, and
+   - *"split this into two cards"* — `forge cards new` for the second, and
      add both uids to the unit's `uids`.
    - *"this duplicates 4b2e1c"* — compare, keep the better one, delete the
      other file. Say which you kept and why.
@@ -69,6 +69,14 @@ the urgent ones queue behind the speculative ones.
    resolved: <what was asked> — <what you did about it>
    ```
 
+   **Replace the `@claude` line, and nothing else.** A card that has been
+   round twice carries two `resolved:` lines, oldest first. They are a
+   history of what was asked of this card and what came back, and a second
+   round folded into the first loses that there were two. Rewrite an earlier
+   line only when what it claims has stopped being true, which happens when a
+   later round reverts it: then say so in the new line rather than quietly
+   correcting the old one.
+
    `resolved:` is not an address, so the line is a record rather than work and
    does not hold the card out of sync. Keep the question in it: "fixed" is the
    thing nobody can act on six weeks later, and the person reading this will
@@ -76,6 +84,22 @@ the urgent ones queue behind the speculative ones.
    in the card's own terms, and say so plainly when the answer is that nothing
    needed changing: *"the sign was right; the condition it needs was missing
    and is now in `## conditions`"*, not *"checked"*.
+
+   **One line, and read it back as a list entry before you keep it.** These
+   stack up in `todo` and in the review rail, where each is one row among
+   many and the reader is scanning for which point was taken. Two clauses
+   carry that: what was asked, what changed. Around twenty words.
+
+   The argument that got you there is not part of it. A counterexample, a
+   numeric check, a page you chased down: those belong in the card, in
+   `## prose` or `## conditions` where a reviewer meets them, or nowhere. A
+   `resolved:` line that has to be unfolded to be read has taken the place of
+   the list it sits in.
+
+   | | |
+   |---|---|
+   | write | `resolved: asked what $H_\theta$ is — the Hessian in $\theta$, now glossed in ## prose` |
+   | not | `resolved: asked what $H_\theta$ is — the Hessian in $\theta$, the matrix of second derivatives, which the book itself uses unglossed where it first appears and again in the Laplace approximation chapter, so ## prose now names it and draws out that the Fisher information is therefore the average curvature of the negative log-likelihood` |
 
    There is no notes archive to append to, and none to create. Deleting a
    note used to be unrecoverable, which is the whole reason one existed;
@@ -97,11 +121,11 @@ the urgent ones queue behind the speculative ones.
 For a **unit** annotation, act on it and then clear it:
 
 ```
-uv run forge units --id <unit-id> --resolve-notes
-uv run forge units --id <unit-id> --set-state queued     # or skipped --reason ...
+uv run forge units clear-notes <unit-id>
+uv run forge units set <unit-id> --state queued   # or --state skipped --reason ...
 ```
 
-`--resolve-notes` clears `@claude` only, which is its default. `--audience all`
+`clear-notes` clears `@claude` only, which is its default. `--audience all`
 also deletes the `@me` decision parked on the same unit, so reach for it only
 when that is what you mean.
 
@@ -114,12 +138,13 @@ it open and say so — guessing is worse than asking.
 ## Addressed annotations
 
 `@claude ...` is a request for you: act on it, then delete the line (on a
-card) or clear it with `--resolve-notes --audience claude` (on a unit).
+card) or clear it with `units clear-notes <id> --audience claude` (on a
+unit).
 
 `@me ...` is a decision only the human can make — a question parked where it
 will be found again. **Report those; do not act on them and do not clear
 them.** `forge todo --json` carries an `audience` field for exactly this
 split, and `forge todo` marks them `(me)`.
 
-Either kind blocks `sync`, because either kind means the thing is not
+Either kind blocks `anki push`, because either kind means the thing is not
 finished.

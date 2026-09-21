@@ -305,7 +305,7 @@ class ProjectConfig:
         return self.sources[0] if len(self.sources) == 1 else None
 
     def segments(self) -> SourceConfig | None:
-        """The work `forge extract` would read now, or None.
+        """The work `forge units extract` would read now, or None.
 
         The other half of what `source` used to answer, and the half that
         is about permission: a work switched off is not handed to a pass

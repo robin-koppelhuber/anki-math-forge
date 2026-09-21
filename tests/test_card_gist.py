@@ -112,7 +112,7 @@ def test_the_review_view_shows_it(config: Config) -> None:
 def test_the_stub_carries_it_rather_than_being_patched_afterwards(
     config: Config, units: Ledger
 ) -> None:
-    """`forge new` takes it, because whoever runs that has just decided what
+    """`forge cards new` takes it, because whoever runs that has just decided what
     the card is and every later pass reads it back off the LaTeX."""
     import argparse
 

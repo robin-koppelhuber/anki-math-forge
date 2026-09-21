@@ -10,9 +10,9 @@ Tests cite these by number.
 
 ### 1. Nothing reaches Anki without human approval
 
-`sync` only touches cards marked `status: approved`.
+`anki push` only touches cards marked `status: approved`.
 
-Traffic is one-way, with one exception. `feedback` pulls review comments and
+Traffic is one-way, with one exception. `anki pull` takes review comments and
 flags out of Anki, writes them into the card's `## notes` as annotations, and
 erases them from Anki in the same pass. An imported note is addressed like any
 other, `@claude` unless the comment or the flag's meaning opens `@me`. The erase is not tidiness: without
@@ -27,9 +27,9 @@ file.
 
 ### 3. Extraction produces units, never cards
 
-If `extract` is tempted to write a `front`, it has overstepped. It produces
-geometry and no image files: each unit carries `locator.bbox`, and crops render
-from the source document on demand.
+If `units extract` is tempted to write a `front`, it has overstepped. It
+produces geometry and no image files: each unit carries `locator.bbox`, and
+crops render from the source document on demand.
 
 **Every unit arrives `new`, whichever door it came in by.** Importing what
 someone marked in Zotero is not triage. Marking says "this mattered while I was
@@ -185,8 +185,8 @@ into one card (`unit` accepts a list, or a comma-separated string), which is
 what a multi-line display cut into pieces needs.
 
 `forge context <unit>` lists every unit on the page in reading order, so the
-pieces are visible and nameable. `new` takes `--unit` repeatedly and marks each
-one carded.
+pieces are visible and nameable. `cards new` takes `--unit` repeatedly and
+marks each one carded.
 
 ### `identity` states a fact; `intuition` explains one
 
@@ -209,8 +209,9 @@ you can predict. A tag outranks a type, because a tag names one card's
 subject and a type names a whole class of card.
 
 Re-tagging a card moves it between decks and does not un-approve it: the
-content hash covers what a reviewer read, and filing is not read. `sync`
-reports what is left behind under the old name, and `--move-decks` moves it.
+content hash covers what a reviewer read, and filing is not read.
+`anki push` reports what is left behind under the old name, and
+`--move-decks` moves it.
 
 ### Study order
 
@@ -223,8 +224,9 @@ and `derive::` tags. An unrecognised value is a `check` error, because a typo
 would silently become its own tag and split the deck.
 
 `requires` is a list of uids that must be introduced before this card, and it
-decides the order `sync` adds new cards in. Only for a real dependency: this
-card's proof or notation rests on that one. It is outside `content_hash`.
+decides the order `anki push` adds new cards in. Only for a real dependency:
+this card's proof or notation rests on that one. It is outside
+`content_hash`.
 
 Within the graph, order is `frequency`, then `derivation`, then the order the
 source prints it in. Which of those outranks which is a setting,

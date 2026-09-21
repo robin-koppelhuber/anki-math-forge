@@ -44,11 +44,12 @@ deck = "Mathe"                    # the default; a source may name its own,
                                   # and a Zotero import defaults to
                                   # "Zotero::<title>" instead of this
 note_type_name = "Math Card"      # -> "Math Card v1". Change the stem and
-note_type_version = 1             # `sync` tells you to rename it in Anki
-                                  # rather than orphan your review history.
+note_type_version = 1             # `anki push` tells you to rename it in
+                                  # Anki rather than orphan your review
+                                  # history.
 tag_prefix = "forge"
 
-# What you meant by each flag, so `feedback` can turn one keystroke during
+# What you meant by each flag, so `anki pull` can turn one keystroke during
 # review into a note. Anki numbers its flags 1-7; a flag with no entry here is
 # reported rather than guessed at. Open a meaning with `@me` to have that
 # colour come back as a decision for you instead of work for Claude.
@@ -80,7 +81,7 @@ graph = true             # the dependency canvas at `/graph`
 # graph:  add-card = '+', every-card = 'f', study-order = 'o', ...
 
 # Reading a marked-up PDF out of Zotero. Needs Zotero running with its local
-# API enabled (Settings > Advanced), the way `sync` needs AnkiConnect.
+# API enabled (Settings > Advanced), the way `anki push` needs AnkiConnect.
 [zotero]
 data_dir = "~/Zotero"
 # Which marks become units, by the same `"kind/colour"` name the meanings

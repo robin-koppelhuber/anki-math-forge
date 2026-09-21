@@ -125,7 +125,7 @@ def lay_out(repo: Path) -> None:
 
 
 def _extract(repo: Path) -> None:
-    """`forge extract`, in-process. The ledger has to be there before the
+    """`forge units extract`, in-process. The ledger has to be there before the
     first request: the units view renders the empty page without one."""
     import sys
 

@@ -247,7 +247,7 @@
           only way back from a skip.</dd>
       <dt><b>{{ key('accept-suggestion') }}</b> accept &middot; <b>{{ key('dismiss-suggestion') }}</b> dismiss</dt>
       <dd>Act on a suggestion, or throw it away. Suggestions come from
-          <code>forge classify</code> or <code>/classify</code>, and both only
+          <code>forge units classify</code> or <code>/classify</code>, and both only
           ever <em>propose</em>. Pressing <b>{{ key('queue') }}</b> or <b>{{ key('skip') }}</b> yourself also
           clears the suggestion, since you overruled it.</dd>
       <dt><b>{{ key('note-claude') }}</b> / <b>{{ key('note-me') }}</b> the brief, and what you parked</dt>
@@ -373,7 +373,7 @@
     <dl>
       <dt><b>{{ key('approve') }}</b> approve</dt>
       <dd>This card is right. Stamps <code>content_hash</code>, and
-          <code>sync</code> will push it to Anki. <b>Editing it afterwards
+          <code>anki push</code> will send it to Anki. <b>Editing it afterwards
           un-approves it</b>: the hash stops matching and it returns
           here.</dd>
       <dt><b>{{ key('back-to-draft') }}</b> back to draft</dt>
@@ -407,7 +407,7 @@
           sync <em>whatever</em> its status, so a note alone holds it back.
           Rejecting to clear it from the draft list leaves a card Anki is
           still showing you while the repo says never sync it, and
-          <code>sync</code> never deletes. Use <b>no notes</b> in the filter
+          <code>anki push</code> never deletes. Use <b>no notes</b> in the filter
           rail to review only what is actually waiting on you.</dd>
       <dt><b>{{ key('resolve-note') }}</b> resolve</dt>
       <dd>Resolve the card's first annotation, or click <b>resolve</b> on any
@@ -425,7 +425,7 @@
           so resolving does <em>not</em> send an approved card back to
           draft. <b>{{ key('undo') }}</b> puts a resolved note back, which
           matters most for one you did not write:
-          <code>forge feedback</code> turns a comment or flag from Anki into
+          <code>forge anki pull</code> turns a comment or flag from Anki into
           an annotation and erases it there as it takes it, so the line here
           is the only copy of it. To fix a typo, or say a request again that
           came back misunderstood, click <b>edit</b> beside it: the line is

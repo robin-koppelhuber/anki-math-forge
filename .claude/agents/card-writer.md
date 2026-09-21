@@ -72,8 +72,8 @@ rather than deciding (see **What not to card**).
    back that was.
 
    Then **say so in your report**: a unit whose hypotheses are two pages back
-   wants that recorded on the unit (`forge units --id <id> --context-pages 3`,
-   or `--context-pages chapter`), so the next pass gets them without knowing
+   wants that recorded on the unit (`forge units set <id> --pages 3`, or
+   `--pages chapter`), so the next pass gets them without knowing
    to ask. Widening your own call solves it for you; recording it solves it
    for everyone after you.
 
@@ -81,9 +81,9 @@ rather than deciding (see **What not to card**).
    annotation has geometry and no text: nothing to transcribe, and the figure
    is the point. Write `![what it shows](unit)` in whichever section the
    figure belongs to -- see **Pictures** in the card-writing skill, which is
-   where that judgement is set out. No file is produced: `sync` renders the
-   crop from the source document, so the unit only has to exist and have a
-   box.
+   where that judgement is set out. No file is produced: `anki push` renders
+   the crop from the source document, so the unit only has to exist and
+   have a box.
 
    **When the page is not enough, read the book's front matter**:
 
@@ -103,7 +103,7 @@ rather than deciding (see **What not to card**).
    whole:
 
    ```
-   uv run --no-sync forge new --unit <a> --unit <b> --unit <c> \
+   uv run --no-sync forge cards new --unit <a> --unit <b> --unit <c> \
      --front '...' --back '...' --tag <t>
    ```
 
@@ -165,11 +165,11 @@ rather than deciding (see **What not to card**).
    occasionally worth its own card. See the skill, *A condition must be worth
    stating*.
 
-6. Pass `--gist` to `forge new`: a few words naming the card, at most about
-   sixty characters. You have just decided what this card is, so you know
-   better than any later pass reading it back off the LaTeX. It is a caption
-   for a list, a dependency link or a graph node, `/augment` refines it, and
-   it never reaches Anki. Write one on every card.
+6. Pass `--gist` to `forge cards new`: a few words naming the card, at most
+   about sixty characters. You have just decided what this card is, so you
+   know better than any later pass reading it back off the LaTeX. It is a
+   caption for a list, a dependency link or a graph node, `/augment` refines
+   it, and it never reaches Anki. Write one on every card.
 
 7. **Do not write `augmented`.** That flag is the augmentation pass's
    receipt, and a stub that claims it is a card `/augment` will never be
@@ -177,7 +177,7 @@ rather than deciding (see **What not to card**).
    happened is not yours to say.
 
 8. Set `frequency` and `derivation` in the frontmatter after writing the card
-   (the `new` verb does not take those two). Both are optional; leave them off
+   (`cards new` does not take those two). Both are optional; leave them off
    rather than guessing. `definitional` is for facts true by definition, where
    "how hard to derive" is the wrong question.
 
@@ -241,8 +241,8 @@ bulk. **Do not card:**
 For each, **propose the skip and say why**:
 
 ```
-uv run --no-sync forge units --id <unit-id>   --suggest skipped not-cardable --detail '<why, in one sentence>' --by card-writer
-uv run --no-sync forge units --id <unit-id> --annotate '@me not carded: <why>'
+uv run --no-sync forge units suggest <unit-id> skipped not-cardable --detail '<why, in one sentence>' --by card-writer
+uv run --no-sync forge units note <unit-id> '@me not carded: <why>'
 ```
 
 The suggestion is what the human can act on: it shows up under the
@@ -284,8 +284,8 @@ immediately before writing it; do not act on a copy you read minutes ago.
 - `--no-sync` on every `uv run`: the dev server holds the executable.
 - Work only `status: draft`. You approve nothing; the human does that.
 - If a unit's `@claude` note tells you how to card it, do what it says, then
-  clear only your own side: `--resolve-notes --audience claude`. Never clear
-  an `@me` note.
+  clear only your own side: `units clear-notes <id> --audience claude`.
+  Never clear an `@me` note.
 - If a note is ambiguous, leave it open, skip the unit, say why in your report.
 
 ## Reporting back

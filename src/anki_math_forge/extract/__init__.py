@@ -113,6 +113,21 @@ def run(
                 f"{untranscribed} units carry a crop but no transcription yet -- "
                 "run `/transcribe` before triaging, or triage from the crops."
             )
+    elif source.zotero_key and not (source.tex or source.pdf):
+        # A marked-up item comes in by the other door, and "set `files` or
+        # `tex`" is the wrong advice for it: what it wants is the import,
+        # not a path. Named here rather than left to the generic message,
+        # because this is the shape `forge zotero` itself writes.
+        #
+        # Only where it declares no file. A Zotero work that also names a
+        # PDF has one, and a missing one is a missing file: saying "import
+        # it" there would send you to Zotero for a path problem.
+        raise ConfigError(
+            f"project {project_name!r} reads a Zotero item"
+            f" ({source.zotero_key}), which is imported rather than"
+            " segmented. Run"
+            f" `forge zotero {source.zotero_key} --project {project_name}`"
+        )
     else:
         configured = source.tex or source.pdf
         raise ConfigError(
@@ -278,7 +293,7 @@ def cache_source_text(config: Config, project_name: str) -> int:
         return 0
     path = source_text_path(config, project_name)
     header = (
-        f"<!-- {project.title}: text layer, cached by `forge extract`.\n"
+        f"<!-- {project.title}: text layer, cached by `forge units extract`.\n"
         "     Generated; do not edit. The mathematics here is mangled -- it is\n"
         "     context for writing cards, never a transcription. The crop is\n"
         "     the authority for what an equation says. -->\n\n"

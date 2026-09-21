@@ -502,7 +502,7 @@ def test_a_dry_run_pushes_no_template(config: Config, card_path: Path) -> None:
 
 
 def zotero_source(repo: Path, key: str = "T7QDISXB", title: str = "A  Paper") -> Config:
-    """A source with a Zotero key on it, which is what `forge zotero` writes."""
+    """A source with a Zotero key on it, which is what `forge zotero import` writes."""
     folder = repo / "projects" / "paper"
     folder.mkdir(parents=True, exist_ok=True)
     folder.joinpath("project.toml").write_text(

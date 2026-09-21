@@ -349,7 +349,7 @@ bindKeys({
    delete would leave the card exactly as stuck as before.
 
    Which is why it goes on the undo stack. A note imported from Anki has no
-   second copy anywhere: `feedback` erases the comment as it takes it, so the
+   second copy anywhere: `anki pull` erases the comment as it takes it, so the
    line in `## notes` is the only one there is, and this was the one action in
    the app that destroyed something outright. The server sends the line back
    under `before`, and `restore` puts it where any annotation goes. */

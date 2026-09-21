@@ -248,7 +248,7 @@ OFFERS: tuple[Offer, ...] = (
         when=lambda at: extracted(at) and at.origin == "zotero" and bool(at.zotero_key),
         scope="work",
         label="re-read the marks on this work",
-        run=lambda at: f"uv run forge zotero {quoted(at.zotero_key)}{at.src}".rstrip(),
+        run=lambda at: f"uv run forge zotero import {quoted(at.zotero_key)}{at.src}".rstrip(),
         why="an item you marked up is imported rather than segmented: this"
         " re-reads the annotations and turns the ones your scheme names into"
         " units. Re-running is safe, and a unit already in the ledger keeps"
@@ -298,7 +298,7 @@ OFFERS: tuple[Offer, ...] = (
         # segments the files.
         when=lambda at: at.origin in ("zotero", "mixed"),
         label="re-read this project's items",
-        run=lambda at: f"uv run forge zotero{at.src}",
+        run=lambda at: f"uv run forge zotero import{at.src}",
         why="its works came from Zotero, which imports rather than segments."
         " With no item named, --project re-reads the ones this project"
         " already declares. Run it with Zotero open.",
@@ -307,7 +307,7 @@ OFFERS: tuple[Offer, ...] = (
         where=("work", "project"),
         when=lambda at: extracted(at) and at.origin != "zotero",
         label="segment this project into units",
-        run=lambda at: f"uv run forge extract {quoted(at.project)}",
+        run=lambda at: f"uv run forge units extract {quoted(at.project)}",
         why="geometry only, and it never reads the maths. It takes a project"
         " rather than one work: every document the project declares as files"
         " is segmented, and anything that came from Zotero is left alone."
@@ -416,7 +416,7 @@ OFFERS: tuple[Offer, ...] = (
         where=("review", "project"),
         reads=True,
         label="what would reach Anki, from this project",
-        run=lambda at: f"uv run forge sync{at.src} --dry-run",
+        run=lambda at: f"uv run forge anki{at.src}",
         why="a rehearsal: approved cards only, nothing written, and it names"
         " every card it would skip and why. The lint behind it is repo-wide"
         " either way, because a duplicate uid is.",
@@ -436,7 +436,7 @@ OFFERS: tuple[Offer, ...] = (
         scope="repo",
         reads=True,
         label="what is on the Zotero shelf",
-        run="uv run forge zotero --list",
+        run="uv run forge zotero",
         why="and which of them are already here. Reads Zotero and writes"
         " nothing.",
     ),
@@ -454,7 +454,7 @@ OFFERS: tuple[Offer, ...] = (
         scope="repo",
         reads=True,
         label="what would reach Anki, from everything",
-        run="uv run forge sync --dry-run",
+        run="uv run forge anki",
         why="the same rehearsal over every project in the repo: approved"
         " cards only, nothing written, and it names every card it would"
         " skip.",
@@ -464,7 +464,7 @@ OFFERS: tuple[Offer, ...] = (
         when=lambda at: extracted(at) and at.origin in ("", "zotero", "mixed"),
         scope="repo",
         label="import every Zotero item you tagged",
-        run="uv run forge zotero --tag anki",
+        run="uv run forge zotero import --tag anki",
         why="each one into a project of its own where it is new, and a"
         " re-read where it is not: a unit already in the ledger keeps its id"
         " and its state. Run it with Zotero open.",
@@ -473,7 +473,7 @@ OFFERS: tuple[Offer, ...] = (
         where=("shelf",),
         scope="repo",
         label="import one item",
-        run="uv run forge zotero <citekey>",
+        run="uv run forge zotero import <citekey>",
         why="add --project to file it under a project that already exists,"
         " rather than making one named after the cite key.",
     ),
@@ -486,7 +486,7 @@ OFFERS: tuple[Offer, ...] = (
         where=("shelf", "review"),
         scope="repo",
         label="pull what you wrote in Anki",
-        run="uv run forge feedback",
+        run="uv run forge anki pull",
         why="a comment or a flag you left while reviewing becomes an @claude"
         " note on the card, and is erased in Anki as it is taken: after this"
         " the line here is the only copy. Repo-wide, like the sync it"

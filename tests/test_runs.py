@@ -51,7 +51,7 @@ def test_a_command_on_two_screens_is_one_object() -> None:
     shared = [o for o in runs.OFFERS if len(o.where) > 1]
 
     assert len(shared) >= 6, "most of these belong in more than one place"
-    everywhere = next(o for o in runs.OFFERS if o.run == "uv run forge sync --dry-run")
+    everywhere = next(o for o in runs.OFFERS if o.run == "uv run forge anki")
     assert set(everywhere.where) == {"shelf", "review", "project"}
 
 
@@ -96,7 +96,7 @@ def test_a_zotero_work_is_never_offered_a_crop_pass() -> None:
 
     assert not any("/transcribe" in run for run in out)
     assert not any("/classify" in run for run in out)
-    assert not any("forge extract" in run for run in out)
+    assert not any("forge units extract" in run for run in out)
     assert any("forge zotero" in run for run in out)
 
 
@@ -106,7 +106,7 @@ def test_a_work_with_nothing_segmented_out_of_it_yet_is_offered_the_segmenter() 
     fresh = Ambient(project="book", origin="pdf", counts={})
     out = commands("work", fresh)
 
-    assert any("forge extract" in run for run in out)
+    assert any("forge units extract" in run for run in out)
     assert not any("/transcribe" in run for run in out), "nothing to read yet"
 
     segmented = commands(
@@ -120,10 +120,10 @@ def test_the_repo_wide_form_comes_last() -> None:
     command about that project is the one you want and the repo-wide form is
     the one you reach for afterwards."""
     out = commands("review", Ambient(project="book", counts={"approved": 2}))
-    mine = out.index('uv run forge sync --project "book" --dry-run')
+    mine = out.index('uv run forge anki --project "book"')
 
-    assert mine < out.index("uv run forge sync --dry-run")
-    assert out.index("uv run forge feedback") > mine
+    assert mine < out.index("uv run forge anki")
+    assert out.index("uv run forge anki pull") > mine
 
 
 def test_a_subject_project_is_proposed_into_rather_than_segmented() -> None:
@@ -132,7 +132,7 @@ def test_a_subject_project_is_proposed_into_rather_than_segmented() -> None:
     out = commands("project", Ambient(project="cpp", has_document=False))
 
     assert any("/propose" in run for run in out)
-    assert not any("forge extract" in run for run in out)
+    assert not any("forge units extract" in run for run in out)
     assert not any("forge audit" in run for run in out), "nothing to index"
 
 
@@ -142,8 +142,8 @@ def test_a_project_of_both_kinds_gets_both_doors() -> None:
     first work came through leaves the other one with no way to re-read it."""
     out = commands("project", Ambient(project="mix", origin="mixed"))
 
-    assert any(run.startswith("uv run forge zotero --project") for run in out)
-    assert any("forge extract" in run for run in out)
+    assert any(run.startswith("uv run forge zotero import --project") for run in out)
+    assert any("forge units extract" in run for run in out)
 
 
 def test_an_offer_reads_ambient_state_and_not_the_screen() -> None:

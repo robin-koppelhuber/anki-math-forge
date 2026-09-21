@@ -287,7 +287,7 @@ def test_what_to_run_follows_what_is_selected(page, live) -> None:  # type: igno
     which ask you are working through."""
     setup(page, live)
     runs = page.locator("#setup-runs")
-    assert "forge extract" in runs.inner_text()
+    assert "forge units extract" in runs.inner_text()
 
     page.click('#setup-panel [data-pane="topic:conjugate-priors"]')
     assert "/propose" in runs.inner_text()

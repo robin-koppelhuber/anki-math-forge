@@ -37,6 +37,13 @@ def main(argv: list[str] | None = None) -> int:
     _force_utf8()
     parser = build_parser()
     args = parser.parse_args(argv)
+    # An old spelling still runs, and says so once. On stderr, so it cannot
+    # corrupt a `--json` read, and before the work rather than after it: the
+    # line is about what you typed, and a reader who has already seen the
+    # output has stopped looking.
+    renamed = getattr(args, "renamed", "")
+    if renamed:
+        print(f"note: `forge {args.verb}` is now `forge {renamed}`", file=sys.stderr)
     try:
         config = load(Path(args.root) if args.root else None)
     except ConfigError as exc:
@@ -81,32 +88,40 @@ def _window(value: str) -> int | str:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="forge", description=__doc__.splitlines()[0])
-    parser.add_argument("--root", default=None, help="repo root (default: nearest forge.toml)")
-    subs = parser.add_subparsers(dest="verb", required=True)
+#: What a subcommand does to your files, declared rather than described.
+#:
+#:   reads  nothing you would miss is recorded. One word.
+#:   repo   writes files in this repo, which git can give back. Two words.
+#:   anki   writes where git cannot reach: your collection, or a file you
+#:          named. Two words, and the first of them is `anki`.
+#:
+#: `forge --help` groups by this, `app/runs.py` derives `Offer.reads` from
+#: it rather than restating it, and `test_verbs.py` refuses a `repo` or
+#: `anki` parser that can be reached in one word. A rule nothing checks
+#: closes again in three commits.
+READS, REPO, ANKI = "reads", "repo", "anki"
 
-    p = subs.add_parser("extract", help="segment a source into units; never writes cards")
+#: `serve` is the exception the rule is allowed: it records nothing itself,
+#: and what it opens is an app that writes plenty. `crops` is not an
+#: exception, it is a read: the PNGs it writes are regenerable bytes under
+#: a scratch directory, not recorded state.
+ONE_WORD_WRITERS = ("serve",)
+
+
+def _fill_extract(p: argparse.ArgumentParser) -> None:
     p.add_argument("project", nargs="?", default=None)
     p.add_argument("--pages", default=None, help="page range, e.g. 10-40 (pdf sources)")
     p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_extract)
 
-    p = subs.add_parser(
-        "zotero",
-        help="what you marked up in Zotero, as units",
-    )
+
+def _fill_zotero_import(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "item",
         nargs="?",
         default=None,
         help="a cite key or a Zotero item key; omit to take everything tagged",
     )
-    p.add_argument(
-        "--tag",
-        default=None,
-        help="import every item carrying this Zotero tag",
-    )
+    p.add_argument("--tag", default=None, help="import every item carrying this Zotero tag")
     p.add_argument(
         "--project",
         default=None,
@@ -119,47 +134,22 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="say what would be imported and write nothing",
-    )
-    p.add_argument(
-        "--list",
-        action="store_true",
-        dest="list_items",
-        help=(
-            "what is in Zotero and what is already a source here. Reads "
-            "nothing else and writes nothing: it is the answer to 'which of "
-            "these have I not imported yet'"
-        ),
+        "--dry-run", action="store_true", help="say what would be imported and write nothing"
     )
     p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_zotero)
 
-    p = subs.add_parser(
-        "sources",
-        help="every work in the repo, whichever project reads it",
-    )
-    p.add_argument("--project", default=None, help="only the works this one reads")
-    p.add_argument(
-        "--remove",
-        default=None,
-        metavar="KEY",
-        help="take this work out of --project: its table and the units it owns",
-    )
+
+def _fill_sources_remove(p: argparse.ArgumentParser) -> None:
+    p.add_argument("remove", metavar="KEY", help="the work to take out")
+    p.add_argument("--project", default=None, help="the project to take it out of")
     p.add_argument(
         "--force", action="store_true", help="remove it even though cards stand on it"
     )
-    p.add_argument(
-        "--dry-run", action="store_true", help="with --remove, say what would go"
-    )
+    p.add_argument("--dry-run", action="store_true", help="say what would go")
     p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_sources)
 
-    p = subs.add_parser(
-        "export",
-        help="a deck as an .apkg, for sharing or for keeping",
-    )
+
+def _fill_export(p: argparse.ArgumentParser) -> None:
     p.add_argument("project", nargs="?", default=None, help="whose deck to export")
     p.add_argument("--deck", default=None, help="a deck name, instead of a source")
     p.add_argument("--out", default=None, metavar="PATH", help="where to write it")
@@ -172,12 +162,9 @@ def build_parser() -> argparse.ArgumentParser:
             "more about you than about the cards"
         ),
     )
-    p.set_defaults(run=cmd_export)
 
-    p = subs.add_parser(
-        "project",
-        help="start a project with no document, for a subject rather than a book",
-    )
+
+def _fill_project_new(p: argparse.ArgumentParser) -> None:
     p.add_argument("name", help="the folder under projects/, and the id units carry")
     p.add_argument("--title", default="", help="what it is called (default: the name)")
     p.add_argument("--deck", default="", help="which Anki deck its cards land in")
@@ -186,29 +173,17 @@ def build_parser() -> argparse.ArgumentParser:
         default="",
         help="what a card's `source` line says when nothing more specific does",
     )
-    p.add_argument(
-        "--delete",
-        action="store_true",
-        help="remove it instead: its folder, its cards, and its table in forge.toml",
-    )
-    p.add_argument(
-        "--force",
-        action="store_true",
-        help="delete it even though it holds cards",
-    )
-    p.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="with --delete, say what would go and take nothing",
-    )
-    p.set_defaults(run=cmd_project)
 
-    p = subs.add_parser(
-        "topic",
-        help="record what you want cards for, in a project that reads no book",
-    )
-    p.add_argument("--project", required=True)
+
+def _fill_project_delete(p: argparse.ArgumentParser) -> None:
+    p.add_argument("name", help="the project to remove")
+    p.add_argument("--force", action="store_true", help="delete it even though it holds cards")
+    p.add_argument("--dry-run", action="store_true", help="say what would go and take nothing")
+
+
+def _fill_topic_add(p: argparse.ArgumentParser) -> None:
     p.add_argument("name", help="the subject, in your own words")
+    p.add_argument("--project", required=True)
     p.add_argument(
         "--ask",
         default="",
@@ -218,215 +193,9 @@ def build_parser() -> argparse.ArgumentParser:
             "says what you wanted from the subject"
         ),
     )
-    p.set_defaults(run=cmd_topic)
 
-    p = subs.add_parser("serve", help="the companion app: units triage + card review")
-    p.add_argument("--host", default=None)
-    p.add_argument("--port", type=int, default=None)
-    p.set_defaults(run=cmd_serve)
 
-    p = subs.add_parser(
-        "context",
-        help="the page an equation was printed on, for writing its card",
-    )
-    p.add_argument("unit", help="unit id, shaped <source>:<section>:<equation>")
-    p.add_argument(
-        "--pages",
-        type=_window,
-        default=None,
-        metavar="N",
-        help=(
-            "pages either side to print, or `chapter` for the whole chapter "
-            "this unit is in. Defaults to whatever the unit, its source or the "
-            "repo asks for, so a unit marked during triage as needing more "
-            "gets it without the caller knowing"
-        ),
-    )
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_context)
-
-    p = subs.add_parser("units", help="view or re-state the ledger")
-    p.add_argument("--project", default=None)
-    p.add_argument("--state", default="all", help=f"one of: {', '.join(ledger_mod.STATES)}, all")
-    p.add_argument("--section", default=None)
-    p.add_argument("--limit", type=int, default=0)
-    p.add_argument("--json", action="store_true")
-    p.add_argument("--id", default=None, help="unit to change (with --set-state / --annotate)")
-    p.add_argument("--set-state", default=None, choices=ledger_mod.STATES)
-    p.add_argument("--reason", default="", help="why it was skipped")
-    p.add_argument("--annotate", default=None, metavar="TEXT")
-    p.add_argument(
-        "--tex-auto",
-        default=None,
-        metavar="TEX",
-        help="record a transcription for --id; gated through KaTeX before it is stored",
-    )
-    p.add_argument(
-        "--context-pages",
-        type=_window,
-        default=None,
-        metavar="N",
-        help=(
-            "how many pages either side a card writer should get for --id, or "
-            "`chapter` for the chapter it is in. Set it during triage, when "
-            "you can see the hypotheses are two pages back. A large number "
-            "means the whole document; -1 goes back to inheriting the "
-            "source's setting"
-        ),
-    )
-    p.add_argument(
-        "--gist",
-        default=None,
-        metavar="TEXT",
-        help=(
-            "one line saying what a card from --id would be about, e.g. "
-            "'Lemma 2' or 'why the bound needs independence'. A reading, not "
-            "an instruction: nothing downstream consumes it, so it can be "
-            "wrong without costing anything but a second look"
-        ),
-    )
-    p.add_argument(
-        "--ungisted",
-        action="store_true",
-        help="only units with no gist yet -- what a `/gist` pass has left to do",
-    )
-    p.add_argument(
-        "--web",
-        choices=("yes", "no", "inherit"),
-        default=None,
-        help=(
-            "whether whoever writes --id's card may look things up on the web. "
-            "Off everywhere unless granted, because a card should say what this "
-            "source says; `inherit` takes the override off again and falls back "
-            "to the source, then the repo"
-        ),
-    )
-    p.add_argument(
-        "--resolve-notes",
-        action="store_true",
-        help="clear the @claude annotations on --id, once you have acted on them",
-    )
-    p.add_argument(
-        "--audience",
-        choices=("claude", "me", "all"),
-        default="claude",
-        help=(
-            "whose notes --resolve-notes clears, and who --annotate addresses. "
-            "Defaults to `claude`: resolving your own requests must not delete a "
-            "`@me` decision parked on the same unit"
-        ),
-    )
-    p.add_argument(
-        "--add",
-        default=None,
-        metavar="SLUG",
-        help=(
-            "write a new unit into --project's ledger, id `<project>:<slug>`. "
-            "The door for a pass that proposes units where no segmenter can: "
-            "it owes a stable id, whatever locator it has, something scannable "
-            "and nothing else, and the unit arrives `new` like every other. A "
-            "slug already in the ledger is left alone, so a re-run of the same "
-            "request adds only what is new"
-        ),
-    )
-    p.add_argument("--preview", default=None, metavar="TEXT", help="a short sample, for --add")
-    p.add_argument(
-        "--document",
-        default="",
-        metavar="KEY",
-        help=(
-            "which of --project's works --add's unit came out of, by source key or "
-            "file name. Only needed where a project reads several: it is what "
-            "settles the crop and context settings for the unit, and what links "
-            "an ask to the works it drew on"
-        ),
-    )
-    p.add_argument("--lang", default="", help="what --preview is written in, e.g. `cpp`")
-    p.add_argument(
-        "--ref",
-        action="append",
-        default=[],
-        metavar="URL",
-        help="something --add's unit stands on; repeat for several. Where to look, not what to say",
-    )
-    p.add_argument(
-        "--tag",
-        action="append",
-        default=[],
-        metavar="TAG",
-        help="a label for --add's unit; repeat for several",
-    )
-    p.add_argument("--flagged", action="store_true", help="only units the audit is unsure about")
-    p.add_argument("--suggested", action="store_true", help="only units with an open suggestion")
-    p.add_argument(
-        "--suggest",
-        nargs=2,
-        default=None,
-        metavar=("STATE", "REASON"),
-        help="propose a decision for --id; records it, applies nothing",
-    )
-    p.add_argument("--detail", default="", help="the argument for a --suggest, for a human")
-    p.add_argument("--by", default="claude", help="who is proposing (with --suggest)")
-    p.add_argument("--accept", action="store_true", help="act on --id's suggestion")
-    p.add_argument("--dismiss", action="store_true", help="discard --id's suggestion")
-    p.set_defaults(run=cmd_units)
-
-    p = subs.add_parser("crops", help="render unit crops to a directory, for transcription")
-    p.add_argument("--project", default=None)
-    p.add_argument("--section", default=None)
-    p.add_argument("--state", default="all", help=f"one of: {', '.join(ledger_mod.STATES)}, all")
-    p.add_argument(
-        "--untranscribed",
-        action="store_true",
-        help="only units that still need reading (transcription: none or failed)",
-    )
-    p.add_argument(
-        "--ungisted",
-        action="store_true",
-        help="only units with no gist yet -- what a `/gist` pass has left to render",
-    )
-    p.add_argument("--limit", type=int, default=0)
-    p.add_argument(
-        "--out",
-        default=None,
-        help="directory to write PNGs into (working files). "
-        "Default: a fresh directory under the configured work_dir.",
-    )
-    p.add_argument(
-        "--context",
-        type=float,
-        default=None,
-        help="points of surrounding page to show around each crop "
-        "(default: the same as the triage view). 0 for a bare crop.",
-    )
-    p.add_argument(
-        "--no-outline",
-        action="store_true",
-        help="do not draw the unit's own box on the crop",
-    )
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_crops)
-
-    p = subs.add_parser(
-        "classify", help="skip units that were never going to be cards, with a reason"
-    )
-    p.add_argument("--project", default=None)
-    p.add_argument(
-        "--dry-run", action="store_true", help="report the proposals without recording them"
-    )
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_classify)
-
-    p = subs.add_parser("audit", help="mechanical confidence checks over a ledger")
-    p.add_argument("--project", default=None)
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_audit)
-
-    p = subs.add_parser("source-text", help="the cached text layer, for card-writing context")
-    p.add_argument("project", nargs="?", default=None)
-    p.set_defaults(run=cmd_source_text)
-
-    p = subs.add_parser("new", help="scaffold a stub card from a queued unit")
+def _fill_cards_new(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--unit",
         action="append",
@@ -448,43 +217,9 @@ def build_parser() -> argparse.ArgumentParser:
         "pass may improve the wording without un-approving anything.",
     )
     p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_new)
 
-    p = subs.add_parser("check", help="lint card files; structural only")
-    p.add_argument("--sync", action="store_true", help="apply the stricter sync rules")
-    p.add_argument(
-        "--anki", action="store_true", help="also check uids against the live collection"
-    )
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_check)
 
-    p = subs.add_parser("todo", help="open @claude annotations")
-    p.add_argument(
-        "--audience",
-        choices=("claude", "me"),
-        default=None,
-        help=(
-            "whose notes. `claude` is the work you can actually do; `me` is "
-            "parked for a human and is only ever reported"
-        ),
-    )
-    p.add_argument("--kind", choices=("card", "unit"), default=None)
-    p.add_argument(
-        "--status", default=None, help="a card status or a unit state, e.g. approved, queued"
-    )
-    p.add_argument(
-        "--project",
-        default=None,
-        help=(
-            "one source's notes. Worth reaching for on a repo with several: "
-            "conventions are per source, so working two books' notes in one "
-            "list means reloading the setting between every item"
-        ),
-    )
-    p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_todo)
-
-    p = subs.add_parser("sync", help="push approved cards to Anki, upserting by uid")
+def _fill_push(p: argparse.ArgumentParser) -> None:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument(
         "--project",
@@ -526,23 +261,462 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_sync)
 
-    p = subs.add_parser(
-        "feedback", help="pull review comments and flags back out of Anki"
-    )
+
+def _fill_pull(p: argparse.ArgumentParser) -> None:
     p.add_argument("--dry-run", action="store_true", help="say what would come back")
     p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_feedback)
+
+
+def _fill_classify(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--project", default=None)
+    p.add_argument(
+        "--dry-run", action="store_true", help="report the proposals without recording them"
+    )
+    p.add_argument("--json", action="store_true")
+
+
+def _fill_units_add(p: argparse.ArgumentParser) -> None:
+    p.add_argument("add", metavar="SLUG", help="the id this unit takes, after the project")
+    p.add_argument("--project", default=None)
+    p.add_argument("--gist", default=None, metavar="TEXT", help="what a card from it is about")
+    p.add_argument("--preview", default=None, metavar="TEXT", help="a short sample")
+    p.add_argument(
+        "--document",
+        default="",
+        metavar="KEY",
+        help=(
+            "which of --project's works it came out of, by source key or file "
+            "name. Only needed where a project reads several: it is what "
+            "settles the crop and context settings for the unit, and what "
+            "links an ask to the works it drew on"
+        ),
+    )
+    p.add_argument("--lang", default="", help="what --preview is written in, e.g. `cpp`")
+    p.add_argument(
+        "--ref",
+        action="append",
+        default=[],
+        metavar="URL",
+        help="something it stands on; repeat for several. Where to look, not what to say",
+    )
+    p.add_argument(
+        "--tag", action="append", default=[], metavar="TAG", help="a label; repeat for several"
+    )
+    p.add_argument("--json", action="store_true")
+
+
+def _fill_units_filters(p: argparse.ArgumentParser) -> None:
+    """What narrows a listing. Every one of these is a read."""
+    p.add_argument("--project", default=None)
+    p.add_argument("--state", default="all", help=f"one of: {', '.join(ledger_mod.STATES)}, all")
+    p.add_argument("--section", default=None)
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--flagged", action="store_true", help="only units the audit is unsure about")
+    p.add_argument("--suggested", action="store_true", help="only units with an open suggestion")
+    p.add_argument(
+        "--ungisted",
+        action="store_true",
+        help="only units with no gist yet -- what a `/gist` pass has left to do",
+    )
+    p.add_argument("--json", action="store_true")
+
+
+def _fill_units_writes(p: argparse.ArgumentParser) -> None:
+    """The old one-word writing flags, kept and hidden.
+
+    `forge units --id X --set-state queued` still works and still writes,
+    which is the one place the arity rule is not true of a *legacy*
+    spelling. Hidden from `--help` and announced on use, like every other
+    old spelling; the current way to say it is `forge units set X`.
+    """
+    hide = argparse.SUPPRESS
+    p.add_argument("--id", default=None, help=hide)
+    p.add_argument("--set-state", default=None, choices=ledger_mod.STATES, help=hide)
+    p.add_argument("--reason", default="", help=hide)
+    p.add_argument("--annotate", default=None, metavar="TEXT", help=hide)
+    p.add_argument("--tex-auto", default=None, metavar="TEX", help=hide)
+    p.add_argument("--context-pages", type=_window, default=None, metavar="N", help=hide)
+    p.add_argument("--gist", default=None, metavar="TEXT", help=hide)
+    p.add_argument("--web", choices=("yes", "no", "inherit"), default=None, help=hide)
+    p.add_argument("--resolve-notes", action="store_true", help=hide)
+    p.add_argument("--audience", choices=("claude", "me", "all"), default="claude", help=hide)
+    p.add_argument("--add", default=None, metavar="SLUG", help=hide)
+    p.add_argument("--preview", default=None, metavar="TEXT", help=hide)
+    p.add_argument("--document", default="", metavar="KEY", help=hide)
+    p.add_argument("--lang", default="", help=hide)
+    p.add_argument("--ref", action="append", default=[], metavar="URL", help=hide)
+    p.add_argument("--tag", action="append", default=[], metavar="TAG", help=hide)
+    p.add_argument("--suggest", nargs=2, default=None, metavar=("STATE", "REASON"), help=hide)
+    p.add_argument("--detail", default="", help=hide)
+    p.add_argument("--by", default="claude", help=hide)
+    p.add_argument("--accept", action="store_true", help=hide)
+    p.add_argument("--dismiss", action="store_true", help=hide)
+
+
+def _fill_units_set(p: argparse.ArgumentParser) -> None:
+    """One unit, one or more of the things you can say about it."""
+    p.add_argument("id", metavar="UNIT")
+    p.add_argument("--project", default=None)
+    p.add_argument(
+        "--state", dest="set_state", default=None, choices=ledger_mod.STATES,
+        help="the decision: queued, skipped, carded, or back to new",
+    )
+    p.add_argument("--reason", default="", help="why it was skipped")
+    p.add_argument(
+        "--gist",
+        default=None,
+        metavar="TEXT",
+        help=(
+            "one line saying what a card from it would be about, e.g. "
+            "'Lemma 2' or 'why the bound needs independence'. A reading, not "
+            "an instruction: nothing downstream consumes it, so it can be "
+            "wrong without costing anything but a second look"
+        ),
+    )
+    p.add_argument(
+        "--tex",
+        dest="tex_auto",
+        default=None,
+        metavar="TEX",
+        help="a transcription, gated through KaTeX before it is stored",
+    )
+    p.add_argument(
+        "--pages",
+        dest="context_pages",
+        type=_window,
+        default=None,
+        metavar="N",
+        help=(
+            "how many pages either side a card writer gets, or `chapter` for "
+            "the chapter it is in. Set it during triage, when you can see the "
+            "hypotheses are two pages back. A large number means the whole "
+            "document; -1 goes back to inheriting the source's setting"
+        ),
+    )
+    p.add_argument(
+        "--web",
+        choices=("yes", "no", "inherit"),
+        default=None,
+        help=(
+            "whether whoever writes its card may look things up on the web. "
+            "Off everywhere unless granted, because a card should say what "
+            "this source says; `inherit` takes the override off again"
+        ),
+    )
+    p.add_argument("--json", action="store_true")
+
+
+def _fill_cards_filters(p: argparse.ArgumentParser) -> None:
+    """What narrows the card listing."""
+    p.add_argument("--project", default=None)
+    p.add_argument("--status", default="all", help="draft, approved, rejected, or all")
+    p.add_argument("--section", default=None)
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument("--json", action="store_true")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Every command, with its effect declared beside it.
+
+    **One word reads, two words write** (docs/VERBS.md). The shape is the
+    warning: you can try a half-remembered one-word command and nothing
+    recorded will move. The names that changed keep their old spellings,
+    registered without a `help=` so they stay out of the listing, and each
+    prints the new form once on the way past.
+
+    A flag block is written once and registered twice, by a `_fill_*`
+    helper, so the legacy spelling cannot drift from the current one.
+    """
+    parser = argparse.ArgumentParser(
+        prog="forge",
+        description=__doc__.splitlines()[0],
+        epilog=(
+            "one word shows you something, two words change something.\n"
+            "  reads   check  audit  verify  todo  units  cards  sources\n"
+            "          zotero  context  source-text  crops  serve\n"
+            "  writes  units extract|classify|add|set|note|suggest\n"
+            "          zotero import   sources remove   project new|delete\n"
+            "          topic add       cards new\n"
+            "  anki    anki push  anki pull  anki export\n"
+            "          (`forge anki` on its own says what a push would do)"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--root", default=None, help="repo root (default: nearest forge.toml)")
+    subs = parser.add_subparsers(dest="verb", required=True, metavar="<command>")
+
+    def legacy(name: str, fill: Any, run: Any, effect: str, now: str) -> None:
+        """The old spelling, hidden from the listing and still working.
+
+        Kept rather than dropped: these are written into skills, notes and
+        shell history that nobody is going to sweep, and a command that
+        stops existing teaches nothing on its way out. It says the new
+        form once, on stderr, where it cannot corrupt a `--json` read.
+        """
+        old = subs.add_parser(name)
+        fill(old)
+        old.set_defaults(run=run, effect=effect, renamed=now)
+
+    # -- units: the ledger, and everything that writes to it ---------------
+    units = subs.add_parser("units", help="the ledger, filtered")
+    _fill_units_filters(units)
+    _fill_units_writes(units)
+    units.set_defaults(run=cmd_units, effect=READS)
+    changes = units.add_subparsers(dest="change", metavar="<change>")
+
+    p = changes.add_parser("extract", help="a document into units; never reads the maths")
+    _fill_extract(p)
+    p.set_defaults(run=cmd_extract, effect=REPO)
+
+    p = changes.add_parser("classify", help="propose skips; applies nothing")
+    _fill_classify(p)
+    p.set_defaults(run=cmd_classify, effect=REPO)
+
+    p = changes.add_parser("add", help="a unit where there was nothing to segment")
+    _fill_units_add(p)
+    p.set_defaults(run=cmd_units, effect=REPO)
+
+    p = changes.add_parser("set", help="a unit's state, gist, transcription or settings")
+    _fill_units_set(p)
+    p.set_defaults(run=cmd_units, effect=REPO)
+
+    p = changes.add_parser("note", help="leave an annotation on a unit")
+    p.add_argument("id", metavar="UNIT")
+    p.add_argument("annotate", metavar="TEXT")
+    p.add_argument("--audience", choices=("claude", "me", "all"), default="claude")
+    p.add_argument("--project", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_units, effect=REPO)
+
+    p = changes.add_parser("clear-notes", help="drop a unit's annotations, once acted on")
+    p.add_argument("id", metavar="UNIT")
+    p.add_argument("--audience", choices=("claude", "me", "all"), default="claude")
+    p.add_argument("--project", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_units, effect=REPO, resolve_notes=True)
+
+    p = changes.add_parser("suggest", help="propose a decision; records it, applies nothing")
+    p.add_argument("id", metavar="UNIT")
+    p.add_argument("suggest", nargs=2, metavar=("STATE", "REASON"))
+    p.add_argument("--detail", default="", help="the argument, for a human")
+    p.add_argument("--by", default="claude", help="who is proposing")
+    p.add_argument("--project", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_units, effect=REPO)
+
+    p = changes.add_parser("accept", help="act on a unit's suggestion")
+    p.add_argument("id", metavar="UNIT")
+    p.add_argument("--project", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_units, effect=REPO, accept=True)
+
+    p = changes.add_parser("dismiss", help="discard a unit's suggestion")
+    p.add_argument("id", metavar="UNIT")
+    p.add_argument("--project", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_units, effect=REPO, dismiss=True)
+
+    legacy("extract", _fill_extract, cmd_extract, REPO, "units extract")
+    legacy("classify", _fill_classify, cmd_classify, REPO, "units classify")
+
+    # -- cards -------------------------------------------------------------
+    cards = subs.add_parser("cards", help="the cards, filtered")
+    _fill_cards_filters(cards)
+    cards.set_defaults(run=cmd_cards, effect=READS)
+    made = cards.add_subparsers(dest="change", metavar="<change>")
+    p = made.add_parser("new", help="scaffold a stub card from a queued unit")
+    _fill_cards_new(p)
+    p.set_defaults(run=cmd_new, effect=REPO)
+    legacy("new", _fill_cards_new, cmd_new, REPO, "cards new")
+
+    # -- sources -----------------------------------------------------------
+    sources = subs.add_parser("sources", help="every work, and which project reads it")
+    sources.add_argument("--project", default=None, help="only the works this one reads")
+    sources.add_argument("--json", action="store_true")
+    sources.set_defaults(
+        run=cmd_sources, effect=READS, remove=None, force=False, dry_run=False
+    )
+    taken = sources.add_subparsers(dest="change", metavar="<change>")
+    p = taken.add_parser("remove", help="take a work out of a project")
+    _fill_sources_remove(p)
+    p.set_defaults(run=cmd_sources, effect=REPO)
+
+    # -- zotero ------------------------------------------------------------
+    zotero = subs.add_parser("zotero", help="what Zotero holds, and what is already a source")
+    zotero.add_argument("--project", default=None)
+    zotero.add_argument("--json", action="store_true")
+    zotero.set_defaults(
+        run=cmd_zotero,
+        effect=READS,
+        list_items=True,
+        item=None,
+        tag=None,
+        dry_run=False,
+    )
+    brought = zotero.add_subparsers(dest="change", metavar="<change>")
+    p = brought.add_parser("import", help="the marks you made, as units")
+    _fill_zotero_import(p)
+    p.set_defaults(run=cmd_zotero, effect=REPO, list_items=False)
+
+    # -- project -----------------------------------------------------------
+    project = subs.add_parser("project", help="the projects this repo holds")
+    project.add_argument("--json", action="store_true")
+    project.set_defaults(
+        run=cmd_projects, effect=READS, name=None, delete=False, force=False, dry_run=False
+    )
+    started = project.add_subparsers(dest="change", metavar="<change>")
+    p = started.add_parser("new", help="start one with no document, for a subject")
+    _fill_project_new(p)
+    p.set_defaults(run=cmd_project, effect=REPO, delete=False, force=False, dry_run=False)
+    p = started.add_parser("delete", help="its folder, its cards, and its table")
+    _fill_project_delete(p)
+    p.set_defaults(
+        run=cmd_project, effect=REPO, delete=True, title="", deck="", citation=""
+    )
+
+    # -- topic -------------------------------------------------------------
+    topic = subs.add_parser("topic", help="what a project has been asked for")
+    topic.add_argument("--project", default=None)
+    topic.add_argument("--json", action="store_true")
+    topic.set_defaults(run=cmd_topics, effect=READS, name=None, ask="")
+    asked = topic.add_subparsers(dest="change", metavar="<change>")
+    p = asked.add_parser("add", help="record a subject you want cards for")
+    _fill_topic_add(p)
+    p.set_defaults(run=cmd_topic, effect=REPO)
+
+    # -- anki: the three that reach outside this repo -----------------------
+    anki = subs.add_parser("anki", help="what a push would do, pushing nothing")
+    _fill_push(anki)
+    anki.set_defaults(run=cmd_sync, effect=READS, dry_run=True)
+    pushed = anki.add_subparsers(dest="change", metavar="<change>")
+    p = pushed.add_parser("push", help="approved cards into your collection")
+    _fill_push(p)
+    p.set_defaults(run=cmd_sync, effect=ANKI)
+    p = pushed.add_parser("pull", help="review comments and flags back out, erasing them there")
+    _fill_pull(p)
+    p.set_defaults(run=cmd_feedback, effect=ANKI)
+    p = pushed.add_parser("export", help="a deck as an .apkg")
+    _fill_export(p)
+    p.set_defaults(run=cmd_export, effect=ANKI)
+
+    legacy("sync", _fill_push, cmd_sync, ANKI, "anki push")
+    legacy("feedback", _fill_pull, cmd_feedback, ANKI, "anki pull")
+    legacy("export", _fill_export, cmd_export, ANKI, "anki export")
+
+    # -- the plain reads ----------------------------------------------------
+    p = subs.add_parser("serve", help="the app: setup, triage, review, the canvas")
+    p.add_argument("--host", default=None)
+    p.add_argument("--port", type=int, default=None)
+    p.set_defaults(run=cmd_serve, effect=REPO)
+
+    p = subs.add_parser(
+        "context", help="the page an equation was printed on, for writing its card"
+    )
+    p.add_argument("unit", help="unit id, shaped <source>:<section>:<equation>")
+    p.add_argument(
+        "--pages",
+        type=_window,
+        default=None,
+        metavar="N",
+        help=(
+            "pages either side to print, or `chapter` for the whole chapter "
+            "this unit is in. Defaults to whatever the unit, its source or the "
+            "repo asks for, so a unit marked during triage as needing more "
+            "gets it without the caller knowing"
+        ),
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_context, effect=READS)
+
+    p = subs.add_parser("crops", help="render unit crops to a directory, for transcription")
+    p.add_argument("--project", default=None)
+    p.add_argument("--section", default=None)
+    p.add_argument("--state", default="all", help=f"one of: {', '.join(ledger_mod.STATES)}, all")
+    p.add_argument(
+        "--untranscribed",
+        action="store_true",
+        help="only units that still need reading (transcription: none or failed)",
+    )
+    p.add_argument(
+        "--ungisted",
+        action="store_true",
+        help="only units with no gist yet -- what a `/gist` pass has left to render",
+    )
+    p.add_argument("--limit", type=int, default=0)
+    p.add_argument(
+        "--out",
+        default=None,
+        help="directory to write PNGs into (working files). "
+        "Default: a fresh directory under the configured work_dir.",
+    )
+    p.add_argument(
+        "--context",
+        type=float,
+        default=None,
+        help="points of surrounding page to show around each crop "
+        "(default: the same as the triage view). 0 for a bare crop.",
+    )
+    p.add_argument(
+        "--no-outline",
+        action="store_true",
+        help="do not draw the unit's own box on the crop",
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_crops, effect=READS)
+
+    p = subs.add_parser("audit", help="mechanical confidence checks over a ledger")
+    p.add_argument("--project", default=None)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_audit, effect=READS)
+
+    p = subs.add_parser("source-text", help="the cached text layer, for card-writing context")
+    p.add_argument("project", nargs="?", default=None)
+    p.set_defaults(run=cmd_source_text, effect=READS)
+
+    p = subs.add_parser("check", help="lint card files; structural only")
+    p.add_argument("--sync", action="store_true", help="apply the stricter sync rules")
+    p.add_argument(
+        "--anki", action="store_true", help="also check uids against the live collection"
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_check, effect=READS)
+
+    p = subs.add_parser("todo", help="open @claude and @me annotations")
+    p.add_argument(
+        "--audience",
+        choices=("claude", "me"),
+        default=None,
+        help=(
+            "whose notes. `claude` is the work you can actually do; `me` is "
+            "parked for a human and is only ever reported"
+        ),
+    )
+    p.add_argument("--kind", choices=("card", "unit"), default=None)
+    p.add_argument(
+        "--status", default=None, help="a card status or a unit state, e.g. approved, queued"
+    )
+    p.add_argument(
+        "--project",
+        default=None,
+        help=(
+            "one source's notes. Worth reaching for on a repo with several: "
+            "conventions are per source, so working two books' notes in one "
+            "list means reloading the setting between every item"
+        ),
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_todo, effect=READS)
 
     p = subs.add_parser("verify", help="opt-in numeric check of identities")
     p.add_argument("--uid", default=None)
     p.add_argument("--project", default=None, help="only this project's cards")
     p.add_argument("--trials", type=int, default=verify.TRIALS)
     p.add_argument("--json", action="store_true")
-    p.set_defaults(run=cmd_verify)
+    p.set_defaults(run=cmd_verify, effect=READS)
 
     return parser
+
 
 
 # -- verbs -----------------------------------------------------------------
@@ -561,7 +735,7 @@ def cmd_extract(args: argparse.Namespace, config: Config) -> int:
             # A source with no `tex`/`pdf` is not a broken source: a Zotero
             # import has its documents on `locator.document` and is filled by
             # `forge zotero`, not by segmentation. Taking the whole run down
-            # over one such source meant the bare `forge extract` in the docs
+            # over one such source meant the bare `forge units extract` in the docs
             # always exited non-zero once a second kind of source existed.
             if args.project:
                 raise
@@ -802,7 +976,7 @@ def _list_zotero(client: Any, config: Config, args: argparse.Namespace) -> int:
     if fresh:
         tag = args.tag or "anki"
         print()
-        print(f"{len(fresh)} not imported yet: `uv run forge zotero --tag {tag}`")
+        print(f"{len(fresh)} not imported yet: `uv run forge zotero import --tag {tag}`")
     return OK
 
 
@@ -955,7 +1129,7 @@ def cmd_export(args: argparse.Namespace, config: Config) -> int:
     if not written:
         print(
             f"Anki refused to export {deck!r}. It has to exist and hold cards; "
-            "`forge sync` puts them there.",
+            "`forge anki push` puts them there.",
             file=sys.stderr,
         )
         return FAILED
@@ -994,12 +1168,12 @@ def cmd_project(args: argparse.Namespace, config: Config) -> int:
         )
         return FAILED
     print(f"{config.projects_dir / made / PROJECT_TOML}")
-    print(f"  propose into it with: forge units --project {made} --add '<subject>'")
+    print(f"  propose into it with: forge units add '<subject>' --project {made}")
     return OK
 
 
 def _delete_project(args: argparse.Namespace, config: Config) -> int:
-    """`forge project <name> --delete`.
+    """`forge project delete <name>`.
 
     Prints what it takes, every time, whether or not it took it: a delete
     that says nothing is one you cannot check afterwards. `--dry-run` is the
@@ -1101,7 +1275,7 @@ def cmd_context(args: argparse.Namespace, config: Config) -> int:
 
 def cmd_units(args: argparse.Namespace, config: Config) -> int:
     # Before the ledgers are opened: a project proposed into for the first
-    # time has no `units.jsonl` yet, and "run `forge extract`" is the wrong
+    # time has no `units.jsonl` yet, and "run `forge units extract`" is the wrong
     # advice for one with no document to extract from.
     if args.add is not None:
         return _add_unit(args, config)
@@ -1110,7 +1284,7 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
     if args.project:
         ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
-        print("no units ledger yet; run `forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge units extract`", file=sys.stderr)
         return FAILED
 
     if args.id and (
@@ -1134,6 +1308,13 @@ def cmd_units(args: argparse.Namespace, config: Config) -> int:
     rows: list[dict[str, Any]] = []
     for name, led in ledgers.items():
         for unit in led.select(state=args.state, section=args.section):
+            # `--id` narrows the listing too, not only the writing path it
+            # was built for. Reading one unit back is what a transcriber
+            # does to check its own work, and the skill has been telling
+            # people to pass `--id` for that all along, which quietly
+            # printed the whole ledger.
+            if args.id and unit.id != args.id:
+                continue
             if args.flagged and unit.id not in flagged.get(name, set()):
                 continue
             if args.suggested and unit.suggestion is None:
@@ -1342,7 +1523,7 @@ def cmd_crops(args: argparse.Namespace, config: Config) -> int:
     if args.project:
         ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
-        print("no units ledger yet; run `forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge units extract`", file=sys.stderr)
         return FAILED
 
     # Context by default. A bare crop cannot show that an equation continues
@@ -1453,7 +1634,7 @@ def cmd_classify(args: argparse.Namespace, config: Config) -> int:
     if args.project:
         ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
-        print("no units ledger yet; run `forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge units extract`", file=sys.stderr)
         return FAILED
 
     reports = []
@@ -1503,7 +1684,7 @@ def cmd_audit(args: argparse.Namespace, config: Config) -> int:
     if args.project:
         ledgers = {k: v for k, v in ledgers.items() if k == args.project}
     if not ledgers:
-        print("no units ledger yet; run `forge extract`", file=sys.stderr)
+        print("no units ledger yet; run `forge units extract`", file=sys.stderr)
         return FAILED
 
     # The scheme goes in too: for a marked-up source, "is this index
@@ -1545,7 +1726,7 @@ def cmd_source_text(args: argparse.Namespace, config: Config) -> int:
     for name in names:
         path = extract_mod.source_text_path(config, name)
         if not path.exists():
-            print(f"no cached text for {name!r}; run `forge extract`", file=sys.stderr)
+            print(f"no cached text for {name!r}; run `forge units extract`", file=sys.stderr)
             return FAILED
         print(path.read_text(encoding="utf-8"))
     return OK
@@ -1689,7 +1870,7 @@ def cmd_feedback(args: argparse.Namespace, config: Config) -> int:
 
 
 def _remove_source(args: argparse.Namespace, config: Config) -> int:
-    """`forge sources --remove <key> --project <name>`.
+    """`forge sources remove <key> --project <name>`.
 
     Prints what it takes every time, whether or not it took it: a removal
     that says nothing is one you cannot check afterwards.
@@ -1720,6 +1901,129 @@ def _remove_source(args: argparse.Namespace, config: Config) -> int:
             " Anki. This does not remove them; delete them there, or leave them.",
             file=sys.stderr,
         )
+    return OK
+
+
+def cmd_cards(args: argparse.Namespace, config: Config) -> int:
+    """The cards, filtered. The read half of `cards`.
+
+    Nothing answered "what cards are there" from a terminal: `check` lints
+    them, `todo` lists their open notes, and the app draws them. So the
+    noun had only a writing form, which is the arity rule saying one thing
+    and the CLI doing another.
+    """
+    cards = model.load_all(config.cards_dir)
+    if args.project:
+        cards = [c for c in cards if c.project_name == args.project]
+    if args.status and args.status != "all":
+        cards = [c for c in cards if c.effective_status == args.status]
+    if args.section:
+        from .app import card_section
+
+        cards = [c for c in cards if card_section(c, config) == args.section]
+    cards.sort(key=lambda c: (c.project_name, c.unit, c.uid))
+    if args.limit:
+        cards = cards[: args.limit]
+
+    if args.json:
+        print(
+            json.dumps(
+                [
+                    {
+                        "uid": c.uid,
+                        "project": c.project_name,
+                        "status": c.effective_status,
+                        "type": c.type,
+                        "units": c.units,
+                        "gist": c.gist,
+                        "tags": c.tags,
+                        "path": str(c.path),
+                    }
+                    for c in cards
+                ],
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return OK
+    if not cards:
+        print("no cards yet")
+        return OK
+    for card in cards:
+        # The gist, not the front: a LaTeX front is unreadable in a column
+        # and the gist exists for exactly this.
+        print(f"{card.uid}  {card.effective_status:9} {card.gist or card.unit}")
+    print(f"\n{len(cards)} cards")
+    return OK
+
+
+def cmd_projects(args: argparse.Namespace, config: Config) -> int:
+    """The projects this repo holds. The read half of `project`."""
+    from .app import project_origin
+
+    rows: list[dict[str, Any]] = []
+    for name, spec in config.projects.items():
+        path = config.units_path(name)
+        units = sum(1 for _ in ledger_mod.Ledger.load(path)) if path.exists() else 0
+        rows.append(
+            {
+                "project": name,
+                "title": spec.title,
+                "deck": config.deck_for(name),
+                "material": project_origin(config, name),
+                "sources": len(spec.sources),
+                "units": units,
+            }
+        )
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return OK
+    if not rows:
+        print("no projects yet; start one with `forge project new <name>`")
+        return OK
+    width = max(len(r["project"]) for r in rows)
+    for row in rows:
+        print(
+            f"{row['project']:<{width}}  {row['material'] or 'nothing declared':<16}"
+            f"  {row['sources']} source(s)  {row['units']} units  -> {row['deck']}"
+        )
+    return OK
+
+
+def cmd_topics(args: argparse.Namespace, config: Config) -> int:
+    """What a project has been asked for. The read half of `topic`."""
+    names = [args.project] if args.project else list(config.projects)
+    rows: list[dict[str, Any]] = []
+    for name in names:
+        if name not in config.projects:
+            known = ", ".join(sorted(config.projects)) or "(none)"
+            print(f"no project {name!r}; configured: {known}", file=sys.stderr)
+            return FAILED
+        ledger = None
+        path = config.units_path(name)
+        if path.exists():
+            ledger = ledger_mod.Ledger.load(path)
+        for topic in topics_mod.coverage(config, name, ledger).topics:
+            rows.append(
+                {
+                    "project": name,
+                    "slug": topic.slug,
+                    "name": topic.name,
+                    "ask": topic.ask,
+                    "entries": len(topic.outline),
+                    "covered": topic.covered,
+                }
+            )
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return OK
+    if not rows:
+        print("nothing asked for yet; record one with `forge topic add`")
+        return OK
+    for row in rows:
+        print(f"{row['name']}  ({row['covered']}/{row['entries']} entries have a unit)")
+        if row["ask"]:
+            print(f"    {row['ask'].splitlines()[0]}")
     return OK
 
 
