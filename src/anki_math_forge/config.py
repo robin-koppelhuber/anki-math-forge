@@ -68,10 +68,25 @@ def settled(*asked: Any, empty: Any = None) -> Any:
     means "just this page". Passing it explicitly is what keeps a real `False`
     from falling through to the next level, which is the bug this shape is
     most likely to hide.
+
+    By value, not by identity. `is not` reads as the careful choice and is
+    the wrong one for a number: a `0` parsed out of TOML is a different
+    object from the `0.0` written here, so `crop_context = 0` in
+    `forge.toml`, which that file's own comment calls the default, was read
+    as a real answer of zero. Crops came out cut to the box with none of
+    the ninety points of page around them that makes a crop judgeable.
+
+    A bool is never the same answer as a number, whichever way round: `0`
+    and `False` compare equal in Python and mean different things here.
     """
     for answer in asked:
-        if answer is not empty:
+        if answer is empty:
+            continue
+        if isinstance(answer, bool) != isinstance(empty, bool):
             return answer
+        if answer == empty:
+            continue
+        return answer
     return empty
 
 
@@ -104,6 +119,39 @@ class SourceConfig:
     #: geometry, so nothing is extracted from it and it needs none of the
     #: settings below; it is there to be checked against.
     url: str = ""
+    #: What this work is for, in one line: which questions it answers, which
+    #: part of it to look at, what to cite. It is the half of a reference
+    #: that is not its address, and the half a card writer needs, so
+    #: `forge context` hands it over with the rest of the shelf.
+    note: str = ""
+    #: Which asks this work serves, by slug. Derived for an authoritative
+    #: work, from the units it produced, and *declared* for a reference,
+    #: which produces none: a page nothing is extracted from has no other
+    #: way to say which part of the project it is there for.
+    #:
+    #: It is also what keeps the site rule honest. Two pages of one site
+    #: are one source when they serve the same ask and two sources when
+    #: they do not, and this is the only thing that can tell the
+    #: difference.
+    topics: tuple[str, ...] = ()
+    #: Whether a card writer is handed this reference by default. `None`
+    #: inherits the project's answer, then `true`.
+    #:
+    #: A shelf is a place to look, and six of them is a reading list
+    #: nobody works through. Turning one off leaves it declared, cited and
+    #: findable, and stops it being handed over every time: the standard's
+    #: wording is worth having on the shelf and not worth reading for every
+    #: card about a container.
+    offer: bool | None = None
+    #: Whether anything is segmented out of this here. `None` means nobody
+    #: said, which is the usual case and reads as yes when there is a
+    #: document to segment.
+    #:
+    #: It only ever says **no**. A work with no files, no tex and no item
+    #: key has nothing to extract from, and `extract = true` on one would
+    #: be a claim the folder cannot honour; the honest way to make
+    #: something authoritative is to give it a document.
+    extract: bool | None = None
     tex: Path | None = None
     files: tuple[Path, ...] = ()
     #: The Zotero item this came from, when it did. The units carry their own
@@ -117,13 +165,25 @@ class SourceConfig:
     attachments: tuple[str, ...] = ()
     #: Points of page shown around this source's crops; 0 inherits.
     crop_context: float = 0.0
+    #: Pages either side handed to a card writer, or `chapter`; -1 inherits.
+    #: Here for the same reason `crop_context` is: how much a page carries is
+    #: a fact about how a book is set, and a project reading a dense textbook
+    #: and a six-page paper has two answers, not one.
+    context_pages: int | str = -1
     #: `box` or `page`; empty inherits, and what it inherits depends on where
     #: the geometry came from -- see `Config.crop_width_for`.
     crop_width: str = ""
     #: What this source's marks mean, overriding the repo-wide `[zotero]`.
     #: Colour schemes drift between a book you read last year and a paper you
     #: read last week, and a scheme that is wrong is worse than none.
-    units_from: frozenset[str] = frozenset()
+    #: Which marks start a unit here. `None` is nobody said, which
+    #: inherits; an **empty set is an answer**, and it means none of them.
+    #:
+    #: Those were the same value until unchecking every box in the scheme
+    #: editor wrote `units_from = []` and the loader read it as "inherit",
+    #: so the one action that says "stop making units out of this" was the
+    #: one action with no effect.
+    units_from: frozenset[str] | None = None
     meanings: Mapping[str, str] = field(default_factory=dict)
     #: The word that asks for a convention here, when this document is read in
     #: another language than the rest of the shelf. Empty inherits.
@@ -133,12 +193,19 @@ class SourceConfig:
     def authoritative(self) -> bool:
         """Whether units are extracted from this, rather than read beside it.
 
-        Derived rather than declared, because it is the same question as
-        "is there something here to segment". A URL you told a pass to read
-        is reference material: it settles nothing on its own, and a unit that
-        stands on it says where to look rather than what to write.
+        Two halves. **Is there anything here to segment**, which is the
+        files, the tex or the Zotero item; a URL you told a pass to read is
+        reference material, because it settles nothing on its own and a
+        unit standing on it says where to look rather than what to write.
+
+        And **did you say not to**, which is `extract = false`. You can own
+        a marked-up paper, want it cited and checked against, and want no
+        units out of it: a Zotero item is authoritative in at most one
+        project and that project is allowed to be none of them. The switch
+        only turns extraction off, because turning it on for a work with no
+        document would be a claim the folder cannot honour.
         """
-        return bool(self.files or self.tex or self.zotero_key)
+        return bool(self.files or self.tex or self.zotero_key) and self.extract is not False
 
     @property
     def pdf(self) -> Path | None:
@@ -188,6 +255,11 @@ class ProjectConfig:
     # Whether whoever writes a card from this source may look things up on the
     # web. `None` inherits the repo setting, which is off.
     web: bool | None = None
+    #: How much a card writer is handed beyond the source itself:
+    #: `none`, `references` or `web`. Empty inherits the repo setting.
+    context: str = ""
+    #: The default for a reference's own `offer` here. Empty inherits.
+    offer: bool | None = None
 
     @property
     def dir_name(self) -> str:
@@ -204,6 +276,12 @@ class ProjectConfig:
         a single work always passes. With several works and no name there is
         no answer, and guessing the first would silently read one book's
         marking scheme onto another's crops.
+
+        **Provenance, never permission.** This says where a unit came from,
+        and it does not read `extract`: switching a work off does not unsay
+        that its units came out of it, and asking that question here handed
+        every unit in a two-book project to whichever book was still on.
+        What may be segmented *now* is `segments` below.
         """
         if document:
             for source in self.sources:
@@ -211,10 +289,32 @@ class ProjectConfig:
                     return source
                 if any(document == f.name or document == str(f) for f in source.files):
                     return source
-        real = [s for s in self.sources if s.authoritative]
-        if len(real) == 1:
-            return real[0]
+        # Nothing matched by name, or nothing was named. A Zotero work
+        # declares the item key while its units carry attachment keys, and
+        # `attachments` stays empty until somebody records them, so a named
+        # document usually reaches here too.
+        #
+        # One candidate or none, which is the rule that stops the guessing.
+        # Counted over the works that *hold* a document rather than over
+        # the authoritative ones: a switched-off book is still the book its
+        # units came out of, and counting the other way left them belonging
+        # to nothing, taking their crops, their scheme and their counts.
+        holds = [s for s in self.sources if s.files or s.tex or s.zotero_key]
+        if len(holds) == 1:
+            return holds[0]
         return self.sources[0] if len(self.sources) == 1 else None
+
+    def segments(self) -> SourceConfig | None:
+        """The work `forge extract` would read now, or None.
+
+        The other half of what `source` used to answer, and the half that
+        is about permission: a work switched off is not handed to a pass
+        that writes units into it. Nothing here asks where an existing
+        unit came from. That is `source`, and it answers whether or not
+        this one does.
+        """
+        real = [s for s in self.sources if s.authoritative]
+        return real[0] if len(real) == 1 else None
 
     @property
     def layout(self) -> str:
@@ -508,6 +608,13 @@ class Config:
     # source, or per unit from triage, where you can see that this particular
     # unit needs it.
     web: bool = False
+    #: How much a card writer is handed beyond the unit's own source, for
+    #: the whole repo. The middle setting, because it is what the tool did
+    #: before there was a name for it: the shelf went over with every unit
+    #: and the web did not.
+    context: str = "references"
+    #: Whether a reference is handed over unless it says otherwise.
+    offer: bool = True
     # Flag number -> what you meant by it. Empty by default: a flag with no
     # meaning here is reported rather than guessed at.
     flags: dict[int, str] = field(default_factory=dict)
@@ -547,11 +654,18 @@ class Config:
         """
         spec = self.projects.get(project)
         work = spec.source(document) if spec else None
-        if work is None or not (work.units_from or work.meanings or work.convention_keyword):
+        if work is None or not (
+            work.units_from is not None or work.meanings or work.convention_keyword
+        ):
             return self.zotero
         return ZoteroConfig(
             data_dir=self.zotero.data_dir,
-            units_from=work.units_from or self.zotero.units_from,
+            # `is not None`, not truthiness: an empty set is the answer
+            # "none of them", and reading it as "nobody said" made the one
+            # action that turns unit-making off do nothing.
+            units_from=(
+                work.units_from if work.units_from is not None else self.zotero.units_from
+            ),
             meanings=dict(work.meanings) or dict(self.zotero.meanings),
             convention_keyword=work.convention_keyword or self.zotero.convention_keyword,
         )
@@ -597,17 +711,22 @@ class Config:
             )
         )
 
-    def context_pages_for(self, project: str, unit: int | str | None = None) -> int | str:
+    def context_pages_for(
+        self, project: str, unit: int | str | None = None, document: str = ""
+    ) -> int | str:
         """The window a card writer gets, most specific first.
 
         A number of pages either side, or `chapter`. The unit wins, because
         triage is where you can see that this theorem's hypotheses are two
-        pages back. Then the source, because how much a page carries is a fact
-        about how a book is set. Then the repo.
+        pages back. Then the work it was printed in, because how much a page
+        carries is a fact about how a book is set, and a project may read a
+        dense textbook and a six-page paper. Then the project, then the repo.
         """
         spec = self.projects.get(project)
+        work = spec.source(document) if spec else None
+        mine = work.context_pages if work and context_asked(work.context_pages) else None
         asked = spec.context_pages if spec and context_asked(spec.context_pages) else None
-        return settled(unit, asked, self.context_pages)
+        return settled(unit, mine, asked, self.context_pages)
 
     def document_for(self, project: str, document: str = "") -> Path | None:
         """The file a unit's page and bbox refer to.
@@ -632,6 +751,27 @@ class Config:
             return files[0] if files else None
         work = spec.source() if spec else None
         return work.pdf if work else None
+
+    def extracting(self, document: str) -> str:
+        """Which project extracts from this document, or "".
+
+        A work is authoritative in at most one project, so this has at most
+        one answer, and it is the answer to "where do this document's
+        derived files live". Cite the same paper from three projects and
+        the text layer is cached once, under the one that segments it,
+        rather than three times under whichever import ran.
+        """
+        if not document:
+            return ""
+        for name, spec in self.projects.items():
+            for work in spec.sources:
+                if not work.authoritative:
+                    continue
+                if document in (work.key, *work.attachments) or any(
+                    document in (f.name, str(f)) for f in work.files
+                ):
+                    return name
+        return ""
 
     def units_path(self, project: str) -> Path:
         return self.projects_dir / project / "units.jsonl"
@@ -707,6 +847,59 @@ class Config:
         """
         return self.conventions_for(project).get("layout", "")
 
+    def context_for(self, source: str, unit: bool | None = None) -> str:
+        """How much a card writer is handed here: the level, resolved.
+
+        Most specific first, like every other setting: the unit, then the
+        project, then the repo. A unit only ever says yes or no to the
+        *web*, which is the exception the per-unit grant exists for: you
+        grant it when you can see why this one unit needs it, and you
+        refuse it on one unit of a project that otherwise has it.
+        """
+        if unit is True:
+            return "web"
+        spec = self.projects.get(source)
+        level = (spec.context if spec else "") or self.context
+        if unit is False and level == "web":
+            # Refused here, whatever the project allows. It still gets the
+            # references: saying "not the web for this one" is not saying
+            # "nothing at all".
+            return "references"
+        return level
+
+    def offers(self, source: str, work: SourceConfig) -> bool:
+        """Whether this reference is handed to a card writer by default.
+
+        Source, then project, then repo, which is `true`. Turning one off
+        leaves it declared, cited and findable and stops it being read for
+        every card: a shelf of six is a reading list nobody works through.
+        """
+        spec = self.projects.get(source)
+        answer = settled(work.offer, spec.offer if spec else None)
+        return self.offer if answer is None else bool(answer)
+
+    def references_for(self, source: str) -> list[SourceConfig]:
+        """The references a card writer gets here, in declaration order.
+
+        Every work nothing is extracted from here, including a paper you
+        imported and switched off: you own it, you want it cited and
+        checked against, and you want none of its highlights in your
+        ledger. That is what the switch is for.
+
+        Project-wide, so it does not know whose card is being written.
+        One of these may be the very work a unit was cropped out of, and
+        for that unit the book is not a place to look but the thing being
+        read; `context.shelf` takes it off its own shelf.
+        """
+        spec = self.projects.get(source)
+        if spec is None:
+            return []
+        return [
+            work
+            for work in spec.sources
+            if not work.authoritative and self.offers(source, work)
+        ]
+
     def web_for(self, source: str, unit: bool | None = None) -> bool:
         """Whether whoever writes this card may look things up on the web.
 
@@ -721,11 +914,7 @@ class Config:
         Wikipedia did not. Granting it per unit is the honest shape: you grant
         it when you can see why this particular unit needs it.
         """
-        spec = self.projects.get(source)
-        answer = settled(unit, spec.web if spec else None)
-        if answer is not None:
-            return bool(answer)
-        return self.web
+        return self.context_for(source, unit) == "web"
 
     def scratch(self, *parts: str) -> Path:
         """A directory for intermediate files, created on demand.
@@ -787,6 +976,8 @@ def load(root: Path | None = None) -> Config:
             deck=str(spec.get("deck", "") or ""),
             conventions=_conventions(spec, f"[projects.{name}]"),
             web=_opt_bool(spec.get("web")),
+            context=_context_word(spec.get("context"), f"[projects.{name}]"),
+            offer=_opt_bool(spec.get("offer")),
             order=_order(spec.get("order", "printed"), f"[projects.{name}]"),
             context_pages=context_size(
                 spec.get("context_pages", -1), f"[projects.{name}] context_pages"
@@ -808,6 +999,12 @@ def load(root: Path | None = None) -> Config:
         context_pages=context_size(cards.get("context_pages", 1), "[cards] context_pages"),
         study_order=_study_order(cards.get("study_order"), "[cards]"),
         web=bool(cards.get("web", False)),
+        # `[cards] web` is what this key used to be, and still says the
+        # same thing: true is the web, false is the shelf without it.
+        context=_context_word(
+            cards.get("context", cards.get("web")), "[cards]"
+        ) or "references",
+        offer=bool(cards.get("offer", True)),
         anki_url=os.environ.get("ANKI_CONNECT_URL", anki.get("url", "http://127.0.0.1:8765")),
         deck=anki.get("deck", "Default"),
         note_type_name=str(anki.get("note_type_name", "Math Card")),
@@ -891,22 +1088,40 @@ def _sources(root: Path, spec: dict[str, Any], where: str) -> tuple[SourceConfig
             raise ConfigError(f"{where} sources[{i}] files is a list, even with one file in it")
         paths = tuple(p for p in (_opt_path(root, f) for f in files) if p is not None)
         key = str(raw.get("key", "") or raw.get("zotero", "") or "")
-        if not key and paths:
-            key = paths[0].name
+        if not key:
+            # Named after what it reads, so every work has something to be
+            # addressed by: a unit's `document`, a `[[sources]]` table
+            # copied into another project, a filter that says which work.
+            # A `tex` source used to fall through this and end up with an
+            # empty key, which is a work nothing outside its own project
+            # could refer to.
+            tex = _opt_path(root, raw.get("tex"))
+            key = paths[0].name if paths else (tex.name if tex else "")
         out.append(
             SourceConfig(
                 key=key,
                 title=str(raw.get("title", "") or ""),
                 citation=str(raw.get("citation", "") or ""),
                 url=str(raw.get("url", "") or ""),
+                note=str(raw.get("note", "") or ""),
+                offer=_opt_bool(raw.get("offer")),
+                topics=tuple(str(x) for x in raw.get("topics", ()) or ()),
+                extract=_opt_bool(raw.get("extract")),
                 tex=_opt_path(root, raw.get("tex")),
                 files=paths,
                 zotero_key=str(raw.get("zotero", "") or ""),
                 attachments=tuple(str(x) for x in raw.get("attachments", ())),
                 crop_context=float(raw.get("crop_context", 0.0)),
+                context_pages=context_size(
+                    raw.get("context_pages", -1), f"{where} sources[{i}] context_pages"
+                ),
                 crop_width=_crop_width(raw.get("crop_width", ""), f"{where} sources[{i}]"),
-                units_from=_units_from(
-                    raw.get("units_from", ()), f"{where} sources[{i}] units_from"
+                units_from=(
+                    _units_from(
+                        raw["units_from"], f"{where} sources[{i}] units_from"
+                    )
+                    if "units_from" in raw
+                    else None
                 ),
                 convention_keyword=str(raw.get("convention_keyword", "") or ""),
                 meanings=_meanings(raw.get("meanings") or {}, f"{where} sources[{i}].meanings"),
@@ -1176,6 +1391,37 @@ def _refuse_a_repo_wide_convention(cards: Mapping[str, Any], path: Path) -> None
             "one book, not a repo-wide default -- move it to that source's "
             "`projects/<name>/project.toml`, under [conventions]."
         )
+
+
+#: How much a card writer is handed beyond the unit's own source.
+#:
+#: `none` is the strict one: what the crop says and nothing else, for a
+#: deck where anything read elsewhere is a way to drift. `references` is
+#: the shelf, which is where this tool started. `web` is the shelf and a
+#: search, which is off by default because the failure it prevents is
+#: invisible: the web is full of cleaner statements of the general theorem,
+#: and one of those substituted for the printed one looks like a better
+#: card right up until the exam turns on the condition the paper had.
+CONTEXT_LEVELS = ("none", "references", "web")
+
+
+def _context_word(value: Any, where: str) -> str:
+    """One of `CONTEXT_LEVELS`, or "" for nobody said.
+
+    `true` and `false` are accepted, because `web = true` is what this key
+    used to be: it says the web is allowed, and `web = false` says no more
+    than that the web is not, which is the middle setting rather than the
+    strict one. A repo that never chose keeps what it had.
+    """
+    if value is None or value == "":
+        return ""
+    if isinstance(value, bool):
+        return "web" if value else "references"
+    word = str(value).strip().lower()
+    if word not in CONTEXT_LEVELS:
+        known = ", ".join(CONTEXT_LEVELS)
+        raise ConfigError(f"{where} context: {value!r} is not one of: {known}")
+    return word
 
 
 def _opt_bool(value: Any) -> bool | None:

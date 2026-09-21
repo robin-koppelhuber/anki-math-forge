@@ -175,13 +175,37 @@ def test_no_context_chip_where_there_are_no_pages(page, live) -> None:  # type: 
 
 
 def test_the_tag_filter_narrows_the_deck(page, live) -> None:  # type: ignore[no-untyped-def]
+    """Nothing is listed until you ask: the box opens the list, typing
+    narrows it, and what is on comes back as a chip."""
     triage(page, live)
 
-    page.click('#tag-list [data-tag="views"] a')
+    assert page.locator("#pick-list").is_visible() is False
+    page.click("#pick-search")
+    page.fill("#pick-search", "vie")
+    page.wait_for_selector('#pick-list [data-pick="views"] a')
+    assert page.locator('#pick-list [data-pick="containers"]').is_visible() is False
+
+    page.click('#pick-list [data-pick="views"] a')
     page.wait_for_selector('[data-id="cpp:span-is-a-view"]')
 
     assert page.locator('[data-id="cpp:vector-erase-remove"]').count() == 0
-    assert "all tags" in page.locator("#filter-rail").inner_text()
+    assert "views" in page.locator("#pick-chips").inner_text()
+
+
+def test_two_tags_select_the_union(page, live) -> None:  # type: ignore[no-untyped-def]
+    """Or, not and. Picking a second one used to empty the deck."""
+    triage(page, live)
+
+    page.click("#pick-search")
+    page.click('#pick-list [data-pick="views"] a')
+    page.wait_for_selector('[data-id="cpp:span-is-a-view"]')
+    # The list stays open across the reload: picking two is what it is for.
+    page.wait_for_selector('#pick-list [data-pick="containers"] a', state="visible")
+    page.click('#pick-list [data-pick="containers"] a')
+    page.wait_for_selector('[data-id="cpp:vector-erase-remove"]')
+
+    assert page.locator('[data-id="cpp:span-is-a-view"]').count() == 1
+    assert page.locator(".pick-chip").count() == 2
 
 
 def test_triage_still_queues_a_unit(page, live, served) -> None:  # type: ignore[no-untyped-def]
@@ -216,16 +240,41 @@ def test_the_setup_view_shows_the_outline_and_what_is_open(page, live) -> None: 
     page.goto(f"{live}/setup?project=cpp")
     page.wait_for_selector("#topics")
 
+    # In the panel, beside the list: it is the number the screen is opened
+    # for, so it does not wait behind a click.
     assert "1 of 3" in page.locator(".setup-total").inner_text()
-    assert page.locator(".outline li.open").count() == 2
-    open_text = page.locator(".outline").inner_text()
-    assert "deque vs vector" in open_text
+
+    page.click('#setup-panel [data-pane="topic:the-standard-containers"]')
+    outline = page.locator('[data-pane="topic:the-standard-containers"] .outline')
+    assert outline.locator("li.open").count() == 2
+    assert "deque vs vector" in outline.inner_text()
+
+
+def test_picking_from_the_panel_shows_one_thing_at_a_time(page, live) -> None:  # type: ignore[no-untyped-def]
+    """A list and a panel: the project's own settings until you pick
+    something out of it, and the fragment says which so the panel you are
+    looking at is a link you can send."""
+    page.goto(f"{live}/setup?project=cpp")
+    page.wait_for_selector("#topics")
+
+    assert page.locator('[data-pane="project"].setup-pane').is_visible()
+    assert page.locator('[data-pane="topic:the-standard-containers"].setup-pane') \
+        .is_visible() is False
+
+    page.click('#setup-panel [data-pane="topic:the-standard-containers"]')
+    assert page.locator('[data-pane="project"].setup-pane').is_visible() is False
+    assert "#topic:the-standard-containers" in page.url
+
+    # And the link works on its own, which is the point of putting it there.
+    page.goto(f"{live}/setup?project=cpp#topic:the-standard-containers")
+    page.wait_for_selector('[data-pane="topic:the-standard-containers"].setup-pane')
+    assert page.locator('[data-pane="project"].setup-pane').is_visible() is False
 
 
 def test_the_setup_view_reaches_the_unit_an_entry_produced(page, live) -> None:  # type: ignore[no-untyped-def]
     """A covered entry is a link, because the next thing you want after
     seeing that something was proposed is to look at it."""
-    page.goto(f"{live}/setup?project=cpp")
+    page.goto(f"{live}/setup?project=cpp#topic:the-standard-containers")
     page.click('.outline li.covered a:has-text("vector erase-remove")')
     page.wait_for_selector('[data-id="cpp:vector-erase-remove"]')
 
@@ -236,6 +285,7 @@ def test_recording_an_ask_from_the_view(page, live, served) -> None:  # type: ig
     """The one write this screen makes, and it is a file edit."""
     _, repo = served
     page.goto(f"{live}/setup?project=cpp")
+    page.click('#setup-panel [data-pane="new-topic"]')
     page.fill("#topic-name", "iterator invalidation")
     page.fill("#topic-ask", "when each container invalidates.")
     page.click('#add-topic button[type="submit"]')
@@ -244,6 +294,25 @@ def test_recording_an_ask_from_the_view(page, live, served) -> None:  # type: ig
     text = (repo / "projects" / "cpp" / "topics.md").read_text(encoding="utf-8")
     assert "## iterator invalidation" in text
     assert "when each container invalidates." in text
+    # And it lands on what it just recorded, which is where you were going.
+    assert "#topic:iterator-invalidation" in page.url
+
+
+def test_starting_a_project_from_the_picker(page, live, served) -> None:  # type: ignore[no-untyped-def]
+    """In the picker, which is where you go when the one you want is not on
+    the list. It used to be on the setup stage, which is the screen about
+    *this* project and the wrong place to make another."""
+    _, repo = served
+    triage(page, live)
+    page.click("#project-pick")
+    page.wait_for_selector("#shelf-grid")
+    assert "/projects" in page.url, "the picker is a page now"
+    page.fill("#project-name", "rust ownership")
+    page.fill("#project-deck", "Rust")
+    page.click('#start-project button[type="submit"]')
+    page.wait_for_url("**/setup?project=rust-ownership")
+
+    assert (repo / "projects" / "rust-ownership" / "project.toml").exists()
 
 
 def test_the_setup_view_is_reachable_from_triage(page, live) -> None:  # type: ignore[no-untyped-def]

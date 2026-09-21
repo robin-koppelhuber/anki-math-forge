@@ -170,11 +170,17 @@ and `derivation` and nothing else.
 
 ## Looking things up
 
-`context` ends with a section headed *looking things up*, which says whether
-web research is permitted for this unit. It is off unless somebody granted it,
-and the card's own `web:` overrides.
+`context` ends with a section headed *looking things up*, which says which
+of three things this unit allows: the project's references, those and the
+web, or nothing at all. The card's own `web:` overrides.
 
-When it says no, a gap in the source is an `@me` note, not a search. The web
+**The references are yours to read whenever they are handed over**, which
+is the usual case. Each is a place somebody agreed a card here can be
+checked against, with a line saying what it is for; a condition you are
+about to add is exactly what one is for. They are where to look and never
+what to write: the source still settles what is printed.
+
+When it says no web, a gap in the source is an `@me` note, not a search. The web
 has a cleaner statement of nearly every result on these pages, and
 substituting one produces a card that reads better than a correct one until
 the hypothesis the paper had turns out to be the whole point. When it says

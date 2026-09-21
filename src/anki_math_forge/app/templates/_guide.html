@@ -111,7 +111,7 @@
            only place it would otherwise be visible. #}
         <dt>declares</dt>
         <dd>{% if sf.declared %}
-            {%- for key, value in sf.declared %}<code>{{ key }}</code> {{ value }}{{ '' if loop.last else '; ' }}{% endfor %}
+            {%- for key, value in sf.declared %}<code>{{ key }}</code> {{ value | inline }}{{ '' if loop.last else '; ' }}{% endfor %}
             {%- else %}<span class="warn">none declared</span>. Nothing in
             <code>[conventions]</code>, so <code>verify</code> has no layout to
             check against and refuses rather than guess{% endif %}</dd>
@@ -119,12 +119,22 @@
         <dd>{% if sf.web %}card writers may look things up
             {{ 'for this source' if sf.web_own else '(repo-wide)' }}
             {%- else %}no lookups. A card says what this source says{% endif %}</dd>
+        {# Only where one work answers for the whole project. Both of these
+           are facts about a document, and a project may read several: the
+           number under the project's name would be one book's. #}
+        {% if sf.one_work %}
         <dt>crops</dt>
         <dd>{{ 'full page width' if sf.crop_width == 'page' else 'the box itself' }},
             {{ sf.crop_context | round | int }}pt around it</dd>
         <dt>context</dt>
-        <dd>{{ sf.context_pages }} page{{ '' if sf.context_pages == 1 else 's' }}
-            either side, per card written</dd>
+        <dd>{% if sf.context_pages == 'chapter' %}the chapter it is in, per card written
+            {%- else %}{{ sf.context_pages }} page{{ '' if sf.context_pages == 1 else 's' }}
+            either side, per card written{% endif %}</dd>
+        {% else %}
+        <dt>crops</dt>
+        <dd>per source: this project reads several, and how a page is cut is a
+            fact about the document. The setup stage shows each</dd>
+        {% endif %}
         <dt>and reads</dt>
         <dd>{% if sf.conventions %}the prose in <code>conventions.md</code>
             {%- else %}<span class="warn">no conventions.md</span>. Whoever
@@ -305,9 +315,10 @@
           everything, then hidden. Drag either edge to resize it. The left
           rail is what <b>acts</b>; this one only tells you what you are
           looking at.</dd>
-      <dt><b>{{ key('sources') }}</b> sources</dt>
-      <dd>Every source at once, with how far along each one is. Narrow it by
-          tag or by where the material came from.</dd>
+      <dt><b>{{ key('projects') }}</b> projects</dt>
+      <dd>Every project at once, with how far along each one is, as a page
+          rather than a panel over this one. Narrow it by tag: two tags
+          narrow, because a project's tags are facets of one thing.</dd>
     </dl>
 
     <h3>filters</h3>
@@ -315,6 +326,13 @@
       <dt>new / queued / skipped / carded</dt>
       <dd>The unit's state. <b>new</b> is untriaged, <b>carded</b> means a
           card exists for it.</dd>
+      {# The one thing about that control you cannot see by looking at it. #}
+      <dt>tags</dt>
+      <dd>Nothing is listed until you click the box; type to narrow it. What
+          is on shows as a chip underneath, and several of them select
+          <b>either</b>, not both: two tags is the union of the two, not the
+          handful carrying each. On the review side the same box offers the
+          two gradings as well.</dd>
       <dt>transcribed</dt>
       <dd>Only units whose <code>tex_auto</code> passed the KaTeX gate, so the
           maths is written out beside the crop instead of only pictured. The
@@ -419,8 +437,8 @@
           the list, so <b>{{ key('prev') }}</b> reaches it.</dd>
       <dt><b>{{ key('filters') }}</b> filters &middot; <b>{{ key('guide') }}</b> this guide</dt>
       <dd>Both panels toggle; drag either edge to resize it.</dd>
-      <dt><b>{{ key('sources') }}</b> sources</dt>
-      <dd>Every source at once, with how far along each one is.</dd>
+      <dt><b>{{ key('projects') }}</b> projects</dt>
+      <dd>Every project at once, with how far along each one is.</dd>
     </dl>
 
     <h3>what a card is made of</h3>
@@ -506,7 +524,8 @@
             {%- for e in row.entries %}<span class="swatch c-{{ e.colour or e.kind }}" aria-hidden="true"></span>{% endfor -%}
             <b class="sl-label">{{ row.label }}</b>
           </span>
-          <span class="sl-meaning">{{ row.meaning }}</span>
+          <span class="sl-meaning">{{ row.meaning }}
+            {%- if row.works %} <i class="sl-work">in {{ row.works | join(', ') }}</i>{% endif %}</span>
           <b class="sl-count">{{ row.count }}</b>
         </li>
         {% endfor %}
@@ -516,6 +535,12 @@
         declared. They read as what Zotero calls the annotation <em>kind</em>,
         which is not what you used it to mean, and until one is declared it
         reaches a card writer as a coloured box with no caption.</p>
+      {% endif %}
+      {% if scheme | selectattr('works') | first %}
+      {# Two works that read the same mark differently. Printing one of the
+         readings over the other is the thing this label exists to stop. #}
+      <p class="scheme-default">Two of this project's works read a mark
+        differently, so those rows say which one they speak for.</p>
       {% endif %}
       <p class="rail-more">declared in <code>[zotero.meanings]</code> as
         <code>"kind/colour"</code>, or per source in <code>project.toml</code></p>

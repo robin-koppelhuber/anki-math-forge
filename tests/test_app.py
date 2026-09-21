@@ -11,6 +11,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from anki_math_forge import app as app_mod
+from anki_math_forge import config as config_mod
 from anki_math_forge import extract, model
 from anki_math_forge.app import _chapter_of, create_app
 from anki_math_forge.config import Config
@@ -1283,12 +1285,15 @@ def write_card(config: Config, uid: str, unit: str) -> Path:
 
 def test_source_picker_is_on_both_views(client: TestClient, card_path: Path) -> None:
     """It renders for a single source too. Its absence was what made the units
-    view look like it was showing every book at once."""
+    view look like it was showing every book at once.
+
+    A link now, not a button that opens a dialog: the shelf is a page, and a
+    modal with a left rail in it is a page that has not admitted it yet."""
     for url in ("/units", "/review"):
         body = client.get(url).text
         assert 'id="project-pick"' in body, url
         assert "demo" in body, url
-        assert 'id="gallery"' in body, url
+        assert 'href="/projects"' in body, url
 
 
 def test_the_gallery_lists_every_configured_source(pdf_source: Config) -> None:
@@ -2366,3 +2371,138 @@ def test_the_settled_list_is_shut_until_it_is_asked_for(pdf_source: Config) -> N
     assert "too thin" in body
     # A `<details>` with no `open`, so it renders shut.
     assert '<details class="settled-notes">' in body
+
+
+# -- the shelf, as a page ---------------------------------------------------
+
+
+def test_the_app_opens_on_the_shelf(client: TestClient) -> None:
+    """Landing on a deck meant landing on whichever project happened to be
+    first, which is an answer to a question nobody asked. What you do first
+    is choose what to work on."""
+    answer = client.get("/", follow_redirects=False)
+
+    assert answer.status_code in (302, 307)
+    assert answer.headers["location"] == "/projects"
+
+
+def test_the_shelf_lists_every_project(pdf_source: Config) -> None:
+    page = TestClient(create_app(pdf_source)).get("/projects").text
+
+    assert "demo" in page and "book" in page
+    assert 'id="shelf-search"' in page, "and keeps the search it had as a dialog"
+
+
+def test_the_shelf_has_no_project_in_force(pdf_source: Config) -> None:
+    """It is the one screen that is not about a project: choosing one is
+    what it is for. The bar used to name whichever project sorted first and
+    offer its setup stage, which answers a question nobody asked and offers
+    a stage for a project nobody picked."""
+    page = TestClient(create_app(pdf_source)).get("/projects").text
+
+    assert 'id="project-pick"' not in page
+    assert "project setup" not in page
+    assert 'id="config-open"' not in page, "settings resolve against a project"
+
+
+def test_the_shelf_follows_every_project_rather_than_the_first(
+    pdf_source: Config,
+) -> None:
+    """The poll behind the reload hint. With no scope it falls back to
+    whichever project sorts first, so the shelf would offer a reload
+    because that one changed and stay quiet when any other did."""
+    # In the *other* project, which is the whole point: the poll with no
+    # scope only ever sees the one that resolves first.
+    write_card(pdf_source, "aaa111", "book:1:1")
+    client = TestClient(create_app(pdf_source))
+
+    one = client.get("/api/counts").json()["pipeline"]
+    every = client.get("/api/counts?scope=repo").json()["pipeline"]
+
+    assert one["draft"] == 0, "the project that resolves first has nothing in it"
+    assert every["draft"] == 1, "and the shelf counts the one that does"
+
+
+def test_the_shelf_puts_its_search_in_the_bar(pdf_source: Config) -> None:
+    """With nothing about a project to say up there, the row carries the one
+    control the page is used with, and the rail starts directly under it
+    instead of under a second band with a heading in it."""
+    page = TestClient(create_app(pdf_source)).get("/projects").text
+    head = page[page.index("<header") : page.index("</header>")]
+
+    assert 'id="shelf-search"' in head
+    assert "<h1>projects</h1>" not in page, "the bar already says where you are"
+
+
+def _tagged_shelf(repo: Path) -> Config:
+    """Three projects whose tags overlap: the question the shelf asks is
+    which of them is the paper about C++."""
+    toml = (repo / "forge.toml").read_text(encoding="utf-8")
+    for name, tags in (
+        ("cpp-book", ["cpp", "book"]),
+        ("cpp-paper", ["cpp", "paper"]),
+        ("ml-paper", ["ml", "paper"]),
+    ):
+        toml += f'\n[projects.{name}]\ntitle = "{name}"\ntags = {tags!r}\n'
+    (repo / "forge.toml").write_text(toml.replace("'", '"'), encoding="utf-8")
+    return config_mod.load(repo)
+
+
+def test_two_tags_on_the_shelf_narrow_rather_than_widen(repo: Path) -> None:
+    """The opposite of the deck rail, and deliberately. A unit's tags are
+    subjects it could be about, so two of them is a union; a project's are
+    facets of one thing, and asking for `cpp` and `paper` means the paper
+    about C++, not everything about either."""
+    client = TestClient(create_app(_tagged_shelf(repo)))
+
+    both = client.get("/projects?tag=cpp,paper").text
+    grid = both[both.index('id="shelf-grid"') :]
+    assert "cpp-paper" in grid
+    assert "cpp-book" not in grid and "ml-paper" not in grid
+
+    one = client.get("/projects?tag=cpp").text
+    assert one[one.index('id="shelf-grid"') :].count('class="gsource"') == 2
+
+
+def test_a_tag_counts_what_choosing_it_would_leave(repo: Path) -> None:
+    """Counted over what is on screen, not over the whole shelf: these
+    narrow each other, so a count from the whole shelf promises nine and
+    delivers one. A tag that would leave nothing still shows, dimmed and
+    reading zero, so the list does not reshuffle as you click."""
+    rows = app_mod.shelf_tag_rows(
+        [{"tags": ["cpp", "book"]}, {"tags": ["cpp", "paper"]}, {"tags": ["ml"]}],
+        [{"tags": ["cpp", "paper"]}],
+        ["paper"],
+    )
+    counts = {row["key"]: row["count"] for row in rows}
+
+    assert counts == {"cpp": 1, "paper": 1, "book": 0, "ml": 0}
+    assert [r["key"] for r in rows] == ["cpp", "book", "ml", "paper"], "a stable order"
+    assert next(r for r in rows if r["key"] == "book")["out"], "a dead end says so"
+    assert not next(r for r in rows if r["key"] == "paper")["out"], "the chosen one"
+
+
+def test_material_is_a_label_and_not_a_filter(pdf_source: Config) -> None:
+    """Where a project's material came from is worth saying on the card and
+    is not how anyone picks one: you choose by name, by subject, or by how
+    much is left to do."""
+    page = TestClient(create_app(pdf_source)).get("/projects").text
+
+    assert "a file here" in page or "LaTeX source" in page, "said on the card"
+    assert 'id="shelf-material"' not in page, "and not a control"
+
+
+def test_the_shelf_commands_are_split_by_what_they_do(pdf_source: Config) -> None:
+    """An info command shows you something and an action command changes a
+    file, and that difference is the whole reason these are copied rather
+    than launched."""
+    page = TestClient(create_app(pdf_source)).get("/projects").text
+
+    assert "info commands" in page
+    assert "action commands" in page
+    # What you came for first: the action commands are the work, and the
+    # ones that only look are what you check afterwards.
+    assert page.index("action commands") < page.index("info commands")
+    assert page.index("forge zotero --tag anki") < page.index("forge check")
+    # And each half folds on its own.
+    assert page.count('class="runs-half"') == 2

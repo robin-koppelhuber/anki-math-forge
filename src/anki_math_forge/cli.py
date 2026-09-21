@@ -110,7 +110,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--project",
         default=None,
-        help="which source to file the units under (default: the cite key)",
+        help=(
+            "which project to file the units under (default: the cite key). "
+            "On its own, with no item and no --tag, it re-reads the Zotero "
+            "items that project already declares: the narrow form of a "
+            "re-import, for when you have marked up more of a book you have "
+            "already imported once"
+        ),
     )
     p.add_argument(
         "--dry-run",
@@ -129,6 +135,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_zotero)
+
+    p = subs.add_parser(
+        "sources",
+        help="every work in the repo, whichever project reads it",
+    )
+    p.add_argument("--project", default=None, help="only the works this one reads")
+    p.add_argument(
+        "--remove",
+        default=None,
+        metavar="KEY",
+        help="take this work out of --project: its table and the units it owns",
+    )
+    p.add_argument(
+        "--force", action="store_true", help="remove it even though cards stand on it"
+    )
+    p.add_argument(
+        "--dry-run", action="store_true", help="with --remove, say what would go"
+    )
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_sources)
 
     p = subs.add_parser(
         "export",
@@ -159,6 +185,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--citation",
         default="",
         help="what a card's `source` line says when nothing more specific does",
+    )
+    p.add_argument(
+        "--delete",
+        action="store_true",
+        help="remove it instead: its folder, its cards, and its table in forge.toml",
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help="delete it even though it holds cards",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="with --delete, say what would go and take nothing",
     )
     p.set_defaults(run=cmd_project)
 
@@ -289,6 +330,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     p.add_argument("--preview", default=None, metavar="TEXT", help="a short sample, for --add")
+    p.add_argument(
+        "--document",
+        default="",
+        metavar="KEY",
+        help=(
+            "which of --project's works --add's unit came out of, by source key or "
+            "file name. Only needed where a project reads several: it is what "
+            "settles the crop and context settings for the unit, and what links "
+            "an ask to the works it drew on"
+        ),
+    )
     p.add_argument("--lang", default="", help="what --preview is written in, e.g. `cpp`")
     p.add_argument(
         "--ref",
@@ -435,6 +487,16 @@ def build_parser() -> argparse.ArgumentParser:
     p = subs.add_parser("sync", help="push approved cards to Anki, upserting by uid")
     p.add_argument("--dry-run", action="store_true")
     p.add_argument(
+        "--project",
+        default=None,
+        help=(
+            "push only this project's approved cards. The lint stays "
+            "repo-wide, because two cards sharing a uid are a collision "
+            "whichever projects they are in; nothing is deleted either way, "
+            "so the rest are simply left where they are"
+        ),
+    )
+    p.add_argument(
         "--templates",
         action="store_true",
         help=(
@@ -539,9 +601,26 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
             if not items:
                 print(f"no Zotero item matches {args.item!r}", file=sys.stderr)
                 return MISUSE
+        elif args.project:
+            # This project's own items, by the keys it already declares. The
+            # narrow end of the same command: `--tag anki` is every shelf you
+            # marked up, and this is the one book in front of you.
+            spec = config.projects.get(args.project)
+            keys = [w.zotero_key for w in spec.sources if w.zotero_key] if spec else []
+            if not keys:
+                print(
+                    f"{args.project!r} declares no Zotero item to re-read",
+                    file=sys.stderr,
+                )
+                return MISUSE
+            items = [found for key in keys for found in _zotero_lookup(client, key)]
+            if not items:
+                print(f"no Zotero item matches {', '.join(keys)}", file=sys.stderr)
+                return MISUSE
         else:
             print(
-                "name an item (cite key or Zotero key), or --tag to take a whole shelf",
+                "name an item (cite key or Zotero key), --project for the ones "
+                "one project declares, or --tag to take a whole shelf",
                 file=sys.stderr,
             )
             return MISUSE
@@ -550,22 +629,70 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
         for item in items:
             source = args.project or _project_name(item)
             spec = config.projects.get(source)
+            # This item's own table, if the project already declares it.
+            # By the key in hand rather than by `spec.source()`, which
+            # answers for the project as a whole and so answered nothing
+            # once there was a second source on the shelf: the run then
+            # read the repo-wide scheme and every attachment, ignoring the
+            # `units_from` and the `documents` this work states.
+            mine = (
+                next((w for w in spec.sources if w.zotero_key == item.key), None)
+                if spec
+                else None
+            )
+            # `extract = false` means no units come out of this work, and
+            # an import is the one place that would add some. Refused
+            # rather than warned about: the switch says what it says, and
+            # re-running to refresh the title and the attachments, which is
+            # the other reason to run this, still works. So does the text
+            # layer, which is context for the units already there.
+            refused = mine is not None and not mine.authoritative
             report = zotero_units.build(
                 client,
                 item,
                 source=source,
-                zotero=config.zotero_for(source),
-                documents=(work.attachments if (work := spec.source() if spec else None) else ()),
-                text_for=None if args.dry_run else _text_cacher(config, source),
+                zotero=config.zotero_for(source, item.key),
+                documents=mine.attachments if mine else (),
+                # Cached under whoever extracts from the *item*, which is
+                # the one project that can. An attachment key is not
+                # declared anywhere, so the item is what resolves it.
+                text_for=None
+                if args.dry_run
+                else _text_cacher(config, config.extracting(item.key) or source),
             )
-            reports.append((source, item, report))
-            if not args.dry_run and report.units:
+            reports.append((source, item, report, refused))
+            if not args.dry_run:
                 stub = config.projects_dir / source / PROJECT_TOML
-                scheme = config.zotero_for(source)
+                # This work's own scheme, by the key in hand. Without the
+                # key it resolved for the project, which is the repo
+                # default once there is a second source declared.
+                scheme = config.zotero_for(source, item.key)
                 # The scheme in force, written into the stub commented out, so
                 # the first thing you see when you go to override one of these
                 # keys is the value you are replacing.
+                stub.parent.mkdir(parents=True, exist_ok=True)
                 fresh = zotero_units.write_source_stub(stub, item, scheme=scheme)
+                # And into a project that already has a file, a table of its
+                # own. Whether or not anything was marked: the import says
+                # this project reads the work, and you mark a book up over
+                # weeks. Without this, importing into an existing project
+                # declared nothing, and importing a book you had not marked
+                # yet wrote nothing at all.
+                declared = fresh or projects_mod.declare_zotero(
+                    config,
+                    source,
+                    key=item.key,
+                    title=item.title,
+                    citation=item.citation,
+                )
+            if refused and report.units:
+                print(
+                    f"  {source} has extraction off for {item.key}, so its"
+                    f" {len(report.units)} marks stay marks. Turn `units are"
+                    " extracted from this` on to import them.",
+                    file=sys.stderr,
+                )
+            if not args.dry_run and report.units and not refused:
                 ledger = ledger_mod.Ledger.load(config.units_path(source))
                 added, refreshed = ledger.upsert(report.units)
                 # Narrowing `documents` leaves the earlier import behind,
@@ -593,10 +720,30 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                     )
                 if fresh:
                     report_line += f"; wrote {stub.relative_to(config.root)}"
+                elif declared:
+                    report_line += f"; declared in {stub.relative_to(config.root)}"
+            elif refused:
+                # Before the dry-run branch: "nothing written" is true of
+                # a dry run and says the wrong reason for this one, where
+                # nothing would be written either way.
+                report_line = (
+                    "nothing would be imported" if args.dry_run else "none imported"
+                ) + ", extraction is off for this work"
+            elif args.dry_run:
+                report_line = "nothing written"
             else:
-                report_line = "nothing written" if args.dry_run else "no units"
+                # Declared and empty is a normal state, not a failure: you
+                # have the book and have not marked it up yet. Saying "no
+                # units" alone read as "nothing happened".
+                report_line = "no marks yet"
+                if fresh or declared:
+                    where = stub.relative_to(config.root)
+                    report_line += (
+                        f"; {'wrote' if fresh else 'declared in'} {where}."
+                        " Mark it up in Zotero and run this again"
+                    )
             if not args.json:
-                _print_zotero(source, item, report, report_line)
+                _print_zotero(source, item, report, report_line, refused=refused)
     except zotero_api.ZoteroError as exc:
         print(str(exc), file=sys.stderr)
         return FAILED
@@ -604,27 +751,11 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
     if args.json:
         print(
             json.dumps(
-                [
-                    {
-                        "source": source,
-                        "item": item.key,
-                        "citation": item.citation,
-                        "documents": r.documents,
-                        "attachments": [
-                            {"key": key, "title": title, "read": taken}
-                            for key, title, taken in r.attachments
-                        ],
-                        "marks": r.annotations,
-                        "units": [u.id for u in r.units],
-                        "unmapped": r.unmapped,
-                        "skipped": r.skipped,
-                    }
-                    for source, item, r in reports
-                ],
+                [_zotero_row(source, item, r, no) for source, item, r, no in reports],
                 indent=2,
             )
         )
-    return OK if all(r.ok for _, _, r in reports) else FAILED
+    return OK if all(r.ok for _, _, r, _ in reports) else FAILED
 
 
 def _list_zotero(client: Any, config: Config, args: argparse.Namespace) -> int:
@@ -710,11 +841,49 @@ def _project_name(item: Any) -> str:
     return item.citation_key or item.key
 
 
-def _print_zotero(source: str, item: Any, report: Any, written: str) -> None:
+def _zotero_row(source: str, item: Any, report: Any, refused: bool) -> dict[str, Any]:
+    """One import, as the machine interface reports it.
+
+    `units` is what is in the ledger, so a refused run says none and puts
+    what it would have made under `would_make`. The refusal used to be on
+    stderr only, and `--json` is the interface this repo tells you to read
+    from, so a row listing two units beside an empty ledger was the one
+    place it could not be checked.
+    """
+    return {
+        "source": source,
+        "item": item.key,
+        "citation": item.citation,
+        "documents": report.documents,
+        "attachments": [
+            {"key": key, "title": title, "read": taken}
+            for key, title, taken in report.attachments
+        ],
+        "marks": report.annotations,
+        "units": [] if refused else [u.id for u in report.units],
+        **(
+            {
+                "refused": "extraction is off for this work",
+                "would_make": [u.id for u in report.units],
+            }
+            if refused
+            else {}
+        ),
+        "unmapped": report.unmapped,
+        "skipped": report.skipped,
+    }
+
+
+def _print_zotero(
+    source: str, item: Any, report: Any, written: str, *, refused: bool = False
+) -> None:
     print(f"{item.citation}  ->  {source}")
+    # A refused run counts marks and no units. Printing the units it would
+    # have made, beside a `written` reading "none imported", said both
+    # things in one sentence.
+    made = written if refused else f"{len(report.units)} units; {written}"
     print(
-        f"  {report.annotations} marks on {report.documents} document(s): "
-        f"{len(report.units)} units; {written}"
+        f"  {report.annotations} marks on {report.documents} document(s): {made}"
         + (f"; {report.text_chars // 1000}k chars of text layer" if report.text_chars else "")
     )
     # Every PDF on the item, every run. You cannot choose between attachments
@@ -798,13 +967,15 @@ def cmd_export(args: argparse.Namespace, config: Config) -> int:
 
 
 def cmd_project(args: argparse.Namespace, config: Config) -> int:
-    """Scaffold a project that reads nothing.
+    """Scaffold a project that reads nothing, or delete one.
 
     The writing lives in `projects.scaffold`, because the setup stage in the
     app offers the same thing and the two must produce the same file: that
     is invariant 2, and the way to keep it true is one function rather than
     two that agree today.
     """
+    if args.delete:
+        return _delete_project(args, config)
     made = projects_mod.scaffold(
         config,
         args.name,
@@ -824,6 +995,49 @@ def cmd_project(args: argparse.Namespace, config: Config) -> int:
         return FAILED
     print(f"{config.projects_dir / made / PROJECT_TOML}")
     print(f"  propose into it with: forge units --project {made} --add '<subject>'")
+    return OK
+
+
+def _delete_project(args: argparse.Namespace, config: Config) -> int:
+    """`forge project <name> --delete`.
+
+    Prints what it takes, every time, whether or not it took it: a delete
+    that says nothing is one you cannot check afterwards. `--dry-run` is the
+    same report with nothing removed.
+
+    The name, not a title: a project is a folder, and deleting the wrong one
+    because two projects are called "notes" is exactly the mistake worth
+    making impossible.
+    """
+    try:
+        going = (
+            projects_mod.removal(config, args.name)
+            if args.dry_run
+            else projects_mod.remove(config, args.name, force=args.force)
+        )
+    except ConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return FAILED
+    verb = "would remove" if args.dry_run else "removed"
+    for path in (going.folder, going.cards_dir):
+        if path is not None:
+            print(f"  {verb} {path}")
+    if going.declared:
+        where = "would drop" if args.dry_run else "dropped"
+        print(f"  {where} [projects.{going.project}] from forge.toml")
+    if going.units or going.cards:
+        print(f"  {going.units} units, {going.cards} cards")
+    if going.approved:
+        # Nothing local records a note id, so the only honest thing to do is
+        # say the notes are still there and let whoever ran this decide.
+        print(
+            f"  {going.approved} of those cards were approved and are already"
+            f" notes in Anki. This does not remove them; delete them there,"
+            f" or leave them.",
+            file=sys.stderr,
+        )
+    if going.empty and going.folder is None and not going.declared:
+        print(f"  {going.project} was already gone")
     return OK
 
 
@@ -997,6 +1211,12 @@ def _add_unit(args: argparse.Namespace, config: Config) -> int:
         led.units.append(
             ledger_mod.Unit(
                 id=unit_id,
+                # Whatever locator it has, which for a proposal is usually
+                # nothing at all. A work, where the project reads several:
+                # `crop_context` and the page window are facts about a
+                # document, and without this one there is nothing to resolve
+                # them against.
+                locator=ledger_mod.Locator(document=args.document),
                 gist=args.gist or "",
                 preview=args.preview or "",
                 lang=args.lang,
@@ -1049,7 +1269,9 @@ def _mutate_unit(
                     None if isinstance(asked_for, int) and asked_for < 0 else asked_for
                 )
                 led.save()
-                asked = config.context_pages_for(target.project, target.context_pages)
+                asked = config.context_pages_for(
+                    target.project, target.context_pages, target.locator.document
+                )
                 print(
                     f"{args.id}: card writers get "
                     + (
@@ -1466,6 +1688,81 @@ def cmd_feedback(args: argparse.Namespace, config: Config) -> int:
     return OK if report.ok else FAILED
 
 
+def _remove_source(args: argparse.Namespace, config: Config) -> int:
+    """`forge sources --remove <key> --project <name>`.
+
+    Prints what it takes every time, whether or not it took it: a removal
+    that says nothing is one you cannot check afterwards.
+    """
+    if not args.project:
+        print("--remove needs --project: a work is read by one", file=sys.stderr)
+        return MISUSE
+    try:
+        going = (
+            projects_mod.source_removal(config, args.project, args.remove)
+            if args.dry_run
+            else projects_mod.remove_source(
+                config, args.project, args.remove, force=args.force
+            )
+        )
+    except ConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return FAILED
+    verb = "would remove" if args.dry_run else "removed"
+    print(f"  {verb} {going.key} ({going.title}) from {going.project}")
+    if going.units:
+        print(f"  {'and' if not args.dry_run else 'would take'} {going.units} units with it")
+    if going.cards:
+        print(f"  {going.cards} cards stood on it", file=sys.stderr)
+    if going.approved:
+        print(
+            f"  {going.approved} of them were approved and are already notes in"
+            " Anki. This does not remove them; delete them there, or leave them.",
+            file=sys.stderr,
+        )
+    return OK
+
+
+def cmd_sources(args: argparse.Namespace, config: Config) -> int:
+    """Every work, across every project.
+
+    A source used to *be* a project, so "which sources are there" was the
+    project list. It is a thing inside one now, and a paper can sit in two:
+    cited by one project and extracted from by another. Nothing listed them
+    across projects, so answering "have I got this already" meant opening
+    every TOML (ROADMAP.md 10).
+    """
+    from .app import every_work
+
+    if args.remove:
+        return _remove_source(args, config)
+    rows = every_work(config)
+    if args.project:
+        rows = [r for r in rows if r["project"] == args.project]
+    if args.json:
+        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        return OK
+    if not rows:
+        print("no works declared yet")
+        return OK
+    width = max(len(str(r["title"])) for r in rows)
+    for row in rows:
+        # Three words, because there are three states. A document with
+        # extraction off is neither of the other two: it keeps the units
+        # it made and makes no more, and calling it a plain `reference`
+        # put it in the same column as a URL on the shelf.
+        kind = (
+            "authoritative"
+            if row["authoritative"]
+            else "extraction off"
+            if row["document"]
+            else "reference"
+        )
+        where = row["url"] or row["zotero"] or ", ".join(row["files"]) or "-"
+        print(f"{row['title']!s:<{width}}  {row['project']}  {kind:<15}  {where}")
+    return OK
+
+
 def cmd_sync(args: argparse.Namespace, config: Config) -> int:
     from . import sync as sync_mod
 
@@ -1475,6 +1772,7 @@ def cmd_sync(args: argparse.Namespace, config: Config) -> int:
         reposition_new=args.reposition,
         templates=args.templates,
         move_decks=args.move_decks,
+        project=args.project or "",
     )
     if args.json:
         print(

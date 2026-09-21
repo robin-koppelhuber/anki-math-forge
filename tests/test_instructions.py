@@ -43,6 +43,11 @@ def test_no_source_is_named(path: Path) -> None:
     """
     text = path.read_text(encoding="utf-8")
     for name in (d.name for d in (ROOT / "projects").iterdir() if d.is_dir()):
+        # Long enough to be a name rather than a word. A project called `c`
+        # or `ml` matches half the prose in every file here, and the check
+        # that fires on everything says nothing about any of it.
+        if len(name) < 4:
+            continue
         assert name not in text, f"{path.name} names the source {name!r}; use <source>"
 
 

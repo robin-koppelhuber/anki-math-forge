@@ -20,10 +20,16 @@ def runs(view: str, filters: dict[str, object], counts: dict[str, int], **kw: An
     return [c["run"] for c in commands_for(view, filters, counts, **kw)]
 
 
-def test_it_offers_transcription_only_when_something_is_untriaged() -> None:
+def test_it_offers_transcription_only_when_something_is_untranscribed() -> None:
+    """On what the pass would work on, not on the triage state. `new` stood
+    in for this, so a deck of sixteen new units that had all been read
+    offered the pass anyway and running it reported nothing to do."""
     base = {"project": "book", "state": "new"}
-    assert any("/transcribe" in r for r in runs("units", base, {"new": 12}))
-    assert not any("/transcribe" in r for r in runs("units", base, {"new": 0}))
+    assert any("/transcribe" in r for r in runs("units", base, {"untranscribed": 12}))
+    assert not any("/transcribe" in r for r in runs("units", base, {"untranscribed": 0}))
+    assert not any(
+        "/transcribe" in r for r in runs("units", base, {"new": 12, "untranscribed": 0})
+    ), "sixteen units nobody has triaged, all of them already read"
 
 
 def test_it_offers_card_writing_only_when_something_is_queued() -> None:
@@ -119,19 +125,16 @@ def test_a_marked_up_source_is_offered_neither_crop_pass() -> None:
     assert not any("/classify" in r for r in out)
 
 
-def test_a_marked_up_source_says_why_rather_than_going_quiet() -> None:
-    """An empty panel reads as a broken feature.
-
-    And what it says has to be true. It said "a mark carries its own text",
-    which is false for the two cases you would actually want transcribed: a
-    boxed region carries no text at all, and a highlight over a display
-    equation carries the PDF's mangled text layer.
-    """
+def test_a_marked_up_source_leaves_out_the_pass_without_explaining_itself() -> None:
+    """A panel of commands is a list of what to do, not a list of what not
+    to do. Two notes here said the transcription pass does not apply and how
+    to transcribe one unit anyway; they were written when an absent pass
+    left the panel empty, which it no longer does."""
     said = commands_for("units", {"project": "wegel"}, {"new": 16}, from_marks=True)
-    notes = [c["label"] for c in said if c["kind"] == "note"]
-    assert any("transcription" in label for label in notes)
-    assert not any("carries its own text" in label for label in notes)
-    assert any("--tex-auto" in label for label in notes), "and says the way out"
+
+    assert said, "still something to run"
+    assert not [c for c in said if c["kind"] == "note"]
+    assert not any("/transcribe" in c["run"] for c in said)
 
 
 def test_the_review_view_offers_review_things() -> None:

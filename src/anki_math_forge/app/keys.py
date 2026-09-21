@@ -18,7 +18,7 @@ and never mentions a letter.
 
 One key means one thing across the views that have it. `z` undoes everywhere,
 `u` takes the decision back to the state before it (a unit to `new`, a card to
-`draft`), `f` is about what you are shown, `g` is the source picker, `j` and
+`draft`), `f` is about what you are shown, `g` is the project shelf, `j` and
 `k` move. That is the whole rule, and it is worth more than any individual
 mnemonic: a key that means "approve" here and "show everything" there is a key
 you have to think about.
@@ -140,7 +140,7 @@ SHARED: dict[str, str] = {
     "u": "back to the state before the decision: a unit to `new`, a card to `draft`",
     "x": "clear what is under the cursor: an annotation, or a hand-placed position",
     "f": "what you are shown: the filter rail, or the canvas's one filter",
-    "g": "the source picker",
+    "g": "every project, with its counts",
     "n": "write the `@claude` note",
     "N": "park an `@me` decision",
     "j": "next",

@@ -11,6 +11,7 @@
    `EMPTY_VIEW_KEYS` on the Python side, so the two cannot drift. */
 bindKeys({
   filters: toggleFilters,
-  projects: openGallery,
+  // The shelf is a page now, not a dialog over this one.
+  projects: () => (location.href = "/projects"),
   guide: cycleGuide,
 });

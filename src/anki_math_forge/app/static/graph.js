@@ -628,10 +628,21 @@ function describe() {
     : `No cards in ${data.project} yet. Card some units first.`;
 }
 
-/* Which subject is being looked at alone, or "" for all of them. Kept in
-   the URL as well as here, so the picture you are looking at is a link you
-   can send -- the same promise the two list views make about their filters. */
-let tag = new URL(location.href).searchParams.get("tag") || "";
+/* Which subjects are being looked at alone, or "" for all of them. The same
+   comma-separated `has` the two list views carry, so a filter means one thing
+   across the app and several of them select the union here too. Kept in the
+   URL as well as here, so the picture you are looking at is a link you can
+   send, which is the same promise the list views make about their filters. */
+let has = new URL(location.href).searchParams.get("has") || "";
+
+/* Add this one to the selection, or take it out if it is already in. The
+   server does the same in `pick_toggle`; this is the one control that builds
+   its own links. */
+function toggleHas(key) {
+  const chosen = has.split(",").map((k) => k.trim()).filter(Boolean);
+  const kept = chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key];
+  return kept.join(",");
+}
 
 /* The subjects this source's cards carry, as a row of toggles beside the
    `drawn` group. A select would hide the counts, and the counts are how you
@@ -647,12 +658,12 @@ function paintTags() {
   for (const row of rows) {
     const button = el("button", `ctx-step${row.on ? " on" : ""}`, `${row.name} ${row.count}`);
     button.type = "button";
-    button.title = row.on ? "click to draw every subject" : `only ${row.name}`;
+    button.title = row.on ? "click to stop filtering by it" : `add ${row.name} to the filter`;
     button.addEventListener("click", () => {
-      tag = row.on ? "" : row.name;
+      has = toggleHas(row.key);
       const url = new URL(location.href);
-      if (tag) url.searchParams.set("tag", tag);
-      else url.searchParams.delete("tag");
+      if (has) url.searchParams.set("has", has);
+      else url.searchParams.delete("has");
       history.replaceState(null, "", url);
       load({ recentre: true });
     });
@@ -664,7 +675,7 @@ async function load({ recentre: centre = true } = {}) {
   const project = stage.dataset.project;
   const parts = [];
   if (everything) parts.push("all=1");
-  if (tag) parts.push(`tag=${encodeURIComponent(tag)}`);
+  if (has) parts.push(`has=${encodeURIComponent(has)}`);
   const query = parts.length ? `?${parts.join("&")}` : "";
   const response = await fetch(`/api/graph/${encodeURIComponent(project)}${query}`);
   if (!response.ok) {
@@ -1713,7 +1724,8 @@ bindKeys({
   "select-all": mid(selectAll),
   /* The one shared key this view can honour beyond undo. `filters` here is
      the only filter the canvas has, and `guide` has no guide to open. */
-  projects: openGallery,
+  // The shelf is a page now, not a dialog over this one.
+  projects: () => (location.href = "/projects"),
 });
 
 /* Reopened where you left it, unless the link says otherwise.

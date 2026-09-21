@@ -28,6 +28,9 @@ CSS = (APP / "static" / "app.css").read_text(encoding="utf-8")
 JS = (APP / "static" / "app.js").read_text(encoding="utf-8")
 FILTERS = (APP / "templates" / "_filters.html").read_text(encoding="utf-8")
 GUIDE = (APP / "templates" / "_guide.html").read_text(encoding="utf-8")
+# The one list of commands to copy, shared by the rail, the setup stage and
+# the picker. Four spellings of it is how one ends up without the hover.
+RUNS = (APP / "templates" / "_runs.html").read_text(encoding="utf-8")
 BASE = (APP / "templates" / "base.html").read_text(encoding="utf-8")
 
 
@@ -129,7 +132,11 @@ def test_both_rails_resize_their_bottom_panel_the_same_way() -> None:
     # The sized pane is the lower one here, so a drag is measured up from the
     # bottom -- the same asymmetry the two rail grips already have.
     assert 'from: "bottom"' in split
-    loop = JS[JS.index('document.addEventListener("pointermove"') :][:900]
+    # The whole handler, not its first few hundred characters: it grew a
+    # third axis for the setup stage's column widths, and a fixed window
+    # made this a test about how long the comments above the branch are.
+    loop = JS[JS.index('document.addEventListener("pointermove"') :]
+    loop = loop[: loop.index('document.addEventListener("pointerup"')]
     assert "box.bottom - event.clientY" in loop
     assert "event.clientY - box.top" in loop
 
@@ -147,8 +154,8 @@ def test_a_command_hover_reads_as_two_lines_not_as_an_entity() -> None:
     `}` in front of every one of them."""
     # The attribute itself, not the block around it: the comment above it
     # names the entity in order to say why it is wrong.
-    start = FILTERS.index('class="run {{ cmd.kind }}"')
-    title = FILTERS[FILTERS.index('title="', start) :]
+    start = RUNS.index('class="run {{ cmd.kind }}"')
+    title = RUNS[RUNS.index('title="', start) :]
     title = title[: title.index('">') + 2]
     assert "&#10;" not in title
     assert "}}}" not in title
@@ -222,18 +229,24 @@ def test_the_resolved_settings_are_reachable_without_leaving_the_view() -> None:
 # -- the picker -------------------------------------------------------------
 
 
-def test_the_picker_opens_the_gallery_rather_than_a_dropdown() -> None:
-    assert 'id="gallery"' in BASE
+def test_the_picker_goes_to_the_shelf_rather_than_a_dropdown() -> None:
+    """A dropdown answers "which one am I on" and nothing else. The question
+    with a shelf of papers is which to work on next, and that is a
+    comparison, so it is a page with counts on it."""
+    assert 'href="/projects"' in BASE
     assert "<select" not in BASE, "a dropdown cannot compare fifty papers"
-    assert "openGallery" in JS
+    assert "/projects" in (APP / "static" / "units.js").read_text(encoding="utf-8")
 
 
-def test_switching_source_drops_the_filters_that_belonged_to_the_old_one() -> None:
+def test_switching_project_carries_no_filters_at_all() -> None:
     """A section number from one book means nothing in another, and carrying
-    it over lands you on an empty deck that looks like the import failed."""
-    match = re.search(r"function sourceHref[\s\S]*?\n}", JS)
-    assert match and 'searchParams.delete' in match.group(0)
-    assert '"section"' in match.group(0) and '"mark"' in match.group(0)
+    it over lands you on an empty deck that looks like the import failed.
+
+    The shelf is a page now, so each card is a plain link built by
+    `filter_url` with the project and the state and nothing else: there is
+    no old filter to drop, because none was ever picked up."""
+    page = (APP / "templates" / "projects.html").read_text(encoding="utf-8")
+    assert "filter_url('/units', {}, project=row.name, state='new')" in page
 
 
 def test_a_modal_over_the_deck_owns_the_keyboard() -> None:
@@ -252,12 +265,12 @@ def test_a_modal_over_the_deck_owns_the_keyboard() -> None:
 
 
 def test_both_panels_are_on_every_view(pdf_source: Config) -> None:
-    """The picker and the settings are questions you have mid-decision, so
-    they open over whatever you were doing rather than navigating away."""
+    """The settings are a question you have mid-decision, so they open over
+    whatever you were doing rather than navigating away. The picker is the
+    other kind: choosing what to work on is the work, not an aside."""
     client = TestClient(create_app(pdf_source))
     for url in ("/units", "/review"):
         body = client.get(url).text
-        assert 'id="gallery"' in body, url
         assert 'id="project-pick"' in body, url
         assert 'id="settings"' in body, url
         assert 'id="config-open"' in body, url
@@ -415,7 +428,12 @@ def test_each_stage_says_what_it_decides() -> None:
     because everything below only makes sense in that light -- and because
     depth applied at triage buys nothing and costs the throughput the stage
     exists for."""
-    units_part, review_part = GUIDE.split("{% else %}", 1)
+    # Anchored on the branch that actually divides the two views. Splitting
+    # on the first `{% else %}` in the file made this a test about whatever
+    # else the guide had learnt to say conditionally further up.
+    units_part, review_part = GUIDE.split("{% if view == 'units' %}", 1)[1].split(
+        "{% else %}", 1
+    )
     for part in (units_part, review_part):
         assert "what this stage decides" in part
     assert "worth a card at all" in units_part
@@ -735,10 +753,13 @@ def test_a_dialog_closes_when_you_click_away() -> None:
     assert "dialog.close()" in JS
 
 
-def test_adding_a_source_is_answered_where_you_would_ask() -> None:
-    """The gallery is where you go when the one you want is not on the list."""
-    assert "gallery-add" in BASE
-    assert "forge zotero --list" in BASE
+def test_adding_a_project_is_answered_where_you_would_ask() -> None:
+    """The shelf is where you go when the one you want is not on the list,
+    so it is where both answers live: the form that starts one with no
+    document, and the import that reads one."""
+    page = (APP / "templates" / "projects.html").read_text(encoding="utf-8")
+    assert 'id="start-project"' in page
+    assert "start a project" in page
 
 
 # -- things that should not scale for ever ---------------------------------
@@ -860,3 +881,27 @@ def test_no_property_is_declared_twice_for_one_selector() -> None:
             seen[key] = seen.get(key, 0) + 1
     twice = sorted(f"{sel} {{ {prop} }}" for (sel, prop), n in seen.items() if n > 1)
     assert not twice, f"declared twice, so only the last one is live: {twice}"
+
+
+def test_every_key_the_templates_ask_for_is_bound() -> None:
+    """`key_of` answers `?` for an action nobody declared, so a renamed
+    action goes out as a printed question mark rather than as an error. The
+    guide taught `?` for the project picker that way, for two views."""
+    import re
+    from pathlib import Path
+
+    from anki_math_forge.app import TEMPLATES
+    from anki_math_forge.app import keys as keys_mod
+
+    declared = {
+        key.action
+        for view in (keys_mod.UNITS, keys_mod.REVIEW, keys_mod.GRAPH)
+        for key in view
+    }
+    asked: dict[str, set[str]] = {}
+    for path in Path(TEMPLATES).rglob("*.html"):
+        for found in re.findall(r"""key\(['"]([a-z-]+)['"]\)""", path.read_text(encoding="utf-8")):
+            asked.setdefault(found, set()).add(path.name)
+
+    unknown = {name: sorted(where) for name, where in asked.items() if name not in declared}
+    assert not unknown, f"no such key action: {unknown}"

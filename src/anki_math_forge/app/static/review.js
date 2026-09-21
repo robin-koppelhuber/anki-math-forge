@@ -339,7 +339,8 @@ bindKeys({
   "next-alt": () => deck.nextPending(),
   "prev-alt": () => deck.prev(),
   filters: toggleFilters,
-  projects: openGallery,
+  // The shelf is a page now, not a dialog over this one.
+  projects: () => (location.href = "/projects"),
   guide: cycleGuide,
 });
 

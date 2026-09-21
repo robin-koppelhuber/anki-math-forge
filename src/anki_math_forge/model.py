@@ -270,6 +270,12 @@ UNRENDERED_SECTIONS = frozenset({"notes", "verify"})
 # have to agree about where code starts and stops or a block lints as maths in
 # one place and renders as code in another. The language is optional and may
 # be empty, which is what a fence with no word after it means.
+#: A shelf line nobody has agreed to yet: `- [ ] cppreference, the container
+#: library`. A pass proposes with the checkbox, accepting takes it off, and
+#: rejecting deletes the line. Markdown everyone already writes for "not
+#: yet", so the file stays something you can settle in an editor.
+PROPOSED_RE = re.compile(r"^[-*]\s*\[\s*\]\s*")
+
 CODE_FENCE_RE = re.compile(r"```([A-Za-z0-9_+#-]*)[ \t]*\r?\n(.*?)```", re.DOTALL)
 
 
@@ -848,6 +854,44 @@ def load_all(cards_dir: Path) -> list[Card]:
     return sorted(cards, key=lambda c: (c.uid, str(c.path)))
 
 
+def toml_string(value: str) -> str:
+    """`value` as a TOML basic string, escaped.
+
+    One spelling, because everything here that writes a `.toml` writes it
+    line by line to keep the comments, and three hand-rolled quoters would
+    disagree about the first sentence somebody pastes in with a quote in it.
+
+    Refused rather than escaped for a newline: every value written this way
+    is a caption or a name on one line, and a value that is secretly two
+    lines is a mistake worth stopping rather than encoding.
+    """
+    if "\n" in value or "\r" in value:
+        raise ValueError(f"{value!r} runs over more than one line")
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def home_of(card: Card, cards_dir: Path) -> str:
+    """Which project a card belongs to, for anything that groups cards.
+
+    Its unit says, because that is the declared relationship. Failing that,
+    the folder it is filed under: `cards/<project>/<uid>-<slug>.md` is the
+    convention every writer follows, and for a card with no unit it is the
+    only evidence there is.
+
+    Not the same question as which Anki deck it lands in. `sync` routes by
+    what the card declares (`project_name`), and one that declares nothing
+    takes the repo default rather than being moved into a project's deck by
+    a rule about where its file happens to sit. `check` warns about the gap
+    (`unit-missing`), and writing `unit:` closes it in both directions.
+    """
+    if card.project_name:
+        return card.project_name
+    if card.path is not None and card.path.parent != cards_dir:
+        return card.path.parent.name
+    return ""
+
+
 def find(cards_dir: Path, uid: str) -> Card | None:
     for card in load_all(cards_dir):
         if card.uid == uid:
@@ -930,8 +974,20 @@ def mint_uid(seed: str, taken: set[str] | None = None) -> str:
     raise CardError(f"could not mint a free uid for {seed!r}")
 
 
+#: Names that are mostly punctuation, and that the general rule below would
+#: quietly turn into a different word. `c++` slugs to `c`, which is another
+#: language, and `c#` slugs to `c` as well, so a project for each would want
+#: the same folder. Whole tokens only: `a+b` keeps its plus.
+SPELLINGS = {"c++": "cpp", "c#": "c-sharp", "f#": "f-sharp"}
+
+
 def slugify(text: str, limit: int = 40) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
+    lowered = text.lower()
+    for word, spelled in SPELLINGS.items():
+        lowered = re.sub(
+            rf"(?<![a-z0-9]){re.escape(word)}(?![a-z0-9])", spelled, lowered
+        )
+    slug = re.sub(r"[^a-z0-9]+", "-", lowered).strip("-")
     return slug[:limit].strip("-") or "card"
 
 

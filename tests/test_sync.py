@@ -684,3 +684,20 @@ def test_a_deck_that_still_agrees_says_nothing(repo: Path) -> None:
     report = sync.run(config, client=anki)
 
     assert not [o for o in report.outcomes if o.action == "move" or "asks for" in o.detail]
+
+
+def test_sync_can_be_scoped_to_one_project(
+    config: Config, card_path: Path, anki: FakeAnki
+) -> None:
+    """Safe to narrow because nothing here deletes: a card that is no longer
+    approved is reported, not removed, so the ones a scoped run leaves out
+    are simply left where they are."""
+    approve(card_path)
+
+    report = sync.run(config, client=anki, project="nothing-here")
+
+    assert not [o for o in report.outcomes if o.action == "add"]
+    assert not anki.notes, "a project with no cards pushes none"
+
+    report = sync.run(config, client=anki, project="demo")
+    assert [o for o in report.outcomes if o.action == "add"], "and its own still go"

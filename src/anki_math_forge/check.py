@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import latex, model
-from .config import Config
+from .config import Config, SourceConfig
 from .model import Card
 
 ERROR = "error"
@@ -161,6 +161,20 @@ def check_card(
 
     if not card.source:
         add(WARN, "source-missing", "no `source` -- a card should say where it came from")
+
+    # Which project a card belongs to is read off its unit id, so a card with
+    # no unit belongs to none of them. It still syncs, to the repo's default
+    # deck, and the app still shows it under the folder it is filed in; what
+    # it cannot do is inherit a deck, a layout or a crop. A warning rather
+    # than an error, like `source-missing`: the card is fine, it is unfiled.
+    if not card.project_name:
+        add(
+            WARN,
+            "unit-missing",
+            "no `unit`: nothing says which project this card belongs to, so it "
+            "takes the repo's default deck and conventions rather than a "
+            "project's",
+        )
 
     # -- sections ---------------------------------------------------------
     names = card.section_names()
@@ -420,6 +434,7 @@ def check_deck(
 
     findings.extend(check_requires(cards))
     findings.extend(check_images(cards, config))
+    findings.extend(check_sources(config))
 
     by_uid: dict[str, list[Card]] = defaultdict(list)
     for card in cards:
@@ -451,6 +466,68 @@ def check_deck(
                 )
             )
 
+    return findings
+
+
+def check_sources(config: Config) -> list[Finding]:
+    """A work is extracted from by **at most one** project.
+
+    Read by as many as you like: a paper cited by one deck and segmented by
+    another is the case the shelf exists for, and a reference with no
+    document of its own costs nothing.
+
+    Counted over the projects a work has units in, not only the ones its
+    extract switch is on for. Turning the switch off stops new units and
+    leaves the ones already in that ledger, so reading only the switch let
+    this go quiet on two full ledgers, which is the duplication it exists
+    to catch. Declaring the same paper in a second project and extracting
+    nothing from it stays what it always was: a citation, and fine.
+
+    Authoritative in two is a different thing. A unit lives in one project's
+    ledger and its id starts with that project's name, so the same document
+    imported twice produces two ledgers of units, two piles of cards and two
+    Anki notes per equation, with nothing anywhere that knows they are the
+    same. Nobody would choose that, and the way you reach it is by adding a
+    work to a second project without noticing it was already segmented in the
+    first.
+
+    An error rather than a warning, because the duplication is invisible
+    until it is in Anki: every view here is scoped to one project, so two
+    copies look like one copy from wherever you are standing.
+    """
+    from .ledger import Ledger
+
+    findings: list[Finding] = []
+    where: dict[str, list[str]] = defaultdict(list)
+
+    def holds_units(project: str, work: SourceConfig) -> bool:
+        """Has this project got units out of this work. Only asked of a
+        switched-off work, so the usual answer costs no read at all."""
+        path = config.units_path(project)
+        if not path.exists():
+            return False
+        spec = config.projects[project]
+        return any(spec.source(unit.locator.document) is work for unit in Ledger.load(path))
+
+    for name, spec in config.projects.items():
+        for work in spec.sources:
+            if not work.key:
+                continue
+            if work.authoritative or holds_units(name, work):
+                where[work.key].append(name)
+    for key, projects in sorted(where.items()):
+        if len(projects) > 1:
+            findings.append(
+                Finding(
+                    ERROR,
+                    "source-extracted-twice",
+                    f"{key!r} has units in {', '.join(sorted(projects))}. "
+                    "A work is extracted from by at most one project: two make two "
+                    "ledgers of units and two notes per card in Anki, with nothing "
+                    "that knows they are the same. Keep it in one and cite it from "
+                    "the other with `url`",
+                )
+            )
     return findings
 
 

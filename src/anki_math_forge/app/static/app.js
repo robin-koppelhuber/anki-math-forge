@@ -507,6 +507,39 @@ const SPLITS = {
     axis: "y",
     from: "bottom",
   },
+  /* The setup stage's three columns. Widths rather than shares, because the
+     three do not divide one box between them: the commands column and the
+     list are each as wide as they need to be and the panel takes the slack,
+     so a drag decides one edge and leaves the other where it was. Both
+     measure from the left edge of the pane in front of the handle, which is
+     the only thing the markup promises. */
+  setupRuns: {
+    key: "anki-forge.split.setup-runs",
+    left: "--split-setup-runs",
+    fallback: 232,
+    axis: "x-px",
+    min: 150,
+    max: 560,
+  },
+  setupPanel: {
+    key: "anki-forge.split.setup-panel",
+    left: "--split-setup-panel",
+    fallback: 288,
+    axis: "x-px",
+    min: 170,
+    max: 640,
+  },
+  /* The setup panel's two lists: what you asked for on top, what the project
+     reads underneath. Which of the two is long depends entirely on the
+     project (a book has one source and no asks, a deck with no book is all
+     asks), so this is the one split with no sensible default share. */
+  setup: {
+    key: "anki-forge.split.setup",
+    left: "--split-setup",
+    right: "--split-setup-bottom",
+    fallback: 260,
+    axis: "y",
+  },
 };
 
 /* The right rail has two widths, because it has two jobs. At `counts` it is a
@@ -604,6 +637,15 @@ function applySplit(name, fraction) {
   const split = SPLITS[name];
   if (!split) return 0;
   if (split.axis === "y") return applyVerticalSplit(name, fraction);
+  /* A width, for a row of three panes. One variable, clamped per split:
+     a commands column below 150px is a column of ellipses, and one past
+     560px is reading room spent on something you glance at. */
+  if (split.axis === "x-px") {
+    const wide = Math.min(split.max, Math.max(split.min, fraction));
+    document.documentElement.style.setProperty(split.left, `${wide}px`);
+    split.fraction = wide;
+    return wide;
+  }
   const clamped = Math.min(0.85, Math.max(0.15, fraction));
   document.documentElement.style.setProperty(split.left, `${clamped}fr`);
   document.documentElement.style.setProperty(split.right, `${1 - clamped}fr`);
@@ -665,6 +707,14 @@ function applyRail(name, px) {
     // both, because two hand-rolled drag loops is how they end up behaving
     // differently -- and only the axis actually differs.
     const split = SPLITS[drag.name] || {};
+    if (split.axis === "x-px") {
+      // The pane this handle resizes is the one in front of it, and its own
+      // left edge is where the width is measured from. That holds for both
+      // handles in a row of three without either knowing about the other.
+      const pane = drag.handle.previousElementSibling;
+      if (pane) applySplit(drag.name, event.clientX - pane.getBoundingClientRect().left);
+      return;
+    }
     if (split.axis === "y") {
       // The pointer's offset into the box *is* the height of the sized pane,
       // measured from whichever end that pane is anchored to.
@@ -768,47 +818,13 @@ function saveUndo(scope, stack) {
   }
 }
 
-/* The project gallery.
+/* One element, with a class and some text. Three views build lists of small
+   nodes and `document.createElement` plus two assignments each is four lines
+   where one says the same thing.
 
-   A dropdown answers "which one am I on" and nothing else. With a shelf of
-   papers the question is which one to work on next, and that is a comparison:
-   how far along each is, where it came from, what it is about. So this is the
-   window rather than a list, and it carries the counts.
-
-   Loaded once per page, on first open, because it walks every ledger and
-   every card. */
-const gallery = {
-  data: null,
-  tag: "",
-  origin: "",
-  query: "",
-};
-
-const ORIGIN_LABEL = {
-  zotero: "from Zotero",
-  pdf: "a PDF here",
-  tex: "LaTeX source",
-};
-const UNIT_LANE = ["new", "queued", "carded", "skipped"];
-const CARD_LANE = ["draft", "approved", "rejected"];
-
-function sourceHref(name) {
-  /* Keep the view and the state you were on; drop the filters that belong to
-     the project you are leaving. A section number from one book means nothing
-     in another, and carrying it over lands you on an empty deck that looks
-     like the import failed. */
-  const url = new URL(location.href);
-  /* `chapter` belongs with these. A chapter number from one book means
-     nothing in another exactly as a section number does, the server treats
-     them as siblings, and carrying it over lands you on an empty deck that
-     looks like the import failed -- which is the sentence this line was
-     written for. */
-  ["section", "mark", "chapter"].forEach((key) => url.searchParams.delete(key));
-  url.searchParams.set("project", name);
-  url.hash = "";
-  return url.toString();
-}
-
+   `textContent`, never `innerHTML`: everything here is filled with a name or
+   a citation out of a file, and one of those containing a `<` should show a
+   `<` rather than open a tag. */
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -816,161 +832,22 @@ function el(tag, className, text) {
   return node;
 }
 
-function countBar(counts, lane) {
-  const total = lane.reduce((sum, state) => sum + (counts[state] || 0), 0);
-  const bar = el("span", "gsource-bar");
-  if (!total) return bar;
-  lane.forEach((state) => {
-    const n = counts[state] || 0;
-    if (!n) return;
-    const seg = el("i", `seg state-${state}`);
-    seg.style.width = `${(100 * n) / total}%`;
-    seg.title = `${n} ${state}`;
-    bar.appendChild(seg);
-  });
-  return bar;
-}
-
-function countRow(counts, lane) {
-  const row = el("span", "gsource-counts");
-  lane.forEach((state) => {
-    const n = counts[state] || 0;
-    const cell = el("i", n ? `on state-${state}` : "");
-    cell.appendChild(el("b", "", String(n)));
-    cell.appendChild(document.createTextNode(` ${state}`));
-    row.appendChild(cell);
-  });
-  return row;
-}
-
-function sourceCard(row, current) {
-  const card = el("a", "gsource" + (row.name === current ? " current" : ""));
-  card.href = sourceHref(row.name);
-  const head = el("span", "gsource-head");
-  head.appendChild(el("span", "gsource-name", row.name));
-  if (row.origin) {
-    head.appendChild(el("span", `gsource-origin o-${row.origin}`, ORIGIN_LABEL[row.origin] || row.origin));
-  } else {
-    head.appendChild(el("span", "gsource-origin warn", "no project.toml"));
-  }
-  card.appendChild(head);
-  card.appendChild(el("span", "gsource-title", row.title));
-  if (row.tags.length) {
-    const tags = el("span", "gsource-tags");
-    row.tags.forEach((tag) => tags.appendChild(el("i", "", tag)));
-    card.appendChild(tags);
-  }
-  card.appendChild(el("span", "gsource-lane", `units · ${row.units}`));
-  card.appendChild(countBar(row.counts, UNIT_LANE));
-  card.appendChild(countRow(row.counts, UNIT_LANE));
-  card.appendChild(el("span", "gsource-lane", `cards · ${row.cards}`));
-  card.appendChild(countBar(row.counts, CARD_LANE));
-  card.appendChild(countRow(row.counts, CARD_LANE));
-  return card;
-}
-
-function chip(label, active, onPick) {
-  const button = el("button", "chip" + (active ? " on" : ""), label);
-  button.type = "button";
-  button.addEventListener("click", onPick);
-  return button;
-}
-
-function paintGallery() {
-  const data = gallery.data;
-  if (!data) return;
-  const current = new URL(location.href).searchParams.get("project") || "";
-  const chips = document.getElementById("gallery-chips");
-  chips.textContent = "";
-  const pick = (key) => (value) => () => {
-    gallery[key] = gallery[key] === value ? "" : value;
-    paintGallery();
-  };
-  const byTag = pick("tag");
-  const byOrigin = pick("origin");
-  if (data.tags.length) {
-    chips.appendChild(el("span", "chip-label", "tag"));
-    data.tags.forEach((tag) => chips.appendChild(chip(tag, gallery.tag === tag, byTag(tag))));
-  }
-  if (data.origins.length > 1) {
-    chips.appendChild(el("span", "chip-label", "from"));
-    data.origins.forEach((origin) =>
-      chips.appendChild(
-        chip(ORIGIN_LABEL[origin] || origin, gallery.origin === origin, byOrigin(origin)),
-      ),
-    );
-  }
-
-  const needle = gallery.query.trim().toLowerCase();
-  const shown = data.projects.filter((row) => {
-    if (gallery.tag && !row.tags.includes(gallery.tag)) return false;
-    if (gallery.origin && row.origin !== gallery.origin) return false;
-    if (!needle) return true;
-    return `${row.name} ${row.title} ${row.citation}`.toLowerCase().includes(needle);
-  });
-
-  const grid = document.getElementById("gallery-grid");
-  grid.textContent = "";
-  shown.forEach((row) => grid.appendChild(sourceCard(row, current)));
-  document.getElementById("gallery-empty").hidden = shown.length > 0;
-
-  const t = data.totals;
-  document.getElementById("gallery-totals").textContent =
-    `${shown.length} of ${data.projects.length} sources · ` +
-    `${data.units} units (${t.new} new, ${t.queued} queued) · ` +
-    `${data.cards} cards (${t.draft} draft, ${t.approved} approved)`;
-}
-
-async function openGallery() {
-  const dialog = document.getElementById("gallery");
-  if (!dialog) return;
-  dialog.showModal();
-  if (!gallery.data) {
-    try {
-      const response = await fetch("/api/projects");
-      gallery.data = await response.json();
-    } catch {
-      document.getElementById("gallery-totals").textContent = "could not read the projects";
-      return;
-    }
-  }
-  paintGallery();
-  document.getElementById("gallery-search").focus();
-}
-
-/* Narrowing the tag list in the rail.
-
-   Client side and nothing else: the list is already on the page, the counts
-   beside each tag are the ones that matter, and a round trip per keystroke
-   would make the counts flicker between two answers. Clicking a tag is still
-   a link, so the filter itself stays a URL you can bookmark and share. */
-(function wireTagSearch() {
-  const search = document.getElementById("tag-search");
-  const list = document.getElementById("tag-list");
-  if (!search || !list) return;
-  const empty = document.getElementById("tag-none");
-  search.addEventListener("input", () => {
-    const wanted = search.value.trim().toLowerCase();
-    let shown = 0;
-    for (const row of list.children) {
-      const hit = !wanted || (row.dataset.tag || "").toLowerCase().includes(wanted);
-      row.hidden = !hit;
-      if (hit) shown += 1;
-    }
-    if (empty) empty.hidden = shown > 0;
-  });
-})();
-
-(function wireGallery() {
-  const dialog = document.getElementById("gallery");
-  if (!dialog) return;
-  const open = document.getElementById("project-pick");
-  if (open) open.addEventListener("click", openGallery);
-  document.getElementById("gallery-close").addEventListener("click", () => dialog.close());
-  const search = document.getElementById("gallery-search");
-  search.addEventListener("input", () => {
-    gallery.query = search.value;
-    paintGallery();
+/* Starting a project, from the shelf. The list is filled from the config,
+   which the app re-reads per request, so the new one is there the moment
+   this returns, and the setup stage is where you go next: a project with no
+   document is all pre-unit work. */
+(function wireNewProject() {
+  const form = document.getElementById("start-project");
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const name = document.getElementById("project-name").value.trim();
+    if (!name) return;
+    const answer = await post("/api/projects", {
+      name,
+      deck: document.getElementById("project-deck").value,
+    });
+    if (answer && answer.project) location.href = `/setup?project=${answer.project}`;
   });
 })();
 
@@ -995,6 +872,142 @@ document.addEventListener("click", (event) => {
   // backdrop and closing on it would dismiss the panel as it opened.
   if (outside && (event.clientX || event.clientY)) dialog.close();
 });
+
+/* The multi-select filters: tags and gradings in the rail, tags on the
+   shelf. Nothing is spelled out until you ask for it, because on a deck with
+   forty tags the written-out list was most of the rail's height and the
+   sections below it were off the bottom of the screen. The box opens the
+   list, typing narrows it, and what is on shows as a chip underneath.
+
+   Every option is a link the server built with the selection already toggled
+   into it, so this only ever shows and hides. With it doing nothing the
+   control is still a working list of filters, one click deeper. */
+(function wirePickControls() {
+  /* Every one on the page, by its own id. The rail has one and the shelf
+     has another, and they are the same control over different
+     vocabularies. */
+  for (const box of document.querySelectorAll(".pick")) wireOnePick(box);
+})();
+
+function wireOnePick(box) {
+  const id = box.id;
+  const search = document.getElementById(`${id}-search`);
+  const list = document.getElementById(`${id}-list`);
+  if (!search || !list) return;
+  const empty = document.getElementById(`${id}-none`);
+  const rows = [...list.querySelectorAll("li[data-pick]")];
+  const heads = [...list.querySelectorAll("li.pick-head")];
+  /* Selecting reloads the page, which is how every other filter here works.
+     Left to itself that shuts the list after each pick, and picking two is
+     the case this control exists for, so a pick, and only a pick, asks the
+     next page to open the list again. Read once and cleared, so it survives
+     exactly one navigation: a flag that outlived the sequence left the list
+     standing open over the sections for the rest of the session. Not the
+     focus either, because with the caret in the box every single-key
+     shortcut on the page types a letter instead. */
+  const KEY = `pick-open.${id}`;
+  let active = -1;
+
+  const visible = () => rows.filter((row) => !row.hidden);
+
+  function mark(index) {
+    const shown = visible();
+    for (const row of rows) row.classList.remove("here");
+    active = shown.length ? Math.max(0, Math.min(index, shown.length - 1)) : -1;
+    if (active < 0) return;
+    shown[active].classList.add("here");
+    shown[active].scrollIntoView({ block: "nearest" });
+  }
+
+  const hint = document.getElementById(`${id}-hint`);
+  const counted = document.getElementById(`${id}-count`);
+
+  function open(yes) {
+    list.hidden = !yes;
+    if (hint) hint.hidden = !yes;
+    if (!yes) mark(-1);
+  }
+
+  function rememberOpen(yes) {
+    try {
+      if (yes) sessionStorage.setItem(KEY, "1");
+      else sessionStorage.removeItem(KEY);
+    } catch (err) {
+      /* Private windows refuse storage. The control works, it just forgets. */
+    }
+  }
+
+  function narrow() {
+    const wanted = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const row of rows) {
+      const hit = !wanted || (row.dataset.find || "").toLowerCase().includes(wanted);
+      row.hidden = !hit;
+      if (hit) shown += 1;
+    }
+    /* A heading over nothing reads as a group that is empty rather than as
+       one filtered out. Each one owns the rows between it and the next, in
+       document order, which is the only thing the markup promises. */
+    for (const head of heads) {
+      let any = false;
+      for (let next = head.nextElementSibling; next; next = next.nextElementSibling) {
+        if (next.classList.contains("pick-head")) break;
+        if (next.dataset.pick && !next.hidden) any = true;
+      }
+      head.hidden = !any;
+    }
+    if (empty) empty.hidden = shown > 0;
+    if (counted) counted.textContent = String(shown);
+    /* What Enter would take. Typing three letters and pressing Enter is the
+       whole point of a box over a list, and without a marked row it is a
+       guess about which one you meant. */
+    mark(0);
+  }
+
+  search.addEventListener("focus", () => open(true));
+  search.addEventListener("click", () => open(true));
+  search.addEventListener("input", () => {
+    open(true);
+    narrow();
+  });
+  search.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      search.value = "";
+      narrow();
+      open(false);
+      search.blur();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      open(true);
+      mark(active + 1);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      mark(active - 1);
+    } else if (event.key === "Enter") {
+      const row = visible()[active];
+      const link = row && row.querySelector("a");
+      if (link) {
+        event.preventDefault();
+        link.click();
+      }
+    }
+  });
+  /* Clicking away closes it, the way the dialogs here do. The rail is narrow
+     and the list is long, so leaving it open over the sections is the state
+     you most want out of. */
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(`#${id}-list a`)) rememberOpen(true);
+    else if (!list.hidden && !event.target.closest(`#${id}`)) open(false);
+  });
+  let picked = false;
+  try {
+    picked = sessionStorage.getItem(KEY) === "1";
+  } catch (err) {
+    /* see above */
+  }
+  rememberOpen(false);
+  if (picked) open(true);
+}
 
 /* The effective configuration, over whatever you were doing. It answers a
    question you have *mid-decision* -- which layout did this card resolve to --
@@ -1029,7 +1042,16 @@ async function openSettings() {
       // An empty value is an answer -- a project that declares no layout gets
       // no layout -- but a blank cell reads as a rendering failure, so say it.
       const text = String(row.value);
-      value.appendChild(text ? el("code", "", text) : el("span", "muted", "unset"));
+      /* A value with maths in it is prose, not a literal. `[conventions]` is
+         open, so what a source states there is a sentence somebody wrote:
+         "the derivative is $\partial f/\partial x$". KaTeX skips `code` by
+         default, which is exactly right for `box` or `denominator` and
+         exactly wrong for that. */
+      const maths = /\$[^$]+\$/.test(text);
+      value.appendChild(
+        text ? el(maths ? "span" : "code", maths ? "config-prose" : "", text)
+             : el("span", "muted", "unset"),
+      );
       tr.appendChild(value);
       tr.appendChild(el("td", "origin" + (row.from === "inherited" ? " inherited" : ""), row.from));
       tbody.appendChild(tr);
@@ -1038,6 +1060,7 @@ async function openSettings() {
     section.appendChild(table);
     body.appendChild(section);
   });
+  renderMath(body);
 }
 
 /* The state machine, full width. It is static markup already on the page, so
@@ -1088,8 +1111,6 @@ function openCrop(button) {
   });
 })();
 
-/* Any modal over the deck owns the keyboard: `s` typed into the gallery's
-   search box would otherwise skip whatever unit was behind it. */
 /* Any open dialog owns the keyboard, not a named list of two of them.
 
    The list was `gallery` and `settings`, which is the rule stated as its
@@ -1205,6 +1226,13 @@ const COUNT_POLL_MS = 4000;
   async function tick() {
     if (document.visibilityState !== "visible") return;
     const params = new URLSearchParams(location.search);
+    /* The shelf is about every project, so it follows every project. With
+       no scope the endpoint falls back to whichever one sorts first, and
+       the page would offer a reload because *that* one changed. */
+    if (document.body.dataset.view === "projects") {
+      params.set("scope", "repo");
+      params.delete("project");
+    }
     let payload;
     try {
       const response = await fetch(`/api/counts?${params.toString()}`);

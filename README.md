@@ -9,19 +9,20 @@
 
 Turn math-heavy texts into Anki cards with a human in the loop.
 
-1. Import standalone PDFs or entries from your Zotero collection.
-2. Decide which parts of the text are worth putting into a card.
+1. Import standalone PDFs, entries from your Zotero collection or just start from an idea.
+2. Decide which parts of a source are worth putting into a card.
 3. Generate cards and iterate until they are perfect.
 
 ## Features
 - Local website to build cards and iterate together with AI.
-- Import standalone PDFs or entries from your Zotero collection.
+- Import standalone PDFs, entries from your Zotero collection or just start from an idea.
 - Use Zotero annotations as the starting point for your cards, and map
   annotation types to different meanings for the agent.
 - Augment equations with proof outlines, intuition and use cases.
 - Optimized study order: let AI classify the usefulness, hardness and dependency between cards and explore them in a graph view, for the optimal initial study order in Anki.
 - Sync cards to Anki and update safely if something changes.
 - Write card feedback directly in Anki, sync it back into the website and improve your cards.
+
 ---
 - Supported models: currently only works with a Claude Code subscription, no
   API key needed. The website gives you Claude skill commands to run instead
@@ -67,15 +68,16 @@ Anki, once:
 ## Workflow
 Creating cards is a two stage process
 1. Create and select **Units**: These are candidate parts of a page in a source for becoming a card. They are cheap to create and change
-2. Create and refine **Cards**: Once you've selected which units should become cards, a thourough agent can create a card draft for you to iterate on
+2. Create and refine **Cards**: Once you've selected which units should become cards, a thorough agent can create a card draft for you to iterate on
 ```
-extract  ->  units  ->  triage  ->  cards  ->  review  ->  sync
-             (you)                  (Claude)   (you)
+extract / import  ->  units  ->  triage  ->  cards  ->  review  ->  sync
+                                 (you)       (Claude)   (you)
 ```
+
 
 ```
 # route 1: a PDF
-uv run forge extract <source>         # PDF -> units. Never reads the maths
+uv run forge extract <project>        # PDF -> units. Never reads the maths
 /transcribe --project <project>         # crops -> LaTeX, via subagents
 /classify --project <project>           # propose skips; applies nothing
 
@@ -83,7 +85,13 @@ uv run forge extract <source>         # PDF -> units. Never reads the maths
 uv run forge zotero --list            # what Zotero has, and what is already a source
 uv run forge zotero --tag anki        # every item tagged `anki` -> units
 
-# both routes
+# route 3: a subject, with no document to segment
+uv run forge project <project>        # start one
+uv run forge topic 'a subject' --project <project> --ask '...'
+/sources --project <project>            # what its cards can be checked against
+/propose --project <project> 'a subject'  # the ask -> units
+
+# every route
 /gist --project <project>               # one line per unit: what its card would be about
 uv run forge serve                    # triage units, then review cards
 /extract-cards --project <project>      # queued units -> draft cards
@@ -94,6 +102,8 @@ uv run forge sync --dry-run           # then without --dry-run
 
 
 ![the state machine](assets/states.png)
+
+![project setup](assets/setup.png)
 
 ![triage](assets/triage.png)
 
@@ -109,25 +119,30 @@ Every session:
 
 | `forge` | |
 |---|---|
-| `serve` | the web app: triage, review, dependency canvas |
-| `check` | lint; blocks sync on error |
-| `sync` | approved cards -> Anki, upsert by uid. `--dry-run`, `--templates`, `--reposition`, `--move-decks` |
-| `feedback` | Anki comments and flags -> notes on the card |
+| `serve` | the web app: project setup, triage, review, dependency canvas. `--port` |
+| `check` | lint; blocks sync on error. `--anki` also checks uids against the live collection |
+| `sync` | approved cards -> Anki, upsert by uid. `--dry-run`, `--project`, `--templates`, `--reposition`, `--move-decks` |
+| `feedback` | Anki comments and flags -> notes on the card. `--dry-run` |
 | `todo` | open annotations, `@claude` and `@me` |
 
-Once per source:
+Once per project or source:
 
 | `forge` | |
 |---|---|
-| `extract [source]` | PDF -> units; never writes cards |
-| `zotero [item]` | Zotero marks -> units. `--list`, `--tag`, `--dry-run` |
-| `export [source]` | a deck as `.apkg`; `--scheduling` includes review history |
+| `project <name>` | start one with no document. `--title`, `--deck`, `--citation`; `--delete` takes it and its cards out, `--force` if it holds any |
+| `topic '<subject>' --project NAME` | what you want cards for; `--ask` what you want from it |
+| `extract [project]` | PDF -> units; never writes cards. `--pages` |
+| `zotero [item]` | Zotero marks -> units. `--list`, `--tag`, `--project`, `--dry-run` |
+| `sources` | every work in the repo, and which project reads it. `--remove KEY`, `--force`, `--dry-run` |
+| `export [project]` | a deck as `.apkg`; `--deck`, `--out`, `--scheduling` includes review history |
 | `audit` | is the ledger trustworthy: 1..N, no gaps |
 
 In the order the pipeline runs them:
 
 | Claude Code | |
 |---|---|
+| `/propose --project NAME '<subject>'` | a subject -> units, where there is no document to segment |
+| `/sources --project NAME` | reference material to check a card against; every line stays pending until you take it |
 | `/transcribe --project NAME` | crops -> LaTeX, via subagents |
 | `/classify --project NAME` | propose which units are not worth a card |
 | `/gist --project NAME` | one line per unit on what its card would be about |
@@ -139,21 +154,19 @@ Mostly called by the skills, or from a script:
 
 | `forge` | |
 |---|---|
-| `units` | view or change the ledger: state, gist, notes, transcription |
-| `context <unit-id>` | the page a unit was printed on, plus the source's conventions |
-| `source-text <source>` | the document's cached text layer |
-| `crops` | render unit crops to a directory |
-| `classify` | propose skips; applies nothing |
-| `new` | scaffold a draft card from a queued unit |
-| `verify` | opt-in numeric check of identities |
+| `units` | view or change the ledger: state, gist, notes, transcription, web lookups. `--add SLUG` writes one where there was nothing to segment |
+| `context <unit-id>` | the page a unit was printed on, plus the source's conventions. `--pages N` either side, or `--pages chapter` |
+| `source-text [project]` | the document's cached text layer |
+| `crops` | render unit crops to a directory. `--out`, `--untranscribed`, `--ungisted` |
+| `classify` | propose skips; applies nothing. `--dry-run` records nothing either |
+| `new` | scaffold a draft card from a queued unit; repeat `--unit` to build one card from several |
+| `verify` | opt-in numeric check of identities. `--uid`, `--project`, `--trials` |
 
 | Keys | units | review | graph |
 |---|---|---|---|
 | decide | `q` queue, `Q` queue + brief, `s` skip, `S` skip + reason, `a` accept a suggestion, `d` dismiss it | `a` approve, `r` reject | `+` add a card, `Delete` remove selection, `Enter` open card |
 | repair | `u` back to new, `z` undo, `n` note for claude, `N` note for me, `c` context size, `w` web lookups, `p` crop/page/doc | `u` back to draft, `z` undo, `e` `$EDITOR`, `n`, `N`, `x` resolve first note | `z` undo, `x` put boxes back, `A` select all |
-| move | `j` `k` next/prev, `f` filters, `g` sources, `?` guide | same | `.` `,` zoom, `0` fit, `g` sources |
-
-> `[app.keys]` in `forge.toml` remaps any key by action name.
+| move | `j` `k` next/prev, `f` filters, `g` projects, `?` guide | same | `.` `,` zoom, `0` fit, `f` every card, `o` study order, `g` projects |
 
 ## Debugging
 - "cannot reach AnkiConnect" means Anki is closed.
@@ -164,7 +177,7 @@ Mostly called by the skills, or from a script:
 - Study order: `frequency`, then `derivation`, then printed order;
  `requires` overrides. `sync --reposition` moves cards you have not
  studied yet.
-- Feedback: `E` in Anki writes the `Feedback` field, `Ctrl+1..4` sets a flag.
+- Feedback: `E` in Anki writes the `Feedback` field, `Ctrl+1..7` sets a flag.
 
 ## Contributing & License
 Happy for any contributions, open a PR.

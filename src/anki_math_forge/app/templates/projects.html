@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "_runs.html" import runs %}
+{% from "_pick.html" import pick %}
+{% set view = "projects" %}
+
+{% block title %}projects · forge{% endblock %}
+
+{# The shelf: every project, and how far along each one is.
+
+   The page you land on. Opening the app on a deck meant opening it on
+   whichever project happened to be first, which is an answer to a question
+   nobody asked; what you do first is choose what to work on.
+
+   It was a dialog over whatever you were reading, and a dialog with a left
+   rail in it is a page that has not admitted it yet. As a page it can be
+   filtered by a link, which is how every other list here works.
+
+   A card is a comparison, not a label: two numbers and two bars, so "which
+   one do I work on next" is answered by looking rather than by opening each
+   in turn. Where its material came from is a label on the card and **not** a
+   filter: this page picks a project, and nobody chooses one by what kind of
+   file it reads. #}
+{# One half of the pipeline for one project: how many, split how. #}
+{% macro lane(what, row, states, total) %}
+<span class="gsource-lane">{{ what }} &middot; <b>{{ total }}</b></span>
+<span class="gsource-bar">
+  {%- for state in states if row.counts[state] -%}
+  <i class="seg state-{{ state }}"
+     style="width:{{ (100 * row.counts[state] / total) | round(2) }}%"></i>
+  {%- endfor -%}
+</span>
+<span class="gsource-counts">
+  {% for state in states if row.counts[state] %}
+  <i class="on"><b>{{ row.counts[state] }}</b> {{ state }}</i>
+  {% endfor %}
+  {% if not total %}<i>nothing yet</i>{% endif %}
+</span>
+{% endmacro %}
+
+{# The bar, which on every other screen says which project you are on and
+   offers its setup stage. Here there is no project: choosing one is what the
+   page is for. So the row carries the control the page is used with instead
+   of a row of links that would all need a project to mean anything.
+
+   Centred over the grid rather than over the window, by giving the bar the
+   rail's own first column: the two line up, and the rail reads as part of
+   the same frame rather than as a panel that starts under a stripe. #}
+{% block topbar %}
+<span class="shelf-mark">projects</span>
+<div class="shelf-find">
+  <input type="search" class="shelf-search" id="shelf-search"
+         placeholder="find a project by name, title or citation"
+         autocomplete="off" spellcheck="false" aria-label="find a project">
+  <p class="shelf-totals">{{ shown | length }}
+    {{- ' of ' ~ shelf.projects | length if shown | length != shelf.projects | length }}
+    {{ 'project' if shelf.projects | length == 1 else 'projects' }}
+    &middot; {{ shelf.units }} units &middot; {{ shelf.cards }} cards,
+    {{ shelf.totals.approved }} approved</p>
+</div>
+{% endblock %}
+
+{% block main %}
+<div class="shelf">
+
+  <aside class="shelf-rail" aria-label="narrow the shelf">
+    {# Filters, then the one write, then what to run. Narrowest to widest:
+       the filter is about what is on screen, the form makes something new,
+       and the commands are about the repo. #}
+    {% if tag_picks %}
+    <details class="filter-group" open>
+      <summary>tags<span class="filter-tally">{{ tag_chips | length or '' }}</span></summary>
+      {# Two at once narrow, unlike the deck rail's. A project's tags are
+         facets of one thing, `cpp` and `paper`, so picking both means
+         the paper about C++, not everything about either. #}
+      {{ pick('shelf-tags', tag_picks, tag_chips, 'tag', filters.tag,
+              '/projects', filters, 'find a tag', 'and') }}
+    </details>
+    {% endif %}
+
+    <details class="filter-group" open>
+      <summary>start a project</summary>
+      <form class="setup-form" id="start-project">
+        <label for="project-name">what it is about</label>
+        <input type="text" id="project-name" autocomplete="off"
+               placeholder="the C++ standard library">
+        <label for="project-deck">which Anki deck</label>
+        <input type="text" id="project-deck" autocomplete="off"
+               placeholder="optional; the repo default otherwise">
+        <button type="submit" class="form-go">start it</button>
+      </form>
+    </details>
+
+    <details class="filter-group" open>
+      <summary>run next</summary>
+      {{ runs(commands) }}
+    </details>
+  </aside>
+
+  <div class="shelf-main">
+    <div class="gallery-grid" id="shelf-grid">
+      {% for row in shown %}
+      <a class="gsource"
+         data-find="{{ row.name }} {{ row.title }} {{ row.citation }}"
+         href="{{ filter_url('/units', {}, project=row.name, state='new') }}">
+        <span class="gsource-head">
+          <span class="gsource-name">{{ row.name }}</span>
+          {% if row.origin %}
+          <span class="gsource-origin o-{{ row.origin }}">{{
+            material_label(row.origin) }}</span>
+          {% else %}
+          {# No *material*, which is not the same as no config: a project for
+             a subject declares topics and no sources, and that is the shape
+             the whole feature exists for. #}
+          <span class="gsource-origin warn"
+                title="nothing to segment here: its units are proposed">no document</span>
+          {% endif %}
+        </span>
+        <span class="gsource-title">{{ row.title }}</span>
+        {% if row.tags %}
+        <span class="gsource-tags">{% for t in row.tags %}<i>{{ t }}</i>{% endfor %}</span>
+        {% endif %}
+        {{ lane('units', row, ['new', 'queued', 'carded', 'skipped'], row.units) }}
+        {{ lane('cards', row, ['draft', 'approved', 'rejected'], row.cards) }}
+      </a>
+      {% endfor %}
+    </div>
+    <p class="gallery-empty" id="shelf-none"
+       {{ '' if not shown else 'hidden' }}>nothing matches that.</p>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}<script defer src="/static/projects.js?b={{ app_build }}"></script>{% endblock %}

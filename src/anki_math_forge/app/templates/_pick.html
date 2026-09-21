@@ -1,0 +1,101 @@
+{# A multi-select filter: a search box, chips for what is on, and a list that
+   stays shut until you ask for it.
+
+   Two places render one. The triage rail narrows a deck by tag and by
+   grading; the shelf narrows the projects by tag. They are the same
+   control over different vocabularies, and writing it twice is how one of
+   them ends up without the chips.
+
+   Nothing is spelled out until you click the box: on a deck with forty tags
+   the written-out list was most of the rail's height, and the sections below
+   it were off the bottom of the screen. What is on shows as a chip
+   underneath, because a filter you cannot see is one you cannot turn off.
+
+   `join` says what two chips mean together, and the word sits between them
+   so the answer is on screen rather than in a docstring. A deck takes the
+   **union**: groups that each narrowed the last meant a second choice nearly
+   always emptied the deck, and "these two tags" is the question actually
+   being asked of a mixed deck. The shelf takes the **intersection**, because
+   there the tags are facets of one project, `cpp` and `paper`, so
+   picking both means the paper about C++, not forty things about either.
+
+   Every option is a real link the server built with the selection already
+   toggled into it, so the script only ever shows and hides. With it doing
+   nothing the control is still a working list of filters, one click deeper.
+
+   `param` is the query parameter the selection lives in, `now` is its
+   current value, and a row is `{key, label, count, field}` where `field`
+   groups the list under subheadings. #}
+{% macro pick(id, rows, chips, param, now, here, filters, placeholder, join='or') %}
+<div class="pick" id="{{ id }}">
+  {# No box where there is nothing to find. The control is still drawn for
+     its chips: a filter naming something this project no longer offers is
+     one you still have to be able to take off. #}
+  {% if rows %}
+  <input type="search" class="pick-search" id="{{ id }}-search"
+         placeholder="{{ placeholder }}"
+         {# A search box over a list of links, not a combobox: the options
+            are real links, and claiming the role without a listbox under it
+            describes a widget that is not there. #}
+         autocomplete="off" spellcheck="false" aria-controls="{{ id }}-list"
+         aria-label="{{ placeholder }}">
+  {% endif %}
+  {# Under the box, not in it. A chip inside the field pushes the caret
+     around as they accumulate, and these are read at least as often as they
+     are clicked. #}
+  {% if chips %}
+  <ul class="pick-chips" id="{{ id }}-chips">
+    {% for chip in chips %}
+    {# Between them, not in a legend: two chips sitting next to each other
+       look like a list either way round, and which one it is decides
+       whether a second choice widens the view or narrows it. #}
+    {% if not loop.first %}<li class="pick-join">{{ join }}</li>{% endif %}
+    <li class="pick-chip f-{{ chip.field }}">
+      <span>{{ chip.label }}</span>
+      <a href="{{ filter_url(here, filters, **{param: pick_toggle(now, chip.key)}) }}"
+         title="stop filtering by {{ chip.label }}"
+         aria-label="remove {{ chip.label }}">&times;</a>
+    </li>
+    {% endfor %}
+    {% if chips | length > 1 %}
+    <li class="pick-clear"><a href="{{ filter_url(here, filters, **{param: none}) }}"
+           title="stop filtering by any of them">clear</a></li>
+    {% endif %}
+  </ul>
+  {% endif %}
+  {# A heading per vocabulary, and none at all where there is only one of
+     them: the group is already named, and the word twice is the list
+     explaining itself to nobody. #}
+  {% set kinds = rows | map(attribute='field') | unique | list %}
+  {# What the box is offering, above the offers. A search box over a list
+     that only appears on click reads as a text field until you try it, and
+     the one thing you cannot guess is that Enter takes the first match. #}
+  {% if rows %}
+  <p class="pick-hint" id="{{ id }}-hint" hidden>
+    <span id="{{ id }}-count">{{ rows | length }}</span> to choose from ·
+    enter takes the first ·
+    {{ 'two together narrow' if join == 'and' else 'two together widen' }}</p>
+  {% endif %}
+  {% if rows %}
+  <ul class="filter-list pick-list" id="{{ id }}-list" hidden>
+    {% for kind in kinds %}
+    {% if kinds | length > 1 %}
+    <li class="pick-head" data-head="{{ kind }}">{{ kind }}</li>
+    {% endif %}
+    {% for row in rows if row.field == kind %}
+    <li data-pick="{{ row.key }}" data-find="{{ row.label }} {{ kind }}">
+      <a class="{{ 'on' if row.on }}{{ ' out' if row.get('out') }}"
+         href="{{ filter_url(here, filters, **{param: pick_toggle(now, row.key)}) }}"
+         {# A row may carry its own second line. A count of 0 on a tag says
+           what it says; on an ask it has two causes, and "no outline yet"
+           is the one you can do something about. #}
+        title="{{ 'click to remove' if row.on else 'add ' ~ row.label ~ ' to the filter' }}{% if row.get('why') %}&#10;{{ row.why }}{% endif %}">
+        <span>{% if row.on %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}{{ row.label }}</span>
+        <b>{{ row.count }}</b></a></li>
+    {% endfor %}
+    {% endfor %}
+    <li class="filter-none" id="{{ id }}-none" hidden>nothing matches that.</li>
+  </ul>
+  {% endif %}
+</div>
+{% endmacro %}

@@ -1,0 +1,77 @@
+{# A list of commands to copy.
+
+   Four places render one: the triage rail, the setup stage's column, the
+   panel that creates a topic, and the picker's import corner. They had drifted
+   into four spellings of the same markup, which is how one of them ends up
+   without the hover that says where to paste it.
+
+   Copied, never launched. You paste it where you can watch it, so nothing
+   writes cards with nobody looking. That is the whole bargain, and it is why
+   these are buttons that put text on a clipboard rather than controls that
+   run something.
+
+   **Two kinds, and they are not equally safe to paste.** An info command
+   shows you something and an action command changes a file, and the
+   difference is the whole reason these are copied rather than launched, so
+   it is worth more than a sentence in a tooltip. `reads` marks the safe
+   half, they are grouped apart, and the heading says which is which.
+
+   A row is `{kind, label, run, why, reads}`. `kind` is `shell` or `claude`,
+   which decides where it is pasted, or `note` for a line that says there is
+   nothing to run here. #}
+{% macro runs(rows) %}
+{# A note is neither: it says why a pass is absent, so it frames the list
+   rather than sitting in one half of it, and it goes first. #}
+{% set notes = rows | selectattr('kind', 'equalto', 'note') | list %}
+{% set rest = rows | rejectattr('kind', 'equalto', 'note') | list %}
+{% set looking = rest | selectattr('reads') | list %}
+{% set doing = rest | rejectattr('reads') | list %}
+{% if notes %}{{ run_list(notes, '') }}{% endif %}
+{# What you came for first. The action commands are the work; the ones that
+   only look are what you check afterwards, and they are more numerous. #}
+{% if looking and doing %}
+{{ run_list(doing, 'action commands') }}
+{{ run_list(looking, 'info commands') }}
+{% else %}
+{{ run_list(rest, '') }}
+{% endif %}
+{% endmacro %}
+
+{# Each half folds on its own. Four commands you run and six you read is ten
+   boxes in a 240px column, and the one you want is under the other nine. #}
+{% macro run_list(rows, heading) %}
+{% if heading %}
+<details class="runs-half" open>
+  <summary class="runs-what">{{ heading }}<b>{{ rows | length }}</b></summary>
+{% endif %}
+<ul class="filter-list runs">
+  {% for cmd in rows %}
+  {% if cmd.kind == 'note' %}
+  <li class="run-note">{{ cmd.label }}</li>
+  {% else %}
+  <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
+              {# A real newline, not `&#10;`: the entity is written by the
+                 template rather than by the browser, so Jinja escapes its
+                 `&` and the hover reads the entity out loud. An attribute
+                 keeps a literal newline, which is what a two-line tooltip
+                 needs. #}
+              title="{{ cmd.why ~ '\n\n' if cmd.why }}{{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
+    <span class="run-label">{{ cmd.label }}
+      {#- Which end it runs at. A shell command is plain Python and does
+          exactly what it says; a skill puts a model in the loop, which
+          costs tokens, takes minutes and produces something to review. That
+          is the difference worth marking, and the two are pasted into
+          different windows. -#}
+      <i class="run-who {{ cmd.kind }}">{{ 'claude' if cmd.kind == 'claude' else 'shell' }}</i>
+    </span>
+    {# What it does, in one sentence. The label says which pass and how much
+       is waiting; it does not say what the pass *is*, and these are commands
+       you run rarely enough to have forgotten. #}
+    {% if cmd.why %}<span class="run-why">{{ cmd.why }}</span>{% endif %}
+    <code>{{ cmd.run }}</code>
+  </button></li>
+  {% endif %}
+  {% endfor %}
+</ul>
+{% if heading %}</details>{% endif %}
+{% endmacro %}

@@ -95,9 +95,11 @@ def code_html(lang: str, code: str) -> str:
     colours. That needs no add-on in anybody's collection, which a template
     calling out to a highlighter would.
 
-    Pygments is optional (`uv sync --extra code`). Without it the block is
-    still a correct, readable `<pre>`, just uncoloured: a missing dependency
-    should cost you the colours and not the card.
+    Pygments is a dependency, so the `try` below is not an optional
+    feature: it is the rule that a missing highlighter costs the colours
+    and not the card, kept for an environment somebody has taken it out
+    of. It was an extra, and that meant two decks out of one repo, one
+    coloured and one not, depending on how each had been synced.
     """
     body = code.rstrip("\n")
     try:
@@ -745,17 +747,28 @@ def run(
     reposition_new: bool = False,
     templates: bool = False,
     move_decks: bool = False,
+    project: str = "",
 ) -> SyncReport:
     """Lint, then upsert every approved card.
 
     `move_decks` also files cards that predate a `deck` change under the name
     the config now gives them. Off by default: everything else here adds to a
     collection, and this moves something that may have been filed by hand.
+
+    `project` narrows what is **pushed**, never what is checked. The lint
+    stays repo-wide because the things it catches are repo-wide facts: two
+    cards sharing a uid are a collision whichever projects they are in, and a
+    scoped run that stopped seeing the other one would report the collision
+    as gone. Safe to narrow because nothing here deletes: a card that is no
+    longer approved is reported, not removed, so the cards this run leaves
+    out are simply left where they are.
     """
     client = client or AnkiConnect(config.anki_url)
     report = SyncReport(dry_run=dry_run)
 
     cards, findings = check.check_repo(config)
+    if project:
+        cards = [c for c in cards if c.project_name == project]
     ready, skipped = syncable(cards)
     report.outcomes.extend(skipped)
 

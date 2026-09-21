@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_runs.html" import runs %}
 {% set view = "setup" %}
 
 {% block title %}setup · {{ project | default('', true) }} · forge{% endblock %}
@@ -8,159 +9,838 @@
    and it happened by editing TOML because it had no screen. For a project
    with no document it is *all* of the pre-unit work.
 
+   The whole window, in three columns, and every ratio between them drags:
+   what to run next, what the project holds, and whichever one you picked.
+   It is the screen you configure a project from, and a centred column with
+   the page showing round it read as a dialog somebody had forgotten to
+   close.
+
+   The commands column collapses, because it is the one you stop needing:
+   what to run next is a question you ask twice a session, and the other two
+   are what you are reading.
+
+   The list is the project's two halves, split by a handle you can drag: what
+   you asked for on top, what it reads underneath. Which of the two is long
+   depends entirely on the project (a book has one source and no asks, a deck
+   with no book is all asks), so neither gets to be the fixed one.
+
+   **An ask stays selected while you read its works.** One with four behind it
+   is the case this panel is for, so picking an ask narrows the list below to
+   the works it drew on and stays lit itself; clicking through them changes
+   only the right-hand panel. The relation is derived from what the ask
+   produced (see `topic_works`), so there is no third list in a file to keep
+   in step with the other two.
+
+   Every panel is rendered here, and the script shows one. So the page is a
+   plain scrolling document with the script doing nothing, and the selection
+   lives in the URL fragment: the panel you are looking at is a link you can
+   send.
+
    Read mostly, and deliberately: the files are the source of truth and this
-   is a view over them (invariant 2). The one thing it writes is a new ask,
-   which is a heading appended to a markdown file and is the thing you cannot
-   conveniently do from anywhere else. #}
-{% block main %}
-<div class="setup">
+   is a view over them (invariant 2). What it writes (an ask, a dropped
+   reference, a new project) is a file edit you could make by hand, and it
+   makes exactly that edit. #}
+{# The way over to the other two views, carrying whatever is selected.
 
-  {# What the project is, as settings rather than as prose. `project_facts`
-     is the same panel the guide shows, given room it never had in a 240px
-     rail. #}
-  <section class="setup-block">
-    <h2>{{ project_facts.title or project }}</h2>
-    <dl class="setup-facts">
-      <dt>deck</dt><dd>{{ project_facts.deck }}</dd>
-      {% if project_facts.citation %}<dt>cited as</dt><dd>{{ project_facts.citation }}</dd>{% endif %}
-      <dt>material</dt><dd>{{ project_facts.origin or 'nothing declared' }}</dd>
-      {% if project_facts.tags %}<dt>labels</dt><dd>{{ project_facts.tags | join(', ') }}</dd>{% endif %}
-    </dl>
-  </section>
+   The counts below are links too, but each is one state and only exists
+   when something is in it, so a topic with nothing proposed yet offered no
+   way through at all. This pair is always there, and it says what it does.
 
-  {# The works it reads. Absent for a project that reads none, and that
-     absence is the whole of what "no document" means: there is no kind key
-     to show, so there is nothing to say here rather than a row saying none. #}
-  {% if sources %}
-  <section class="setup-block">
-    <h3>sources</h3>
-    <p class="muted">What this project reads. A marking scheme and a crop
-      width are facts about a document, so they live with the work rather
-      than with the deck.</p>
-    <ul class="setup-list">
-      {% for work in sources %}
-      <li>
-        <div class="setup-row">
-          <b>{{ work.title }}</b>
-          <span class="badge{{ ' out' if not work.authoritative }}">{{
-            'authoritative' if work.authoritative else 'reference' }}</span>
-          <span class="muted">{{ work.units }} units</span>
-        </div>
-        {% if work.files %}<p class="muted">files: {{ work.files | join(', ') }}</p>{% endif %}
-        {% if work.zotero %}<p class="muted">Zotero item {{ work.zotero }}{{
-          ', attachments: ' ~ work.attachments | join(', ') if work.attachments }}</p>{% endif %}
-        {% if work.url %}<p class="muted"><a href="{{ work.url }}" rel="noreferrer">{{ work.url }}</a></p>{% endif %}
-        {% if work.scheme %}<p class="muted">marks that start a unit: {{ work.scheme | join(', ') }}</p>{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </section>
+   `data-scope` is what the script adds the *other* half of the selection to:
+   reading a work while an ask is selected should open both filters, and only
+   the browser knows which ask that is. #}
+{% macro open_in(scope) %}
+<p class="pane-open" data-scope="{{ scope.keys() | list | join(',') }}">
+  <a class="open-link" data-open="units"
+     href="{{ filter_url('/units', {'project': project}, state='all', **scope) }}"
+     >open in triage &rarr;</a>
+  <a class="open-link" data-open="review"
+     href="{{ filter_url('/review', {'project': project}, status='all', **scope) }}"
+     >open in the cards &rarr;</a>
+</p>
+{% endmacro %}
+
+{# What a thing is holding, as chips that click through to it.
+
+   Each one lands on the triage or review view already narrowed to this ask
+   or this work, which is the whole point: the selection you made here is
+   worth carrying, and re-making it over there by hand was the one thing
+   this screen could not hand over.
+
+   `approved` doubles as what `sync` would push. Nothing local records a note
+   id, so "is it in Anki" is a question only the dry run can answer, and this
+   panel does not make network calls to draw a number. #}
+{% macro counts_strip(counts, scope) %}
+<p class="pane-counts">
+  {% set states = ['new', 'queued', 'carded', 'skipped'] %}
+  {% set written = ['draft', 'approved', 'rejected'] %}
+  <span class="counts-what">units</span>
+  {% for state in states %}
+  {% if counts[state] %}
+  <a class="count-chip state-{{ state }}"
+     href="{{ filter_url('/units', {'project': project}, state=state, **scope) }}"
+     >{{ state }}<b>{{ counts[state] }}</b></a>
   {% endif %}
+  {% endfor %}
+  {% if not states | map('in_map', counts) | select | list %}
+  <span class="counts-none">none yet</span>{% endif %}
+  <span class="counts-what">cards</span>
+  {% for status in written %}
+  {% if counts[status] %}
+  <a class="count-chip state-{{ status }}"
+     href="{{ filter_url('/review', {'project': project}, status=status, **scope) }}"
+     title="{{ 'approved is what sync pushes; nothing here has asked Anki' if status == 'approved' }}"
+     >{{ status }}<b>{{ counts[status] }}</b></a>
+  {% endif %}
+  {% endfor %}
+  {% if not written | map('in_map', counts) | select | list %}
+  <span class="counts-none">none written</span>{% endif %}
+</p>
+{% endmacro %}
 
-  {# Topics, and the only thing here you cannot read off a file: which entries
-     of an ask have a unit and which are still waiting. A pass that stopped
-     halfway looks exactly like a subject that was smaller than you thought,
-     and this is the difference. #}
-  <section class="setup-block" id="topics">
-    <h3>topics</h3>
-    <p class="muted">What you asked for, and what each ask means to cover.
-      Optional: most projects have a source doing this job. The outline is
-      prose in <code>topics.md</code>, and deleting a line is how you say a
-      subject is not wanted.</p>
+{# The same strip from a `holding` map, which counts one ask or one work. #}
+{% macro counts_of(held, scope) %}
+{% if held %}
+<p class="pane-counts">
+  <span class="counts-what">units</span>
+  {% for row in held.states %}
+  <a class="count-chip state-{{ row.name }}"
+     href="{{ filter_url('/units', {'project': project}, state=row.name, **scope) }}"
+     >{{ row.name }}<b>{{ row.count }}</b></a>
+  {% endfor %}
+  {% if not held.states %}<span class="counts-none">no units yet</span>{% endif %}
+  <span class="counts-what">cards</span>
+  {% for row in held.written %}
+  <a class="count-chip state-{{ row.name }}"
+     href="{{ filter_url('/review', {'project': project}, status=row.name, **scope) }}"
+     title="{{ 'approved is what sync pushes; nothing here has asked Anki' if row.name == 'approved' }}"
+     >{{ row.name }}<b>{{ row.count }}</b></a>
+  {% endfor %}
+  {% if not held.written %}<span class="counts-none">none written</span>{% endif %}
+</p>
+{% endif %}
+{% endmacro %}
 
-    {% if coverage.topics %}
-    <p class="setup-total">{{ coverage.covered }} of {{ coverage.entries }}
-      outline entries have a unit{{ ', ' ~ coverage.open ~ ' still open' if coverage.open }}</p>
-    {% endif %}
+{% block main %}
+{# Split once, at the top: the list of sources shows the proposals, each
+   one has a panel of its own, and the project's panel still lists the
+   settled half as the shelf. #}
+{% set proposed = shelf_lines | selectattr('proposed') | list %}
+{% set settled = shelf_lines | rejectattr('proposed') | list %}
+<div class="setup" id="setup">
 
-    <ul class="setup-list">
-      {% for topic in coverage.topics %}
-      <li>
-        <div class="setup-row">
-          <b>{{ topic.name }}</b>
-          <span class="muted">{{ topic.covered }}/{{ topic.outline | length }}</span>
-        </div>
-        {% if topic.ask %}<p class="setup-ask">{{ topic.ask }}</p>{% endif %}
-        <ul class="outline">
-          {% for entry in topic.outline %}
-          <li class="{{ 'covered' if entry.covered else 'open' }}">
-            <span class="outline-mark" aria-hidden="true">{{ '·' if entry.covered else '○' }}</span>
-            {% if entry.covered %}
-            <a href="{{ filter_url('/units', {'project': project}, state='all') }}#{{ entry.units[0] }}">{{ entry.text }}</a>
-            {% else %}
-            {{ entry.text }}
-            {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-      </li>
+  {# What to run, for the thing you have selected. The same bargain the rail
+     on the triage page makes: copied, never launched, so nothing writes
+     cards with nobody looking. What it can say that the other panel cannot
+     is the *scope*: triage does not know which ask you are working through,
+     and this screen is where you picked it. #}
+  <aside class="setup-runs" id="setup-runs" aria-label="what to run next">
+    <div class="rail-head">
+      <span class="rail-title">run next</span>
+      <button type="button" class="rail-fold" id="runs-fold"
+              title="hide this column">&#8249;</button>
+    </div>
+    <div class="setup-runs-scroll">
+      {% for pane, rows in commands.items() %}
+      <div data-runs="{{ pane }}" hidden>{{ runs(rows) }}</div>
       {% endfor %}
-    </ul>
+      <p class="setup-empty">Copied, not launched.</p>
+    </div>
+  </aside>
+  <div class="splitter" data-splitter="setupRuns"
+       title="drag to resize · double-click to reset"></div>
+  <button type="button" class="rail-tab left" id="runs-tab"
+          title="what to run next" aria-controls="setup-runs" hidden>&#9776;</button>
 
-    {# The one write. A heading appended to a markdown file: instant, local,
-       no model behind it, and doable by hand exactly as this does it. #}
-    <form class="setup-add" id="add-topic">
-      <input type="text" id="topic-name" placeholder="what do you want cards for?"
-             autocomplete="off" aria-label="the subject">
-      <textarea id="topic-ask" rows="2" aria-label="what you want from it"
-                placeholder="what you want from it, in your own words"></textarea>
-      <button type="submit">record the ask</button>
-      <p class="muted">Then run <code>/propose --project {{ project }} '&lt;the subject&gt;'</code>
-        to outline it and write the units.</p>
-    </form>
+  <aside class="setup-panel" id="setup-panel" aria-label="what this project holds">
+    {# The project itself, above the split and outside both lists: it is what
+       the two lists belong to, not a third item in one of them. #}
+    <button type="button" class="setup-who" data-pane="project">
+      <span class="setup-who-name">{{ project_facts.title or project }}</span>
+      <span class="setup-who-what">{{ project_facts.deck }}</span>
+    </button>
 
-    {% if untopiced %}
-    <p class="muted">{{ untopiced | length }} proposed units match no outline entry.
-      Either the ask was edited after they were written, or they were proposed
-      without one.</p>
-    {% endif %}
-  </section>
+    {# The two lists and the handle between them, in a box of their own: the
+       drag measures from the top of that box, so the project button above
+       must not be inside it. Same arrangement as the filter rail's. #}
+    <div class="setup-lists">
+    <section class="setup-stack" id="topics" aria-label="topics">
+      <h2 class="setup-cap">topics<span class="setup-count">{{ coverage.topics | length }}</span></h2>
+      {# The one thing here you cannot read off a file: which entries of an ask
+         have a unit and which are still waiting. A pass that stopped halfway
+         looks exactly like a subject that was smaller than you thought, and
+         this is the difference. In the panel rather than in a detail view
+         because it is the number the screen is opened for. #}
+      {% if coverage.topics %}
+      <p class="setup-total">{{ coverage.covered }} of {{ coverage.entries }}
+        outline entries have a unit{{ ', ' ~ coverage.open ~ ' still open' if coverage.open }}</p>
+      {% endif %}
+      <ul class="setup-pick">
+        {% for topic in coverage.topics %}
+        <li><button type="button" data-pane="topic:{{ topic.slug }}"
+                    data-works="{{ topic_works.get(topic.slug, []) | join(' ') }}">
+          <span class="pick-name">{{ topic.name }}</span>
+          <span class="pick-note">{{ topic.covered }}/{{ topic.outline | length }}</span>
+          <span class="pick-bar" aria-hidden="true"><i style="width:{{
+            (100 * topic.covered / topic.outline | length) | round if topic.outline else 0 }}%"></i></span>
+        </button></li>
+        {% endfor %}
+        <li><button type="button" class="setup-more" data-pane="new-topic">
+          <span class="pick-name">+ new topic</span></button></li>
+      </ul>
+      {% if not coverage.topics %}
+      <p class="setup-empty">Optional where a source says what the deck
+        covers.</p>
+      {% endif %}
+    </section>
 
-  {# Reference material and what is ambient. Both are prose files handed to
-     whoever writes a card, shown here so you can see whether they say
-     anything before a pass reads them and finds they do not. #}
-  <section class="setup-block" id="shelf">
-    <h3>the shelf</h3>
-    {% if shelf_lines %}
-    <p class="muted">Reference material, checked against rather than carded.
-      Dropping a line is how you say you do not want one, which is the same
-      shape as resolving an annotation by deleting it.</p>
-    <ul class="setup-list shelf-list">
-      {% for line in shelf_lines %}
-      <li class="shelf-line">
-        <span>{{ line }}</span>
-        <button type="button" class="drop" data-drop-reference="{{ line }}"
-                title="drop this line from references.md">&times;</button>
-      </li>
-      {% endfor %}
-    </ul>
-    {% else %}<p class="muted">No <code>references.md</code>. With no authoritative
-      source, this is all that keeps a card off the model's memory alone.</p>{% endif %}
-  </section>
+    <div class="splitter y" data-splitter="setup"
+         title="drag to resize · double-click to reset"></div>
 
-  <section class="setup-block">
-    <h3>what is ambient here</h3>
-    {% if conventions %}<pre class="setup-prose">{{ conventions }}</pre>
-    {% else %}<p class="muted">No <code>conventions.md</code>. With no book to read
-      it off, that file <em>decides</em> what the deck does rather than describing
-      it, so whoever writes a card here is guessing until it exists.</p>{% endif %}
-  </section>
+    <section class="setup-stack" id="sources" aria-label="sources">
+      <h2 class="setup-cap">sources<span class="setup-count" id="source-count">{{
+        sources | length }}</span></h2>
+      {# Two filters, because they answer different questions. What a work
+         *is*, meaning something units come out of or something they are
+         checked against, and whether it has anything to do with the ask
+         above. One row of five buttons would read as one question. #}
+      {% if sources %}
+      <div class="setup-filter" id="source-filter">
+        <button type="button" data-kind="" class="on">all</button>
+        <button type="button" data-kind="authoritative">authoritative</button>
+        <button type="button" data-kind="reference">reference</button>
+        <button type="button" class="filter-sync" id="topic-sync" data-sync
+                title="only the works the selected topic drew on">this topic</button>
+      </div>
+      {% endif %}
+      <ul class="setup-pick" id="source-list">
+        {% for work in sources %}
+        <li data-kind="{{ 'authoritative' if work.authoritative else 'reference' }}"
+            data-topics="{{ work_topics.get(work.key, []) | join(' ') }}">
+          <button type="button" data-pane="source:{{ work.key }}">
+            <span class="pick-name">{{ work.title }}</span>
+            <span class="pick-note">{{ work.units or '' }}</span>
+            <span class="pick-kind{{ ' out' if not work.authoritative }}">{{
+              'authoritative' if work.authoritative else 'reference' }}</span>
+          </button></li>
+        {% endfor %}
+      </ul>
+      <p class="setup-empty" id="source-none" hidden>No source matches that.</p>
+      {# Proposed sources, in the list of sources. They were on the
+         project's own panel, under the shelf, which is where a *reference*
+         lives and not where anybody looks for a source: a pass proposed
+         six of them and they read as having gone nowhere. #}
+      {% if proposed %}
+      <ul class="setup-pick" id="proposed-list">
+        {% for line in proposed %}
+        <li data-kind="proposed">
+          <button type="button" data-pane="proposed:{{ loop.index0 }}">
+            <span class="pick-name">{{ line.title or line.text }}</span>
+            <span class="pick-kind out">proposed</span>
+          </button></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      <ul class="setup-pick">
+        <li><button type="button" class="setup-more" data-pane="add-source">
+          <span class="pick-name">+ add a source</span></button></li>
+      </ul>
+      {% if not sources %}
+      {# No kind key to show: a project that reads nothing has no row saying
+         so, it simply has no sources. The line about adding one is here and
+         not above a list that has some: it answers a question you only ask
+         with nothing to look at. #}
+      <p class="setup-empty">This project reads no document. Its cards come
+        from what you asked for, checked against the shelf.</p>
+      {% endif %}
+    </section>
+    </div>
 
-  {# Starting another one. Here because this is the screen about what a
-     project is, and because the gallery's "add a source" corner is about
-     importing a document, which is the other kind. #}
-  <section class="setup-block">
-    <h3>start another project</h3>
-    <p class="muted">One that reads no document, for a subject rather than a
-      book. <code>forge project</code> writes the same file.</p>
-    <form class="setup-add" id="start-project">
-      <input type="text" id="project-name" placeholder="what is it about?"
-             autocomplete="off" aria-label="the project's name">
-      <input type="text" id="project-deck" placeholder="which Anki deck (optional)"
-             autocomplete="off" aria-label="the deck">
-      <button type="submit">start it</button>
-    </form>
-  </section>
+    {# Starting another project is not something this project holds, so it is
+       not a row in its lists. It lives in the picker, which is where you go
+       when the one you want is not on the list. #}
+    <footer class="setup-foot">
+      <button type="button" class="setup-more" id="project-pick-foot">
+        all projects, or start one</button>
+    </footer>
+  </aside>
+  <div class="splitter" data-splitter="setupPanel"
+       title="drag to resize · double-click to reset"></div>
+
+  <div class="setup-detail" id="setup-detail">
+
+    {# -- the project ------------------------------------------------------ #}
+    <section class="setup-pane" data-pane="project">
+      <header class="pane-head">
+        <h2>{{ project_facts.title or project }}</h2>
+      </header>
+
+      {{ open_in({}) }}
+      {{ counts_strip(pipeline, {}) }}
+
+      <dl class="setup-facts">
+        <dt>deck</dt><dd>{{ project_facts.deck }}</dd>
+        {% for card_type, deck in project_facts.decks %}
+        <dt>deck · {{ card_type }}</dt><dd>{{ deck }}</dd>
+        {% endfor %}
+        <dt>material</dt><dd>{{ project_facts.origin or 'nothing declared' }}</dd>
+        {% if project_facts.citation %}
+        <dt>cited as</dt><dd>{{ project_facts.citation | inline }}</dd>{% endif %}
+        {% if project_facts.tags %}
+        <dt>labels</dt><dd>{{ project_facts.tags | join(', ') }}</dd>{% endif %}
+        <dt>order</dt><dd>{{ project_facts.order or 'printed' }}</dd>
+        <dt>web lookups</dt><dd>{{ 'allowed' if project_facts.web else 'off' }}
+          <span class="from">{{ 'set here' if project_facts.web_own else 'inherited' }}</span></dd>
+        {% for key, value in project_facts.declared %}
+        <dt>conventions.{{ key }}</dt><dd>{{ value | inline }}</dd>
+        {% endfor %}
+      </dl>
+      {% if sources | length > 1 %}
+      <p class="pane-next">Crop settings and mark meanings are per document,
+        on each work's own panel.</p>
+      {% endif %}
+
+      {# Both prose files, shown so you can see whether they say anything
+         before a pass reads them and finds they do not. Rendered rather than
+         quoted: they are markdown, and a wall of literal `-` and `$\partial$`
+         is this page saying it has not read the file you are looking at. #}
+      <h3 class="pane-cap">what is ambient here</h3>
+      {% if conventions %}<div class="setup-prose">{{ conventions | prose }}</div>
+      {% else %}<p class="setup-empty">No <code>conventions.md</code>. Whoever
+        writes a card here is guessing until it exists.</p>{% endif %}
+
+
+      {# Proposed first, because it is the half with something to decide. A
+         pass writes `- [ ] ...` and the checkbox is the whole of the pending
+         state: accepting takes it off, rejecting deletes the line, and both
+         are edits you could make in an editor. #}
+      {% if proposed %}
+      <h3 class="pane-cap">proposed, not yet yours</h3>
+      <ul class="shelf-list">
+        {% for line in proposed %}
+        <li class="shelf-line pending">
+          <span>{{ line.text | inline }}</span>
+          <span class="shelf-settle">
+            <button type="button" class="take" data-take-reference="{{ line.raw }}"
+                    title="keep it: it becomes a line of the shelf">keep</button>
+            <button type="button" class="drop" data-drop-reference="{{ line.raw }}"
+                    title="drop it from references.md">&times;</button>
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <h3 class="pane-cap">the shelf</h3>
+      {% if settled %}
+      <p class="setup-empty">Reference material, checked against rather than
+        carded.</p>
+      <ul class="shelf-list">
+        {% for line in settled %}
+        <li class="shelf-line">
+          <span>{{ line.text | inline }}</span>
+          <span class="shelf-settle">
+            {# Prose here is a note to whoever writes a card. Making it a
+               source gives it a key, a panel and a line of its own in the
+               context handed over, which is worth doing for anything with
+               an address. #}
+            <button type="button" class="take" data-take-reference="{{ line.raw }}"
+                    title="make it a source, with a panel of its own">as a source</button>
+            <button type="button" class="drop" data-drop-reference="{{ line.raw }}"
+                    title="drop this line from references.md">&times;</button>
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+      {# The file's own prose, which nothing drew: the rows are only its
+         list items, so a shelf written as paragraphs rendered as
+         "No references.md" while the file sat there with prose in it.
+
+         Against every row, settled or proposed. Against the settled ones
+         alone it printed a shelf of nothing but proposals a second time,
+         raw `[ ]` markers and all, under a heading calling them yours. #}
+      {% if shelf and not shelf_lines %}
+      <div class="setup-ask">{{ shelf | prose }}</div>
+      {% elif not shelf and not proposed %}
+      <p class="setup-empty">No <code>references.md</code>.</p>
+      {% endif %}
+
+      {{ runs([{
+        'kind': 'claude',
+        'label': 'propose some references',
+        'why': 'reads what this project is for and proposes places to check'
+               ' a card against. Nothing is accepted: each line waits for you.',
+        'run': '/sources --project "' ~ project ~ '"',
+      }]) }}
+
+      {% if untopiced %}
+      <h3 class="pane-cap">outside every outline</h3>
+      <p class="setup-empty">{{ untopiced | length }} proposed units match no
+        outline entry.</p>
+      {% endif %}
+
+      {# Folded, and it asks you to type the name. A project is a folder, a
+         ledger and a pile of cards, and the mistake worth making impossible
+         is deleting the wrong one because two of them start with the same
+         word. Typing the name is the one confirmation that cannot be
+         clicked through by muscle memory.
+
+         It refuses a project that holds cards and says which command will
+         do it anyway. That override is a flag you type in a terminal, not
+         a second button here: thirty-nine cards is weeks of review. #}
+      <details class="setup-danger">
+        <summary>remove this project</summary>
+        <p class="setup-empty">Deletes <code>projects/{{ project }}</code>,
+          the cards filed under it, and its table in
+          <code>forge.toml</code>. Notes already in Anki stay there.</p>
+        <form class="setup-form" id="drop-project" data-project="{{ project }}">
+          <label for="drop-name">type <code>{{ project }}</code> to confirm</label>
+          <input type="text" id="drop-name" autocomplete="off" spellcheck="false">
+          <button type="submit" class="form-go danger" id="drop-go" disabled>
+            remove it</button>
+        </form>
+      </details>
+    </section>
+
+    {# -- one topic -------------------------------------------------------- #}
+    {% for topic in coverage.topics %}
+    <section class="setup-pane" data-pane="topic:{{ topic.slug }}">
+      <header class="pane-head">
+        <h2>{{ topic.name }}</h2>
+        <p class="pane-what">{{ topic.covered }} of {{ topic.outline | length }}
+          entries have a unit.</p>
+      </header>
+
+      {{ open_in({'topic': topic.slug}) }}
+      {{ counts_of(topic_stats.get(topic.slug), {'topic': topic.slug}) }}
+
+      {% if topic.ask %}<div class="setup-ask">{{ topic.ask | prose }}</div>{% endif %}
+
+      {% set works = topic_works.get(topic.slug, []) %}
+      {# Which sources this ask reads, and a way straight into each. A box each rather than a list of
+         chips, because the answer is one you set: the walk over what the
+         ask produced can only report a work its units already came out
+         of, and a reference produces none.
+
+         A work whose units came out of this ask is checked and fixed. It
+         read that book, and a box does not unsay it. The name opens the
+         work, so the relation still reads both ways. The heading carries
+         the label, so no row repeats it. #}
+      {% if sources %}
+      <h3 class="pane-cap">use for this topic</h3>
+      <ul class="setup-known reads-list" data-reads-for-topic="{{ topic.slug }}">
+        {% for work in sources %}
+        {% set derived = work.key in topic_derived.get(topic.slug, []) %}
+        <li>
+          <input type="checkbox" data-reads="{{ work.key }}"
+                 data-topics="{{ work.topics | join(' ') }}"
+                 aria-label="{{ work.title }}"
+                 {{ 'checked' if work.key in works }}
+                 {{ 'disabled' if derived }}>
+          <button type="button" class="known-name work-chip"
+                  data-pane="source:{{ work.key }}">{{ work.title }}</button>
+          {% if derived %}<span class="known-kind">this topic's units already use it</span>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      <ul class="outline">
+        {% for entry in topic.outline %}
+        <li class="{{ 'covered' if entry.covered else 'open' }}">
+          <span class="outline-mark" aria-hidden="true">{{ '·' if entry.covered else '○' }}</span>
+          {% if entry.covered %}
+          <a href="{{ filter_url('/units', {'project': project}, state='all') }}#{{ entry.units[0] }}">{{ entry.text | inline }}</a>
+          {% else %}
+          <span>{{ entry.text | inline }}</span>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+
+    {# -- one source ------------------------------------------------------- #}
+    {% for work in sources %}
+    <section class="setup-pane" data-pane="source:{{ work.key }}">
+      <header class="pane-head">
+        <h2>{{ work.title }}</h2>
+        <p class="pane-what">
+          {# Three, not two. A work you switched off keeps the units it
+             made, so "nothing is extracted from it" above a strip counting
+             them was the panel contradicting itself. #}
+          {% if work.authoritative %}Units are extracted from this: {{ work.units }}
+            so far.
+          {% elif work.units %}Nothing new is extracted from this. Its
+            {{ work.units }} units stay.
+          {% else %}Reference material, checked against rather than extracted
+            from.{% endif %}</p>
+      </header>
+
+      {{ open_in({'document': work.key}) }}
+      {{ counts_of(work.holding, {'document': work.key}) }}
+
+      <dl class="setup-facts">
+        {% if work.citation %}<dt>cited as</dt><dd>{{ work.citation | inline }}</dd>{% endif %}
+        {% if work.files %}<dt>files</dt><dd>{{ work.files | join(', ') }}</dd>{% endif %}
+        {% if work.tex %}<dt>tex</dt><dd>{{ work.tex }}</dd>{% endif %}
+        {% if work.zotero %}<dt>Zotero item</dt><dd>{{ work.zotero }}</dd>{% endif %}
+        {% if work.attachments %}
+        <dt>attachments</dt><dd>{{ work.attachments | join(', ') }}</dd>{% endif %}
+        {% if work.url %}
+        <dt>at</dt><dd><a href="{{ work.url }}" rel="noreferrer">{{ work.url }}</a></dd>{% endif %}
+      </dl>
+
+      {# A reference with no address is a book you own. Nothing here can
+         open it, which is exactly what makes it a reference; and it is
+         also one `zotero` or `files` line away from being a work units
+         come out of, so the panel says which line. #}
+      {% if not work.url and not work.zotero and not work.files and not work.tex %}
+      <p class="setup-empty">No address. Something you own rather than
+        something to open.</p>
+      {# And the way to make it more than that, proposed rather than done.
+         Put the book in Zotero, mark it up, and import it: that is one
+         command, it carries the marking scheme and the crop settings with
+         it, and it is the only route that ends with units. Adding
+         `zotero = "..."` by hand would declare an item nobody marked. #}
+      {{ runs([{
+        'kind': 'shell',
+        'label': 'put it in Zotero and import it',
+        'why': 'mark up what is worth carding in Zotero, then run this. It'
+               ' writes the item key, the attachments and the marks into a'
+               ' source here.',
+        'run': 'uv run forge zotero <citekey> --project "' ~ project ~ '"',
+        'reads': false,
+      }]) }}
+      {% endif %}
+
+      {# The asks standing on it: the relation read backwards, and a way
+         into each. Said here, changed on the ask's own panel, because a
+         box per source here would be a second list of this project's
+         sources on a screen that already has one. #}
+      {% set asks = work_topics.get(work.key, []) %}
+      {% if asks %}
+      <p class="pane-works"><span class="works-what">used by</span>
+        {% for slug in asks %}
+        <button type="button" class="work-chip" data-pane="topic:{{ slug }}">{{
+          (coverage.topics | selectattr('slug', 'equalto', slug) | first).name }}</button>
+        {% endfor %}
+      </p>
+      {% endif %}
+
+      {# Whether anything is segmented out of it here. The one property of
+         a source you could not change without editing the file, and the
+         one that decides what every pass does with it: you can own a
+         marked-up paper, want it cited, and want none of its highlights
+         in your ledger.
+
+         Only where there is a document. Turning it *on* for a URL would
+         be a claim the folder cannot honour, so the switch only appears
+         once there is something to segment. #}
+      {% if work.files or work.tex or work.zotero %}
+      <form class="setup-form work-extract" data-extract="{{ work.key }}">
+        <label class="switch">
+          <input type="checkbox" {{ 'checked' if work.authoritative }}>
+          units are extracted from this</label>
+        {# What the switch does *not* do, and the one line here that stays
+           visible rather than becoming a tooltip: a switch that looks
+           destructive is read as destructive, and this one is not. #}
+        <p class="form-note">The units it already made stay either way.</p>
+      </form>
+      {% endif %}
+
+      {# Whether a card writer gets handed this one. Only for a
+         reference: an authoritative work is not on the shelf, it *is* the
+         source, and it reaches the writer as the unit's own pages. #}
+      {% if not work.authoritative %}
+      <form class="setup-form work-offer" data-offer="{{ work.key }}">
+        <label class="switch">
+          <input type="checkbox" {{ 'checked' if work.offer }}>
+          hand it to whoever writes a card
+          {# Where the value came from, in the chip the settings list
+             below already uses for it: a checkbox looks the same set
+             here and inherited, and that is the only thing left to say. #}
+          <span class="from">{{ 'set here' if work.offer_own else 'inherited' }}</span></label>
+      </form>
+      {% endif %}
+
+      {# What it is for, and how to read it. The half of a source that is
+         not its address: which questions it answers, which part to look
+         at, what to cite. A card writer gets it from `forge context` with
+         the rest of the shelf, which is the whole reason it is worth
+         typing, and it is the one thing about a reference that nothing
+         else can derive. #}
+      <h3 class="pane-cap">what it is for</h3>
+      <form class="setup-form source-note" data-note="{{ work.key }}">
+        <label for="note-{{ work.key }}">one line, handed to whoever writes a card</label>
+        <input type="text" id="note-{{ work.key }}" value="{{ work.note }}"
+               autocomplete="off"
+               placeholder="{{ 'which pages to read against, what to cite'
+                 if work.authoritative else
+                 'which questions it answers, and where to look' }}">
+        <button type="submit" class="form-go">save</button>
+      </form>
+
+      {# The settings that resolve differently because of this work, each with
+         where it was settled: "40 points" and "40 points, because nobody said
+         otherwise" are different answers. Only for a work with a document:
+         every one of them is about cutting a crop out of a page, and a
+         reference with no document has no page here to cut.
+
+         Not gated on the extract switch. Every one of these is still in
+         force for the units the work already made. The crops render at
+         that width and that context, a card writer gets that page window,
+         and a setting in force with nowhere to read it off is the one
+         that drifts. #}
+      {% if work.files or work.tex or work.zotero %}
+      <h3 class="pane-cap">how it is read</h3>
+      <ul class="setup-settings">
+        {% for row in work.settings %}
+        <li>
+          <span class="set-key">{{ row.key }}</span>
+          <span class="set-value">{{ row.value | inline }}</span>
+          <span class="from">{{ 'set here' if row.own else 'inherited' }}</span>
+          <span class="set-what">{{ row.what | inline }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {# What a colour means, and which marks become units. The one setting
+         you change while *looking* at the marks: you import a book, triage
+         twenty units, and find that the orange highlights were the ones
+         worth carding.
+
+         Only the pairs this work actually carries, plus the ones it
+         declares. Eight colours across six kinds is forty-eight rows and
+         nobody has forty-eight meanings; a pair you have never used is not
+         worth a text box.
+
+         The checkbox is here wherever there are marks. It decides which
+         of them count as units, and that stays a live question for the
+         units already in the ledger: unchecking a colour forgets the
+         untouched ones, whether or not more are ever imported. #}
+      {% if work.scheme %}
+      {# The tally, only where there is a ledger to tally. A work nothing
+         has been imported from would otherwise show a column of zeroes,
+         each of which reads as a lookup that failed. #}
+      {% set counted = work.scheme | map(attribute='count') | select | list %}
+      <h3 class="pane-cap">what its marks mean</h3>
+      <form class="scheme-edit" data-scheme="{{ work.key }}"
+            data-marks="{{ 1 if work.zotero else 0 }}">
+        <table class="scheme-table">
+          <thead>
+            <tr>
+              <th>mark</th>
+              <th>reads as</th>
+              {% if work.zotero %}<th title="a mark like this becomes a unit of its own">makes a unit</th>{% endif %}
+              {% if counted %}<th class="sc-count">marks</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in work.scheme %}
+            <tr data-pair="{{ row.pair }}">
+              <td class="sc-mark">
+                <span class="swatch c-{{ row.colour or row.kind }}" aria-hidden="true"></span>
+                <code>{{ row.pair }}</code>
+              </td>
+              <td><input type="text" class="sc-means" value="{{ row.own }}"
+                         placeholder="{{ row.inherited }}"
+                         aria-label="what {{ row.pair }} means here"></td>
+              {% if work.zotero %}
+              <td class="sc-makes">
+                <input type="checkbox" class="sc-unit" {{ 'checked' if row.makes_a_unit }}
+                       aria-label="{{ row.pair }} becomes a unit"></td>
+              {% endif %}
+              {% if counted %}
+              <td class="sc-count{{ ' none' if not row.count }}">{{ row.count }}</td>
+              {% endif %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% if not counted %}
+        <p class="form-note">Nothing imported yet, so nothing to count.</p>
+        {% endif %}
+        <p class="form-note">Blank reads as the repo-wide meaning, shown in
+          grey.</p>
+        <button type="submit" class="form-go">save the scheme</button>
+      </form>
+      {% endif %}
+
+      {# Folded, and it says what goes. A reference is free to drop: it has
+         no units and nothing stands on it. A work something was extracted
+         from takes its units with it, because a unit whose work is gone
+         has no crop to render and no settings to resolve, and the server
+         refuses while any card stands on one. #}
+      <details class="setup-danger">
+        <summary>remove this source</summary>
+        <p class="setup-empty">Drops its <code>[[sources]]</code> table from
+          <code>projects/{{ project }}/project.toml</code>{% if work.units %},
+          and the {{ work.units }} unit{{ '' if work.units == 1 else 's' }} that
+          came out of it{% endif %}. The document itself is not touched.
+          {%- if work.holding and work.holding.cards %} {{ work.holding.cards }}
+          card{{ '' if work.holding.cards == 1 else 's' }}
+          stand{{ 's' if work.holding.cards == 1 else '' }} on it, so this
+          will be refused: <code>uv run forge sources --remove "{{ work.key }}"
+          --project "{{ project }}" --force</code> is the way through.{% endif %}</p>
+        <form class="setup-form" id="drop-source-{{ work.key }}"
+              data-drop-source="{{ work.key }}">
+          <label for="ds-{{ work.key }}">type <code>{{ work.key }}</code> to confirm</label>
+          <input type="text" id="ds-{{ work.key }}" autocomplete="off" spellcheck="false">
+          <button type="submit" class="form-go danger" disabled>remove it</button>
+        </form>
+      </details>
+    </section>
+    {% endfor %}
+
+    {# -- a work the repo already knows ------------------------------------ #}
+    {# A source used to *be* a project, so "which sources are there" was the
+       project list. It is a thing inside one now, and a paper can sit in
+       two: cited by one project and extracted from by another. Adding it
+       copies nothing on disk, because a Zotero work is its item key and a
+       reference is its URL, so both projects read the same thing. #}
+    {# One panel per proposed source. A proposal is a line of prose, so
+       the panel says what accepting would write: the name it would take,
+       the address, and what the pass said it is for. Two decisions and
+       nothing else, because there is nothing to configure until it
+       exists. #}
+    {% for line in proposed %}
+    <section class="setup-pane" data-pane="proposed:{{ loop.index0 }}">
+      <header class="pane-head">
+        <h2>{{ line.title or line.text }}</h2>
+        <p class="pane-what">Proposed by a pass. Nothing reads it until you
+          take it.</p>
+      </header>
+      <dl class="setup-facts">
+        {% if line.url %}<dt>address</dt>
+        <dd><a href="{{ line.url }}" target="_blank" rel="noreferrer">{{ line.url }}</a></dd>{% endif %}
+        {% if line.note %}<dt>what it is for</dt><dd>{{ line.note | inline }}</dd>{% endif %}
+        <dt>as proposed</dt><dd>{{ line.text | inline }}</dd>
+      </dl>
+      <p class="pane-open">
+        <button type="button" class="form-go" data-take-reference="{{ line.raw }}"
+                title="writes a [[sources]] table in project.toml, as a reference"
+                >take it as a source</button>
+        <button type="button" class="form-go quiet" data-drop-reference="{{ line.raw }}"
+                title="delete the line from references.md">reject it</button>
+      </p>
+    </section>
+    {% endfor %}
+
+    <section class="setup-pane" data-pane="add-source">
+      <header class="pane-head">
+        <h2>add a source</h2>
+        <p class="pane-what">Something to check cards against, always as a
+          reference. A document to segment is imported instead, under
+          <em>or import one</em>.</p>
+      </header>
+
+      {% if elsewhere %}
+      <h3 class="pane-cap">already in this repo</h3>
+      <input type="search" class="known-search" id="known-search"
+             placeholder="find a work by name, project or citation"
+             autocomplete="off" spellcheck="false"
+             aria-label="narrow the list of works">
+      <ul class="setup-known" id="known-list">
+        {% for work in elsewhere %}
+        <li data-find="{{ work.title }} {{ work.project }} {{ work.citation }} {{ work.key }}">
+          <span class="known-name">{{ work.title }}</span>
+          <span class="known-where">{{ work.project }}</span>
+          {# Under the name, not beside the button. A project name is one
+             long unbreakable word (`wainwrightHighDimensional...`), and in
+             a column sized to a button it ran straight through it. #}
+          <span class="known-kind">{{ 'authoritative' if work.authoritative
+            else 'reference' }}{{ ' · ' ~ work.origin if work.origin }}
+            {%- if work.authoritative %} · <span class="known-note"
+              title="a work is extracted from by one project: the same
+document twice is two ledgers of units and two notes per card">read only,
+              {{ work.project }} extracts from it</span>{% endif %}</span>
+          {# Always as a reference. The item key and the files are what
+             make a work authoritative, and this does not copy them: the
+             same document segmented twice is two ledgers of units and two
+             notes per card in Anki, and deciding to segment something is a
+             decision with crop settings and a marking scheme behind it.
+             `forge zotero <citekey> --project <name>` is where that is
+             made, and the commands beside this list say so. #}
+          <span class="known-take">
+            <button type="button" class="known-add" data-add-source="{{ work.key }}"
+                    title="check cards in {{ project }} against it">add</button>
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+      <p class="setup-empty" id="known-none" hidden>No work matches that.</p>
+      {% else %}
+      <p class="setup-empty">Every work this repo knows is already read here.</p>
+      {% endif %}
+
+      {# A page you found yourself. The same three fields a proposed line
+         carries, so a reference you typed and one a pass suggested end up
+         as the same table, including the rule about sites: a second page
+         of somewhere this project already reads widens that source
+         instead of adding a row beside it. #}
+      <h3 class="pane-cap">or a page to check against</h3>
+      <form class="setup-form" id="add-web">
+        <label for="web-url">address</label>
+        <input type="url" id="web-url" autocomplete="off"
+               placeholder="https://en.cppreference.com/w/cpp/container">
+        <label for="web-title">what it is called</label>
+        <input type="text" id="web-title" autocomplete="off"
+               placeholder="optional; the site's name otherwise">
+        <label for="web-note">what it is for</label>
+        <input type="text" id="web-note" autocomplete="off"
+               placeholder="which questions it answers, and where to look">
+        <button type="submit" class="form-go">add it</button>
+      </form>
+
+      <h3 class="pane-cap">or import one</h3>
+      {{ runs([
+        {'kind': 'shell', 'label': 'what is on the shelf, and what is already a source',
+         'why': 'reads Zotero and writes nothing. It is the answer to "which'
+                ' of these have I not imported yet".',
+         'run': 'uv run forge zotero --list'},
+        {'kind': 'shell', 'label': 'import one into this project',
+         'why': 'turns the marks you declared into units, and files them'
+                ' under this project rather than under the cite key.',
+         'run': 'uv run forge zotero <citekey> --project "' ~ project ~ '"'},
+      ]) }}
+    </section>
+
+    {# -- the two writes --------------------------------------------------- #}
+    {# A heading appended to a markdown file: instant, local, no model behind
+       it, and doable by hand exactly as this does it. #}
+    <section class="setup-pane" data-pane="new-topic">
+      <header class="pane-head">
+        <h2>create a topic</h2>
+        <p class="pane-what">A subject you want cards for.</p>
+      </header>
+      {# Labelled fields rather than two placeholders in a row. A placeholder
+         is gone the moment you type, which is exactly when the second field
+         needs to say what it is for. #}
+      <form class="setup-form" id="add-topic">
+        <label for="topic-name">what it covers</label>
+        <input type="text" id="topic-name" autocomplete="off"
+               placeholder="the standard containers">
+        <label for="topic-ask">what you want from it</label>
+        <textarea id="topic-ask" rows="3"
+                  title="a pass reads this before it outlines anything; a narrow ask keeps the outline from going shallow"
+                  placeholder="choosing between them and invalidation, not the full API"></textarea>
+        <button type="submit" class="form-go">create it</button>
+      </form>
+      <h3 class="pane-cap">then</h3>
+      {{ runs([{
+        'kind': 'claude',
+        'label': 'outline it and write the units',
+        'why': 'reads what you wrote, outlines what the subject covers, and'
+               ' writes a unit per entry. Subjects, never drafts: triage'
+               ' still decides.',
+        'run': '/propose --project "' ~ project ~ '" "<the subject>"',
+      }]) }}
+    </section>
+
+  </div>
 </div>
 {% endblock %}
 

@@ -10,6 +10,11 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "jinja2>=3.1",
+    # Colouring a card's fenced code, at sync. Small, pure Python, and the
+    # colours are part of what reaches Anki rather than a nicety: an
+    # optional highlighter meant two decks from one repo, one coloured and
+    # one not, depending on how somebody had synced.
+    "pygments>=2.17",
 ]
 
 [project.optional-dependencies]
@@ -23,12 +28,6 @@ pdf = ["pymupdf>=1.24"]
 # installed rather than downloading one: `assets/make_assets.py` assumes a
 # local Chrome too, so this is a pip package and nothing else.
 browser = ["playwright>=1.44"]
-# Colouring a card's fenced code, at sync. Optional because a missing
-# highlighter should cost the colours and not the card: `sync` falls back to
-# an uncoloured `<pre>`, which is still correct and readable. Highlighted
-# here rather than on the card so nobody you share a deck with needs an
-# add-on.
-code = ["pygments>=2.17"]
 # NOTE: there is deliberately no `ocr` extra. Transcription is a Claude Code
 # skill (`/transcribe`) reading crops, not a local vision model -- which is
 # what keeps torch, and a 4 GB dependency tree, out of this project entirely.
@@ -42,6 +41,10 @@ anki-math-forge = "anki_math_forge.cli:main"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    # The suite is a thousand small tests and a hundred browser ones; it is
+    # CPU-bound Python either way, so it splits across cores nearly
+    # linearly. Bounded on purpose where it drives Chrome: see `addopts`.
+    "pytest-xdist>=3.6",
     "httpx>=0.27",
     "ruff>=0.6",
     "mypy>=1.11",
@@ -70,9 +73,7 @@ files = ["src"]
 strict = true
 warn_return_any = false
 
-# Pygments ships no stubs and is optional anyway: `sync` imports it inside a
-# `try` and falls back to an uncoloured `<pre>`, so a missing dependency
-# costs the colours and not the card.
+# Pygments ships no stubs.
 [[tool.mypy.overrides]]
 module = ["pygments.*"]
 ignore_missing_imports = true
@@ -83,4 +84,14 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Split across processes, and **capped**. The suite is CPU-bound Python and
+# splits nearly linearly, but a third of it drives a real browser: uncapped
+# `-n auto` is one Chrome per core, which is a way to run out of memory
+# rather than a way to go faster. Four is fast and survivable on a laptop.
+#
+# `loadscope` keeps a module's tests on one worker. The browser modules start
+# a uvicorn per module in a module-scoped fixture, so scattering their tests
+# would start that server once per worker instead of once.
+#
+# Serial when you need it: `-p no:xdist` or `-n0`.
+addopts = "-q -n auto --maxprocesses=4 --dist loadscope"

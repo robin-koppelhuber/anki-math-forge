@@ -83,7 +83,9 @@ def test_a_name_is_slugified_so_the_id_is_predictable(repo: Path) -> None:
     """The project name is the first segment of every unit id it holds."""
     assert run(repo, "project", "Modern C++") == 0
 
-    assert (repo / "projects" / "modern-c").exists()
+    # `c++` spells `cpp`: the general rule strips the pluses and leaves `c`,
+    # which is a different language and a folder somebody else may want.
+    assert (repo / "projects" / "modern-cpp").exists()
 
 
 @pytest.mark.parametrize("name", ["", "   ", "!!!"])

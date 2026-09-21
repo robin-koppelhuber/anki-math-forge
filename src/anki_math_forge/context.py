@@ -51,6 +51,10 @@ class UnitContext:
     # has to work out whose setting won.
     web: bool = False
     web_from: str = "repo"
+    #: How much beyond the unit's own source this is: `none`, `references`
+    #: or `web`. The `web` flag above is the last of the three read as a
+    #: yes or no, kept because every pass already branches on it.
+    context: str = "references"
     # What `transcription` is written in. `latex` for a formula, whatever the
     # preview says for anything else, so a snippet is fenced as code rather
     # than handed over as maths that will not parse.
@@ -82,6 +86,7 @@ class UnitContext:
             "declared": self.declared,
             "web": self.web,
             "web_from": self.web_from,
+            "context": self.context,
             "page_text": self.page_text,
             "window": self.window,
             "pages": self.pages,
@@ -130,19 +135,34 @@ class UnitContext:
         # Said plainly and in both directions. An absent line would read as
         # "nobody thought about it", and the whole value of the permission is
         # that somebody did.
-        out.append(
-            "\n## looking things up\n   "
-            + (
+        # Said plainly, in all three directions. Three, because "no web"
+        # was doing the work of two different answers: read the shelf but
+        # not the internet, and read nothing but this page.
+        if self.web:
+            allowed = (
                 f"Web research is ALLOWED for this unit (granted by the {self.web_from})."
-                " Use it for what the source assumes and does not state, and say"
-                " in `## notes` what came from off the page."
-                if self.web
-                else "No web access. Everything on the card comes from "
+                " The shelf below comes first: look things up for what the"
+                " source assumes and does not state, and say in `## notes`"
+                " what came from off the page."
+            )
+        elif self.context == "none":
+            allowed = (
+                "No web access, and no shelf. Everything on the card comes from "
+                + ("the pages below" if self.settled else "this unit")
+                + " and from the conventions above. If that does not settle"
+                " it, annotate the unit rather than reading around it: this"
+                " deck is deliberately closed."
+            )
+        else:
+            allowed = (
+                "No web access. Everything on the card comes from "
                 + ("the pages below" if self.settled else "the references below")
-                + " and from the conventions above; if that does not settle it,"
+                + " and from the conventions above. **Read the references**:"
+                " they are the shelf this project keeps for exactly this, and"
+                " each says what it is for. If they do not settle it,"
                 " annotate the unit rather than guessing."
             )
-        )
+        out.append("\n## looking things up\n   " + allowed)
         if self.marks:
             out.append(
                 "\n## what the reader marked here\n"
@@ -262,7 +282,7 @@ def assemble(
         return None
 
     if spread is None:
-        spread = config.context_pages_for(source, unit.context_pages)
+        spread = config.context_pages_for(source, unit.context_pages, unit.locator.document)
     scheme = config.zotero_for(source)
     text = ""
     path = source_text_path(config, source, unit.locator.document)
@@ -280,11 +300,17 @@ def assemble(
     # geometry for one region is in the same position as a proposal nobody
     # printed, and both want the same warning.
     work = spec.source(unit.locator.document) if spec else None
-    # Whether an authoritative source stands behind this unit, which is not
-    # the same question as whether its text layer happens to be cached: a
-    # missing layer is a real condition with a warning of its own, and a crop
-    # still settles the maths without it.
-    settled = bool(unit.has_crop or (work is not None and work.authoritative))
+    # Whether a document stands behind this unit, which is not the same
+    # question as whether its text layer happens to be cached: a missing
+    # layer is a real condition with a warning of its own, and a crop still
+    # settles the maths without it.
+    #
+    # Not the extract switch. A unit out of a `.tex` work has no crop, so
+    # this is the whole answer for it, and switching the work off told a
+    # card writer there was no source at all and withheld the very page
+    # the unit was printed on.
+    printed = work is not None and bool(work.files or work.tex or work.zotero_key)
+    settled = bool(unit.has_crop or printed)
     scannable, lang = unit.scannable
     return UnitContext(
         unit=unit.id,
@@ -292,13 +318,14 @@ def assemble(
         transcription=scannable,
         lang=lang,
         refs=list(unit.refs),
-        shelf=shelf(config, source),
+        shelf=shelf(config, source, printed_in=work.key if work else ""),
         asks=asks(config, source),
         settled=settled,
         conventions=source_conventions(config, source),
         declared=dict(config.conventions_for(source)),
         web=config.web_for(source, unit.web),
         web_from=web_from,
+        context=config.context_for(source, unit.web),
         page_text=_pages(text, wanted),
         window=window,
         pages=wanted,
@@ -466,23 +493,69 @@ def _page_units(ledger: Any, page: int | None) -> list[dict[str, Any]]:
         for u in rows
     ]
 
-def shelf(config: Config, project: str) -> str:
-    """The reference material a project keeps, verbatim.
+def shelf(config: Config, project: str, *, printed_in: str = "") -> str:
+    """The reference material a project keeps: the declared half and the prose.
 
-    `projects/<name>/references.md`: prose with no schema, because nothing
-    branches on it. It is a shelf to check against rather than things to
-    card, which is the difference between it and a source: a unit's
-    authoritative source settles what the card says, and these do not.
+    Two places, one list, because a reference arrives in two ways. An
+    accepted proposal is a `[[sources]]` table with a title, an address and
+    a line saying what it is for, which is what the tool acts on. Anything
+    you typed into `references.md` yourself is prose with no schema, because
+    nothing branches on it.
+
+    Both are handed over, and the declared ones come first: they are the
+    ones somebody agreed to. It is a shelf to check against rather than
+    things to card, which is the difference between it and an authoritative
+    source: a unit's source settles what the card says, and these do not.
+
+    Only the references this project *offers*. One turned off stays
+    declared, cited and findable, and stops arriving with every unit: six
+    places to look is a reading list nobody works through.
 
     It matters most where there is no authoritative source at all. Then this
     is all that keeps a card off the model's memory alone, and handing it
     over is the difference between a deck that was checked and one that was
     remembered.
+
+    `printed_in` is the work this unit came out of, which is never on its
+    own shelf. A book you stopped extracting from is a reference to every
+    other card here and is still the book this one was cropped from, and
+    listing it under "it says where to look, never what to write" got that
+    exactly backwards.
+    """
+    listed = []
+    for work in config.references_for(project):
+        if printed_in and work.key == printed_in:
+            continue
+        parts = [work.title or work.key]
+        if work.url:
+            parts.append(f"({work.url})")
+        if work.note:
+            parts.append(f"- {work.note}")
+        listed.append("- " + " ".join(parts))
+    prose = references_prose(config, project)
+    return "\n\n".join(part for part in ("\n".join(listed), prose) if part)
+
+
+def references_prose(config: Config, project: str) -> str:
+    """What `references.md` itself says, without the declared sources.
+
+    The setup stage reads this and the card writer reads `shelf`. They
+    want different things out of one file: the writer wants everything
+    worth checking a card against, and the page wants the lines somebody
+    can still accept or reject.
+
+    Handing the page the composed version rendered each declared source as
+    a shelf line with an accept button on it, for a source that was
+    already accepted, and the buttons did nothing: `drop_proposal` cannot
+    find a line that is not in the file, and accepting one would write a
+    second table for a work already declared.
     """
     path = config.projects_dir / project / REFERENCES_FILE
     if not path.exists():
         return ""
-    return re.sub(r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M).strip()
+    return re.sub(
+        r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M
+    ).strip()
 
 
 def asks(config: Config, project: str) -> str:

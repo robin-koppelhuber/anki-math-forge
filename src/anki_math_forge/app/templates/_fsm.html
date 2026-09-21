@@ -14,10 +14,11 @@
      from here on there are two objects, and the rest of the machine is about
      the second one.
    * `/transcribe` and `/classify` do nothing for a source whose units came
-     from marks. A highlighted paragraph already carries its text, and the two
-     classifier rules are about a page of formulas. Both skills say so and
-     stop. `/gist` is the one unit pass that runs on either, because the
-     gist-writer reads the mark's own sentence where there is one.
+     from marks, and nothing for a project with no document, where there is
+     no crop to read. A highlighted paragraph already carries its text, and
+     the two classifier rules are about a page of formulas. Both skills say
+     so and stop. `/gist` is the one unit pass that runs on any of the three,
+     because the gist-writer reads the mark's own sentence where there is one.
    * `/classify` reads the transcription in preference to the PDF text layer,
      so it wants `/transcribe` first. Not a hard dependency: it still works on
      an untranscribed book, from the worse of the two readings. That is why
@@ -45,11 +46,11 @@
      as an annotation, erasing it there in the same pass. It arrives at the
      annotations box because that is what it becomes, not at a state.
 
-   There is one `new` box and not two. A unit is `new` in the ledger whatever
-   door it came in by, so drawing the state twice would say there are two of
-   them in the diagram people read to find out what the states are. The branch
-   is real, but it is a branch in which passes you can run, so it is drawn
-   where it happens: on the passes.
+   There is one `new` box and not three. A unit is `new` in the ledger
+   whatever door it came in by, so drawing the state three times would say
+   there are three of them in the diagram people read to find out what the
+   states are. The branch is real, but it is a branch in which passes you can
+   run, so it is drawn where it happens: on the passes.
 
    No caption. The picture was carrying eight lines of prose under it, which
    is a second explanation of the same thing in the one place a reader is
@@ -81,7 +82,7 @@
   <line class="lane-rule" x1="0" y1="432" x2="790" y2="432"/>
   <text class="lane" x="10" y="452">CARD: a file in cards/</text>
 
-  <!-- Two doors in, drawn side by side, because which one a source came
+  <!-- Three doors in, drawn side by side, because which one a source came
        through is what decides the passes below. The active one is lit.
 
        Each gets a mark, and each is traced from the real icon rather than
@@ -126,7 +127,7 @@
     <text x="44" y="42">forge extract</text>
     <text class="sub" x="44" y="58">a PDF, segmented into numbered statements</text>
   </g>
-  <g class="source{{ ' on' if sf.origin == 'zotero' else '' }}">
+  <g class="source{{ ' on' if sf.origin in ('zotero', 'mixed') else '' }}">
     <path class="mark thin" d="M325.2,43.5 L324.1,43.4 L324.1,33.9 L326.0,34.0
                                L326.0,40.2 L325.3,40.3 Z"/>
     <path class="mark thin" d="M313.9,29.9 L307.6,29.9 L307.5,28.0 L313.9,28.0 Z"/>
@@ -142,11 +143,34 @@
                                 L319.0,44.4 Z"/>
     <text x="332" y="42">forge zotero</text>
     <text class="sub" x="332" y="58">the marks you made while reading:</text>
-    <text class="sub" x="332" y="72">{{ sf.units_from | join(', ') if sf.units_from
-        else 'highlight/green, note/yellow, image/yellow' }}</text>
+    {# This project's scheme, and no line at all without one. It used to
+       fall back to three invented pairs, which read as the answer; saying
+       there is none instead put a claim where the README render, which
+       passes no project, has nothing to claim. #}
+    {% if sf.units_from %}
+    <text class="sub" x="332" y="72">{{ sf.units_from | join(', ') }}</text>
+    {% endif %}
+  </g>
+  {# The third door: a project with no document, proposed into rather than
+     segmented. Its mark is door one's page drawn dashed, because no app
+     stands behind this one and the absent document is the fact it states.
+
+     Two lines and no third. Row 72 belongs to the scheme above, which is
+     whatever a project declared and is the one length nothing here bounds:
+     the four pairs in forge.toml already reach x=651. The drop leaves at
+     x=752 for the same reason, rather than under the mark where the other
+     two do. #}
+  <g class="source{{ ' on' if sf.configured and not sf.origin else '' }}">
+    <path class="mark thin" stroke-dasharray="3 2"
+          d="M584.3,52.1 L565.9,52.0 L566.0,27.9 L579.2,27.9 L584.1,32.7 Z"/>
+    <path class="mark thin" stroke-dasharray="3 2"
+          d="M579.2,27.9 L579.2,32.7 L584.1,32.7"/>
+    <text x="592" y="42">/propose</text>
+    <text class="sub" x="592" y="58">a subject, with no document</text>
   </g>
   <path class="edge" d="M27,56 V78 H112 V90" marker-end="url(#ar)"/>
   <path class="edge" d="M313,56 V78 H150 V90" marker-end="url(#ar)"/>
+  <path class="edge" d="M752,56 V84 H170 V90" marker-end="url(#ar)"/>
 
   <!-- the spine -->
   <g class="state"><rect x="70" y="92" width="120" height="38" rx="6"/>
@@ -256,7 +280,7 @@
   <path class="edge dash" d="M172,130 V156 H378 V338 H392" marker-end="url(#ar)"/>
   <g class="prop">
     <rect x="396" y="316" width="368" height="44" rx="6"/>
-    <text x="408" y="334">/gist · either source</text>
+    <text x="408" y="334">/gist · any door</text>
     <text class="sub" x="408" y="352">one line: what a card from here would be about</text>
   </g>
 
@@ -271,7 +295,7 @@
   <path class="edge dash" d="M160,500 V511 H392" marker-end="url(#ar)"/>
   <g class="prop">
     <rect x="396" y="488" width="368" height="44" rx="6"/>
-    <text x="408" y="506">/augment · either source</text>
+    <text x="408" y="506">/augment · any door</text>
     <text class="sub" x="408" y="524">conditions, proof, prose · still a draft after</text>
   </g>
 

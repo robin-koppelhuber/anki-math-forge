@@ -14,7 +14,10 @@ the next time anything re-segments.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import threading
+from collections import OrderedDict
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -357,6 +360,108 @@ DOCUMENT_ZOOM = 2.0
 single page is ~1785px and 150KB, and the view stacks dozens of them."""
 
 
+#: How many documents to keep open at once. A project is usually one book
+#: and the app shows one project at a time, so this is a ceiling rather
+#: than a working set; past it a request opens its own and drops it.
+POOL_SIZE = 8
+
+
+@dataclass
+class _Held:
+    """One pooled document: the renderer, when the file was last written,
+    and a lock, because a PyMuPDF document is not safe to use from two
+    threads at once and the app answers from a thread pool."""
+
+    renderer: CropRenderer
+    mtime: int
+    lock: threading.Lock
+
+
+_POOL: OrderedDict[tuple[str, float], _Held] = OrderedDict()
+_POOL_LOCK = threading.Lock()
+
+
+@contextmanager
+def borrow(pdf_path: Path, zoom: float = RENDER_ZOOM) -> Iterator[CropRenderer]:
+    """A renderer for this document, kept open between requests.
+
+    **Opening the file is the whole cost.** A render off an open document
+    is about 4ms; `open` on a 16MB, 312-page book is 1.2 *seconds*, and
+    every function below used to pay it per call. A triage deck asks for
+    one crop per unit, so fifty units meant fifty opens of the same file:
+    the crops arrived over a minute, one at a time, while the same book's
+    full-page view, which is one request, came up fine. That is the whole
+    of the bug this exists to fix, and it is invisible on a 3MB paper
+    where the open costs 4ms.
+
+    Held under a lock per document, so crops of one book render one after
+    another. That is the right trade: after the open they cost about 4ms
+    each, and the alternative is several copies of a 16MB document open at
+    once to save a few hundred milliseconds in total.
+
+    A pooled renderer is never closed, only dropped: whoever is rendering
+    holds a reference and the document closes when the last one goes.
+    Closing it here would pull the file out from under a thread mid-render
+    to save a file handle.
+
+    Re-read when the file changes on disk, by mtime, so re-exporting a PDF
+    does not serve crops of the old one for the rest of the session.
+    """
+    key = (str(pdf_path), zoom)
+    try:
+        mtime = pdf_path.stat().st_mtime_ns
+    except OSError:
+        # Gone, or unreadable. Let the renderer raise the real error rather
+        # than inventing one about the pool.
+        with CropRenderer(pdf_path, zoom=zoom) as private:
+            yield private
+        return
+
+    with _POOL_LOCK:
+        held = _POOL.get(key)
+        if held is not None and held.mtime == mtime:
+            _POOL.move_to_end(key)
+        else:
+            held = None
+        room = len(_POOL) < POOL_SIZE or key in _POOL
+
+    if held is not None:
+        with held.lock:
+            yield held.renderer
+        return
+
+    fresh = CropRenderer(pdf_path, zoom=zoom)
+    if not room:
+        # More documents in play than the pool holds. Its own renderer,
+        # closed at the end, which is what every call used to do.
+        with fresh:
+            yield fresh
+        return
+
+    entry = _Held(fresh, mtime, threading.Lock())
+    with _POOL_LOCK:
+        # Another thread may have opened the same document while this one
+        # was opening it. Theirs is as good as ours, and one of the two is
+        # dropped either way.
+        current = _POOL.get(key)
+        if current is not None and current.mtime == mtime:
+            entry = current
+            _POOL.move_to_end(key)
+        else:
+            _POOL[key] = entry
+            while len(_POOL) > POOL_SIZE:
+                _POOL.popitem(last=False)
+    with entry.lock:
+        yield entry.renderer
+
+
+def forget_documents() -> None:
+    """Drop every pooled document. For tests, and for anything that has
+    just rewritten a file and does not want to wait on mtime."""
+    with _POOL_LOCK:
+        _POOL.clear()
+
+
 def render_page(
     pdf_path: Path,
     number: int,
@@ -366,12 +471,12 @@ def render_page(
     zoom: float = DOCUMENT_ZOOM,
 ) -> bytes:
     """One page, for the app's scrolling document view."""
-    with CropRenderer(pdf_path, zoom=zoom) as renderer:
+    with borrow(pdf_path, zoom=zoom) as renderer:
         return renderer.page(number, regions=regions, outline=outline)
 
 
 def page_count(pdf_path: Path) -> int:
-    with CropRenderer(pdf_path) as renderer:
+    with borrow(pdf_path) as renderer:
         return renderer.page_count
 
 
@@ -386,7 +491,7 @@ def render_crop(
     regions: Sequence[Region] = (),
 ) -> bytes:
     """One-off crop, for the app's per-request rendering."""
-    with CropRenderer(pdf_path) as renderer:
+    with borrow(pdf_path) as renderer:
         return renderer.render(
             page, bbox, context=context, outline=outline, width=width, regions=regions
         )

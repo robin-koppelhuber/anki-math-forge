@@ -47,6 +47,8 @@ Python verbs:
 | Verb | Does |
 |---|---|
 | `extract` | Segments a document into units, attempts a first-pass transcription, updates the ledger. Never writes cards. |
+| `zotero` | The second door: what you marked up in Zotero, as units. Imports rather than segments. |
+| `sources` | Every work in the repo and which project reads it, across projects. |
 | `project` | Starts a project that reads no document, for a subject rather than a book. |
 | `units --add` | The door a proposing pass writes through, where there is nothing to segment. |
 | `serve` | The companion app: units triage + card review + annotations. |
@@ -162,7 +164,19 @@ The matrix analogue of $(\log x)' = 1/x$.
 
 ## 6. The companion app
 
-`forge serve` — FastAPI, KaTeX, local only. Three views over the same files.
+`forge serve` — FastAPI, KaTeX, local only. Five views over the same files: two before you triage anything, and three over the deck.
+
+### The shelf (`/projects`)
+
+Where the app opens. Every project as a card with two bars on it, units and cards, so "which one do I work on next" is answered by looking rather than by opening each in turn. Filter by tag; two tags narrow, because a project's tags are facets of one thing.
+
+The one screen that is not about a project, so it carries none of the row that is: no project name, no setup link, no canvas, no settings. It starts a project, which is the other thing you come here to do.
+
+### Setup stage (`/setup`)
+
+What a project is before it has units: what it reads, what you asked for, and which asks have outline entries with nothing behind them yet. Three columns you can drag: the commands to copy, the list of topics and works, and the panel for whichever one you picked.
+
+A work's panel is where the per-document settings live, each with where it was settled, because "40 points" and "40 points, because nobody said otherwise" are different answers. For a work that came from Zotero it is also where the marking scheme is edited: what each colour means, and which marks make units.
 
 ### Units view (`/units`)
 
@@ -185,7 +199,7 @@ The crop link matters: when a card looks off, the fastest resolution is comparin
 
 ### Graph view (`/graph`)
 
-The `requires` of one source, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all. Reached from the button between the source picker and the settings gear, on every view.
+The `requires` of one source, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all. Reached from the button beside the settings gear, on every view that is about one project.
 
 - every box has a dot on each side. **Drag from a dot to another card** to connect them, and which dot you grabbed decides which card ends up with the `requires` line
 - `click` selects a box or an arrow · `double-click` opens the card · `del` removes what is selected

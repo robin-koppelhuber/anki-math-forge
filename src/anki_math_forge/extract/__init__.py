@@ -78,11 +78,21 @@ def run(
     project = config.project(project_name)
     # The work being segmented. A project with several is not extracted from
     # wholesale: each is imported by the door that knows how to read it.
-    source = project.source()
+    #
+    # `segments`, not `source`: this is the permission question, and a work
+    # with `extract = false` answers no to it. `source` answers where the
+    # units already in the ledger came from, and goes on answering.
+    source = project.segments()
     report = ExtractReport(project=project_name)
     checker = latex.checker(config.extra_macros)
 
     if source is None:
+        held = project.source()
+        if held is not None:
+            raise ConfigError(
+                f"project {project_name!r} has extraction off for {held.key!r};"
+                " turn `units are extracted from this` on to read it"
+            )
         raise ConfigError(
             f"project {project_name!r} declares no source to read; add a [[sources]] table"
         )
@@ -224,8 +234,21 @@ def source_text_path(config: Config, project_name: str, document: str = "") -> P
 
     Per document, because `## page 7` means nothing across fifteen
     chapter PDFs. A single-document source keeps the plain name it had.
+
+    **With the project that extracts from it**, wherever that is. A work
+    is authoritative in at most one project, so the text has one home, and
+    caching it under whichever project happened to run the import would
+    leave two copies of one book's text with nothing saying which is
+    current. A document nothing extracts from has no such project, and
+    then the caller's own folder is the only answer there is.
+
+    `extracting` resolves what the config *names*: an item key, a declared
+    attachment, a file. A bare attachment key of an item that declares no
+    `attachments` is named nowhere, so it does not resolve, and the import
+    asks about the item instead, which does.
     """
-    folder = config.projects_dir / project_name
+    home = config.extracting(document) or project_name
+    folder = config.projects_dir / home
     return folder / (f"text-{document}.md" if document else "text.md")
 
 
@@ -239,7 +262,11 @@ def cache_source_text(config: Config, project_name: str) -> int:
     ~26k tokens, so the honest answer is to hand over all of it.
     """
     project = config.project(project_name)
-    source = project.source()
+    # The work just segmented, and only then the project's one work: this
+    # runs at the end of `run`, so the text to cache is the text of what
+    # was read. A project reading a second book alongside it has no single
+    # answer to the other question, and would cache nothing.
+    source = project.segments() or project.source()
     text = ""
     if source is None:
         return 0

@@ -734,9 +734,23 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   font-size: 9px;
 }
 .rail-actions:not([open]) > summary::before { content: "▸"; }
-.rail-actions-what { margin-right: auto; }
-.rail-actions-hint { text-transform: none; letter-spacing: 0; opacity: 0.7; font-size: 10.5px; }
-.rail-actions .run-note {
+/* Side by side while they fit, and the hint on its own line when they do
+   not. Both are short phrases, and left to wrap inside a 240px rail they
+   came out as two ragged columns of three words each, which reads as a
+   broken table rather than as a heading. */
+.rail-actions > summary { flex-wrap: wrap; }
+.rail-actions-what { margin-right: auto; white-space: nowrap; }
+.rail-actions-hint {
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.7;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+/* Unscoped: the same list renders in the triage rail, the shelf rail and
+   the setup stage's column, and scoped to one of them the note came out at
+   body size beside commands drawn at 11px. */
+.run-note {
   font-size: 11.5px;
   color: var(--muted);
   padding: 4px 2px;
@@ -793,30 +807,114 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
 .filter-list a:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); }
 .filter-list a.on { background: var(--accent); color: var(--panel); }
 .filter-list a b { font-weight: 500; font-variant-numeric: tabular-nums; opacity: 0.7; }
-/* Narrowing the tag list. Shown only past a handful of tags: below that
-   there is nothing to hunt through and the box is one more thing on screen. */
-.tag-search {
+/* Tags and the two graded scales, as a search rather than as three lists.
+   Nothing is spelled out until the box is clicked: on a deck with forty tags
+   the lists were most of the rail's height, and the sections below them were
+   off the bottom of the screen. */
+.pick { padding: 0 0 0.3rem 0.5rem; }
+.pick-search {
   width: calc(100% - 0.5rem);
-  margin: 0.15rem 0 0.35rem 0.5rem;
-  padding: 3px 6px;
+  margin: 0.15rem 0 0.1rem;
+  padding: 4px 7px;
   font: inherit;
   font-size: 12px;
   color: var(--ink);
   background: var(--panel);
   border: 1px solid var(--line, rgba(127, 127, 127, 0.3));
-  border-radius: 4px;
+  border-radius: 5px;
 }
-.tag-search:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
-.filter-none { margin: 0.2rem 0 0.5rem 0.5rem; font-size: 12px; color: var(--muted); }
-/* Which scale the rows under it belong to. Two closed vocabularies in one
-   group, so without a label `core` and `short` read as one list. */
-.filter-sub {
-  margin: 0.4rem 0 0.1rem 0.5rem;
+.pick-search:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+/* What is on. Under the box rather than inside it: chips in the field push
+   the caret around as they accumulate, and these are read at least as often
+   as they are clicked. */
+.pick-chips {
+  list-style: none;
+  margin: 0.3rem 0 0.1rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+.pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: 100%;
+  padding: 1px 3px 1px 7px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--panel);
+}
+.pick-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-chip > a {
+  color: inherit;
+  text-decoration: none;
+  opacity: 0.75;
+  padding: 0 3px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+.pick-chip > a:hover { opacity: 1; background: rgba(255, 255, 255, 0.25); }
+/* A grading is the same kind of thing as a tag here and selects the same way,
+   but it comes from a closed vocabulary rather than from this deck, so it is
+   drawn as an outline rather than as a solid. */
+.pick-chip.f-frequency,
+.pick-chip.f-derivation {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--accent);
+  padding: 0 3px 0 6px;
+}
+.pick-chip.f-frequency > a:hover,
+.pick-chip.f-derivation > a:hover { background: var(--hover, rgba(127, 127, 127, 0.18)); }
+/* What two chips mean together, in the gap between them, because the
+   alternative is a sentence nobody reads under a control they are already
+   using. The word comes from the template and not from here: a deck's tags
+   select the union and a project's narrow each other, and the two lists are
+   the same control. */
+.pick-join {
+  padding: 0 0.15rem;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.pick-clear a {
   font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0 0.3rem;
+}
+.pick-clear a:hover { color: var(--ink); text-decoration: underline; }
+/* Scrolls rather than pushing the sections off the bottom. Deep enough to
+   show that there is more, short enough to leave the rest of the rail in
+   view. */
+.pick-list {
+  max-height: 15rem;
+  overflow-y: auto;
+  margin: 0.3rem 0 0;
+  padding: 0.15rem 0 0;
+  border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+}
+.pick-list li.here > a { background: var(--hover, rgba(127, 127, 127, 0.12)); }
+.pick-list li.here > a.on { background: var(--accent); }
+/* Which group the rows under it belong to. Three vocabularies in one list, so
+   without a label `core` and `short` read as tags somebody wrote. */
+.pick-head {
+  margin: 0.35rem 0 0.1rem;
+  padding: 0 0.4rem;
+  font-size: 10.5px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
 }
+.pick-head:first-child { margin-top: 0; }
+.filter-none { margin: 0.2rem 0 0.5rem 0.5rem; font-size: 12px; color: var(--muted); }
 .filter-clear { margin: 0.2rem 0 0.5rem 0.5rem; font-size: 12px; }
 .filter-clear a {
   color: var(--muted);
@@ -1364,7 +1462,17 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   white-space: normal;
   text-align: left;
 }
-.filter-list.runs code { font-size: 11px; word-break: break-all; }
+/* At the spaces, not mid-token. `break-all` in a 240px rail split
+   `--project "demo"` into `--project "de` and `mo"`, which reads as two
+   commands and copies as neither: the eye has to reassemble the argument
+   before it can check the one thing this panel is for, that the command is
+   scoped to what is on screen. `break-word` breaks a token only when that
+   token alone is wider than the rail. */
+.filter-list.runs code {
+  font-size: 11px;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
 .filter-list.runs .claude code { color: var(--accent); }
 .filter-list.runs button.copied { border-color: var(--accent); }
 .filter-list.runs button.copied .run-label::after { content: " — copied"; }
@@ -1499,7 +1607,6 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   background: var(--panel); color: inherit; text-decoration: none;
 }
 .gsource:hover { border-color: var(--accent); }
-.gsource.current { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .gsource-head { display: flex; align-items: baseline; gap: 0.5rem; }
 .gsource-name {
   font-weight: 600; font-size: 13px; overflow: hidden;
@@ -2932,46 +3039,489 @@ body.with-order-rail .graph-stage { right: var(--order-rail-w); }
 .machine-body .fsm { margin: 0; }
 
 /* -- the setup stage ------------------------------------------------------
-   The screen before triage. A column of blocks rather than a list and a
-   panel: what a project holds is short -- a work or two, an ask or two, two
-   prose files -- and a master/detail layout over four items is two clicks
-   where none were needed. */
-.setup { max-width: 62em; margin: 0 auto; padding: 1.2rem 1rem 3rem; }
-.setup-block { margin: 0 0 2rem; }
-.setup-block h2 { margin: 0 0 0.6rem; font-size: 20px; }
-.setup-block h3 {
-  margin: 0 0 0.3rem; font-size: 12px; letter-spacing: 0.09em;
+   The screen before triage. A list of what the project holds on the left and
+   a panel for whichever one you picked on the right.
+
+   The list is split in two by a handle: asks on top, sources underneath.
+   Which of the two is long depends entirely on the project (a book has one
+   source and no asks, a deck with no book is all asks), so neither gets to be
+   the fixed one, and the drag is remembered like every other split here. */
+/* No rails on this one, so no gutters to leave for them, and no column to
+   centre: this is the whole window. A centred card with the page showing
+   round it read as a dialog somebody had forgotten to close, and the thing
+   it is a dialog over does not exist. */
+body.bare { --left-rail: 0rem; --right-rail: 0rem; }
+body.bare .deck-column { padding: 0; max-width: none; }
+/* Three columns and two handles: what to run, what the project holds, and
+   whichever one you picked. The first two are widths and the last takes the
+   slack, so a drag moves one edge and leaves the other where it was. The
+   middle starts narrower than the right, because one is a list of names and
+   the other is what you are reading. */
+.setup {
+  display: grid;
+  grid-template-columns:
+    var(--split-setup-runs, 14.5rem) 14px
+    var(--split-setup-panel, 18rem) 14px
+    minmax(0, 1fr);
+  height: calc(100vh - var(--header-h, 2.6rem) - var(--footer-h, 0px));
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+/* Folded away entirely, handle and all: a zero-width track with a live
+   splitter in it is a column you can drag out of nowhere. Three tracks and
+   not five with two collapsed, because `display: none` takes an item out of
+   the grid altogether and the rest slide up into the tracks it left. */
+.setup.runs-off {
+  grid-template-columns: var(--split-setup-panel, 18rem) 14px minmax(0, 1fr);
+}
+.setup.runs-off > .setup-runs,
+.setup.runs-off > [data-splitter="setupRuns"] { display: none; }
+.setup > .splitter { min-height: 0; }
+.setup-runs {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+.setup-runs-scroll { overflow-y: auto; min-height: 0; padding: 0 0.5rem 1rem; }
+.setup-runs .rail-head { padding: 0.45rem 0.5rem 0.3rem 0.7rem; }
+/* Room for the tab that replaces it. Without this the first list item sits
+   under the tab the moment the column is folded and unfolded again. */
+.setup.runs-off > .setup-panel { padding-left: 1.5rem; }
+/* The tab that brings it back. At the top of the panel beside it, not
+   floating at the middle of the window: the two rails' tabs sit against a
+   full-height fixed panel and this one has a column starting under the
+   header, so a centred tab reads as a control belonging to nothing.
+
+   Out of the grid flow, so the three columns stay three items. */
+.setup > .rail-tab.left {
+  position: absolute;
+  top: 0.55rem;
+  left: 0;
+  transform: none;
+  height: 1.9rem;
+  width: 1.2rem;
+  border-radius: 0 5px 5px 0;
+}
+.setup { position: relative; }
+.setup.runs-off > .rail-tab.left { display: block; }
+.setup-panel {
+  display: grid;
+  /* The project, the two lists, and the one thing that is neither. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  height: 100%;
+  padding: 0.5rem 0.4rem;
+  background: var(--panel);
+  /* One edge, against the page. A box with four of them was the island. */
+  border-right: 1px solid var(--line);
+}
+/* The project itself, above the split: it is what the two lists belong to,
+   not a third item in one of them. */
+.setup-who {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  margin: 0 0 0.3rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.setup-who:hover { background: var(--hover, rgba(127, 127, 127, 0.1)); }
+.setup-who.on { background: var(--accent); color: var(--panel); }
+.setup-who-name { font-weight: 600; font-size: 14px; }
+.setup-who-what { font-size: 11.5px; opacity: 0.72; }
+/* Topics take what they need and sources take the slack, until you drag,
+   when the top list takes exactly what you dragged it to. Capped at a bit
+   over half, so forty asks cannot squeeze the sources list to nothing
+   before you have the chance to drag it. */
+.setup-lists {
+  display: grid;
+  grid-template-rows: var(--split-setup, minmax(0, auto)) auto minmax(0, 1fr);
+  min-height: 0;
+}
+.setup-stack { overflow-y: auto; min-height: 0; padding-right: 0.15rem; }
+.setup-lists > .setup-stack:first-child { max-height: 55vh; }
+.setup-cap {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0.3rem 0 0.25rem;
+  padding: 0 0.6rem;
+  font-size: 10.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+.setup-count { font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.setup-pick { list-style: none; margin: 0; padding: 0; }
+.setup-pick button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 0 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.setup-pick button:hover { background: var(--hover, rgba(127, 127, 127, 0.1)); }
+.setup-pick button.on { background: var(--accent); color: var(--panel); }
+.pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pick-note { font-size: 11.5px; opacity: 0.68; font-variant-numeric: tabular-nums; }
+.pick-kind { grid-column: 1 / -1; font-size: 10.5px; letter-spacing: 0.04em; opacity: 0.68; }
+/* How much of an ask has been proposed for, as a bar. The number beside it
+   says the same thing; the bar is what makes a half-done outline visible
+   while scanning the list rather than while reading it. */
+.pick-bar {
+  grid-column: 1 / -1;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+  /* Inset from the text, so it reads as a bar under the row and not as an
+     underline on the words. */
+  margin: 0.3rem 0.1rem 0.15rem;
+}
+.pick-bar i { display: block; height: 100%; background: var(--accent); }
+.setup-pick button.on .pick-bar { background: rgba(255, 255, 255, 0.35); }
+.setup-pick button.on .pick-bar i { background: var(--panel); }
+/* The two filters over the works list. Small, quiet, and in the panel
+   rather than in the heading: they change what the list shows, which is the
+   one thing in this column that is not a selection. */
+.setup-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  padding: 0.1rem 0.5rem 0.35rem;
+  align-items: center;
+}
+.setup-filter button {
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.setup-filter button:hover:not(:disabled) { color: var(--ink); border-color: var(--muted); }
+.setup-filter button.on { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+/* The odd one out: it filters by the *selection* above rather than by a
+   property of the work, so it sits apart and goes flat when there is no ask
+   selected for it to follow. */
+.setup-filter .filter-sync { margin-left: auto; }
+.setup-filter button:disabled { opacity: 0.45; cursor: default; }
+.setup-more { color: var(--muted); }
+.setup-foot { border-top: 1px solid var(--line); padding-top: 0.3rem; margin-top: 0.3rem; }
+.setup-foot .setup-more {
+  display: block; width: 100%; text-align: left; padding: 0.3rem 0.6rem;
+  border: 0; border-radius: 6px; background: none; font: inherit; font-size: 12.5px;
+  cursor: pointer;
+}
+.setup-foot .setup-more:hover { background: var(--hover, rgba(127, 127, 127, 0.1)); }
+.setup-foot .setup-more.on { background: var(--accent); color: var(--panel); }
+.setup-empty { margin: 0.35rem 0.6rem 0.6rem; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.setup-total {
+  margin: 0 0.6rem 0.4rem; font-size: 11.5px; color: var(--muted); line-height: 1.45;
+}
+
+/* The panel. One pane at a time with the script running, every pane stacked
+   without it. */
+.setup-detail {
+  min-width: 0;
+  overflow-y: auto;
+  height: 100%;
+  padding: 1.3rem 1.6rem 3rem;
+}
+/* The column stays readable while the page is the window: prose measured in
+   characters, not in pixels of screen somebody happens to have. */
+.setup-pane { max-width: 48em; }
+.setup-pane + .setup-pane { margin-top: 2.5rem; }
+.pane-head { margin: 0 0 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--line); }
+.pane-head h2 { margin: 0; font-size: 20px; }
+.pane-what { margin: 0.3rem 0 0; font-size: 13px; color: var(--muted); line-height: 1.55; }
+.pane-cap {
+  margin: 1.8rem 0 0.4rem; font-size: 10.5px; letter-spacing: 0.09em;
   text-transform: uppercase; color: var(--muted);
 }
-.setup-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; margin: 0; }
+.pane-next { margin: 1rem 0 0; font-size: 13px; color: var(--muted); }
+/* The way over to the other two views, carrying what is selected. Always
+   there, unlike the counts below it, which exist only for a state something
+   is actually in. */
+.pane-open { display: flex; flex-wrap: wrap; gap: 0.9rem; margin: 0 0 0.9rem; }
+.open-link {
+  font-size: 12.5px;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.open-link:hover { border-bottom-color: var(--accent); }
+/* What a thing is holding, as chips that click through to it: the selection
+   you made here is worth carrying, and re-making it in the triage view by
+   hand was the one thing this screen could not hand over. */
+.pane-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  margin: 0 0 1.1rem;
+}
+.counts-what {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.counts-what:not(:first-child) { margin-left: 0.6rem; }
+.counts-none { font-size: 12px; color: var(--muted); }
+.count-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 1px 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+}
+.count-chip b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.count-chip:hover { border-color: var(--accent); color: var(--accent); }
+/* Tinted by the state, the same colours the section bars and the diagram
+   use, so `queued` reads as the same thing it does two screens over. */
+.count-chip.state-new { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.count-chip.state-approved { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.count-chip.state-rejected,
+.count-chip.state-skipped { opacity: 0.7; }
+/* What an ask reads, and what reads a work: the same relation from either
+   end, and both are a way into the other panel. */
+.pane-works {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+  margin: 0 0 1rem;
+}
+.works-what { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.work-chip {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.work-chip:hover { border-color: var(--accent); color: var(--accent); }
+.setup-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1.2rem; margin: 0; }
 .setup-facts dt { color: var(--muted); font-size: 13px; }
 .setup-facts dd { margin: 0; font-size: 13px; }
-.setup-list { list-style: none; margin: 0.6rem 0 0; padding: 0; }
-.setup-list > li {
-  margin: 0 0 0.9rem; padding: 0.6rem 0.8rem;
-  background: var(--panel); border-radius: 6px;
+/* Where a value was settled. Muted and trailing, because the value is the
+   answer and this is the footnote to it. It is also the footnote you open
+   this pane for: "40 points" and "40 points, because nobody said otherwise"
+   are different answers. */
+.from {
+  margin-left: 0.5rem; font-size: 11px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 999px; padding: 0 0.4rem;
 }
-.setup-row { display: flex; align-items: baseline; gap: 0.6rem; }
-.setup-list p { margin: 0.25rem 0 0; font-size: 13px; }
-.setup-ask { font-style: italic; }
-.setup-total { margin: 0.4rem 0 0; font-size: 13px; }
+/* Works the repo already knows. A row is a name, where it is read now, and
+   what it is, so "have I got this already" is answered by looking. */
+.setup-known { list-style: none; margin: 0.4rem 0 0; padding: 0; }
+.setup-known > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  align-items: baseline;
+  gap: 0.2rem 0.8rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.known-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.known-where { font-size: 12px; color: var(--muted); }
+.known-kind { grid-column: 1 / 3; font-size: 11.5px; color: var(--muted); }
+.known-add {
+  grid-row: 1 / 3;
+  grid-column: 3;
+  align-self: center;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.known-add:hover { border-color: var(--accent); color: var(--accent); }
+/* Past a handful of works, the list is something to hunt through rather
+   than read. Same control as the rail's, and it appears for the same
+   reason. */
+.known-search {
+  width: 100%;
+  margin: 0.5rem 0 0.2rem;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.known-search:focus { outline: none; border-color: var(--accent); }
+.setup-settings { list-style: none; margin: 0; padding: 0; }
+.setup-settings > li {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: 0.1rem 0.8rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.set-key { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.set-what { grid-column: 2 / -1; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.setup-ask {
+  margin: 0 0 1rem; padding: 0.6rem 0.9rem; font-style: italic; font-size: 13.5px;
+  border-left: 2px solid var(--accent); background: var(--panel); border-radius: 0 6px 6px 0;
+}
 /* One line per outline entry, and the only thing here you cannot read off a
    file: an open circle is an entry nothing has been proposed for. */
 .outline { list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 13px; }
 .outline li { display: flex; gap: 0.5rem; line-height: 1.6; }
 .outline .outline-mark { color: var(--muted); width: 1em; }
 .outline li.open { color: var(--muted); }
+/* Rendered markdown, not a quoted file: a list is a list and the maths is
+   maths. The frame stays, because it is still a file you are being shown. */
 .setup-prose {
-  white-space: pre-wrap; margin: 0.4rem 0 0; font-size: 13px; line-height: 1.55;
-  font-family: inherit;
+  margin: 0.4rem 0 0; font-size: 13px; line-height: 1.6;
+  padding: 0.7rem 0.9rem; background: var(--panel);
+  border: 1px solid var(--line); border-radius: 6px;
 }
-.setup-add { display: grid; gap: 0.4rem; margin: 1rem 0 0; max-width: 34em; }
-.setup-add input, .setup-add textarea {
-  font: inherit; font-size: 13px; padding: 5px 8px; color: var(--ink);
-  background: var(--panel); border: 1px solid var(--line, rgba(127, 127, 127, 0.3));
-  border-radius: 4px;
+.setup-prose > :first-child, .setup-ask > :first-child { margin-top: 0; }
+.setup-prose > :last-child, .setup-ask > :last-child { margin-bottom: 0; }
+.setup-prose p, .setup-ask p { margin: 0.5rem 0; }
+.setup-prose ul, .setup-prose ol { margin: 0.5rem 0; padding-left: 1.2rem; }
+.setup-prose li { margin: 0.15rem 0; }
+.setup-prose h4 { margin: 0.9rem 0 0.3rem; font-size: 13px; }
+.shelf-list { list-style: none; margin: 0.4rem 0 0; padding: 0; font-size: 13px; }
+/* The two forms that write a file: a topic, and a project with no document.
+   Labelled fields rather than a stack of placeholders, because a placeholder
+   is gone the moment you type and that is when the next field needs to say
+   what it is for. */
+.setup-form { display: grid; gap: 0.15rem; margin: 0.5rem 0 0; max-width: 32em; }
+.setup-form label {
+  font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--muted); margin-top: 0.7rem;
 }
-.setup-add button { justify-self: start; }
+/* A label is a small caps heading, except where it quotes something you
+   have to type back. `TYPE DOOMED TO CONFIRM` asks for a word the project
+   is not called, and typing what it showed did not match. */
+.setup-form label code {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  color: var(--ink);
+}
+.setup-form input, .setup-form textarea {
+  font: inherit; font-size: 13.5px; padding: 7px 10px; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; width: 100%;
+}
+.setup-form input::placeholder, .setup-form textarea::placeholder { color: var(--muted); opacity: 0.7; }
+.setup-form input:focus, .setup-form textarea:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.setup-form .form-note { margin: 0.5rem 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.form-go {
+  justify-self: start; margin-top: 0.9rem; font: inherit; font-size: 13px;
+  padding: 5px 16px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--panel);
+}
+.form-go:hover { filter: brightness(1.08); }
+.form-go:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
+
+/* The one control here that destroys something. Folded away, drawn in the
+   bad colour, and dead until the name is typed: every other write on this
+   page is a line in a file you can put back. */
+.setup-danger { margin-top: 2rem; border-top: 1px solid var(--line); padding-top: 0.6rem; }
+.setup-danger > summary {
+  cursor: pointer;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0.2rem 0;
+}
+.setup-danger > summary:hover { color: var(--bad); }
+.setup-danger .setup-form { max-width: 26rem; }
+.form-go.danger { border-color: var(--bad); background: var(--bad); }
+/* The second of two choices: still a button, not the one the panel is
+   recommending. */
+.form-go.quiet { background: transparent; color: var(--muted); border-color: var(--line); }
+.form-go.quiet:hover { color: var(--bad); border-color: var(--bad); filter: none; }
+.pane-open .form-go { margin-top: 0; }
+.source-note { max-width: 34rem; }
+/* A checkbox and its label on one line, which a `.setup-form` label is
+   not: those are the small caps heading above a field. */
+/* A switch is not a labelled field: the box and its sentence are one
+   line. `.setup-form` is a grid of stacked rows, so the row has to be one
+   item rather than two, and the label carries both. */
+.setup-form label.switch {
+  display: inline-flex;
+  align-items: baseline;
+  justify-self: start;
+  gap: 0.45rem;
+  margin-top: 0;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.setup-form label.switch input { width: auto; flex: none; }
+.work-extract, .work-offer { margin: 0.6rem 0 1rem; }
+/* Which sources an ask reads. A heading over the list says what a tick
+   means, so a row is a box and a name, and it drops the columns and the
+   divider `.setup-known` gives it. */
+.reads-list { margin: 0 0 1.2rem; }
+.reads-list > li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-bottom: 0;
+}
+.reads-list > li > input { margin: 0; }
+/* The name in that list is a link to the work, not a heading. */
+.reads-list .known-name {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+.reads-list .known-name:hover { text-decoration: underline; }
+/* A zero is an answer: nothing of that kind has been imported. Printed
+   as blank it read as a column that had failed. */
+.sc-count.none { opacity: 0.4; }
 /* A shelf line and the button that drops it. The button sits at the end of
    the row rather than beside the text: a line can wrap, and a control that
    moves with the wrap is one you have to look for. */
@@ -2983,3 +3533,242 @@ body.with-order-rail .graph-stage { right: var(--order-rail-w); }
   color: var(--muted); font-size: 15px; line-height: 1; padding: 0 2px;
 }
 .shelf-line .drop:hover { color: var(--bad); }
+/* A line nobody has agreed to yet. Dashed, because it is the same "proposed
+   rather than settled" the suggestion banner means one stage over. */
+.shelf-line.pending {
+  border-left: 2px dashed var(--warn);
+  padding-left: 0.5rem;
+  margin-left: -0.5rem;
+}
+.shelf-settle { display: inline-flex; align-items: center; gap: 0.3rem; flex: none; }
+.shelf-line .take {
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.shelf-line .take:hover { background: var(--accent); color: var(--panel); }
+
+/* A named way in, for a stage of the pipeline. Three grey lines beside two
+   other three-grey-line buttons said "some settings, probably". */
+.chip-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2px 9px;
+  font-size: 12.5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.chip-button:hover { border-color: var(--accent); color: var(--accent); }
+/* Which work a reading speaks for, on the one legend row where two of them
+   disagree. Absent everywhere else: a label on every row of a project with
+   one book is noise. */
+.sl-work { color: var(--muted); font-style: normal; font-size: 10.5px; }
+
+/* -- the shelf ------------------------------------------------------------
+   Every project, and how far along each one is. The page you land on: a
+   dialog with a left rail in it is a page that has not admitted it yet.
+
+   Two columns and no drag. The rail holds one filter, one form and the
+   repo-wide commands, and none of them wants more room than they take. */
+.shelf {
+  display: grid;
+  grid-template-columns: var(--shelf-rail) minmax(0, 1fr);
+  height: calc(100vh - var(--header-h, 2.6rem) - var(--footer-h, 0px));
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+/* One track width, used twice: the bar takes the same first column as the
+   grid below it, so the rail starts where the bar's first cell ends and the
+   two read as one frame rather than as a panel under a stripe. */
+body.bare { --shelf-rail: minmax(200px, 17rem); }
+
+/* The bar, on the one screen that is not about a project. Everywhere else
+   it says which project you are on and what to do with it; here choosing
+   one is the whole page, so it carries the control instead. */
+header.bar.shelf-bar {
+  display: grid;
+  grid-template-columns: var(--shelf-rail) minmax(0, 1fr);
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  min-height: 3.2rem;
+}
+.shelf-mark {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 0.9rem;
+  height: 100%;
+  border-right: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* Three tracks so the search sits in the middle of the grid it narrows,
+   with the totals beside it rather than pushing it off centre. */
+.shelf-find {
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 34rem) 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 1rem;
+}
+.shelf-find .shelf-search { grid-column: 2; width: 100%; }
+.shelf-find .shelf-totals {
+  grid-column: 3;
+  justify-self: end;
+  /* One line or none. Wrapped, it made the bar two rows deep and pushed
+     the search off the middle of the grid it belongs over. */
+  white-space: nowrap;
+}
+/* Below this the third track has no room for the sentence, and the numbers
+   are on the cards anyway: each one carries its own two bars. */
+@media (max-width: 1250px) {
+  .shelf-find { grid-template-columns: 1fr minmax(0, 34rem) 1fr; }
+  .shelf-find .shelf-totals { display: none; }
+}
+.shelf-rail {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.2rem 0.6rem 2rem;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  font-size: 13px;
+}
+/* One panel, not three boxes sharing a background: a rule between the
+   groups says they are parts of a list, and the first one needs no line
+   above it. */
+.shelf-rail > .filter-group { border-top: 1px solid var(--line); padding-bottom: 0.4rem; }
+.shelf-rail > .filter-group:first-child { border-top: 0; }
+.shelf-note { margin: 0.3rem 0.4rem 0.7rem; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.shelf-rail .setup-form { margin: 0 0.4rem; }
+.shelf-rail .setup-form label { margin-top: 0.5rem; }
+.shelf-rail .runs { margin-bottom: 0.2rem; }
+
+.shelf-main { overflow-y: auto; min-height: 0; }
+.shelf-search {
+  width: min(34rem, 100%);
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-align: center;
+}
+.shelf-search::placeholder { color: var(--muted); }
+.shelf-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.shelf-totals { margin: 0; font-size: 12.5px; color: var(--muted); }
+.shelf-main .gallery-grid { padding: 1.4rem; max-width: 76em; margin: 0 auto; }
+
+/* One heading per half of the command list, and each half folds: four
+   commands you run and six you read is ten boxes in a 240px column, and the
+   one you want is under the other nine. */
+.runs-half > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  cursor: pointer;
+  margin: 0.6rem 0 0.2rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 5px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.runs-half > summary:hover { background: var(--hover, rgba(127, 127, 127, 0.12)); }
+.runs-half > summary b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.runs-what { color: var(--muted); }
+
+/* What the box is offering, and what Enter will take. A search over a list
+   that only appears on click reads as a plain text field until you try it. */
+.pick-hint {
+  margin: 0.3rem 0 0;
+  padding: 0 0.4rem;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* Which end a command runs at. A shell command is plain Python and does what
+   it says; a skill puts a model in the loop, which costs tokens, takes
+   minutes and produces something to review. They are pasted into different
+   windows, so the label is worth more than the colour of the border. */
+.run-who {
+  float: right;
+  /* Floated, so the label wraps around it rather than beside it: a
+     margin is the only thing keeping the last word of a label that fills
+     its line off the badge. */
+  margin: 0 0 0 0.4rem;
+  font-style: normal;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+.run-who.claude { border-color: var(--accent); color: var(--accent); }
+
+/* What a work's marks mean, and which of them become units. Editable here
+   because it is the setting you change while looking at the marks: you
+   import a book, triage twenty units, and find that the orange highlights
+   were the ones worth carding. */
+.scheme-edit { margin: 0.4rem 0 0; }
+.scheme-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.scheme-table th {
+  text-align: left;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 0.5rem 0.3rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.scheme-table td { padding: 0.25rem 0.5rem 0.25rem 0; border-bottom: 1px solid var(--line); }
+.sc-mark { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+.sc-mark code { font-size: 11.5px; color: var(--muted); }
+.sc-count { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.sc-makes { text-align: center; }
+.sc-means {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 3px 7px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.sc-means:hover { border-color: var(--line); }
+.sc-means:focus { outline: none; border-color: var(--accent); background: var(--bg); }
+.sc-means::placeholder { color: var(--muted); opacity: 0.75; }
+/* The control at the end of a row in "already in this repo": one button,
+   centred against the two lines of text beside it. */
+.known-take { grid-row: 1 / 3; grid-column: 3; align-self: center; display: flex;
+  align-items: center; gap: 0.6rem; }
+/* A project name is one long unbreakable word, so it needs somewhere to
+   break. It sits on the line under the title now rather than in a column
+   sized to the button beside it, where it ran through the button. */
+.known-note { overflow-wrap: anywhere; }

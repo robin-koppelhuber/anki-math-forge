@@ -69,8 +69,8 @@ re-segmenting the unit fixes every card that shows it. Which section it goes
 in is the writer's call. `check` refuses a card whose picture cannot be drawn.
 
 Code is a fenced block, ```` ```cpp ````. It is not read as maths and not
-counted as wrapped prose, and `sync` renders it as a `<pre>`, highlighted if
-Pygments is installed (`uv sync --extra code`). The file keeps plain code;
+counted as wrapped prose, and `sync` renders it as a highlighted `<pre>`.
+The file keeps plain code;
 the colours are added on the way to Anki, so nobody needs an add-on.
 
 `identity` states a fact and `verify` can check it numerically. `intuition`
@@ -82,7 +82,7 @@ introduced first, for a real dependency only.
 
 ## Conventions
 
-**Conventions belong to a source, not to this file.** Which layout a
+**Conventions belong to a project, not to this file.** Which layout a
 derivative uses, what a bare symbol means: each is a fact about one book. They
 live in `projects/<name>/project.toml` (the `[conventions]` table, open to any
 key) and `projects/<name>/conventions.md` (the prose a card writer must read).
@@ -97,12 +97,23 @@ load.
 ```
 uv run forge extract [project]  # document -> units; never reads the maths
 uv run forge project <name>     # start one with no document, for a subject
+uv run forge project <name> --delete
+                                #   remove it: the folder, the cards filed
+                                #   under it, and its table in forge.toml.
+                                #   Refused when it holds cards unless
+                                #   --force; --dry-run says what would go.
+                                #   Notes already in Anki stay there
 uv run forge topic --project <p> 'a subject' --ask '...'
                                 #   what you want cards for, and what you
                                 #   want from it; `/propose` outlines it
 uv run forge units --project <p> --add 'a subject' --gist '...' --preview '...'
                                 #   the third door in, for `/propose`: a unit
                                 #   where there was nothing to segment
+uv run forge sources            # every work in the repo, and which project reads it
+uv run forge sources --project <p> --remove <key>
+                                #   take one out: its table and the units it
+                                #   owns. Refused while cards stand on it
+                                #   unless --force; --dry-run says what goes
 uv run forge zotero --list      # what Zotero has, and what is already a source
 uv run forge zotero --tag anki  # what you marked up in Zotero -> units
 uv run forge classify           # *propose* skips; applies nothing
@@ -113,6 +124,11 @@ uv run forge context <unit-id>  # the page it was printed on (--pages N for more
                                 #   --pages chapter for the chapter it is in),
                                 #   plus whether web lookups are allowed here
 uv run forge units --id <id> --web yes|no|inherit   # grant or refuse them
+                                #   how much a writer is handed is
+                                #   `[cards] context` or `[projects.x]
+                                #   context`: none | references | web.
+                                #   Per reference, `offer` says whether it
+                                #   is handed over at all
 uv run forge source-text <src>  # the book text, for card-writing context
 uv run forge check              # lint (always; blocks sync)
 uv run forge units --state queued --json
@@ -135,6 +151,10 @@ Every verb that prints for a human takes `--json`. That is the interface to
 read from, not the human output.
 
 `uv run pytest` · `uv run ruff check .` · `uv run mypy`
+
+The suite runs on four workers by default (`pyproject.toml` explains the
+cap). `-n0` puts it back on one, which is what you want with `-x` or a
+`breakpoint()`.
 
 `tests/browser/` drives the app in a real browser (the canvas has no markup
 to assert against). Opt in with `uv sync --extra browser`; it skips without.

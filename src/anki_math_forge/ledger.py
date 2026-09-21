@@ -548,10 +548,28 @@ class Ledger:
         A unit with no marks came from a segmenter rather than from a reader,
         so no colour scheme has anything to say about it.
         """
+        def keeps(unit: Unit) -> bool:
+            anchor = unit.marks[0] if unit.marks else None
+            return anchor is None or makes_a_unit(anchor.kind, anchor.colour)
+
+        return self.drop_untouched(keeps)
+
+    def drop_untouched(self, keeps: Callable[[Unit], bool]) -> tuple[int, int]:
+        """Forget the units `keeps` rejects, unless somebody has touched one.
+
+        The guard `drop_from_scheme` describes, over any question: still
+        `new`, no cards, no notes, no suggestion acted on. A unit you
+        triaged is a decision, and a config change is about what to import
+        next rather than about undoing one.
+
+        Taking a predicate over the whole unit rather than over one mark,
+        because the question is sometimes about the *work*: turning
+        extraction off leaves every unit of that work behind, and which
+        work a unit belongs to is a fact about its document.
+        """
         keeping, kept = [], 0
         for unit in self.units:
-            anchor = unit.marks[0] if unit.marks else None
-            if anchor is None or makes_a_unit(anchor.kind, anchor.colour):
+            if keeps(unit):
                 keeping.append(unit)
                 continue
             if unit.state == "new" and not unit.uids and not unit.notes and not unit.suggestion:

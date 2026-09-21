@@ -18,6 +18,8 @@ display:
     review.png   an approved card, with the notes that decided it
     graph.png    the dependency canvas: what each card rests on, arranged,
                  beside the study order the two of them produce
+    setup.png    the stage before triage: what a project reads, what you asked
+                 for, and the panel for whichever of the two you picked
     states.png   the state machine, units above and cards below
 
 Two ways of taking a picture, because the subjects differ. The **state
@@ -28,7 +30,9 @@ they start `forge serve` on a spare port and point a headless Chrome at it.
 
 Which source each screenshot uses is worked out from the config rather than
 named here, so importing a different paper does not mean editing this file.
-`triage` and `review` take the first segmented source. `zotero` takes the
+`triage` and `review` take the first segmented source. `setup` takes the
+project with the most to show on that stage, which is the one reading the most
+works, and falls back to the segmented one. `zotero` takes the
 first marked-up source that has **tagged itself `demo`** in its `project.toml`,
 and takes none otherwise: that shot is a legible page of whatever you were
 reading, and photographing the first Zotero source to hand would republish a
@@ -100,7 +104,12 @@ VIEW = (1600, 1000)
 # the screenshot as much as the page beside it is. At 1000 it sits just under
 # the fold, and a rail photographed with its point cut off is a worse picture
 # than an unusual aspect ratio.
-VIEWS = {"zotero": (1600, 1320)}
+# The setup stage is three columns and a detail pane. At 1600 the panel
+# between them is squeezed to the point where a source title wraps, and the
+# picture is of a cramped app rather than of the stage. Tall enough for the
+# marking scheme to finish: the detail pane scrolls, and a table cut through
+# a row reads as a rendering fault rather than as more below.
+VIEWS = {"zotero": (1600, 1320), "setup": (1800, 1400)}
 
 
 def find_chrome() -> str:
@@ -268,7 +277,7 @@ class Serving:
 # is, and `carded` sits above it only because it at least shows a finished one.
 TRIAGE_STATES = ("queued", "new", "carded", "skipped")
 
-SHOTS = ("triage", "zotero", "review", "graph", "states")
+SHOTS = ("setup", "triage", "zotero", "review", "graph", "states")
 
 
 # What a transcription has to be to make a picture. Under the floor the two
@@ -333,6 +342,7 @@ def urls() -> dict[str, str]:
     dropped, and a screenshot of an empty deck is worse than none at all: it
     looks like the feature does not work.
     """
+    from anki_math_forge import topics as topics_mod
     from anki_math_forge.app import project_origin
     from anki_math_forge.config import load
     from anki_math_forge.ledger import open_ledgers
@@ -397,6 +407,36 @@ def urls() -> dict[str, str]:
     )
     if marked:
         out["zotero"] = units(marked) + marked_unit()
+
+    # The setup stage, on whichever project has the most to show there: the
+    # two lists are what a project reads and what you asked for, so the
+    # interesting one is the project reading several works. A project with one
+    # source has the same screen with one row in it.
+    #
+    # The pane is a *source*, because that is the half with settings on it:
+    # the marking scheme, the crop width, what a card writer is handed. The
+    # project pane is a list of resolved values and reads as a config dump.
+    staged = os.environ.get("FORGE_ASSET_SETUP", "") or next(
+        iter(
+            sorted(
+                config.projects,
+                key=lambda name: (
+                    -len(config.projects[name].sources),
+                    -len(topics_mod.read(config, name)),
+                    name,
+                ),
+            )
+        ),
+        "",
+    )
+    if staged:
+        spec = config.projects[staged]
+        opened = next((w.key for w in spec.sources if w.authoritative), "")
+        out["setup"] = (
+            "/setup?"
+            + urllib.parse.urlencode({"project": staged})
+            + (f"#source:{opened}" if opened else "#project")
+        )
     return out
 
 
@@ -420,6 +460,7 @@ def main() -> int:
         "zotero": "no marked-up source is tagged `demo` — skipped, so the README "
         "does not end up carrying a page of somebody's book",
         "graph": "no card in that source has a `requires` yet — skipped",
+        "setup": "no project is configured — skipped",
     }
     for name in sorted((wanted - {"states"}) - set(live)):
         print(f"  {name}: {why.get(name, 'no source for it yet — skipped')}")

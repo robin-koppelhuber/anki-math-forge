@@ -1,3 +1,4 @@
+{% from "_runs.html" import runs %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -35,7 +36,20 @@
 
    So the template asks for something only a current Python can answer. Old
    code leaves the attribute empty, `app.js` sees that, and says so. #}
-<body data-app="{{ app_build | default('', true) }}">
+{# Two screens take the whole window and bring their own rail: the shelf,
+   where you pick what to work on, and the setup stage. Neither wants the
+   triage filter or the guide to triage beside it, which between them are
+   480px of controls about a deck you have not chosen yet. #}
+{% set bare = view | default('') in ('setup', 'projects') %}
+{# The shelf is the one screen that is not about a project, so it gets none
+   of the row that is: no project name, no setup link, no canvas, no settings
+   panel. Every one of those needs a project in force, and the page you land
+   on has not chosen one: the app used to pick the first alphabetically
+   and offer its setup stage, which answers a question nobody asked.
+
+   It fills the bar itself instead, with the one control it is used with. #}
+{% set shelf_page = view | default('') == 'projects' %}
+<body data-app="{{ app_build | default('', true) }}" data-view="{{ view | default('') }}"{{ ' class=bare' if bare }}>
 {# The source in force, carried on every in-header link so switching
    view does not silently switch book. #}
 {% set src = project | default('', true) %}
@@ -46,33 +60,37 @@
 {# No `units` / `review` links. The left rail already carries both lanes as
    counts you can click -- `new 16`, `approved 108` -- and those say where the
    work is as well as where to go, which two bare words never did. #}
-<header class="bar" id="topbar">
-  {% if projects is defined and projects %}
-  {# A button rather than a select, and no caret: a caret promises a list
-     dropping down from here, and what opens is the gallery -- every source at
-     once, with where each came from and how far along it is. A dropdown
-     answers "which one am I on" and nothing else. #}
-  <button type="button" class="project-pick" id="project-pick"
-          title="all projects, with their counts (g)">
+<header class="bar{{ ' shelf-bar' if shelf_page }}" id="topbar">
+  {% if projects is defined and projects and not shelf_page %}
+  {# A link, and no caret: a caret promises a list dropping down from here,
+     and what opens is the shelf, which is a page. Every project at once,
+     with where each came from and how far along it is. A dropdown answers
+     "which one am I on" and nothing else. #}
+  <a class="project-pick" id="project-pick" href="/projects"
+     title="every project, with its counts (g)">
     <span class="pick-icon" aria-hidden="true">▦</span>
     <span class="project-pick-name">{{ src or 'no project' }}</span>
-  </button>
+  </a>
   {# The stage before triage, from anywhere. A project with no document
      spends all of its pre-unit work here, and one with a book still has
      settings worth reading without opening the TOML. Points back from the
      page itself, like the canvas below. #}
+  {# Named, not an icon. It is a stage of the pipeline, the one where you
+     decide what the deck is even for, and three grey lines beside two other
+     three-grey-line buttons said "some settings, probably". #}
   {% if view | default('') == 'setup' %}
-  <a class="icon-button" href="{{ filter_url('/units', {}, project=src, state='new') }}"
-     title="back to triage" aria-label="units">&larr;</a>
+  <a class="chip-button" href="{{ filter_url('/units', {}, project=src, state='new') }}"
+     title="back to triage" aria-label="units">&larr; triage</a>
   {% else %}
-  <a class="icon-button" href="{{ filter_url('/setup', {}, project=src) }}"
-     title="what this project is set up as: its sources, its asks, what is ambient"
+  <a class="chip-button" href="{{ filter_url('/setup', {}, project=src) }}"
+     title="the stage before triage: what this project reads, what you asked
+for, and how much of each ask has units yet"
      aria-label="setup">
-    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
       <path d="M2 4h12M2 8h12M2 12h7" fill="none" stroke="currentColor"
-            stroke-width="1.5" stroke-linecap="round"/>
+            stroke-width="1.6" stroke-linecap="round"/>
     </svg>
-  </a>
+    project setup</a>
   {% endif %}
   {# The dependency canvas, from anywhere. It was reachable only from the
      `needs` block of a card in the review view, which is the right place to
@@ -101,20 +119,23 @@
           title="what every setting resolved to, and where it came from"
           aria-label="settings">⚙</button>
   {% endif %}
+  {# A page with nothing to say about a project says its own thing here
+     rather than leaving the row empty above a rail that starts under it. #}
+  {% block topbar %}{% endblock %}
   {% block filters %}{% endblock %}
   <span class="position" id="position"></span>
 </header>
 
 
 <main id="main">
-  {% if pipeline is defined %}{% include "_filters.html" %}
+  {% if pipeline is defined and not bare %}{% include "_filters.html" %}
   {# Always on screen, including when the rail is hidden -- the button inside
      it slides away with it, which left no way back. #}
   <button type="button" class="rail-tab left" id="filters-tab"
           title="filters and actions (f)" aria-controls="filter-rail">&#9776;</button>
   {% endif %}
   <div class="deck-column">{% block main %}{% endblock %}</div>
-  {% if pipeline is defined %}{% include "_guide.html" %}
+  {% if pipeline is defined and not bare %}{% include "_guide.html" %}
   <button type="button" class="rail-tab right" id="guide-tab"
           title="cycles counts / everything / hidden (?)"
           aria-controls="guide">?</button>
@@ -148,49 +169,10 @@
   </form>
 </dialog>
 
-{% if projects is defined and projects %}
-{# The source gallery: the whole window, over whatever you were doing. Filled
-   from /api/projects when it is first opened, because it walks every ledger and
-   every card and that is not a price to pay on every page load. #}
-<dialog class="gallery" id="gallery" aria-label="projects">
-  <header class="gallery-head">
-    <div class="gallery-title">
-      <h2>projects</h2>
-      <p class="gallery-totals" id="gallery-totals">counting…</p>
-    </div>
-    <input type="search" class="gallery-search" id="gallery-search"
-           placeholder="name, title or citation" autocomplete="off" spellcheck="false">
-    <button type="button" class="gallery-close" id="gallery-close"
-            title="close (esc)">&times;</button>
-  </header>
-  <div class="gallery-chips" id="gallery-chips"></div>
-  <div class="gallery-grid" id="gallery-grid"></div>
-  <p class="gallery-empty" id="gallery-empty" hidden>nothing matches that.</p>
-  {# Where a new source comes from. The gallery is where you go when the one
-     you want is not on the list, so it is where the answer to "add one"
-     belongs -- and the answer is a command, because importing reads Zotero,
-     writes files and caches a text layer, and none of that should happen
-     because a button was near the pointer. #}
-  <footer class="gallery-add">
-    <h3>add a source</h3>
-    <p class="muted">Tag the item <code>anki</code> in Zotero, mark it up, then
-      run one of these with Zotero open. Each writes
-      <code>projects/&lt;name&gt;/project.toml</code>, caches the document's text
-      layer next to it, and turns the marks you declared into units.</p>
-    <ul class="filter-list runs">
-      <li><button type="button" class="run shell" data-copy="uv run forge zotero --list">
-        <span class="run-label">what is there, and what is already a source</span>
-        <code>uv run forge zotero --list</code></button></li>
-      <li><button type="button" class="run shell" data-copy="uv run forge zotero --tag anki">
-        <span class="run-label">import everything tagged</span>
-        <code>uv run forge zotero --tag anki</code></button></li>
-      <li><button type="button" class="run shell" data-copy="uv run forge zotero &#34;&#34;">
-        <span class="run-label">one item, by cite key</span>
-        <code>uv run forge zotero &lt;citekey&gt;</code></button></li>
-    </ul>
-  </footer>
-</dialog>
-
+{# All three are about a project: what its settings resolved to, a crop from
+   one of its documents, the machine its units move through. The shelf has
+   no project in force, so it carries none of them. #}
+{% if projects is defined and projects and not shelf_page %}
 {# The effective configuration, over the view you were on. It answers a
    question you have *while deciding something else* -- which layout did this
    card resolve to -- and a navigation away and back is a poor way to look
@@ -211,10 +193,18 @@
             title="close (esc)">&times;</button>
   </header>
   <div class="settings-body" id="settings-body"></div>
+  {# Two panels, two questions. This one is every resolved value in one flat
+     table, over whatever you were doing, because "which layout did this card
+     resolve to" is asked mid-decision and a navigation away and back is a
+     poor way to look it up. The setup stage is the other question (what this
+     project holds, and what each work is read as) and is where the
+     per-source settings live, because a crop width belongs to a document. #}
   <p class="rail-more settings-foot">
     Read-only: the config is read at startup, and half these keys change what
     content that already exists <em>means</em>. Edit
     <code>forge.toml</code> or <code>projects/&lt;name&gt;/project.toml</code>.
+    What a project <em>holds</em>, and how each source is read, is on
+    <a href="{{ filter_url('/setup', {}, project=src) }}">the setup stage</a>.
   </p>
 </dialog>
 

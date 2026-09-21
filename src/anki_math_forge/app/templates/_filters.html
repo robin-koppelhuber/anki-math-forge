@@ -10,6 +10,8 @@
    `@me` dropped `suggested`.
 
    Toggled with `f`. #}
+{% from "_runs.html" import runs %}
+{% from "_pick.html" import pick %}
 {% set src = project | default('', true) %}
 {% set here = '/review' if view == 'review' else '/units' %}
 {% set f = filters | default({}, true) %}
@@ -76,6 +78,51 @@
                href="{{ filter_url('/review', shared, status='rejected') }}">rejected<b data-count="rejected">{{ pipeline.rejected }}</b></a></li>
       </ul>
     </details>
+
+    {# Which source, and which ask. The coarsest divisions there are, above
+       the properties and the sections, because project, source, section,
+       unit is the order the material nests in. An ask cuts across the
+       sources rather than sitting over them, so it reads after them.
+
+       Sources take the **union**. A section answers "where in the book" and
+       a source answers "which book", which is the question a cluster of
+       papers asks first, and two related papers are read as one deck. Asks
+       take the **intersection**: an ask states what the deck should
+       contain, so two of them asks what is under both. The word between the
+       chips says which, on the control itself.
+
+       Every declared source gets a row, dimmed and reading 0 where nothing
+       came out of it. The setup stage lists three works for a project that
+       declares three, and a rail showing one of them contradicts the screen
+       you arrived from. One source is the project, so that group is absent
+       rather than offering a row that selects what is already on screen.
+       One ask is still a filter, because an outline names part of a deck.
+
+       The same control as the tags below, for the reason `_pick.html`
+       gives: written a second time is how one of them ends up without the
+       chips. #}
+    {# Drawn for the chips as well as for the rows. A filter can name
+       something the project no longer offers a row for, and hiding the
+       group then hid the way to turn it off: an empty deck with nothing
+       on screen saying why. The tally counts the chips for the same
+       reason, which is what the tags group already does. #}
+    {% if work_rows or source_picks %}
+    <details class="filter-group" open>
+      <summary>sources<span class="filter-tally">{{
+        source_picks | length or '' }}</span></summary>
+      {{ pick('sources', work_rows, source_picks, 'document',
+              f.get('document', ''), here, f, 'find a source', 'or') }}
+    </details>
+    {% endif %}
+
+    {% if topic_rows or topic_picks %}
+    <details class="filter-group" open>
+      <summary>topics<span class="filter-tally">{{
+        topic_picks | length or '' }}</span></summary>
+      {{ pick('topics', topic_rows, topic_picks, 'topic',
+              f.get('topic', ''), here, f, 'find a topic', 'and') }}
+    </details>
+    {% endif %}
 
     {# Everything here is a toggle: clicking an active filter clears it. An
        active row shows a x, so the way out is visible rather than merely
@@ -229,67 +276,44 @@
 
     </details>
     {% endif %}
-    {# The two graded scales. They decide when Anki introduces a card, and
-       until now they were chips you could read and not filters you could
-       click: "the core ones I have not augmented yet" was a question the
-       rail could not ask.
+    {# What a thing is *about* and how it is graded, in one control. A section
+       is where something sits in a document and a tag is what it is about, so
+       they answer different questions and a deck with no sections may still
+       be full of tags. The two graded scales decide when Anki introduces a
+       card.
 
-       Both vocabularies in full, including `ungraded`. A row missing because
-       nothing carries that value reads as "none of these are core" when it
-       means "nothing is graded yet", and `ungraded` is the row you want most
-       on a deck being worked through. #}
-    {% if grade_rows %}
-    <details class="filter-group">
-      <summary>grading</summary>
-      {% for field in ['frequency', 'derivation'] %}
-      <p class="filter-sub">{{ field }}</p>
-      <ul class="filter-list flow">
-        {% for row in grade_rows if row.field == field %}
-        <li><a class="{{ 'on' if row.on }}{{ ' out' if row.value == 'none' }}"
-               href="{{ filter_url(here, f, **{field: (none if row.on else row.value)}) }}"
-               title="{{ 'click to clear' if row.on else 'only ' ~ row.label ~ ' cards' }}">
-          <span>{% if row.on %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}{{ row.label }}</span>
-          <b>{{ row.count }}</b></a></li>
-        {% endfor %}
-      </ul>
-      {% endfor %}
+       They were three groups, each spelling out its whole vocabulary, and
+       together they were most of the rail's height: on a deck with forty tags
+       you scrolled past the filters to reach the sections. So nothing is
+       listed until you ask. The box opens the list, typing narrows it, and
+       what is on shows as a chip underneath, which is the part that has to be
+       visible: a filter you cannot see is a filter you cannot turn off.
+
+       Several at once select the **union**. Three groups that each narrowed
+       the last meant a second choice nearly always emptied the deck; "the
+       core ones and anything tagged containers" is the question actually
+       being asked of a mixed deck.
+
+       Tags are offered from what is actually tagged (a list from anywhere
+       else would show tags nothing carries and hide one you wrote a minute
+       ago), and ordered by how many carry each, because alphabetical puts
+       the tag you used twice above the one you used ninety times. The two
+       scales are closed sets and are offered in full, `ungraded` included: a
+       row missing because nothing carries that value reads as "none of these
+       are core" when it means "nothing is graded yet".
+
+       Every option is a real link carrying the toggled selection, so the
+       control works with the script doing nothing but showing and hiding. #}
+    {% if pick_rows %}
+    <details class="filter-group" open id="pick-group">
+      <summary>{{ pick_title | default('tags', true) }}
+        <span class="filter-tally">{{ picks | length if picks else '' }}</span></summary>
+      {{ pick('pick', pick_rows, picks, 'has', f.get('has', ''), here, f,
+              'find a tag or a grading' if pick_rows | selectattr('field', 'ne', 'tag') | first
+              else 'find a tag') }}
     </details>
     {% endif %}
-    {# Tags, on both views. A section is where something sits in a document
-       and a tag is what it is *about*, so they answer different questions and
-       a deck with no sections may still be full of tags. Offered from what is
-       actually tagged: a list from anywhere else would show tags nothing
-       carries and hide one you wrote a minute ago.
 
-       Ordered by how many carry each, because alphabetical puts the tag you
-       used twice above the one you used ninety times, and the order should
-       not move as you click through. The search box appears once there are
-       enough of them to hunt through; below that it is one more thing to
-       look at. #}
-    {% if tag_rows %}
-    <details class="filter-group" open>
-      <summary>tags</summary>
-      {% if f.get('tag') %}
-      <p class="filter-clear"><a href="{{ filter_url(here, f, tag=none) }}"
-           title="stop filtering by tag">&larr; all tags</a></p>
-      {% endif %}
-      {% if tag_rows | length > 8 %}
-      <input type="search" class="tag-search" id="tag-search" placeholder="find a tag"
-             autocomplete="off" spellcheck="false"
-             aria-label="narrow the tag list">
-      {% endif %}
-      <ul class="filter-list" id="tag-list">
-        {% for row in tag_rows %}
-        <li data-tag="{{ row.name }}"><a class="{{ 'on' if row.on }}"
-               href="{{ filter_url(here, f, tag=(none if row.on else row.name)) }}"
-               title="{{ 'click to clear' if row.on else 'only what is tagged ' ~ row.name }}">
-          <span>{% if row.on %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}{{ row.name }}</span>
-          <b>{{ row.count }}</b></a></li>
-        {% endfor %}
-      </ul>
-      <p class="filter-none" id="tag-none" hidden>nothing matches that.</p>
-    </details>
-    {% endif %}
     {# Sections, on both views now. A card's section comes off its unit id, so
        "§2.4" means the same thing on either side and survives the jump. #}
     {% if section_tree %}
@@ -377,28 +401,7 @@
        never been folded; the script remembers what you did with it. #}
     <summary><span class="rail-actions-what">copy a command</span>
       <span class="rail-actions-hint">scoped to what is on screen</span></summary>
-    <ul class="filter-list runs">
-      {% for cmd in commands %}
-      {% if cmd.kind == 'note' %}
-      <li class="run-note">{{ cmd.label }}</li>
-      {% else %}
-      <li><button type="button" class="run {{ cmd.kind }}" data-copy="{{ cmd.run }}"
-                  {# A real newline, not `&#10;`: the entity is written by the
-                     template rather than by the browser, so Jinja escapes its
-                     `&` and the hover reads the entity out loud. An attribute
-                     keeps a literal newline, which is what a two-line tooltip
-                     needs. #}
-                  title="{{ cmd.why ~ '\n\n' if cmd.why }}{{ 'paste into Claude Code' if cmd.kind == 'claude' else 'paste into a shell' }}">
-        <span class="run-label">{{ cmd.label }}</span>
-        {# What it does, in one sentence. The label says which pass and how
-           much is waiting; it does not say what the pass *is*, and these are
-           commands you run rarely enough to have forgotten. #}
-        {% if cmd.why %}<span class="run-why">{{ cmd.why }}</span>{% endif %}
-        <code>{{ cmd.run }}</code>
-      </button></li>
-      {% endif %}
-      {% endfor %}
-    </ul>
+    {{ runs(commands) }}
   </details>
   {% endif %}
   </div>

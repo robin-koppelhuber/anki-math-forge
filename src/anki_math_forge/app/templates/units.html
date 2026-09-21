@@ -319,7 +319,11 @@
   </article>
   {% endfor %}
 </div>
-<p class="empty-filter" id="empty-filter" hidden>nothing here with this filter.</p>
+{# An empty ledger and a filter that matches nothing are two problems, and
+   one sentence for both sent you hunting a filter that was not on. A ledger
+   is empty before the first import, and after one that found nothing
+   marked. #}
+<p class="empty-filter" id="empty-filter" hidden>{% if counts.values() | sum %}nothing here with this filter.{% else %}no units in {{ project }} yet.{% endif %}</p>
 {% endblock %}
 
 {% block keys %}

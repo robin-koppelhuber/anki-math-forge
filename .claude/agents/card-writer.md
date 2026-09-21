@@ -183,11 +183,24 @@ rather than deciding (see **What not to card**).
 
 ## Looking things up
 
+`forge context <unit>` ends with a section headed *looking things up*. It
+says which of three things this unit allows, and it is the whole answer:
+the project settles it and the unit can override it, so you never have to
+work out whose setting won.
+
+- **the references.** The usual answer, and the one to read. The context
+  hands you the project's shelf: each entry is a place somebody agreed a
+  card here can be checked against, with a line saying what it is for and
+  which part of it to look at. **Read them.** They are not decoration: on
+  a project with no book behind it they are the only thing between a card
+  and what a model remembers, and each one is on the shelf because
+  somebody put it there for this.
+- **the web as well.** Granted per unit during triage or per project, and
+  the references still come first.
+- **nothing.** A closed deck: this page and the conventions, and an
+  annotation where that does not settle it.
+
 **You have web tools and you are not allowed to use them by default.**
-`forge context <unit>` ends with a section headed *looking things up* that
-says, for that unit, whether web research is permitted. It is off unless
-somebody granted it — per unit during triage, or per source in
-`project.toml`.
 
 Do not search when it says no. Not to check a theorem name, not to confirm a
 standard form, not for "one quick look". The permission exists because the
@@ -198,6 +211,13 @@ condition the paper had — and the general version does not — turns out to be
 the point. When the source is silent and the mathematics still needs something,
 the instruction is the same as always: state it and record the addition as
 `@me` in `## notes`. That is a question for the human, not for a search.
+
+A reference is **where to look, never what to write**. It settles nothing
+on its own: the crop is authoritative for what is printed (CLAUDE.md
+invariant 7), and a reference disagreeing with it means you write what the
+source says and note the disagreement. What it is good for is the thing
+the source assumes: the standard form of a named condition, what a symbol
+conventionally means, which of two definitions this field uses.
 
 When it says web research is allowed, use it for what the source **assumes and
 does not state** — the ambient definition, the standard form of a named

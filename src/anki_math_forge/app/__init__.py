@@ -24,6 +24,7 @@ import subprocess
 import sys
 import time
 import tomllib
+from collections.abc import Mapping
 from dataclasses import replace
 from html import escape
 from pathlib import Path
@@ -45,9 +46,11 @@ from ..config import (
     CHAPTER,
     DECLARED,
     DEFAULT_MEANINGS,
-    REFERENCES_FILE,
+    PROJECT_TOML,
     Config,
     ConfigError,
+    ProjectConfig,
+    SourceConfig,
     context_asked,
     context_size,
     load,
@@ -63,6 +66,7 @@ from ..sync import (
     study_values,
 )
 from . import keys as keymod
+from . import prose, runs
 
 HERE = Path(__file__).parent
 TEMPLATES = HERE / "templates"
@@ -205,6 +209,16 @@ def create_app(config: Config) -> FastAPI:
 
     templates = Jinja2Templates(directory=str(TEMPLATES))
     templates.env.filters["body"] = render_body
+    # Free text out of a file: `conventions.md`, an ask, a line of the shelf.
+    # Every one of them is markdown in practice, because that is what you type
+    # into a `.md` file, and a `<pre>` full of literal `-` and `$\partial$` is
+    # the app saying it has not read the file you are looking at.
+    templates.env.filters["prose"] = prose.render
+    templates.env.filters["inline"] = prose.line
+    # `counts | in_map(key)` read the other way round, so a list of state
+    # names can be mapped over one counts dict. Jinja's `map` passes the item
+    # first, and the item here is the key.
+    templates.env.filters["in_map"] = lambda key, table: table.get(key, 0)
 
     @pass_context
     def key_of(ctx: Any, action: str) -> str:
@@ -251,12 +265,67 @@ def create_app(config: Config) -> FastAPI:
     templates.env.globals["study_criteria"] = lambda: study.resolve(study_order(config))
     templates.env.globals["mark_selection"] = mark_selection
     templates.env.globals["mark_toggle"] = mark_toggle
+    templates.env.globals["pick_toggle"] = pick_toggle
+    templates.env.globals["material_label"] = lambda key: MATERIAL_LABEL.get(key, key)
 
     # -- views ------------------------------------------------------------
 
     @app.get("/", include_in_schema=False)
     def index() -> RedirectResponse:
-        return RedirectResponse("/review")
+        """The shelf, not a deck.
+
+        Landing on `/review` meant landing in whichever project happened to
+        be first, which is an answer to a question nobody asked on opening
+        the app. What you actually do first is choose what to work on.
+        """
+        return RedirectResponse("/projects")
+
+    @app.get("/projects", response_class=HTMLResponse)
+    def projects_view(request: Request, tag: str = "") -> Any:
+        """Every project, with how far along each one is.
+
+        A page rather than a dialog over whatever you were reading. It is
+        where you start, it has filters of its own, and a modal with a left
+        rail in it is a page that has not admitted it yet.
+
+        Filtered server-side, like every other list here, so a narrowed shelf
+        is a link you can send.
+
+        Two tags narrow, where two tags on the deck rail widen. They are the
+        same control over different things: a unit's tags are subjects it
+        could be about, so "these two" is a union, while a project's are
+        facets of one thing (`cpp`, `paper`, `reference`), so asking for
+        both means the paper about C++.
+
+        No project in force. This is the one screen that is not about one,
+        and the app used to answer "which project" with whichever sorted
+        first and offer its setup stage from the bar.
+        """
+        config = reread()
+        shelf = source_gallery(config)
+        rows = list(shelf["projects"])
+        tags = picked(tag)
+        if tags:
+            rows = [r for r in rows if set(tags) <= set(r["tags"])]
+        return templates.TemplateResponse(
+            request,
+            "projects.html",
+            {
+                **key_context(config, "units", ("projects",)),
+                "config": config,
+                "view": "projects",
+                "project": "",
+                "projects": project_names(config),
+                "shown": rows,
+                "shelf": shelf,
+                "filters": {"tag": tag},
+                "tag_picks": shelf_tag_rows(shelf["projects"], rows, tags),
+                "tag_chips": [
+                    {"key": t, "label": t, "field": "tag"} for t in tags
+                ],
+                "commands": picker_commands(),
+            },
+        )
 
     @app.get("/api/config")
     def config_api(project: str = "") -> Any:
@@ -267,22 +336,27 @@ def create_app(config: Config) -> FastAPI:
         layout did this card resolve to -- and a navigation away and back is a
         poor way to look something up mid-decision.
 
-        The project in force comes first. With fifty of them, landing at the top
-        of an alphabetical list and scrolling is not an answer.
+        The project in force comes first, then the works it reads, then what
+        is ambient. With fifty projects, landing at the top of an alphabetical
+        list and scrolling is not an answer.
         """
         name = resolve_project(config, project)
         focus = f"project: {name}"
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in effective_config(config):
             where = str(row["where"])
-            # The repo-wide settings and *this* source. The other fifty are a
-            # different question -- which book to work on -- and the gallery
-            # answers that one; listing them here buried the two groups you
-            # opened the panel for.
-            if where.startswith("project: ") and where != focus:
+            # This project and its works, plus what is ambient. The other
+            # fifty projects are a different question, which book to work on,
+            # and the gallery answers that one; listing them here buried the
+            # groups you opened the panel for.
+            if row.get("owner") and row["owner"] != name:
                 continue
             grouped.setdefault(where, []).append(row)
-        order = [focus, *(g for g in grouped if g != focus)]
+        # A work sits with the project it belongs to, not below the repo-wide
+        # tables: the two are read together, since half of what used to be one
+        # project row is now one row per work.
+        works = [g for g in grouped if g.startswith("source: ")]
+        order = [focus, *works, *(g for g in grouped if g != focus and g not in works)]
         return {
             "project": name,
             "focus": focus,
@@ -297,7 +371,13 @@ def create_app(config: Config) -> FastAPI:
     def units_view(
         request: Request,
         project: str = "",
-        tag: str = "",
+        has: str = "",
+        # Which work, and which ask. Both are properties of a unit rather
+        # than of the view, and both come from the setup stage: picking a
+        # work there and asking to see its units is the one thing that
+        # screen could not do (ROADMAP.md 10).
+        document: str = "",
+        topic: str = "",
         state: str = "new",
         section: str = "",
         chapter: str = "",
@@ -334,10 +414,31 @@ def create_app(config: Config) -> FastAPI:
         # `hollow`, and you were triaging the first book in the config.
         #
         # Nothing named is a default, and a default that lands you on an empty
-        # view reads as a broken import. So that one steps past a source with
-        # no ledger to one that has units.
-        if not project and name not in ledgers:
-            name = next(iter(ledgers))
+        # view reads as a broken import. So that one steps past a project with
+        # no units to one that has some.
+        #
+        # By what the ledger holds, not by whether its file is there. A
+        # project whose import found nothing, or whose units were dropped,
+        # keeps a zero-byte `units.jsonl`, and testing for the file landed
+        # you on it: the first project in the config, no units, and
+        # "nothing here with this filter" over a rail with no filter on.
+        #
+        # Through the order the config names, not the order the folders
+        # glob in: `_ledgers` globs `projects/*/units.jsonl`, so the
+        # alphabetical fallback preferred a leftover directory with no
+        # `[projects.*]` entry over a project the config declares.
+        if not project and not ledgers.get(name):
+            name = next((key for key in project_names(config) if ledgers.get(key)), name)
+        # And say so in the URL. The page is drawn for `name` while the
+        # script polls `/api/counts` with `location.search`, which carries
+        # no project and resolves to the configured default, so a deck
+        # stepped past an empty project had the other one's numbers painted
+        # over its rail four seconds later.
+        if not project and name:
+            return RedirectResponse(
+                filter_url("/units", dict(request.query_params), project=name),
+                status_code=302,
+            )
         ledger = ledgers.get(name) or Ledger(config.units_path(name))
         # The section rows must show what clicking one would give, so they
         # are counted over everything the *other* filters leave -- the same
@@ -380,18 +481,61 @@ def create_app(config: Config) -> FastAPI:
             # squint at a picture of it.
             units = [u for u in units if u.transcription == "ok"]
         # What a unit is *about*, as against the one thing it came from. Tags
-        # cross each other by design, so this is membership and not a tree.
-        if tag:
-            units = [u for u in units if tag in u.tags]
-            unsectioned = [u for u in unsectioned if tag in u.tags]
+        # cross each other by design, so this is membership and not a tree,
+        # and several of them select the union.
+        chosen = picked(has)
+        if chosen:
+            units = [u for u in units if pick_matches(chosen, u.tags)]
+            unsectioned = [u for u in unsectioned if pick_matches(chosen, u.tags)]
+        works = picked(document)
+        if works:
+            # By work, not by file name: a unit records the attachment it was
+            # printed in, and for a Zotero item that is not the work's key.
+            # Several at once select the union, like the tag control, because
+            # a cluster of papers is read as one deck and two of them is a
+            # question you actually ask.
+            def from_work(unit: Unit) -> bool:
+                # Or the document itself, which is the row `work_rows`
+                # offers for a document no declared work answers for.
+                return (
+                    work_of(config, name, unit.locator.document) in works
+                    or unit.locator.document in works
+                )
+
+            units = [u for u in units if from_work(u)]
+            unsectioned = [u for u in unsectioned if from_work(u)]
+        # Which ask, where the block above is which work. Several at once
+        # take the **intersection**: an ask states what the deck should
+        # contain, so two of them asks what is under both, where two works
+        # are read as one deck and take the union. `None` is nothing
+        # chosen, which an empty set cannot say: an outline with no entries
+        # selects nothing and has to stay tellable from no filter at all.
+        cover = topics_mod.coverage(config, name, ledger)
+        asks = picked(topic)
+        under = slugs_under(cover, asks)
+        if under is not None:
+            units = [u for u in units if unit_slug(u) in under]
+            unsectioned = [u for u in unsectioned if unit_slug(u) in under]
         everything = list(ledger)
         known = {u.id for u in everything}
+        offered = tag_rows([u.tags for u in everything], chosen)
+        # The works over the whole project, the asks over what is on screen.
+        # A work selects the union, so picking a second one can only add and
+        # the number beside it is what it would add. An ask narrows, so the
+        # number beside it is what picking it would leave, counted after the
+        # other filters have had their say.
+        works_offered = work_rows(
+            config, name, everything, lambda u: {u.locator.document}, works
+        )
+        topics_offered = topic_rows(cover, units, lambda u: {unit_slug(u)}, asks)
         shared = project_context(config, name, everything)
         from_marks = shared["from_marks"]
         pipeline = shared["pipeline"]
         filters = {
             "project": name,
-            "tag": tag,
+            "has": has,
+            "document": document,
+            "topic": topic,
             "state": state,
             "section": section,
             "chapter": chapter,
@@ -445,7 +589,16 @@ def create_app(config: Config) -> FastAPI:
                     "units", filters, pipeline, from_marks=from_marks,
                     has_document=shared["has_document"],
                 ),
-                "tag_rows": tag_rows([u.tags for u in everything], tag),
+                # Tags only: a unit has no grading to filter by, and offering
+                # a scale the stage does not decide would be the units view
+                # asking a card question.
+                "pick_rows": offered,
+                "picks": pick_chips(chosen, offered),
+                "pick_title": pick_title(offered),
+                "work_rows": works_offered,
+                "source_picks": chips_of(works, works_offered, "source"),
+                "topic_rows": topics_offered,
+                "topic_picks": chips_of(asks, topics_offered, "topic"),
                 "mark": mark,
                 "mark_matrix": mark_matrix(
                     ledger.select(state=state or "all", section=section or None), config, name
@@ -478,9 +631,9 @@ def create_app(config: Config) -> FastAPI:
         augmented: str = "",
         section: str = "",
         chapter: str = "",
-        tag: str = "",
-        frequency: str = "",
-        derivation: str = "",
+        has: str = "",
+        document: str = "",
+        topic: str = "",
         counts_scope: str = "",
     ) -> Any:
         config = reread()
@@ -505,7 +658,7 @@ def create_app(config: Config) -> FastAPI:
                     "pipeline": pipeline_counts(config, name),
                 },
             )
-        in_project = [c for c in cards if card_in_source(c, name)]
+        in_project = [c for c in cards if card_in_source(config, c, name)]
         cards = in_project
         if section:
             cards = [c for c in cards if card_section(c, config) == section]
@@ -519,26 +672,50 @@ def create_app(config: Config) -> FastAPI:
         # card this app cannot answer from the content.
         if augmented in ("yes", "no"):
             cards = [c for c in cards if c.augmented == (augmented == "yes")]
-        # What a card is *about*, as against the one thing it came from. A
-        # tag crosses subjects by design, so this is a plain membership test
-        # and not a tree.
-        if tag:
-            cards = [c for c in cards if tag in c.tags]
-        # The two coarse judgements. They decide when you meet a card, so
-        # "show me the core ones I have not augmented" is the question the
-        # rail could not ask: they were chips you could read and not filters
-        # you could click.
-        # `none` is a value here, not the absence of one: "what have I not
-        # graded yet" is the question you ask most while working a deck
-        # through, and it is the one a filter over the vocabulary alone
-        # cannot express.
-        if frequency:
-            cards = [c for c in cards if (c.frequency or "none") == frequency]
-        if derivation:
-            cards = [c for c in cards if (c.derivation or "none") == derivation]
+        # What a card is *about* and how it is graded, in one selection. A tag
+        # crosses subjects by design, so this is a plain membership test and
+        # not a tree; the two scales decide when you meet the card. Several
+        # chosen at once select the union, so "the core ones and anything
+        # tagged containers" is one view rather than two.
+        chosen = picked(has)
+        if chosen:
+            cards = [c for c in cards if pick_matches(chosen, c.tags, card_grades(c))]
+        # The same two as the units view, resolved through the unit a card
+        # was written from: a card carries neither, and both are questions
+        # about where the material came from.
+        works = picked(document)
+        if works:
+            # Every work the card stands on, so a card merged from two
+            # books is found under either.
+            wanted_works = set(works)
+            cards = [
+                c
+                for c in cards
+                if card_documents(c, config) & wanted_works
+                or card_unit_documents(c, config) & wanted_works
+            ]
+        # The same intersection the units view takes, resolved through the
+        # unit a card was written from. Off the cached ledger rather than
+        # `coverage`'s own load, which reopens the file on every request.
+        cover = topics_mod.coverage(config, name, _ledgers(config).get(name))
+        asks = picked(topic)
+        under = slugs_under(cover, asks)
+        if under is not None:
+            cards = [c for c in cards if card_slugs(c, config) & under]
         # Everything the other filters leave, ignoring the section: what each
-        # section row would show if you clicked it.
+        # section row would show if you clicked it. The work and the ask
+        # belong in it too: a row promises what a click delivers, and counted
+        # without them it promises more.
         unsectioned = in_project
+        if works:
+            unsectioned = [
+                c
+                for c in unsectioned
+                if card_documents(c, config) & wanted_works
+                or card_unit_documents(c, config) & wanted_works
+            ]
+        if under is not None:
+            unsectioned = [c for c in unsectioned if card_slugs(c, config) & under]
         if annotated:
             unsectioned = [c for c in unsectioned if has_annotation(c.annotations(), annotated)]
         if augmented in ("yes", "no"):
@@ -603,9 +780,9 @@ def create_app(config: Config) -> FastAPI:
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
         filters = {
             "project": name,
-            "tag": tag,
-            "frequency": frequency,
-            "derivation": derivation,
+            "has": has,
+            "document": document,
+            "topic": topic,
             "status": status,
             "section": section,
             "chapter": chapter,
@@ -614,6 +791,14 @@ def create_app(config: Config) -> FastAPI:
             "counts_scope": counts_scope,
         }
         counts = {s: sum(1 for c in cards if c.effective_status == s) for s in model.STATUSES}
+        offered = tag_rows([c.tags for c in in_project], chosen) + grade_rows(in_project, chosen)
+        # See the units view: the works over the whole project because they
+        # take the union, the asks over the deck on screen because they
+        # narrow it.
+        works_offered = work_rows(
+            config, name, in_project, lambda c: card_unit_documents(c, config), works
+        )
+        topics_offered = topic_rows(cover, selected, lambda c: card_slugs(c, config), asks)
         units_here = list(_ledgers(config).get(name, Ledger(config.units_path(name))))
         shared = project_context(config, name, units_here)
         from_marks = shared["from_marks"]
@@ -643,8 +828,16 @@ def create_app(config: Config) -> FastAPI:
                     "review", filters, pipeline, from_marks=from_marks,
                     has_document=shared["has_document"],
                 ),
-                "tag_rows": tag_rows([c.tags for c in in_project], tag),
-                "grade_rows": grade_rows(in_project, frequency, derivation),
+                # Tags first, then the two scales: the tags are this deck's
+                # own vocabulary and the scales are the same seven rows on
+                # every deck there will ever be.
+                "pick_rows": offered,
+                "picks": pick_chips(chosen, offered),
+                "pick_title": pick_title(offered),
+                "work_rows": works_offered,
+                "source_picks": chips_of(works, works_offered, "source"),
+                "topic_rows": topics_offered,
+                "topic_picks": chips_of(asks, topics_offered, "topic"),
                 "section_tree": section_rows(
                     in_project,
                     {c.uid for c in unsectioned},
@@ -698,7 +891,7 @@ def create_app(config: Config) -> FastAPI:
         """
         # Local, like the other reader of this module: `context` pulls in the
         # extraction package, and the app should not pay for that at import.
-        from ..context import shelf as project_shelf
+        from ..context import references_prose as project_shelf
         from ..context import source_conventions
 
         config = reread()
@@ -707,11 +900,42 @@ def create_app(config: Config) -> FastAPI:
         ledger = _ledgers(config).get(name)
         units = list(ledger) if ledger else []
         cover = topics_mod.coverage(config, name, ledger)
+        works = topic_works(spec, cover, units)
+        # The same walk without the declared seed: which asks a work is
+        # fixed for, as against which it is merely set for.
+        derived = topic_works(spec, cover, units, declared=False)
+        # What each ask is holding, in both halves of the pipeline. The join
+        # is the slug, the same one coverage counts by, so the outline's
+        # "2 of 3" and this panel's "2 units" cannot disagree.
+        here = [c for c in _cards(config) if card_in_source(config, c, name)]
+        by_slug: dict[str, list[Unit]] = {}
+        for unit in units:
+            by_slug.setdefault(unit_slug(unit), []).append(unit)
+        cards_by_unit: dict[str, list[Card]] = {}
+        for card in here:
+            cards_by_unit.setdefault(card.unit, []).append(card)
+        stats = {}
+        for topic in cover.topics:
+            mine = [u for e in topic.outline for u in by_slug.get(e.slug, ())]
+            stats[topic.slug] = holding(
+                mine, [c for u in mine for c in cards_by_unit.get(u.id, ())]
+            )
+        queued = sum(1 for u in units if u.state == "queued")
+        # Has this project anything a pass could segment. Counted over the
+        # works that are switched on, not over the declared ones: a project
+        # whose only book has extraction off has nothing for `forge extract`
+        # to read, and `/propose` is the pass that can still make it a unit.
+        segmentable = any(w.authoritative for w in (spec.sources if spec else ()))
+        works_here = [
+            source_facts(config, name, work, units, cards_by_unit)
+            for work in (spec.sources if spec else ())
+        ]
         return templates.TemplateResponse(
             request,
             "setup.html",
             {
-                **key_context(config, "units", ("projects", "guide")),
+                # No guide rail on this page, so no key for folding one.
+                **key_context(config, "units", ("projects",)),
                 "config": config,
                 "project": name,
                 "projects": project_names(config),
@@ -719,35 +943,87 @@ def create_app(config: Config) -> FastAPI:
                 "project_facts": project_facts(
                     config, name, from_marks=any(u.marks for u in units)
                 ),
-                "sources": [
-                    {
-                        "key": work.key,
-                        "title": work.title or work.key or work.url,
-                        "url": work.url,
-                        "files": [f.name for f in work.files],
-                        "zotero": work.zotero_key,
-                        "attachments": list(work.attachments),
-                        "authoritative": work.authoritative,
-                        "units": sum(
-                            1
-                            for u in units
-                            if u.locator.document in (work.key, *work.attachments)
-                            or (not u.locator.document and work.authoritative)
-                        ),
-                        "scheme": sorted(work.units_from),
-                    }
-                    for work in (spec.sources if spec else ())
+                "sources": works_here,
+                "topic_stats": stats,
+                # Works the repo already knows and this project does not. A
+                # paper can sit in two projects: cited by one, extracted from
+                # by another, and nothing listed them across projects.
+                "elsewhere": [
+                    row
+                    for row in every_work(config)
+                    if row["project"] != name
+                    and row["key"] not in {w["key"] for w in works_here}
                 ],
+                # One list per thing you can select. Rendered together and
+                # shown one at a time, like the panels themselves, so the
+                # page stays a plain document with the script doing nothing.
+                "commands": {
+                    # The panel that creates one carries its own command,
+                    # under the form, where the thing it follows on from is.
+                    # A column with nothing but its footnote in it reads as
+                    # broken rather than as empty.
+                    "new-topic": [
+                        {
+                            "kind": "note",
+                            "label": "nothing to run until it exists",
+                            "run": "",
+                        }
+                    ],
+                    "project": setup_commands(
+                        name,
+                        pane="project",
+                        has_document=segmentable,
+                        origin=project_origin(config, name),
+                    ),
+                    **{
+                        f"topic:{t.slug}": setup_commands(
+                            name,
+                            pane=f"topic:{t.slug}",
+                            has_document=segmentable,
+                            subject=t.name,
+                            open_entries=len(t.open),
+                            counts={"queued": queued},
+                        )
+                        for t in cover.topics
+                    },
+                    **{
+                        f"source:{w['key']}": setup_commands(
+                            name,
+                            pane=f"source:{w['key']}",
+                            has_document=True,
+                            authoritative=w["authoritative"],
+                            origin=w["origin"],
+                            from_marks=w["from_marks"],
+                            zotero_key=w["zotero"],
+                            # This work's own units, so the crop passes are
+                            # offered on a work that has something to read
+                            # and not on one nothing has been segmented out
+                            # of yet.
+                            counts=w["holding"]["counts"],
+                        )
+                        for w in works_here
+                    },
+                },
                 "coverage": cover,
+                # Which works each ask drew on, and the same fact read the
+                # other way. Both from one walk, so the panel and the panels
+                # cannot disagree about it.
+                "topic_works": works,
+                "topic_derived": derived,
+                "work_topics": {
+                    key: sorted(slug for slug, keys in works.items() if key in keys)
+                    for key in (w.key for w in (spec.sources if spec else ()))
+                },
                 "shelf": project_shelf(config, name),
-                # One entry per line, so a line can be dropped. Only
-                # the list items: a shelf is prose, and the sentence
-                # above the list is not a reference.
-                "shelf_lines": [
-                    line.strip()
-                    for line in project_shelf(config, name).splitlines()
-                    if line.strip().startswith(("-", "*"))
-                ],
+                # One entry per line, so a line can be dropped. Only the list
+                # items: a shelf is prose, and the sentence above the list is
+                # not a reference.
+                #
+                # Both spellings of each: `raw` is what the file says and is
+                # what dropping one has to match, `text` is the same line
+                # without its bullet, because the list it is shown in draws
+                # its own.
+                "shelf_lines": shelf_rows(project_shelf(config, name)),
                 "conventions": source_conventions(config, name),
                 "untopiced": [
                     u.id
@@ -783,6 +1059,328 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(status_code=400, detail=f"cannot start a project from {name!r}")
         return {"ok": True, "project": made}
 
+    @app.delete("/api/projects/{name}")
+    def delete_project(name: str) -> Any:
+        """Remove a project: its folder, its cards, and its declaration.
+
+        The same function the command goes through, for the reason
+        `scaffold` gives: one writer, so the two cannot drift.
+
+        **This one never forces.** `remove` refuses a project that holds
+        cards, and the app does not offer the override: a project with
+        thirty-nine cards in it is weeks of review, and the place to say
+        "yes, that too" is a flag you type yourself. The message says which
+        command that is.
+        """
+        try:
+            going = projects_mod.remove(reread(), name)
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {
+            "ok": True,
+            "project": going.project,
+            "units": going.units,
+            "cards": going.cards,
+        }
+
+    @app.get("/api/sources")
+    def sources_api() -> Any:
+        """Every work in the repo, whichever project reads it.
+
+        Read-only, and config only: it does not ask Zotero what is on the
+        shelf, because that is a disk read of somebody else's database and
+        this is a list the config already knows. `forge zotero --list`
+        answers the other question.
+        """
+        return {"sources": every_work(reread())}
+
+    @app.post("/api/sources/{project}")
+    def add_source(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Add a work to a project, by copying one the repo already knows.
+
+        A `[[sources]]` table appended to `project.toml`, which is the edit
+        you would make by hand. Nothing is copied on disk: a reference is
+        its URL, so the second project reads the same thing rather than a
+        duplicate of it.
+
+        **Always as a reference**, whatever the other project reads it as.
+        The item key and the files are what make a work authoritative, and
+        the app does not write those: a second extraction of one document
+        is two ledgers of units and two notes per card in Anki, and the
+        decision to segment something belongs with the crop settings and
+        the marking scheme that come with it. `forge zotero <citekey>
+        --project <name>` is that decision, typed where you can see it.
+
+        Refused when the project already reads it. Two tables with one key is
+        not a richer configuration, it is the same work twice, and every
+        count on the setup stage would say so.
+        """
+        config = reread()
+        spec = config.projects.get(project)
+        if spec is None:
+            raise HTTPException(status_code=404, detail=f"no project {project!r}")
+        key = str(body.get("key", "")).strip()
+        wanted = next((w for w in every_work(config) if w["key"] == key), None)
+        if wanted is None:
+            raise HTTPException(status_code=400, detail=f"no work {key!r} in this repo")
+        if any(w.key == key for w in spec.sources):
+            raise HTTPException(status_code=409, detail=f"{project} already reads {key!r}")
+        path = config.projects_dir / project / PROJECT_TOML
+        if not path.exists():
+            # Configured in `forge.toml` instead. Writing a `project.toml`
+            # here would not add a table to that one, it would *replace* the
+            # project's whole source list with this single entry, because a
+            # folder's file wins over the root file key by key. Say so.
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"{project} is configured in forge.toml rather than in its own "
+                    f"{PROJECT_TOML}. Add the [[sources]] table there, or move the "
+                    f"project's config into {path} first"
+                ),
+            )
+        lines = [
+            "",
+            "[[sources]]",
+            f"key = {model.toml_string(key)}",
+        ]
+        if wanted["title"]:
+            lines.append(f"title = {model.toml_string(str(wanted['title']))}")
+        if wanted["url"]:
+            lines.append(f"url = {model.toml_string(str(wanted['url']))}")
+        with path.open("a", encoding="utf-8") as out:
+            out.write("\n".join(lines) + "\n")
+        return {"ok": True, "key": key}
+
+    @app.delete("/api/sources/{project}/{work}")
+    def remove_source(project: str, work: str) -> Any:
+        """Take a source out of a project: its table and the units it owns.
+
+        Never forced from here, like the project delete: `remove_source`
+        refuses while cards stand on it, and the flag that overrides that
+        is one you type in a terminal.
+        """
+        try:
+            going = projects_mod.remove_source(reread(), project, work)
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True, "key": going.key, "units": going.units}
+
+    @app.post("/api/references/{project}/web")
+    def add_web_reference(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """A page to check cards against, typed in rather than proposed.
+
+        The same three fields a proposed line carries and the same writer,
+        so a reference you found yourself and one a pass suggested end up
+        as the same table. Which includes the rule about sites: a second
+        page of somewhere this project already reads widens that source
+        rather than adding a row beside it.
+        """
+        config = reread()
+        url = str(body.get("url", "")).strip()
+        title = str(body.get("title", "")).strip()
+        note = str(body.get("note", "")).strip()
+        if url and not title:
+            # A name is what the list shows, and a bare URL in a list of
+            # titles reads as a row that failed to load. The host is a
+            # poor name and a better one than none.
+            host, _ = projects_mod.site_of(url)
+            title = host.partition("://")[2] or url
+        try:
+            key, merged = projects_mod.add_reference(
+                config, project, title=title, url=url, note=note
+            )
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True, "key": key, "merged": merged}
+
+    @app.post("/api/sources/{project}/{work}/extract")
+    def set_extract(project: str, work: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Whether units are extracted from this work here.
+
+        The one property of a source you could not change without editing
+        the file, and it is the one that decides what every pass does with
+        it. Off, the document stays exactly where it is and stops producing
+        units: you own the paper, you want it cited and checked against,
+        and you do not want a hundred highlights in your ledger.
+
+        Reversible. Turning it off stops new units coming out of the
+        work and leaves the ones in the ledger alone: their document is
+        still declared and their crops still render. It deleted them
+        once, which made the switch destroy work in one direction and do
+        nothing in the other.
+        """
+        from .. import scheme as scheme_mod
+
+        config = reread()
+        spec = config.projects.get(project)
+        found = next((w for w in spec.sources if w.key == work), None) if spec else None
+        if found is None:
+            raise HTTPException(
+                status_code=404, detail=f"{project} does not read {work!r}"
+            )
+        wanted = bool(body.get("extract"))
+        if wanted and not (found.files or found.tex or found.zotero_key):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{work!r} has no document to segment. Give it `files` or"
+                    " import it from Zotero first"
+                ),
+            )
+        try:
+            # `None` rather than `true`: nobody said is the ordinary state,
+            # and writing the ordinary answer down makes it look chosen.
+            scheme_mod.set_flag(
+                config, project, work, "extract", None if wanted else False
+            )
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # No `apply_scheme` here. It enforces the marking scheme, which this
+        # switch does not touch, so running it would let the one control
+        # that promises to keep your units delete some for a reason it
+        # never named.
+        return {"ok": True, "extract": wanted}
+
+    @app.post("/api/sources/{project}/{work}/topics")
+    def set_work_topics(project: str, work: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Which asks read this work.
+
+        The declared half of a relation whose other half is derived. A
+        book you imported this morning has produced nothing, so nothing
+        can be walked to say which ask it is for, and saying it is the
+        point of importing it under an ask at all.
+
+        What you cannot do here is unsay the derived half: an ask whose
+        units came out of a book read that book, and the panel shows those
+        as fixed.
+        """
+        from .. import scheme as scheme_mod
+
+        config = reread()
+        spec = config.projects.get(project)
+        found = next((w for w in spec.sources if w.key == work), None) if spec else None
+        if found is None:
+            raise HTTPException(
+                status_code=404, detail=f"{project} does not read {work!r}"
+            )
+        wanted = sorted({str(slug).strip() for slug in body.get("topics", []) if slug})
+        try:
+            scheme_mod.set_list(config, project, work, "topics", wanted)
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True, "topics": wanted}
+
+    @app.post("/api/sources/{project}/{work}/offer")
+    def set_offer(project: str, work: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Whether a card writer is handed this reference by default.
+
+        A shelf of six is a reading list nobody works through. Turning one
+        off leaves it declared, cited and findable, and stops it arriving
+        with every unit: the standard's wording belongs on the shelf and
+        not in front of every card about a container.
+        """
+        from .. import scheme as scheme_mod
+
+        config = reread()
+        spec = config.projects.get(project)
+        found = next((w for w in spec.sources if w.key == work), None) if spec else None
+        if found is None:
+            raise HTTPException(
+                status_code=404, detail=f"{project} does not read {work!r}"
+            )
+        wanted = bool(body.get("offer"))
+        # Written either way, unlike `extract`: this one has a project-wide
+        # default that can be either, so "nobody said" is not the same
+        # answer twice and saying it out loud is the point of the switch.
+        try:
+            scheme_mod.set_flag(config, project, work, "offer", wanted)
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True, "offer": wanted}
+
+    @app.post("/api/sources/{project}/{work}/note")
+    def edit_note(project: str, work: str, body: dict[str, Any] = Body(...)) -> Any:
+        """What this work is for, in one line.
+
+        The half of a reference that is not its address: which questions it
+        answers, which part of it to read, what to cite. A card writer gets
+        it from `forge context` with the rest of the shelf, which is the
+        whole reason it is worth typing.
+
+        A `note` key in the work's own `[[sources]]` table, written line by
+        line so the file keeps its comments.
+        """
+        from .. import scheme as scheme_mod
+
+        config = reread()
+        spec = config.projects.get(project)
+        found = next((w for w in spec.sources if w.key == work), None) if spec else None
+        if found is None:
+            raise HTTPException(
+                status_code=404, detail=f"{project} does not read {work!r}"
+            )
+        try:
+            scheme_mod.set_key(
+                config, project, work, "note", str(body.get("note", "")).strip()
+            )
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True}
+
+    @app.post("/api/scheme/{project}/{work}")
+    def edit_scheme(project: str, work: str, body: dict[str, Any] = Body(...)) -> Any:
+        """What this work's marks mean, and which of them become units.
+
+        The one setting you change while *looking* at the marks: you import a
+        book, triage twenty units, and find that the orange highlights were
+        the ones worth carding. Until now that meant opening the TOML and
+        remembering the `"kind/colour"` spelling.
+
+        A file edit, like every other write here, and a line-wise one: a
+        generated `project.toml` is mostly comments, and a round trip through
+        a TOML writer would produce a correct file with all of them gone.
+
+        `units_from` only where there are marks to read: a work with no
+        Zotero item behind it has no kinds and no colours, so the question
+        does not arise and a saved empty list would be an answer nobody
+        gave. Asked of the extract switch instead, it went unanswerable
+        for a work holding units, while `apply_scheme` went on enforcing
+        the rule on them.
+        """
+        from .. import scheme as scheme_mod
+
+        config = reread()
+        spec = config.projects.get(project)
+        found = next((w for w in spec.sources if w.key == work), None) if spec else None
+        if found is None:
+            raise HTTPException(status_code=404, detail=f"{project} does not read {work!r}")
+        raw = body.get("meanings") or {}
+        meanings = {str(k): str(v).strip() for k, v in raw.items() if str(v).strip()}
+        makes = body.get("units_from")
+        wanted = (
+            sorted({str(pair) for pair in makes})
+            if found.zotero_key and makes is not None
+            else None
+        )
+        try:
+            scheme_mod.write(
+                config, project, work, meanings=meanings, units_from=wanted
+            )
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # A colour you stopped reading as a unit went on being a unit: in
+        # the counts, in the filters and in every pass. Unchecking one now
+        # forgets the units it made, on the same terms the import uses.
+        dropped, kept = projects_mod.apply_scheme(reread(), project)
+        return {
+            "ok": True,
+            "meanings": len(meanings),
+            "units_from": wanted,
+            "dropped": dropped,
+            "kept": kept,
+        }
+
     @app.post("/api/references/{project}")
     def edit_references(project: str, body: dict[str, Any] = Body(...)) -> Any:
         """Keep or drop one line of the shelf.
@@ -795,18 +1393,46 @@ def create_app(config: Config) -> FastAPI:
         line = str(body.get("line", "")).strip()
         if not line:
             raise HTTPException(status_code=400, detail="which line?")
-        path = config.projects_dir / project / REFERENCES_FILE
-        if not path.exists():
-            raise HTTPException(status_code=404, detail="no references.md here")
-        kept = [
-            existing
-            for existing in path.read_text(encoding="utf-8").splitlines()
-            if existing.strip() != line
-        ]
-        if len(kept) == len(path.read_text(encoding="utf-8").splitlines()):
+        if not projects_mod.drop_proposal(reread(), project, line):
             raise HTTPException(status_code=404, detail="no such line")
-        model.write_atomic(path, "\n".join(kept).rstrip("\n") + "\n")
         return {"ok": True}
+
+    @app.post("/api/references/{project}/accept")
+    def accept_reference(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Take a proposed source: make it a `[[sources]]` table.
+
+        A pass proposes with `- [ ] ...`, the markdown everyone already
+        writes for "not yet". Accepting used to take the checkbox off and
+        leave the prose, which meant a proposed *source* never became one:
+        it stayed a sentence on a shelf, with no panel, no settings and no
+        place to write down how to read it.
+
+        So the line becomes a table, and leaves `references.md`. That is
+        where the tool acts on it, and the same fact in two files is the one
+        that drifts. Nothing about it is authoritative: no files and no item
+        key, so nothing is extracted from it.
+        """
+        from ..context import references_prose as project_shelf
+
+        line = str(body.get("line", "")).strip()
+        config = reread()
+        # Which ask it was proposed for: the heading it sits under, read
+        # off the file rather than taken from the request. The browser
+        # knows which panel you clicked; the file knows what the pass was
+        # asked to cover, and that is the one that survives an edit.
+        slug = next(
+            (
+                str(row["slug"])
+                for row in shelf_rows(project_shelf(config, project))
+                if row["raw"] == line
+            ),
+            "",
+        )
+        try:
+            key = projects_mod.accept_proposal(config, project, line, slug)
+        except ConfigError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"ok": True, "key": key}
 
     @app.post("/api/topics/{project}")
     def add_topic(project: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -867,10 +1493,10 @@ def create_app(config: Config) -> FastAPI:
         )
 
     @app.get("/api/graph/{project}")
-    def graph_api(project: str, all: str = "", tag: str = "") -> Any:
+    def graph_api(project: str, all: str = "", has: str = "") -> Any:
         graph_enabled()
         return project_graph(
-            config, resolve_project(config, project), everything=bool(all), tag=tag
+            config, resolve_project(config, project), everything=bool(all), has=has
         )
 
     @app.post("/api/graph/{project}/positions")
@@ -957,13 +1583,28 @@ def create_app(config: Config) -> FastAPI:
         suggested: bool = False,
         transcribed: bool = False,
         counts_scope: str = "",
+        scope: str = "",
+        # The three `scoped_counts` reads and this route dropped. The page
+        # renders the diagram over every filter and app.js then polls here
+        # with the same query string, so a missing parameter showed as the
+        # numbers changing a few seconds after the page settled:
+        # `counts_scope=filtered&state=all&document=cppref` answered `new: 2`
+        # where the page had drawn 0.
+        has: str = "",
+        document: str = "",
+        topic: str = "",
     ) -> Any:
         """The pipeline counts, so the rail can follow a decision.
 
         Every mutating route returns these too; this exists for the first
         paint after an in-page navigation, when nothing has been decided yet.
+
+        `scope=repo` counts every project. The shelf polls with it: it is
+        the one page that is not about a project, and without it the poll
+        fell back to whichever project sorted first and offered a reload
+        when *that* one changed.
         """
-        name = resolve_project(config, project)
+        name = "" if scope == "repo" else resolve_project(config, project)
         whole = pipeline_counts(config, name)
         if counts_scope != "filtered":
             return {"pipeline": whole, "fsm": whole, "stale": code_is_newer_than_this_process()}
@@ -980,6 +1621,9 @@ def create_app(config: Config) -> FastAPI:
                     "annotated": annotated,
                     "suggested": suggested,
                     "transcribed": transcribed,
+                    "has": has,
+                    "document": document,
+                    "topic": topic,
                 },
             ),
         }
@@ -1543,6 +2187,17 @@ def section_rows(
     for item in everything:
         by_section.setdefault(section_of(item) or "", []).append(item)
 
+    # Nothing here has a section: a project proposed into rather than
+    # segmented, and every unit lands in the same bucket. The group then
+    # reads as one filter called "no section" that selects everything, which
+    # is a control that does nothing and looks like a workaround for one.
+    #
+    # The bucket itself stays wherever there are real sections beside it. It
+    # is where the units the segmenter could not place go, and those are the
+    # ones most worth finding.
+    if not any(by_section.keys()):
+        return []
+
     # Numbered sections sort numerically -- `2.10` after `2.9` -- and named
     # ones sort in the order the document introduced them. A paper's own
     # sections are titles, not numbers ("Introduction", "A uniform learning
@@ -1660,6 +2315,11 @@ def pipeline_counts(
     # a unit nobody has decided about is a sentence written for a card that
     # may never exist.
     counts["ungisted"] = 0
+    # Units with no transcription at all, which is what the pass that reads
+    # crops would actually work on. `new` is a triage state and was standing
+    # in for this: a deck of sixteen new units that have all been read
+    # offered the pass anyway, and a run of it reported nothing to do.
+    counts["untranscribed"] = 0
     counts["unaugmented"] = 0
     counts["augmented"] = 0
     counts["annotated"] = 0
@@ -1691,6 +2351,7 @@ def pipeline_counts(
                 counts[unit.state] += 1
             counts["suggested"] += unit.suggestion is not None
             counts["ungisted"] += unit.state == "queued" and not unit.gist
+            counts["untranscribed"] += not unit.tex and unit.state != "skipped"
             counts["annotated"] += bool(unit.notes)
             counts["annotated_me"] += has_annotation(unit.notes, "me")
             counts["annotated_claude"] += has_annotation(unit.notes, "claude")
@@ -1698,7 +2359,7 @@ def pipeline_counts(
             counts["annotated_me_unit"] += has_annotation(unit.notes, "me")
             counts["annotated_claude_unit"] += has_annotation(unit.notes, "claude")
     for card in _cards(config):
-        if not card_in_source(card, project):
+        if not card_in_source(config, card, project):
             continue
         if keep_card is not None and not keep_card(card):
             continue
@@ -1714,6 +2375,10 @@ def pipeline_counts(
         # would be counting work the pass would decline to do.
         counts["unaugmented"] += card.effective_status == "draft" and not card.augmented
         counts["augmented"] += card.augmented
+    # How many units there are at all. The states are already here, but an
+    # offer that wants "is there anything to read" would have to sum four
+    # of them and know which four.
+    counts["units"] = sum(counts[state] for state in UNIT_STATES)
     return counts
 
 
@@ -1763,12 +2428,102 @@ def project_context(config: Config, name: str, units: list[Unit]) -> dict[str, A
     }
 
 
-def tag_rows(tagged: list[list[str]], chosen: str) -> list[dict[str, Any]]:
+# One control for what a thing is *about* (a tag) and how it is graded
+# (`frequency`, `derivation`). They were three groups, each listing its whole
+# vocabulary, and together they were most of the rail's height: on a deck with
+# forty tags you scrolled past the filters to reach the sections.
+#
+# Carried in one comma-separated parameter, the way `mark` already is. One key
+# is what makes OR expressible at all: with a parameter per field, "core or
+# tagged containers" has nowhere to live, since separate parameters can only
+# narrow each other.
+GRADED: dict[str, tuple[str, ...]] = {
+    "frequency": model.FREQUENCIES,
+    "derivation": model.DERIVATIONS,
+}
+
+
+def picked(has: str) -> list[str]:
+    """The chosen filters, in the order they were chosen, without repeats.
+
+    Order is the order of the chips, so adding a third does not rearrange the
+    two already there.
+    """
+    keys: list[str] = []
+    for raw in has.split(","):
+        key = raw.strip()
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def pick_field(key: str) -> tuple[str, str]:
+    """A key read as (field, value).
+
+    `frequency:core` is a grading and anything else is a tag, including a
+    tag with a colon in it, which is how Anki writes a hierarchy. Only the two
+    closed vocabularies are claimed, so `notes:todo` stays a tag.
+    """
+    field, _, value = key.partition(":")
+    if field in GRADED and (value in GRADED[field] or value == "none"):
+        return field, value
+    return "tag", key
+
+
+def pick_matches(keys: list[str], tags: list[str], grades: dict[str, str] | None = None) -> bool:
+    """Does this carry any of the chosen filters?
+
+    Or, not and. Three groups that each narrowed the last meant a second
+    choice almost always emptied the deck, and the question people actually
+    ask of a mixed deck is the other one: show me these *and* those.
+
+    `grades` is `None` for a unit, which has no grading rather than an
+    ungraded one. That is a question a unit cannot answer, so it does not decide
+    either way: a filter of nothing but gradings leaves the units alone
+    rather than emptying them. That is what the counts in the rail read,
+    and "0 new" under a grading chosen on the review page is a lie about
+    the other lane.
+    """
+    asked = [key for key in keys if grades is not None or pick_field(key)[0] == "tag"]
+    if not asked:
+        return True
+    for key in asked:
+        field, value = pick_field(key)
+        if field == "tag":
+            if value in tags:
+                return True
+        elif grades is not None and grades.get(field, "none") == value:
+            return True
+    return False
+
+
+def card_grades(card: Card) -> dict[str, str]:
+    """The two scales as the filter reads them: unset is `none`, a value you
+    can ask for, because "what have I not graded yet" is the question you put
+    most often while working a deck through."""
+    return {"frequency": card.frequency or "none", "derivation": card.derivation or "none"}
+
+
+def pick_toggle(has: str, key: str) -> str | None:
+    """A comma-separated selection with this key added, or removed if it is
+    already on. `None` clears the parameter, which is how the last one taken
+    off leaves no filter rather than an empty one.
+
+    Shared by both multi-selects, `has` and `document`: one is what a thing
+    is about and the other is which work it came out of, and neither has any
+    business spelling its own list arithmetic.
+    """
+    chosen = picked(has)
+    kept = [k for k in chosen if k != key] if key in chosen else [*chosen, key]
+    return ",".join(kept) or None
+
+
+def tag_rows(tagged: list[list[str]], chosen: list[str]) -> list[dict[str, Any]]:
     """Every tag in view, with how many carry it, most used first.
 
     Offered rather than configured: a tag exists because something is tagged
     with it, so a list that came from anywhere else would show tags nothing
-    has and hide ones you just wrote. The chosen one is kept even when the
+    has and hide ones you just wrote. A chosen tag is kept even when the
     filter has narrowed the deck down to it, so there is always a way back
     out.
 
@@ -1780,15 +2535,24 @@ def tag_rows(tagged: list[list[str]], chosen: str) -> list[dict[str, Any]]:
     for tags in tagged:
         for name in tags:
             counts[name] = counts.get(name, 0) + 1
-    if chosen:
-        counts.setdefault(chosen, 0)
+    for key in chosen:
+        field, value = pick_field(key)
+        if field == "tag":
+            counts.setdefault(value, 0)
     return [
-        {"name": name, "count": counts[name], "on": name == chosen}
+        {
+            "field": "tag",
+            "key": name,
+            "name": name,
+            "label": name,
+            "count": counts[name],
+            "on": name in chosen,
+        }
         for name in sorted(counts, key=lambda t: (-counts[t], t))
     ]
 
 
-def grade_rows(cards: list[Card], frequency: str, derivation: str) -> list[dict[str, Any]]:
+def grade_rows(cards: list[Card], chosen: list[str]) -> list[dict[str, Any]]:
     """The two graded scales, with how many carry each value.
 
     Both vocabularies in full rather than only the values in use, because
@@ -1798,22 +2562,64 @@ def grade_rows(cards: list[Card], frequency: str, derivation: str) -> list[dict[
     built from the values present could never show.
     """
     rows: list[dict[str, Any]] = []
-    for field_name, vocabulary, chosen in (
-        ("frequency", model.FREQUENCIES, frequency),
-        ("derivation", model.DERIVATIONS, derivation),
-    ):
+    for field_name, vocabulary in GRADED.items():
         for value in (*vocabulary, "none"):
+            key = f"{field_name}:{value}"
             got = [c for c in cards if (getattr(c, field_name) or "none") == value]
             rows.append(
                 {
                     "field": field_name,
                     "value": value,
+                    "key": key,
                     "label": "ungraded" if value == "none" else value,
                     "count": len(got),
-                    "on": chosen == value,
+                    "on": key in chosen,
                 }
             )
     return rows
+
+
+def pick_title(rows: list[dict[str, Any]]) -> str:
+    """What to call the group, from what is in it. A deck with no tags yet
+    would otherwise have a heading promising some."""
+    kinds = {row["field"] for row in rows}
+    words = (["tags"] if "tag" in kinds else []) + (["grading"] if kinds - {"tag"} else [])
+    return " and ".join(words) or "tags"
+
+
+def pick_chips(chosen: list[str], rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What is on, as the chips under the search box.
+
+    Built from the chosen keys and not from the rows, so a filter still
+    shows, and can still be taken off, when nothing in view carries it. A
+    grading says which scale it is from: `core` and `short` are unambiguous
+    under a heading and not on a chip of their own.
+    """
+    counts = {row["key"]: row["count"] for row in rows}
+    chips: list[dict[str, Any]] = []
+    for key in chosen:
+        field, value = pick_field(key)
+        label = value if field == "tag" else f"{field}: {'ungraded' if value == 'none' else value}"
+        chips.append({"key": key, "field": field, "label": label, "count": counts.get(key)})
+    return chips
+
+
+def chips_of(
+    chosen: list[str], rows: list[dict[str, Any]], field: str
+) -> list[dict[str, Any]]:
+    """What is on, as the chips under a search box, for a control whose keys
+    are not their own labels.
+
+    `pick_chips` reads a tag or a grading out of its key, which a work key
+    and a topic slug cannot answer for: `the-cpp-working-draft` is an
+    address and the title is on the row. Built from the chosen keys rather
+    than from the rows, so a selection nothing in view carries still shows
+    and can still be taken off, and a key with no row keeps its key as its
+    label: a work dropped from `project.toml` while a link to it was open
+    should still say which one it was.
+    """
+    labels = {str(row["key"]): str(row["label"]) for row in rows}
+    return [{"key": key, "field": field, "label": labels.get(key, key)} for key in chosen]
 
 
 def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict[str, int]:
@@ -1832,8 +2638,24 @@ def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict
     annotated = str(filters.get("annotated") or "")
     status = str(filters.get("status") or "")
     state = str(filters.get("state") or "")
+    chosen = picked(str(filters.get("has") or ""))
+    works = picked(str(filters.get("document") or ""))
+    asks = picked(str(filters.get("topic") or ""))
+    # The intersection, where `works` above takes the union. Read only when
+    # an ask is chosen: `coverage` opens `topics.md`, and this runs on every
+    # poll of `/api/counts`.
+    under = slugs_under(topics_mod.coverage(config, project), asks) if asks else None
 
     def keep_unit(unit: Unit) -> bool:
+        if not pick_matches(chosen, unit.tags):
+            return False
+        if works and not (
+            work_of(config, project, unit.locator.document) in works
+            or unit.locator.document in works
+        ):
+            return False
+        if under is not None and unit_slug(unit) not in under:
+            return False
         if section and unit.locator.section != section:
             return False
         if state and state != "all" and unit.state != state:
@@ -1845,6 +2667,15 @@ def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict
         return not annotated or has_annotation(unit.notes, annotated)
 
     def keep_card(card: Card) -> bool:
+        if not pick_matches(chosen, card.tags, card_grades(card)):
+            return False
+        if works and not (
+            card_documents(card, config) & set(works)
+            or card_unit_documents(card, config) & set(works)
+        ):
+            return False
+        if under is not None and not card_slugs(card, config) & under:
+            return False
         if section and card_section(card, config) != section:
             return False
         if status and status != "all" and card.effective_status != status:
@@ -1939,7 +2770,12 @@ def mark_payloads(
     `meaning` is resolved now rather than stored, so editing `[zotero.meanings]`
     changes every unit at once instead of only the ones imported since.
     """
-    scheme = config.zotero_for(unit.project)
+    # This unit's own work, not the project's. A project may read two books
+    # marked up in different years, and a green highlight need not mean the
+    # same thing in both.
+    scheme = config.zotero_for(
+        unit.project, work_of(config, unit.project, unit.locator.document)
+    )
     rows: list[dict[str, Any]] = []
     for index, mark in enumerate(unit.marks):
         own = not index
@@ -2242,11 +3078,24 @@ def scheme_rows(units: list[Unit], config: Config, project: str) -> list[dict[st
     appears in the neighbour list of every unit near it and counting those
     would report the same highlight five times.
     """
+    # Resolved per work, because a scheme belongs to a document. A project
+    # reading two books marked up in different years has two readings of
+    # `highlight/green`, and one legend over both is a caption that is wrong
+    # for half the deck. Where they agree, which is nearly always, the rows
+    # merge and this is the legend it always was.
+    schemes = {
+        key: config.zotero_for(project, key)
+        for key in {work_of(config, project, u.locator.document) for u in units}
+    }
     scheme = config.zotero_for(project)
     seen: dict[tuple[str, str], set[str]] = {}
+    # Which works each pair was marked in, so a disagreement can name them.
+    worked: dict[tuple[str, str], set[str]] = {}
     for unit in units:
+        where = work_of(config, project, unit.locator.document)
         for mark in unit.marks:
             seen.setdefault((mark.kind, mark.colour), set()).add(mark.key)
+            worked.setdefault((mark.kind, mark.colour), set()).add(where)
     if not seen:
         # Nothing in this source was marked, so there is no scheme in force
         # here. `[zotero.meanings]` is repo-wide and would otherwise render a
@@ -2259,23 +3108,48 @@ def scheme_rows(units: list[Unit], config: Config, project: str) -> list[dict[st
     }
     rows: list[dict[str, Any]] = []
     for kind, colour in {*seen, *declared}:
-        meaning, where = scheme.reading(kind, colour)
-        rows.append({
-            "key": f"{kind}/{colour}" if colour else kind,
-            "kind": kind,
-            "colour": colour,
-            # What it reads as, and whether that is a decision you took or the
-            # floor under it. They are not the same claim -- a default says
-            # what Zotero's annotation kind *is*, a declaration says what you
-            # meant by this kind in this colour -- and the difference is the
-            # whole point of showing the scheme rather than just a tally.
-            "meaning": meaning,
-            "declared": where == "declared",
-            "count": len(seen.get((kind, colour), ())),
-            "makes_a_unit": scheme.makes_a_unit(kind, colour),
-        })
+        # One row per *reading*. Two works that read a pair the same way are
+        # one row, as before; two that do not are two rows, each naming the
+        # works it speaks for, because the alternative is printing one of
+        # them over the other.
+        by_reading: dict[str, set[str]] = {}
+        for key in worked.get((kind, colour), set(schemes)):
+            sub = schemes.get(key, scheme)
+            by_reading.setdefault(sub.reading(kind, colour)[0], set()).add(key)
+        split = len(by_reading) > 1
+        for meaning, keys in sorted(by_reading.items()):
+            in_work = sorted(k for k in keys if k) if split else []
+            rows.append(_scheme_row(
+                kind, colour, meaning, in_work,
+                schemes.get(next(iter(keys)), scheme),
+                len(seen.get((kind, colour), ())),
+            ))
     rows.sort(key=lambda r: (not r["makes_a_unit"], -int(r["count"]), str(r["key"])))
     return rows
+
+
+def _scheme_row(
+    kind: str, colour: str, meaning: str, in_work: list[str], scheme: Any, count: int
+) -> dict[str, Any]:
+    """One legend row: a pair, how it reads, and who says so."""
+    where = scheme.reading(kind, colour)[1]
+    return {
+        "key": f"{kind}/{colour}" if colour else kind,
+        "kind": kind,
+        "colour": colour,
+        # Which works read it this way, and only where they disagree: a
+        # label on every row of a project with one book is noise.
+        "works": in_work,
+        # What it reads as, and whether that is a decision you took or the
+        # floor under it. They are not the same claim: a default says what
+        # Zotero's annotation kind *is*, and a declaration says what you
+        # meant by this kind in this colour. That difference is the whole
+        # point of showing the scheme rather than just a tally.
+        "meaning": meaning,
+        "declared": where == "declared",
+        "count": count,
+        "makes_a_unit": scheme.makes_a_unit(kind, colour),
+    }
 
 
 def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -2318,6 +3192,10 @@ def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         group["count"] += int(row["count"])
         group["makes_a_unit"] = group["makes_a_unit"] or bool(row["makes_a_unit"])
         group["declared"] = group["declared"] or bool(row["declared"])
+        # Which works read it this way, where they disagree. Grouping by
+        # meaning is exactly what makes the disagreement legible: the two
+        # readings land in two groups, and each says whose it is.
+        group["works"] = sorted({*group.get("works", []), *row.get("works", [])})
     for group in groups.values():
         group["entries"].sort(key=lambda r: (-int(r["count"]), str(r["key"])))
         # The short name to lead the row with. You come to this legend holding
@@ -2333,23 +3211,637 @@ def scheme_legend(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
-def project_origin(config: Config, project: str) -> str:
-    """Where this source's material comes from: `zotero`, `pdf`, `tex`, or ``.
+def every_work(config: Config) -> list[dict[str, Any]]:
+    """Every work in the repo, with the project it is read in.
 
-    Not cosmetic. It decides which passes make sense, how wide crops are cut,
-    and where to go when a document is missing -- and it was invisible, so a
-    paper imported from Zotero and a PDF sitting in the repo looked identical
-    in every view.
+    A source used to *be* a project, so "which sources are there" was the
+    project list. It is a thing inside one now, and a paper can sit in two:
+    cited by one project and extracted from by another. Nothing listed them
+    across projects, so the only way to answer "have I got this already" was
+    to open five TOMLs (ROADMAP.md 10).
+
+    Sorted by title so the list reads, and grouped by nothing: which project
+    reads a work is a column, not a heading, because the question this
+    answers is about the work.
+    """
+    rows: list[dict[str, Any]] = []
+    for name, spec in config.projects.items():
+        for work in spec.sources:
+            # A Zotero work is usually declared as a bare item key, and a key
+            # is not a name. With one work to read, the project's title is
+            # the work's title, which is the answer somebody already wrote.
+            named = work_name(work)
+            if named == work.key and len(spec.sources) == 1 and spec.title:
+                named = spec.title
+            rows.append({
+                "key": work.key,
+                "title": named,
+                "project": name,
+                "origin": work_origin(work),
+                "authoritative": work.authoritative,
+                # Whether there is a document at all, which is the other
+                # half of what `authoritative` used to imply. A book with
+                # extraction off is false on the first and true on this
+                # one, and it printed as a plain `reference` beside a URL
+                # somebody put on the shelf.
+                "document": bool(work.files or work.tex or work.zotero_key),
+                "url": work.url,
+                "zotero": work.zotero_key,
+                "files": [str(f) for f in work.files],
+                "citation": work.citation,
+            })
+    return sorted(rows, key=lambda r: (str(r["title"]).lower(), str(r["project"])))
+
+
+def shelf_rows(shelf: str) -> list[dict[str, Any]]:
+    """The shelf, one row per list item, and which of them are proposed.
+
+    `- [ ] something` is a line a pass put there and nobody has agreed to
+    yet; `- something` is one that stands. The checkbox is the whole of the
+    pending state: it is what anyone writing this file by hand would use,
+    `check` never reads it, and a pass that stops proposing leaves nothing
+    behind to clean up.
+
+    Both spellings of each line: `raw` is what the file says, which is what
+    an edit has to match, and `text` is the same line without its marker,
+    because the list it is shown in draws its own.
+    """
+    rows: list[dict[str, Any]] = []
+    # Which ask the lines under it are for. A heading, because that is what
+    # anybody writing this file by hand would use, and counting lines under
+    # one is the same thing `annotation_audience` does with a prefix: read,
+    # not parsed. It decides whether two pages of one site are one source
+    # or two.
+    under = ""
+    for line in shelf.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("##"):
+            under = stripped.lstrip("#").strip()
+            continue
+        if not stripped.startswith(("-", "*")):
+            continue
+        proposed = bool(model.PROPOSED_RE.match(stripped))
+        text = model.PROPOSED_RE.sub("", stripped, count=1) if proposed else stripped[1:]
+        # The three parts accepting would write, read the same way the
+        # writer reads them, so the panel can show what it is about to do
+        # rather than the sentence it is about to do it from.
+        title, url, note = projects_mod.parse_proposal(stripped)
+        rows.append({
+            "raw": stripped,
+            "text": text.strip(),
+            "proposed": proposed,
+            "title": title,
+            "url": url,
+            "note": note,
+            "topic": under,
+            "slug": model.slugify(under) if under else "",
+        })
+    return rows
+
+
+def work_of(config: Config, project: str, document: str) -> str:
+    """The key of the work a unit's document belongs to, or "".
+
+    Asked of `ProjectConfig.source`, which is the one definition of the
+    mapping, and not matched by hand here. A Zotero work declares the *item*
+    key while its units carry *attachment* keys, and `attachments` being
+    empty means "all of them", so a hand-rolled `document in (key,
+    *attachments)` matched nothing: the Krause book's panel counted zero
+    units for a work with fifty-six, and offered it the transcription pass it
+    had already ruled out for marked-up sources.
     """
     spec = config.projects.get(project)
-    work = spec.source() if spec else None
-    if work is None:
+    if spec is None:
         return ""
+    work = spec.source(document)
+    return work.key if work else ""
+
+
+def work_origin(work: SourceConfig) -> str:
+    """Where one work's material comes from: `zotero`, `pdf`, `tex`, or ``."""
     if work.zotero_key:
         return "zotero"
     if work.files:
         return "pdf"
     return "tex" if work.tex else ""
+
+
+def project_origin(config: Config, project: str) -> str:
+    """Where this project's material comes from, across every work it reads.
+
+    Not cosmetic. It decides which passes make sense, how wide crops are cut,
+    and where to go when a document is missing, and it was invisible: a paper
+    imported from Zotero and a PDF sitting in the repo looked identical in
+    every view.
+
+    Over all of them, not `spec.source()`. That returns nothing for a project
+    reading two books, by design, and this read it as "no material at all" so
+    the picker badged a cluster of three papers as unconfigured. Where they
+    disagree the honest answer is that they do; unlike a crop width, nobody
+    resolves anything against this, so `mixed` costs nothing and a guess
+    would have cost the truth.
+    """
+    spec = config.projects.get(project)
+    if spec is None:
+        return ""
+    # Every declared work, switched off or not. What a project is made of
+    # does not change when you stop segmenting one: a Zotero item is still
+    # a Zotero item, and reading `extract` here reported a project with a
+    # full ledger as "nothing declared", took away the import offer and
+    # offered `forge extract` in its place.
+    found = {work_origin(w) for w in spec.sources}
+    found.discard("")
+    if len(found) == 1:
+        return found.pop()
+    return "mixed" if found else ""
+
+
+def topic_works(
+    spec: ProjectConfig | None,
+    cover: topics_mod.Coverage,
+    units: list[Unit],
+    *,
+    declared: bool = True,
+) -> dict[str, list[str]]:
+    """Which works each ask drew on, by topic slug.
+
+    Derived **and** declared. The derivation is a walk over what the ask
+    actually produced: a unit records the document it was printed in, and
+    an outline entry joins to its units by slug. That is the half nothing
+    has to maintain, and it is the half that cannot answer for a work
+    nothing has come out of yet, which is every reference and every book
+    you imported this morning. So a source may also say which asks it
+    serves (`topics`), and the two are unioned.
+
+    Declared does not mean editable-only: you cannot unsay that an ask's
+    units came out of a book, because they did. What you can say is that
+    this ask reads that work, before anything has come of it.
+
+    `declared=False` returns the walk alone, which is the half that cannot
+    be unsaid, and is what decides whether a box is fixed. Read off the
+    union instead, a work that was both declared and walked to looked
+    editable: unticking it wrote the file, said so, and the tick came
+    back on the next load because the walk still found it.
+
+    Only a *named* document counts. A project with one work resolves an empty
+    document to it, which would link every ask to the book whether or not
+    anything was read out of it, and an ask whose units were typed in from
+    nowhere is exactly the case this relation is for.
+    """
+    if spec is None:
+        return {}
+    by_id = {u.id: u for u in units}
+    out: dict[str, list[str]] = {}
+    for topic in cover.topics:
+        keys: list[str] = (
+            [w.key for w in spec.sources if topic.slug in w.topics] if declared else []
+        )
+        for entry in topic.outline:
+            for uid in entry.units:
+                unit = by_id.get(uid)
+                if unit is None:
+                    continue
+                named = unit.locator.document
+                work = spec.source(named) if named else None
+                if work is not None and work.key not in keys:
+                    keys.append(work.key)
+                # A reference is a URL on the unit, and a reference source is
+                # a URL in the project. A unit cites the page; the source is
+                # the site, so the deeper one is the one that starts with the
+                # other.
+                for ref in unit.refs:
+                    for other in spec.sources:
+                        if other.url and ref.startswith(other.url) and other.key not in keys:
+                            keys.append(other.key)
+        out[topic.slug] = keys
+    return out
+
+
+def window(pages: int | str) -> str:
+    """A page window in words. `chapter` is a different kind of answer from a
+    number and reads as one; one page either side is not "1 pages"."""
+    if pages == CHAPTER:
+        return "the chapter it is in"
+    return f"{pages} page{'' if pages == 1 else 's'} either side"
+
+
+def work_name(work: SourceConfig) -> str:
+    """What to call a work on screen.
+
+    A work migrated from a project-wide `tex` or `pdf` has neither a title
+    nor a key, and a panel headed by nothing is one you cannot tell from a
+    broken one. The file is what you would call it anyway.
+    """
+    named = work.title or work.key or work.url
+    if named:
+        return named
+    return (
+        next((f.name for f in work.files), "")
+        or (work.tex.name if work.tex else "")
+        or work.zotero_key
+        or "the document"
+    )
+
+
+def unit_slug(unit: Unit) -> str:
+    """The tail of a unit id, which is what an outline entry joins to.
+
+    A proposed unit is `<project>:<slug>`; a segmented one is
+    `<project>:<section>:<number>` and will never match an entry, which is
+    what keeps a book with a topics file from counting its own equations as
+    coverage.
+    """
+    return unit.id.split(":", 1)[-1]
+
+
+def card_slug(card: Card, config: Config) -> str:
+    unit = card_unit(card, config)
+    return unit_slug(unit) if unit else ""
+
+
+def card_slugs(card: Card, config: Config) -> set[str]:
+    """Every outline entry this card stands on.
+
+    `unit:` takes a list, which is the ordinary way a display equation the
+    segmenter cut into three becomes one card, and those units may sit
+    under different asks. Read off the first alone, the card vanished from
+    the second ask while the unit under it was still showing there.
+    """
+    ledger = _ledgers(config).get(card.project_name)
+    if ledger is None:
+        return set()
+    found = [ledger.get(uid) for uid in card.units]
+    return {unit_slug(u) for u in found if u is not None}
+
+
+def card_documents(card: Card, config: Config) -> set[str]:
+    """Every work this card came out of, by work key. See `card_slugs`: a
+    card merged from two books belongs to both."""
+    ledger = _ledgers(config).get(card.project_name)
+    if ledger is None:
+        return set()
+    found = [ledger.get(uid) for uid in card.units]
+    return {
+        work_of(config, card.project_name, u.locator.document)
+        for u in found
+        if u is not None
+    }
+
+
+def work_rows(
+    config: Config, project: str, everything: list[Any], documents_of: Any, chosen: list[str]
+) -> list[dict[str, Any]]:
+    """The works this project reads, with how much of the deck came from each.
+
+    Only where there are two. One work is the project, and a filter with a
+    single row selects what is already on screen.
+
+    The setup stage could send you here scoped to a work, and nothing in the
+    rail could do it: you had to go back to the other screen to change your
+    mind. A section answers "where in the book", and this answers "which
+    book", which is the question a cluster of papers asks first.
+    """
+    spec = config.projects.get(project)
+    if spec is None or len(spec.sources) < 2:
+        return []
+    counts: dict[str, int] = {}
+    # Documents no declared work answers for. A Zotero unit names the
+    # *attachment* it was printed in, and a work declares the item, so the
+    # two match only through `attachments`, which the import leaves empty
+    # to mean "all of them". With one work holding a document that is
+    # enough, because there is one answer to fall back on; with two it is
+    # not, and every unit went unattributed while the rows read zero.
+    loose: dict[str, int] = {}
+    for item in everything:
+        # A set, because a card merged from three units of one book is one
+        # card in that row, and a card merged across two books is one in
+        # each. A unit hands over the one document it names.
+        for doc in documents_of(item):
+            key = work_of(config, project, doc)
+            if key:
+                counts[key] = counts.get(key, 0) + 1
+            elif doc:
+                loose[doc] = loose.get(doc, 0) + 1
+    rows = [
+        {
+            "field": "source",
+            "key": work.key,
+            "label": work_name(work),
+            "count": counts.get(work.key, 0),
+            "on": work.key in chosen,
+            # Dimmed by what it holds rather than by whether anything is
+            # extracted from it. `authoritative` dimmed a book switched off
+            # with fifty-six units in it, and left a reference holding
+            # nothing looking like a live filter.
+            "out": not counts.get(work.key, 0) and work.key not in chosen,
+        }
+        for work in spec.sources
+        # A work with no key cannot be addressed, so a row for it would
+        # build a link that clears the filter instead of setting it.
+        if work.key
+    ]
+    # And a row for each of those documents, under the only name anything
+    # here knows it by. Not pretty, and the alternative is a rail whose
+    # rows do not add up to the deck beside them: a filter that silently
+    # drops a third of what is on screen is worse than one that names it
+    # by its key. Naming the attachments in `attachments` gives it a
+    # title.
+    rows += [
+        {
+            "field": "source",
+            "key": doc,
+            "label": doc,
+            "count": count,
+            "on": doc in chosen,
+            "out": False,
+            "why": "no declared source claims this document; name it in"
+            " `attachments` on the work it belongs to",
+        }
+        for doc, count in sorted(loose.items())
+    ]
+    return rows
+
+
+def slugs_of(cover: topics_mod.Coverage, topic: str) -> set[str]:
+    """Every outline slug under one ask. The join to a unit is the slug, the
+    same rule coverage counts by, so filtering to an ask and counting it
+    covered cannot disagree.
+
+    Over every ask with that slug, not the first. `slugify` lowercases and
+    cuts at forty characters, so two headings can land on one slug, and
+    stopping at the first made the second row an alias for it: it counted
+    its own units and showed the other's.
+    """
+    return {
+        entry.slug
+        for found in cover.topics
+        if found.slug == topic
+        for entry in found.outline
+    }
+
+
+def slugs_under(cover: topics_mod.Coverage, asked: list[str]) -> set[str] | None:
+    """Every slug under **all** of these asks, or `None` when none is chosen.
+
+    The intersection, where the works take the union. An ask states what a
+    deck should contain, so two of them asks what is under both. A unit
+    joins an ask by its slug and carries one slug, so a pair leaves
+    something only where two outlines list the same entry, and that entry
+    is one unit standing under two headings.
+
+    An outline with no entries contributes the empty set, so an ask nobody
+    has outlined yet selects nothing. `topic_rows` counts each ask and dims
+    the ones at zero, which puts that answer on screen before the click
+    rather than after it.
+    """
+    if not asked:
+        return None
+    found = [slugs_of(cover, slug) for slug in asked]
+    kept = set(found[0])
+    for more in found[1:]:
+        kept &= more
+    return kept
+
+
+def topic_rows(
+    cover: topics_mod.Coverage, shown: list[Any], slugs_for: Any, chosen: list[str]
+) -> list[dict[str, Any]]:
+    """The asks this project records, with how many of the deck on screen sit
+    under each.
+
+    Counted over what the other filters left, which is the count an
+    intersection needs: picking a second ask narrows, so the number beside
+    one is what would survive picking it. `shelf_tag_rows` counts the same
+    way, for the reason it gives one stage up.
+
+    Every ask gets a row, in the order `topics.md` writes them, including
+    the ones holding nothing. Dropping those would say the project has no
+    asks when its file has one, and the row's title gives the reason: an
+    outline with no entries has nothing for a unit to join to.
+
+    One ask still earns a group where one work does not. A single work
+    holds the whole deck, so its row selects what is already on screen; an
+    outline names part of a deck.
+    """
+    rows: list[dict[str, Any]] = []
+    for topic in cover.topics:
+        slugs = {entry.slug for entry in topic.outline}
+        # `slugs_for` hands over a set: a card may be written from units
+        # standing under two asks, and it belongs to both.
+        count = sum(1 for item in shown if slugs_for(item) & slugs)
+        rows.append(
+            {
+                "field": "topic",
+                "key": topic.slug,
+                "label": topic.name,
+                "count": count,
+                "on": topic.slug in chosen,
+                "out": not count and topic.slug not in chosen,
+                "why": (
+                    f"{topic.covered} of its {len(topic.outline)} outline "
+                    "entries have a unit"
+                    if topic.outline
+                    else "no outline yet, so no unit joins to it"
+                ),
+            }
+        )
+    return rows
+
+
+def holding(units: list[Unit], cards: list[Card]) -> dict[str, Any]:
+    """What a topic or a work is holding, in both halves of the pipeline.
+
+    The two are separate objects with separate gates, which is the most
+    confusing thing about this tool, so they are counted side by side and in
+    order. `approved` doubles as "what sync would push": nothing local records
+    a note id, so the only honest answer to "is it in Anki" is the one the
+    dry run gives, and this panel does not make network calls to draw a
+    number.
+    """
+    states = dict.fromkeys(UNIT_STATES, 0)
+    untranscribed = 0
+    for unit in units:
+        if unit.state in states:
+            states[unit.state] += 1
+        untranscribed += not unit.tex and unit.state != "skipped"
+    written = dict.fromkeys(CARD_STATES, 0)
+    for card in cards:
+        status = card.effective_status
+        if status in written:
+            written[status] += 1
+    return {
+        "units": len(units),
+        "cards": len(cards),
+        "states": [{"name": k, "count": v} for k, v in states.items() if v],
+        "written": [{"name": k, "count": v} for k, v in written.items() if v],
+        "approved": written["approved"],
+        # The same numbers flat, which is what decides whether a pass is
+        # worth offering: a work nothing has been segmented out of yet has
+        # no crops to read, and the panel should not say otherwise.
+        "counts": {
+            **states,
+            **written,
+            "untranscribed": untranscribed,
+            "units": len(units),
+        },
+    }
+
+
+def scheme_editor(
+    config: Config, project: str, work: SourceConfig, units: list[Unit]
+) -> list[dict[str, Any]]:
+    """Every mark pair worth a row in this work's scheme editor.
+
+    The pairs actually marked in it, plus the ones it declares, plus the
+    kinds Zotero defines with no colour. Not the full grid: eight colours
+    across six kinds is forty-eight rows, and nobody has forty-eight
+    meanings. A pair you have never used is not worth a text box, and one
+    you used once is exactly the row you came here for.
+    """
+    if not work.zotero_key:
+        # Marks are a Zotero thing. A segmented book has none and never
+        # will, and a scheme editor beside it would be machinery that is
+        # not running.
+        return []
+    scheme = config.zotero_for(project, work.key)
+    mine = [u for u in units if work_of(config, project, u.locator.document) == work.key]
+    seen: dict[tuple[str, str], set[str]] = {}
+    for unit in mine:
+        for mark in unit.marks:
+            seen.setdefault((mark.kind, mark.colour), set()).add(mark.key)
+    def split(key: str) -> tuple[str, str]:
+        kind, _, colour = key.partition("/")
+        return kind, colour
+
+    # Three sources, unioned, and the last two are why. What is marked in
+    # the units is the useful list and it is not a durable one: turning
+    # extraction off takes the units with it, and an editor built from
+    # them alone then shows an empty table, which reads as "the mapping
+    # was deleted". What the work declares and what the scheme in force
+    # names are both there whether or not anything has been imported, so
+    # the table is the same table before the first import, after it, and
+    # after switching extraction off and on again.
+    declared = {split(key) for key in work.meanings}
+    declared |= {split(key) for key in scheme.meanings}
+    declared |= {split(key) for key in scheme.unit_pairs}
+    declared |= {split(key) for key in (work.units_from or ())}
+    rows: list[dict[str, Any]] = []
+    for kind, colour in sorted({*seen, *declared}):
+        pair = f"{kind}/{colour}" if colour else kind
+        meaning, _ = scheme.reading(kind, colour)
+        rows.append({
+            "pair": pair,
+            "kind": kind,
+            "colour": colour,
+            # The work's own word, or nothing: the box shows what it would
+            # inherit as a placeholder, so saving an untouched row does not
+            # copy the repo default into this file as if you had chosen it.
+            "own": work.meanings.get(pair, ""),
+            "inherited": meaning,
+            "count": len(seen.get((kind, colour), ())),
+            "makes_a_unit": scheme.makes_a_unit(kind, colour),
+        })
+    return sorted(rows, key=lambda r: (-int(r["count"]), str(r["pair"])))
+
+
+def source_facts(
+    config: Config,
+    project: str,
+    work: SourceConfig,
+    units: list[Unit],
+    cards_by_unit: dict[str, list[Card]] | None = None,
+) -> dict[str, Any]:
+    """One work, and every setting that resolves differently because of it.
+
+    Each of these is a fact about *a document*: how it is set, what a colour
+    meant to whoever read it, how much page frames an equation in it. That is
+    why they sit on the source and not on the deck, and why a project with two
+    works that disagree about one is a project to split.
+
+    Each value comes with where it was settled, because "40 points" and "40
+    points, because nobody said otherwise" are different answers to the
+    question you open this pane with.
+    """
+    mine = [u for u in units if work_of(config, project, u.locator.document) == work.key]
+    from_marks = any(u.marks for u in mine)
+    scheme = config.zotero_for(project, work.key)
+    written = [c for u in mine for c in (cards_by_unit or {}).get(u.id, ())]
+    return {
+        "key": work.key,
+        "title": work_name(work),
+        "citation": work.citation,
+        "url": work.url,
+        "note": work.note,
+        "offer": config.offers(project, work),
+        "offer_own": work.offer is not None,
+        # The asks this work *says* it serves, which is the half a
+        # checkbox edits. The derived half is `work_topics`.
+        "topics": list(work.topics),
+        "files": [f.name for f in work.files],
+        "tex": work.tex.name if work.tex else "",
+        "zotero": work.zotero_key,
+        "attachments": list(work.attachments),
+        "authoritative": work.authoritative,
+        "origin": work_origin(work),
+        "units": len(mine),
+        "holding": holding(mine, written),
+        "from_marks": from_marks,
+        # What the pane is actually for: the resolved value, and whether this
+        # work said it or inherited it.
+        "settings": [
+            {
+                "key": "crop_context",
+                "value": f"{config.crop_context_for(project, work.key):g} points of page",
+                "own": bool(work.crop_context),
+                "what": "how much page is shown around a crop from this work",
+            },
+            {
+                "key": "crop_width",
+                "value": config.crop_width_for(project, from_marks, work.key),
+                "own": bool(work.crop_width),
+                "what": "how wide a crop is cut: the box a segmenter found, or "
+                "the page a mark sits on (invariant 8)",
+            },
+            {
+                "key": "context_pages",
+                "value": window(config.context_pages_for(project, document=work.key)),
+                "own": context_asked(work.context_pages),
+                "what": "how much of this work a card writer is handed. A unit "
+                "may still ask for more",
+            },
+            *(
+                [
+                    {
+                        "key": "units_from",
+                        # Said out loud when it is empty. A blank row
+                        # after "which marks start a unit here" reads as a
+                        # value that failed to render, and the answer
+                        # "none of them" is one somebody chose.
+                        "value": ", ".join(sorted(scheme.unit_pairs)) or "none",
+                        "own": work.units_from is not None,
+                        "what": "which marks start a unit here",
+                    }
+                ]
+                # Only where marks are the machinery. A segmented book has no
+                # scheme and never will, and a row reading "nothing declared"
+                # describes something that is not running.
+                if work.zotero_key or work.units_from is not None
+                else []
+            ),
+            {
+                "key": "convention_keyword",
+                "value": scheme.convention_keyword,
+                "own": bool(work.convention_keyword),
+                "what": "the word that asks for a convention, for a work read in "
+                "another language",
+            },
+        ],
+        # Only where this work reads them differently. The repo-wide scheme is
+        # on the settings panel; a source's own is the thing worth reading
+        # beside the work it belongs to.
+        "meanings": sorted(work.meanings.items()),
+        "scheme": scheme_editor(config, project, work, units),
+    }
 
 
 def project_facts(config: Config, project: str, *, from_marks: bool = False) -> dict[str, Any]:
@@ -2369,7 +3861,12 @@ def project_facts(config: Config, project: str, *, from_marks: bool = False) -> 
         # Which marks become units, and *only* for a source that came from
         # Zotero: a segmented book has no marks and no scheme, and showing it
         # one would be the rail describing machinery that is not running.
-        "units_from": sorted(scheme.unit_pairs) if origin == "zotero" else [],
+        # Only where one work answers for the project. A scheme belongs to a
+        # document, so with two of them this row would be one book's list
+        # under the deck's name, the same mistake the crop rows made.
+        "units_from": sorted(scheme.unit_pairs)
+        if origin == "zotero" and len(spec.sources if spec else ()) < 2
+        else [],
         "name": project,
         "configured": spec is not None,
         "title": spec.title if spec else project,
@@ -2381,6 +3878,13 @@ def project_facts(config: Config, project: str, *, from_marks: bool = False) -> 
         else "",
         "deck": config.deck_for(project),
         "decks": sorted(spec.decks.items()) if spec else [],
+        # Whether one work answers for the whole project. The three rows
+        # below it (how wide a crop is cut, how much page frames it, how many
+        # pages a card writer gets) are facts about a *document*, and a
+        # project reading two of them has two answers. Printing one under the
+        # project's name would be one book's number labelled as the deck's,
+        # so the panel says where to look instead.
+        "one_work": len(spec.sources) < 2 if spec else True,
         # `[conventions]`: what this source declares as keys, all of it, not
         # only the one entry `verify` acts on. A convention the tool has never
         # heard of is still a fact whoever writes a card here needs.
@@ -2398,6 +3902,77 @@ def project_facts(config: Config, project: str, *, from_marks: bool = False) -> 
     }
 
 
+#: What a project's material is, in words. `origin` is `zotero`, `pdf`,
+#: `tex`, `mixed` or empty, and empty is not a missing value here: a project
+#: for a subject rather than a book has no document on purpose, and that is
+#: the shape the whole feature exists for.
+#:
+#: A label on the card and **not a filter**. This page picks a project, and
+#: where its material came from is not how anyone chooses one: you choose by
+#: name, by subject, or by how much is left to do.
+#: Empty has no entry: nothing produces it as a key, because the card says
+#: "no document" itself and says why in the hover.
+MATERIAL_LABEL = {
+    "zotero": "from Zotero",
+    "pdf": "a file here",
+    "tex": "LaTeX source",
+    "mixed": "several kinds",
+}
+
+
+def shelf_tag_rows(
+    rows: list[dict[str, Any]], shown: list[dict[str, Any]], chosen: list[str]
+) -> list[dict[str, Any]]:
+    """Every tag on the shelf, with how many of the projects on screen carry it.
+
+    The same shape the rail's control takes, because it is the same control.
+    Offered from what is actually tagged, most used first, for the reason
+    `tag_rows` gives one stage down.
+
+    Two counts are possible and only one of them is useful. These narrow
+    each other, so the number beside a tag is what picking it would *leave*,
+    counted over what the other choices already left. A tag counted over the
+    whole shelf promises nine projects and delivers one.
+
+    Listed even when that leaves none, dimmed and reading 0: the list is
+    then the same list whichever tags are on, so it does not reshuffle under
+    the pointer, and a dead end says so before you click it.
+    """
+    order: dict[str, int] = {}
+    for row in rows:
+        for name in row["tags"]:
+            order[name] = order.get(name, 0) + 1
+    counts = dict.fromkeys(order, 0)
+    for row in shown:
+        for name in row["tags"]:
+            counts[name] = counts.get(name, 0) + 1
+    for name in chosen:
+        counts.setdefault(name, 0)
+        order.setdefault(name, 0)
+    return [
+        {
+            "key": name,
+            "label": name,
+            "field": "tag",
+            "count": counts[name],
+            "on": name in chosen,
+            "out": not counts[name] and name not in chosen,
+        }
+        # By how common the tag is on the whole shelf, not by the narrowed
+        # count: the order would otherwise change with every click.
+        for name in sorted(order, key=lambda t: (-order[t], t))
+    ]
+
+
+def picker_commands() -> list[dict[str, Any]]:
+    """What to run from the shelf: the repo-wide ones, and the imports.
+
+    Nothing here is about one project, because this page is the one screen
+    that is not. Every command that is gets proposed where the project is.
+    """
+    return runs.propose("shelf", runs.Ambient())
+
+
 def source_gallery(config: Config) -> dict[str, Any]:
     """Every source, with where it came from and how far along it is.
 
@@ -2413,7 +3988,7 @@ def source_gallery(config: Config) -> dict[str, Any]:
     ledgers = _ledgers(config)
     by_source: dict[str, list[Card]] = {}
     for card in _cards(config):
-        by_source.setdefault(card.project_name, []).append(card)
+        by_source.setdefault(card_home(config, card), []).append(card)
 
     rows: list[dict[str, Any]] = []
     for name in project_names(config):
@@ -2477,6 +4052,45 @@ def card_section(card: Card, config: Config) -> str:
     return unit.locator.section if unit else card.section_name
 
 
+def card_unit(card: Card, config: Config) -> Unit | None:
+    """The unit a card was written from, or `None`.
+
+    Looked up rather than parsed, for the reason `card_section` gives: a unit
+    id says different things depending on which door it came in by, and the
+    ledger is the only thing that knows which.
+    """
+    if not card.unit:
+        return None
+    ledger = _ledgers(config).get(card.project_name)
+    return ledger.get(card.unit) if ledger else None
+
+
+def card_unit_documents(card: Card, config: Config) -> set[str]:
+    """The raw documents every unit of a card names, before they are
+    resolved to works. `work_rows` does the resolving, so it wants the
+    unresolved side; see `card_slugs` for why it is every unit."""
+    ledger = _ledgers(config).get(card.project_name)
+    if ledger is None:
+        return set()
+    found = [ledger.get(uid) for uid in card.units]
+    return {u.locator.document for u in found if u is not None}
+
+
+def card_unit_document(card: Card, config: Config) -> str:
+    """The raw document a card's unit names, before it is resolved to a work.
+    `work_rows` does the resolving, so it wants the unresolved side."""
+    unit = card_unit(card, config)
+    return unit.locator.document if unit else ""
+
+
+def card_document(card: Card, config: Config) -> str:
+    """Which of its project's works a card came out of, by work key."""
+    unit = card_unit(card, config)
+    if unit is None:
+        return ""
+    return work_of(config, card.project_name, unit.locator.document)
+
+
 def card_gist(card: Card, config: Config) -> str:
     """A few words naming this card, or the empty string.
 
@@ -2501,7 +4115,7 @@ def card_gist(card: Card, config: Config) -> str:
 
 
 def project_graph(
-    config: Config, project: str, *, everything: bool = False, tag: str = ""
+    config: Config, project: str, *, everything: bool = False, has: str = ""
 ) -> dict[str, Any]:
     """Everything the canvas draws for one source, laid out and positioned.
 
@@ -2517,14 +4131,15 @@ def project_graph(
     is not the full arrangement with holes in it.
     """
     everywhere = _cards(config)
-    here = [c for c in everywhere if card_in_source(c, project)]
+    here = [c for c in everywhere if card_in_source(config, c, project)]
     # A subject, looked at alone. Narrowing *this source's* cards and then
     # letting the dependency walk below pull in what they rest on: a
     # foundation outside the tag is still the thing they rest on, and hiding
     # it would draw them as foundations they are not, which is the one
     # mistake this picture must not make.
-    if tag:
-        here = [c for c in here if tag in c.tags]
+    chosen = picked(has)
+    if chosen:
+        here = [c for c in here if pick_matches(chosen, c.tags, card_grades(c))]
     mine = {c.uid for c in here}
     wanted = {n for c in here for n in c.requires} | mine
     foreign = [
@@ -2555,7 +4170,7 @@ def project_graph(
     drawn = {n.id for n in shown.nodes}
     return {
         "project": project,
-        "tag": tag,
+        "has": has,
         # Offered from this source's cards before the filter, so the control
         # does not empty itself out on the first click.
         #
@@ -2566,7 +4181,7 @@ def project_graph(
         # tail of two-card subjects is a question for the list views, which
         # have the control for it.
         "tags": _canvas_tags(
-            tag_rows([c.tags for c in everywhere if card_in_source(c, project)], tag)
+            tag_rows([c.tags for c in everywhere if card_in_source(config, c, project)], chosen)
         ),
         **shown.as_dict(),
         # Where each node sits before anyone has dragged it, and what has been
@@ -2669,14 +4284,26 @@ def study_reading(
     }
 
 
-def card_in_source(card: Card, project: str) -> bool:
-    """Does this card belong to the source the header is scoped to?
+def card_home(config: Config, card: Card) -> str:
+    """Which project's views a card belongs in: `model.home_of`, here.
 
-    An empty `source` means no scope, so everything belongs. A card whose
-    units name no source belongs to all of them: it is misfiled, and the
-    view that hides it is worse than the one that shows it twice.
+    Before this, a card with no unit belonged to *every* project, so that it
+    would be visible somewhere rather than lost. With one book that was
+    right. With a shelf of projects it meant an unfiled card haunted all of
+    them, including a project created a minute ago with nothing in it.
     """
-    return not project or card.project_name in ("", project)
+    return model.home_of(card, config.cards_dir)
+
+
+def card_in_source(config: Config, card: Card, project: str) -> bool:
+    """Does this card belong to the project the header is scoped to?
+
+    An empty project means no scope, so everything belongs. A card that is
+    neither declared nor filed belongs to all of them, which is the old rule
+    kept for the case it was written for: a card with no home should be
+    visible, not lost.
+    """
+    return not project or card_home(config, card) in ("", project)
 
 
 def project_names(config: Config) -> list[str]:
@@ -2706,11 +4333,23 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     What was actually missing was seeing. There is no way today to tell which
     layout a card resolved to, or whether that came from the source or the
     default, without reading Python.
+
+    **A group per work, not one flat project group.** Half of what used to be
+    listed under a project is a fact about a *document*: how much page frames
+    an equation, what a colour meant to whoever read it, which marks start a
+    unit. A project may read several, and one row for two books either prints
+    one book's number under the deck's name or refuses to answer; both are
+    worse than saying which work it belongs to.
+
+    `owner` is the project a group belongs to, so the panel can show the one
+    you are on with its works and leave the other fifty out.
     """
     rows: list[dict[str, Any]] = []
 
-    def add(where: str, key: str, value: Any, project: str) -> None:
-        rows.append({"where": where, "key": key, "value": value, "from": project})
+    def add(where: str, key: str, value: Any, project: str, owner: str = "") -> None:
+        rows.append(
+            {"where": where, "key": key, "value": value, "from": project, "owner": owner}
+        )
 
     add("repo", "language", config.language, "forge.toml")
     add("repo", "front_char_cap", config.front_char_cap, "forge.toml")
@@ -2762,95 +4401,94 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         where = f"project: {name}"
         origin = f"projects/{name}/project.toml"
         inherited = "inherited"
-        # The work this project reads, when it reads one. Crop settings and a
-        # marking scheme are facts about a document, so a project with none
-        # inherits every one of them.
-        work = spec.source()
-        add(where, "material", project_origin(config, name) or "unset", origin)
-        add(where, "deck", config.deck_for(name), origin if spec.deck else inherited)
-        add(where, "order", spec.order, origin)
+        add(where, "material", project_origin(config, name) or "unset", origin, name)
+        add(where, "deck", config.deck_for(name), origin if spec.deck else inherited, name)
+        add(where, "order", spec.order, origin, name)
         add(
             where,
             "web",
             "allowed" if config.web_for(name) else "off",
             origin if spec.web is not None else inherited,
+            name,
         )
         # Everything under `[conventions]`, not only the one key `verify` acts
         # on. A convention the tool has never heard of is still a fact a card
         # writer needs, and the table is where it is stated.
         for key, value in sorted(spec.conventions.items()):
-            add(where, f"conventions.{key}", value, origin)
-        add(
-            where,
-            "crop_context",
-            config.crop_context_for(name),
-            origin if work and work.crop_context else inherited,
-        )
-        add(
-            where,
-            "crop_width",
-            (work.crop_width if work else "") or "page for marks, box for the rest",
-            origin if work and work.crop_width else "by where the geometry came from",
-        )
+            add(where, f"conventions.{key}", value, origin, name)
         add(
             where,
             "context_pages",
             config.context_pages_for(name),
             origin if context_asked(spec.context_pages) else inherited,
+            name,
         )
         if spec.tags:
-            add(where, "tags", ", ".join(spec.tags), origin)
+            add(where, "tags", ", ".join(spec.tags), origin, name)
         for card_type, deck in sorted(spec.decks.items()):
-            add(where, f"deck [{card_type}]", deck, origin)
-        scheme = config.zotero_for(name)
-        if scheme.unit_pairs:
+            add(where, f"deck [{card_type}]", deck, origin, name)
+        # A group per work. Every row below is about reading *a document*, and
+        # a project may read several, so one `crop_context` under the
+        # project's name is one book's number labelled as the deck's.
+        for work in spec.sources:
+            mine = f"source: {work_name(work)}"
+            scheme = config.zotero_for(name, work.key)
             add(
-                where,
-                "units from",
-                ", ".join(sorted(scheme.unit_pairs)),
-                (origin if work and work.units_from else inherited)
-                + (" · every declared mark" if DECLARED in scheme.units_from else ""),
+                mine,
+                "crop_context",
+                config.crop_context_for(name, work.key),
+                origin if work.crop_context else inherited,
+                name,
             )
-        # The whole colour scheme, **here** rather than in the rail. The rail
-        # is 240px and shows only the marks that become units, because a
-        # meaning is an arbitrary sentence and a source may declare forty of
-        # them. This panel is a full-width dialog and is where you come to ask
-        # what something resolves to, so the complete mapping belongs in it --
-        # including the entries nothing in this source is marked with, which
-        # the rail cannot show at all.
-        for key in sorted({*scheme.meanings, *DEFAULT_MEANINGS}):
-            kind, _, colour = key.partition("/")
-            meaning = scheme.means(kind, colour)
-            if not meaning:
-                continue
-            declared = key in scheme.meanings
             add(
-                where,
-                f"means [{key}]",
-                meaning + (" · becomes a unit" if scheme.makes_a_unit(kind, colour) else ""),
-                origin
-                if declared and key in ((work.meanings if work else None) or {})
-                else "forge.toml"
-                if declared
-                else "Zotero's own reading of the annotation kind",
+                mine,
+                "crop_width",
+                work.crop_width or "page for marks, box for the rest",
+                origin if work.crop_width else "by where the geometry came from",
+                name,
             )
+            add(
+                mine,
+                "context_pages",
+                config.context_pages_for(name, document=work.key),
+                origin if context_asked(work.context_pages) else inherited,
+                name,
+            )
+            if scheme.unit_pairs:
+                add(
+                    mine,
+                    "units from",
+                    ", ".join(sorted(scheme.unit_pairs)),
+                    (origin if work.units_from else inherited)
+                    + (" · every declared mark" if DECLARED in scheme.units_from else ""),
+                    name,
+                )
+            # The whole colour scheme, **here** rather than in the rail. The
+            # rail is 240px and shows only the marks that become units,
+            # because a meaning is an arbitrary sentence and a source may
+            # declare forty of them. This panel is a full-width dialog and is
+            # where you come to ask what something resolves to, so the
+            # complete mapping belongs in it, including the entries nothing
+            # in this source is marked with, which the rail cannot show.
+            for key in sorted({*scheme.meanings, *DEFAULT_MEANINGS}):
+                kind, _, colour = key.partition("/")
+                meaning = scheme.means(kind, colour)
+                if not meaning:
+                    continue
+                declared = key in scheme.meanings
+                add(
+                    mine,
+                    f"means [{key}]",
+                    meaning
+                    + (" · becomes a unit" if scheme.makes_a_unit(kind, colour) else ""),
+                    origin
+                    if declared and key in (work.meanings or {})
+                    else "forge.toml"
+                    if declared
+                    else "Zotero's own reading of the annotation kind",
+                    name,
+                )
     return rows
-
-
-def flag(name: str, value: str) -> str:
-    """` --name "value"`, or nothing at all.
-
-    Double quotes throughout, which both `sh` and PowerShell read the same
-    way. Single quotes, which the CLI's own examples use, are a literal in
-    PowerShell and would pass the quote marks along.
-
-    A value containing a double quote gets **no flag**, because there is no
-    spelling that quotes it correctly for both shells: `""` escapes it in
-    PowerShell and concatenates two strings in `sh`. Dropping the scope makes
-    a command that does too much, which you can see; mis-quoting makes one
-    that does something else, which you cannot.
-    """
-    return "" if not value or '"' in value else f' {name} "{value}"'
 
 
 def commands_for(
@@ -2860,161 +4498,80 @@ def commands_for(
     *,
     from_marks: bool = False,
     has_document: bool = True,
-) -> list[dict[str, str]]:
-    """What to run next, scoped to the source and section on screen.
+) -> list[dict[str, Any]]:
+    """What to run next, scoped to the project and section on screen.
 
     The honest version of "trigger Claude from the website": you filter here,
     copy, and paste it where you can watch it. Nothing is launched, so nothing
     writes cards with nobody looking.
 
-    `counts` is the whole source rather than the filtered deck, deliberately:
+    `counts` is the whole project rather than the filtered deck, deliberately:
     you triage in the `new` view and the units you queue as you go are the
     reason to run `/extract-cards` next. Counting only what is on screen would
     hide that step at exactly the moment you earned it, so the number in each
     label says which population it is talking about.
 
-    `has_document` says the project reads a work at all. One that does not
-    is proposed into rather than segmented, so the passes that read a crop
-    have nothing to read and the pass that writes units has to be offered
-    somewhere. Keyed on what the project has rather than on what kind it is,
-    like everything else here.
-
-    `from_marks` says the units came from someone marking the document up
-    rather than from segmenting it. Both crop-reading passes are off for those:
-    `/transcribe` records what an equation says as LaTeX, and a highlight
-    already carries its own text; `/classify` proposes skipping fragments and
-    table rows, which is a judgement about a page of formulas.
+    The rail's half of `runs.OFFERS`: which commands apply is decided there,
+    against the ambient state this assembles, so the rail and the setup stage
+    cannot come to different conclusions about the same project.
     """
-    project = str(filters.get("project", ""))
-    section = str(filters.get("section", ""))
-    src, sec = flag("--project", project), flag("--section", section)
-    scope = sec or " --all"
-    out: list[dict[str, str]] = []
+    return runs.propose(
+        view if view == "units" else "review",
+        runs.Ambient(
+            project=str(filters.get("project", "")),
+            section=str(filters.get("section", "")),
+            state=str(filters.get("state", "")),
+            counts=counts,
+            has_document=has_document,
+            from_marks=from_marks,
+        ),
+    )
 
-    if view == "units":
-        if not has_document:
-            out.append({
-                "label": "propose units for a subject",
-                "why": "there is no document to segment here, so a pass"
-                " writes the units instead: a subject, a line on what a card"
-                " from it would be about, and the page it read. Subjects,"
-                " never drafts.",
-                "run": f"/propose{src} '<what you want cards for>'",
-                "kind": "claude",
-            })
-        elif from_marks:
-            # Not "a mark carries its own text", which this said and which is
-            # false for the two cases you would actually want transcribed: a
-            # boxed region carries no text at all, and a highlight over a
-            # display equation carries the PDF's mangled text layer. What is
-            # true is the thing invariant 9 says -- you do not need a
-            # transcription to *triage*. If one unit turns out to want LaTeX
-            # beside it, that is one command on that unit.
-            out.append({
-                "kind": "note",
-                "label": "no transcription pass here — triage reads the crop and the mark",
-                "run": "",
-            })
-            out.append({
-                "kind": "note",
-                "label": "one unit that wants LaTeX anyway: forge units --id <id> --tex-auto '...'",
-                "run": "",
-            })
-        elif counts.get("new"):
-            out.append({
-                "label": f"read the crops — {counts['new']} still untranscribed",
-                "why": "so triage shows the maths written out instead of a"
-                " picture to squint at. A hint only: the crop stays the"
-                " authority.",
-                "run": f"/transcribe{src}{scope}",
-                "kind": "claude",
-            })
-            out.append({
-                "label": "propose which of them to skip",
-                "why": "fragments, headings, notation-table rows. It only"
-                " proposes — every suggestion waits for you, and nothing may"
-                " propose skipping a numbered equation.",
-                "run": f"/classify{src}{scope}",
-                "kind": "claude",
-            })
-        if counts.get("ungisted"):
-            out.append({
-                "label": f"name {counts['ungisted']} queued units in a line each",
-                "why": "one line saying what a card from each would be about,"
-                " so the list, the graph and every link to a card read as"
-                " something rather than as a uid. Cheap, and it makes the"
-                " stub-writing pass easier to check.",
-                "run": f"/gist{src}{sec}",
-                "kind": "claude",
-            })
-        if counts.get("queued"):
-            out.append({
-                "label": f"write stubs for {counts['queued']} queued",
-                "why": "reads the page each unit came from and your @claude"
-                " brief, and writes a draft. Approving is still yours.",
-                "run": f"/extract-cards{src}{sec}",
-                "kind": "claude",
-            })
-        out.append({
-            "label": "this list, as JSON",
-            "why": "the same units this filter is showing, for a script or a"
-            " subagent. Read from this rather than from the printed output.",
-            "run": (
-                f"uv run forge units{src}"
-                f" --state {filters.get('state') or 'all'}{sec} --json"
-            ),
-            "kind": "shell",
-        })
-    else:
-        # Offered on what is *left*. A card records that the pass has been
-        # over it, so the panel can stop suggesting a second opinion about
-        # cards that already got one.
-        if counts.get("unaugmented"):
-            out.append({
-                "label": f"augment {counts['unaugmented']} drafts nobody has been over",
-                "why": "adds conditions, a proof where it earns its place, the"
-                " gradings. Run it before approving, not after: augmenting an"
-                " approved card sends it back to draft.",
-                "run": f"/augment{src}",
-                "kind": "claude",
-            })
-        if counts.get("annotated_claude_card"):
-            out.append({
-                "label": f"{counts['annotated_claude_card']} open requests",
-                "why": "works the @claude notes and deletes each line it has"
-                " acted on. Every one of them is holding a card out of sync"
-                " until it goes.",
-                "run": f"/triage claude{src}",
-                "kind": "claude",
-            })
-        if counts.get("approved"):
-            out.append({
-                "label": "check the maths numerically",
-                "why": "runs the `## verify` snippets — opt-in, and it caught"
-                " three errors in the source. Never reaches Anki.",
-                "run": f"uv run forge verify{src}",
-                "kind": "shell",
-            })
-        out.append({
-            "label": "what would reach Anki",
-            "why": "a rehearsal: approved cards only, nothing written, and it"
-            " names every card it would skip and why.",
-            "run": "uv run forge sync --dry-run",
-            "kind": "shell",
-        })
-        # The one flow *back*. Offered on every review page rather than on a
-        # count, because nothing here can know you left a comment in Anki
-        # last night -- and until this runs, that comment is not a note on any
-        # card and no list in this app is showing it.
-        out.append({
-            "label": "pull what you wrote in Anki",
-            "why": "a comment or a flag you left while reviewing becomes an"
-            " @claude note on the card, and is erased in Anki as it is taken:"
-            " after this the line here is the only copy.",
-            "run": "uv run forge feedback",
-            "kind": "shell",
-        })
-    return out
+
+def setup_commands(
+    project: str,
+    *,
+    pane: str,
+    has_document: bool,
+    authoritative: bool = False,
+    origin: str = "",
+    from_marks: bool = False,
+    zotero_key: str = "",
+    subject: str = "",
+    open_entries: int = 0,
+    counts: Mapping[str, int] | None = None,
+) -> list[dict[str, Any]]:
+    """What to run next for the thing you have selected on the setup stage.
+
+    The same bargain as the rail's panel, and the same registry: what
+    differs is the scope. This screen is where you pick a work or an ask,
+    and the pass you want next is almost always about that one thing, which
+    is a command the rail on the triage page cannot write because triage
+    does not know which ask you are working through.
+
+    `pane` is the selection, `<kind>:<key>`, and the kind is all that decides
+    which offers are asked. Everything else about the selection is ambient:
+    a reference gets none of the crop passes because nothing is extracted
+    from it, not because of what kind of pane it is on.
+    """
+    kind, _, _ = pane.partition(":")
+    return runs.propose(
+        {"topic": "topic", "source": "work"}.get(kind, "project"),
+        runs.Ambient(
+            project=project,
+            counts=counts or {},
+            has_document=has_document,
+            from_marks=from_marks,
+            # A pane about a work says whether that work is extracted from.
+            # Anywhere else the question is not asked, and a default of
+            # "no" would silence every pass on the project's own panel.
+            authoritative=authoritative or kind != "source",
+            origin=origin,
+            zotero_key=zotero_key,
+            subject=subject,
+            open_entries=open_entries,
+        ),
+    )
 
 
 def resolve_project(config: Config, project: str) -> str:
@@ -3303,9 +4860,11 @@ def _unit_payload(
         "suggestion": vars(unit.suggestion) if unit.suggestion else None,
         # How much of the document a card writer will be handed, and whether
         # this unit asked for it or inherited it.
-        "context_pages": config.context_pages_for(unit.project, unit.context_pages),
+        "context_pages": config.context_pages_for(
+            unit.project, unit.context_pages, unit.locator.document
+        ),
         "context_steps": context_steps(
-            config.context_pages_for(unit.project, unit.context_pages)
+            config.context_pages_for(unit.project, unit.context_pages, unit.locator.document)
         ),
         "context_own": unit.context_pages is not None,
         # Whether whoever writes this card may look things up, resolved the
