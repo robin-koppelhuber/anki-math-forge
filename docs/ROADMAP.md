@@ -1626,6 +1626,35 @@ it looked like:
 
 ## 12. Running a command from the website
 
+**Built, for the reads.** `POST /api/run` starts one in a thread and
+answers with an id; the page polls it and draws the result under the row.
+What follows is the thinking that got there, and it survived contact
+except in two places, both noted inline.
+
+**The allow-list is the parser.** Only a subcommand declared `reads`
+(§15) may run here, so the app holds no second opinion about which
+commands are safe and a verb that starts writing stops being runnable on
+the same commit. Arity settles before permission: `forge anki push` has
+to be recognised as two words before anything asks whether it may run, or
+it falls back to `anki`, finds a read, and pushes.
+
+**Always in the background**, which is stronger than "an indicator while
+it runs". `forge anki` is ten seconds against 150 cards, almost all of it
+waiting on AnkiConnect, and it grows with the deck. The page keeps
+answering because every endpoint here is `def` and runs in a thread pool;
+measured, a view stayed at 43ms with a run in flight.
+
+**The button replaced the copy line rather than joining it.** Fourteen
+shell rows would have become twenty-eight controls on the panel that is
+already the heaviest thing on three rails. One control per row, and which
+one it is follows the same `reads` that groups the list.
+
+**One renderer, not nine.** Every verb here has `--json` and returns a
+structured object, so the panel adds the flag itself and draws whatever
+comes back: a table where it is a list of flat records, lines otherwise.
+A renderer per verb is nine things to keep in step with nine reports.
+
+
 The commands panel gives you a line to copy. Some of those commands need no
 Claude and no watching: `zotero import`, `anki push`, `check`, and
 everything in §10 that is a file edit. A button for them is not the thing

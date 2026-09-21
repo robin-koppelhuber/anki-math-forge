@@ -65,8 +65,8 @@ from ..sync import (
     study_key,
     study_values,
 )
+from . import jobs, prose, runs
 from . import keys as keymod
-from . import prose, runs
 
 HERE = Path(__file__).parent
 TEMPLATES = HERE / "templates"
@@ -174,8 +174,50 @@ def _with_images(chunk: str, unit: str) -> str:
     return model.IMAGE_RE.sub(tag, chunk)
 
 
+def command_names() -> tuple[set[str], set[str]]:
+    """`(reads, every)`: the subcommands that show you something, and all
+    of them, by the words you type.
+
+    Read off the parser rather than listed here, so the app cannot hold a
+    second opinion about which commands are safe to run from a button.
+    Both sets, because arity settles before permission: `forge anki push`
+    has to be recognised as two words before anything asks whether it may
+    run, or it falls back to `anki` and is allowed.
+    """
+    from ..cli import READS, build_parser
+
+    top = next(
+        a
+        for a in build_parser()._actions
+        if a.dest == "verb" and isinstance(getattr(a, "choices", None), dict)
+    )
+    reads: set[str] = set()
+    every: set[str] = set()
+
+    def note(name: str, parser: Any) -> None:
+        every.add(name)
+        if getattr(parser, "_defaults", {}).get("effect") == READS:
+            reads.add(name)
+
+    for name, parser in dict(top.choices or {}).items():
+        note(name, parser)
+        for action in parser._actions:
+            if getattr(action, "dest", "") == "change" and getattr(action, "choices", None):
+                for word, child in action.choices.items():
+                    note(f"{name} {word}", child)
+    return reads, every
+
+
+def reading_verbs() -> set[str]:
+    """Just the reads, for callers that only need the permission half."""
+    return command_names()[0]
+
+
 def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="forge", docs_url=None, redoc_url=None)
+    # One per server, so a run survives the page that asked for it being
+    # reloaded, and two tabs see the same list.
+    runner = jobs.Runner()
 
     def reread() -> Config:
         """The config as it is on disk right now.
@@ -1572,6 +1614,36 @@ def create_app(config: Config) -> FastAPI:
         and being right matters more there than being instant.
         """
         return source_gallery(config)
+
+    @app.post("/api/run")
+    def start_run(body: dict[str, Any] = Body(...)) -> Any:
+        """Run one of the offered commands, in the background.
+
+        Only the ones that show you something (ROADMAP.md §12): the
+        allow-list is every subcommand the parser declares `reads`, so it
+        is the same declaration `forge --help` groups by and the same one
+        `test_verbs.py` holds shut. A verb that starts writing stops being
+        runnable here on the same commit.
+
+        Returns an id at once and nothing else. A `forge anki` over 150
+        cards is ten seconds of waiting on AnkiConnect, and a page that
+        stops for that is a page you stop using.
+        """
+        line = str(body.get("run", "")).strip()
+        reads, every = command_names()
+        try:
+            argv = jobs.argv_for(line, reads, every)
+        except jobs.Refused as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return runner.start(argv, config.root).payload()
+
+    @app.get("/api/run/{run_id}")
+    def read_run(run_id: str) -> Any:
+        """How a run is getting on, and its result once it has one."""
+        run = runner.get(run_id)
+        if run is None:
+            raise HTTPException(404, "no such run; the server may have restarted")
+        return run.payload()
 
     @app.get("/api/counts")
     def counts(

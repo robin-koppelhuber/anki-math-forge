@@ -100,7 +100,6 @@ footer.bar { border-bottom: 0; border-top: 1px solid var(--line); margin-top: au
 }
 .project-pick:hover { border-color: var(--accent); }
 .project-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-pick-caret { color: var(--muted); font-size: 10px; }
 
 .chip {
   color: var(--muted);
@@ -411,7 +410,6 @@ pre.code {
 
 .muted { color: var(--muted); }
 .empty-filter, .empty-page main { color: var(--muted); }
-.empty-page main { padding: 3rem 1rem; }
 
 /* -- chrome -------------------------------------------------------------- */
 
@@ -486,36 +484,7 @@ pre.code {
   padding: 0 0.25em;
   background: var(--bg);
 }
-.legend-body { padding: 0 1.1rem 0.9rem; font-size: 13.5px; line-height: 1.55; }
-.legend-body h3 {
-  font-size: 11px;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 1.2rem 0 0.4rem;
-}
-.legend-body dl { margin: 0; display: grid; grid-template-columns: 11rem 1fr; gap: 0.35rem 1rem; }
-@media (max-width: 700px) { .legend-body dl { grid-template-columns: 1fr; gap: 0.1rem; } }
-.legend-body dt { font-weight: 600; color: var(--ink); }
-.legend-body dt b {
-  display: inline-block;
-  min-width: 1.1em;
-  text-align: center;
-  padding: 0 0.28em;
-  margin-right: 0.3em;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--bg);
-}
-.legend-body dd { margin: 0; color: var(--muted); }
-.legend-body dd b { color: var(--ink); }
-.legend-body code {
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
-  padding: 0 0.25em;
-  background: var(--bg);
-  border-radius: 3px;
-}
+@media (max-width: 700px) { }
 .chip.readable.on { border-color: var(--warn); color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 
 .suggestion {
@@ -756,7 +725,6 @@ body.filters-off .filter-rail { transform: translateX(-100%); }
   padding: 4px 2px;
   line-height: 1.4;
 }
-
 
 .filter-group > summary,
 .filter-chapter > summary {
@@ -1100,7 +1068,6 @@ body.guide-full .in-full { display: block; }
 body.guide-full .at-a-glance { display: none; }
 body.guide-off .guide { transform: translateX(100%); }
 
-
 .in-full h3 {
   font-size: 11px;
   text-transform: uppercase;
@@ -1229,7 +1196,6 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
    one you have to pan. Drag the rail wider and the scrolling stops. */
 .in-full .fsm svg { min-width: 620px; }
 .in-full { overflow-x: auto; }
-
 
 /* Fenced code in a card -- `## verify` is Python. `<pre>` deliberately: KaTeX
    skips it, which is what you want for code and wrong for prose. */
@@ -1507,10 +1473,6 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   border-radius: 4px; padding: 2px 8px;
 }
 .reload-hint:hover { background: var(--accent); color: var(--bg); }
-
-/* The effective configuration: read-only, so it looks like a document. */
-.config-page { max-width: 62rem; padding: 1.5rem 2rem; }
-.config-page h1 { font-size: 18px; margin: 0 0 0.4rem; }
 .config-page .muted { max-width: 46rem; line-height: 1.5; }
 .config-group { margin-top: 1.6rem; }
 .config-group h2 { font-size: 13px; opacity: 0.75; margin: 0 0 0.4rem; font-weight: 600; }
@@ -1580,17 +1542,7 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   font: inherit; font-size: 16px; line-height: 1;
 }
 .gallery-close:hover { color: var(--ink); }
-
-.gallery-chips {
-  display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center;
-  padding: 0.6rem 1.1rem 0.2rem; font-size: 12px;
-}
 .gallery-chips .chip { background: none; font: inherit; font-size: 12px; cursor: pointer; }
-.gallery-chips .chip-label {
-  color: var(--muted); text-transform: uppercase; font-size: 10px;
-  letter-spacing: 0.06em; margin: 0 0.15rem 0 0.6rem;
-}
-.gallery-chips .chip-label:first-child { margin-left: 0; }
 
 .gallery-grid {
   display: grid;
@@ -1811,7 +1763,6 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
 }
 .mark-meta .this-one { color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
 .mark-what { text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; }
-.mark-meaning { color: var(--ink); }
 .mark-page { font-variant-numeric: tabular-nums; }
 .mark-goto { color: var(--accent); text-decoration: none; }
 .mark-goto:hover { text-decoration: underline; }
@@ -2554,21 +2505,6 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 .note-answers button:hover { color: var(--ink); border-color: var(--accent); }
 .note-drop { border-color: transparent; }
 .note-drop:hover { color: var(--bad); border-color: var(--bad); }
-
-/* Where a new source comes from. The gallery is where you go when the one you
-   want is not on the list, so it is where "add one" belongs. */
-.gallery-add {
-  border-top: 1px solid var(--line);
-  padding: 0.9rem 1.1rem 1.2rem;
-  margin-top: auto;
-}
-.gallery-add h3 {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  margin: 0 0 0.35rem;
-}
 .gallery-add .muted { font-size: 12px; line-height: 1.5; margin: 0 0 0.6rem; max-width: 52rem; }
 .gallery-add .filter-list.runs { max-width: 34rem; padding: 0; }
 
@@ -3653,7 +3589,6 @@ header.bar.shelf-bar {
    above it. */
 .shelf-rail > .filter-group { border-top: 1px solid var(--line); padding-bottom: 0.4rem; }
 .shelf-rail > .filter-group:first-child { border-top: 0; }
-.shelf-note { margin: 0.3rem 0.4rem 0.7rem; font-size: 12px; color: var(--muted); line-height: 1.5; }
 .shelf-rail .setup-form { margin: 0 0.4rem; }
 .shelf-rail .setup-form label { margin-top: 0.5rem; }
 .shelf-rail .runs { margin-bottom: 0.2rem; }
@@ -3729,6 +3664,43 @@ header.bar.shelf-bar {
   color: var(--muted);
 }
 .run-who.claude { border-color: var(--accent); color: var(--accent); }
+/* This one does not go anywhere: it runs here, in the background, and the
+   panel below fills in when it is done. Only a command that shows you
+   something ever gets it (ROADMAP.md §12). */
+.run-who.here { border-color: var(--ok, var(--accent)); color: var(--accent); }
+.run.running { opacity: 0.7; cursor: progress; }
+.run.run-failed .run-who.here { border-color: var(--bad); color: var(--bad); }
+
+/* What a run came back with. Under the button that asked for it, because
+   it is the answer to that row and not to the panel. */
+.run-result {
+  margin: 0.35rem 0 0.2rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 11.5px;
+  color: var(--muted);
+  border-left: 2px solid var(--line);
+  overflow-x: auto;
+}
+.run-result .run-head { margin: 0; color: var(--ink); }
+.run-result .run-said { margin: 0.2rem 0 0; color: var(--bad); white-space: pre-wrap; }
+.run-result .run-cap {
+  margin: 0.4rem 0 0.1rem;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.run-lines { list-style: none; margin: 0.2rem 0 0; padding: 0; }
+.run-lines > li { overflow-wrap: anywhere; }
+.run-none { margin: 0.2rem 0 0; opacity: 0.7; }
+.run-table { border-collapse: collapse; margin: 0.2rem 0 0; font-size: 11px; }
+.run-table td { padding: 1px 0.5rem 1px 0; vertical-align: top; }
+.run-table tr:first-child td {
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+}
 
 /* What a work's marks mean, and which of them become units. Editable here
    because it is the setting you change while looking at the marks: you

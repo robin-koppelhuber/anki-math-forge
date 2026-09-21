@@ -147,19 +147,22 @@ def test_a_folded_commands_panel_gives_its_room_back() -> None:
     assert ":has(> .rail-actions:not([open]))" in CSS
 
 
-def test_a_command_hover_reads_as_two_lines_not_as_an_entity() -> None:
-    """The separator between what a command does and where to paste it was
-    written as `&#10;` in the template, so Jinja escaped its `&` and the hover
-    read the entity out loud. It also carried a stray third brace, which put a
-    `}` in front of every one of them."""
-    # The attribute itself, not the block around it: the comment above it
-    # names the entity in order to say why it is wrong.
-    start = RUNS.index('class="run {{ cmd.kind }}"')
+def test_a_command_hover_says_only_what_the_page_does_not() -> None:
+    """The tooltip opened with `cmd.why`, which the `run-why` span under the
+    label already prints in full: 915 words across five screens, hidden
+    behind a hover over text that was on the page. Where to paste it is the
+    part nothing else says, so it is the part that is left."""
+    start = RUNS.index('class="run {{ cmd.kind }}')
     title = RUNS[RUNS.index('title="', start) :]
     title = title[: title.index('">') + 2]
+
+    assert "cmd.why" not in title, "the page prints it; the hover repeated it"
+    assert "paste into" in title
+    assert "runs here" in title, "and a read says the other thing it does"
+    # The entity and the stray brace this test was originally written for.
     assert "&#10;" not in title
     assert "}}}" not in title
-    assert r"'\n\n'" in title, "a literal newline, which an attribute keeps"
+    assert "{{ cmd.why }}" in RUNS, "and it is still printed, in run-why"
 
 
 def test_the_commands_panel_shows_that_it_folds() -> None:

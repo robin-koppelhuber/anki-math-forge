@@ -1200,6 +1200,152 @@ document.addEventListener("click", async (event) => {
   }
 });
 
+/* Running one of the offered commands, here, in the background.
+
+   Only the ones that show you something: the server refuses the rest by
+   asking the parser, so this does not carry its own opinion about which.
+   See ROADMAP.md §12 and src/anki_math_forge/app/jobs.py.
+
+   The page keeps working while it runs, which is the whole point of the
+   button. `forge anki` is ten seconds against a deck of 150, and a
+   control that froze the screen for that is one you press once. */
+document.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-run]");
+  if (!button || button.dataset.busy) return;
+  button.dataset.busy = "1";
+  button.classList.add("running");
+  const panel = resultPanel(button);
+  panel.textContent = "running…";
+  try {
+    const started = await post("/api/run", { run: button.dataset.run });
+    const done = await untilDone(started.id);
+    panel.replaceChildren(renderRun(done));
+    button.classList.toggle("run-failed", !done.ok);
+  } catch (e) {
+    panel.textContent = String(e.message || e);
+    button.classList.add("run-failed");
+  } finally {
+    button.classList.remove("running");
+    delete button.dataset.busy;
+  }
+});
+
+async function untilDone(id) {
+  /* Its own poll rather than the four second counts tick: a run is
+     usually over in well under a second, and waiting four to be told so
+     reads as the button not having worked. */
+  for (;;) {
+    const response = await fetch(`/api/run/${id}`);
+    const run = await response.json();
+    if (run.done) return run;
+    await new Promise((wake) => setTimeout(wake, 300));
+  }
+}
+
+function resultPanel(button) {
+  const row = button.closest("li");
+  let panel = row.querySelector(".run-result");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.className = "run-result";
+    row.appendChild(panel);
+  }
+  return panel;
+}
+
+/* A result, not a transcript (ROADMAP.md §12). Every one of these verbs
+   returns a structured object and `--json` prints it, so what arrives is
+   rows rather than a log: a table where the shape is a list of flat
+   records, and a line each otherwise. One renderer, because a renderer
+   per verb is nine of them to keep in step. */
+function renderRun(run) {
+  const box = document.createElement("div");
+  const head = document.createElement("p");
+  head.className = "run-head";
+  head.textContent = `${run.ok ? "ok" : "failed"} · ${run.seconds}s`;
+  box.appendChild(head);
+  if (run.said) {
+    const said = document.createElement("p");
+    said.className = "run-said";
+    said.textContent = run.said;
+    box.appendChild(said);
+  }
+  const body = table(run.data);
+  if (body) box.appendChild(body);
+  return box;
+}
+
+function table(data) {
+  if (data === null || data === undefined) return null;
+  if (Array.isArray(data)) {
+    if (!data.length) {
+      const none = document.createElement("p");
+      none.className = "run-none";
+      none.textContent = "nothing to report";
+      return none;
+    }
+    if (typeof data[0] !== "object") return lines(data.map(String));
+    /* The columns every row has, in the order the first one lists them.
+       Not every key in the union: a row that carries one extra field
+       would otherwise widen the table for all of them. */
+    const keys = Object.keys(data[0]).filter((k) =>
+      data.every((row) => row && typeof row === "object" && k in row),
+    );
+    const grid = document.createElement("table");
+    grid.className = "run-table";
+    const head = grid.insertRow();
+    for (const key of keys) head.insertCell().textContent = key;
+    for (const row of data.slice(0, 200)) {
+      const line = grid.insertRow();
+      for (const key of keys) line.insertCell().textContent = cell(row[key]);
+    }
+    if (data.length > 200) {
+      const more = grid.insertRow().insertCell();
+      more.colSpan = keys.length;
+      more.textContent = `and ${data.length - 200} more`;
+    }
+    return grid;
+  }
+  if (typeof data === "object") {
+    /* A report with a list in it: the list is the answer and the scalars
+       beside it are the summary, so draw both rather than picking. */
+    const box = document.createElement("div");
+    const scalars = Object.entries(data).filter(([, v]) => !Array.isArray(v));
+    if (scalars.length) {
+      box.appendChild(lines(scalars.map(([k, v]) => `${k}: ${cell(v)}`)));
+    }
+    for (const [key, value] of Object.entries(data)) {
+      if (!Array.isArray(value)) continue;
+      const cap = document.createElement("p");
+      cap.className = "run-cap";
+      cap.textContent = key;
+      box.appendChild(cap);
+      const grid = table(value);
+      if (grid) box.appendChild(grid);
+    }
+    return box;
+  }
+  return lines([String(data)]);
+}
+
+function cell(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function lines(texts) {
+  const list = document.createElement("ul");
+  list.className = "run-lines";
+  for (const text of texts) {
+    const item = document.createElement("li");
+    item.textContent = text;
+    list.appendChild(item);
+  }
+  return list;
+}
+
 /* Counts that follow work happening elsewhere.
 
    Everything worth showing is already on disk: a `/transcribe` pass writes the
