@@ -1202,22 +1202,34 @@ document.addEventListener("click", async (event) => {
 
 /* Running one of the offered commands, here, in the background.
 
-   Only the ones that show you something: the server refuses the rest by
-   asking the parser, so this does not carry its own opinion about which.
+   Every command with no model behind it. What it does comes from the
+   parser (`data-effect`), and one that writes is asked about first. The
+   server asks the same question again: this dialog is a courtesy to
+   whoever is looking, and a tab left open since before a rename is not.
    See ROADMAP.md §12 and src/anki_math_forge/app/jobs.py.
 
    The page keeps working while it runs, which is the whole point of the
-   button. `forge anki` is ten seconds against a deck of 150, and a
+   button. `forge anki push` is ten seconds against a deck of 150, and a
    control that froze the screen for that is one you press once. */
+const RUN_WARNINGS = {
+  repo: "changes files in this repo.",
+  anki: "changes your Anki collection, which nothing here can undo.",
+};
+
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-run]");
   if (!button || button.dataset.busy) return;
+  const warning = RUN_WARNINGS[button.dataset.effect];
+  if (warning && !window.confirm(`${button.dataset.run}\n\n${warning} Run it?`)) return;
   button.dataset.busy = "1";
   button.classList.add("running");
   const panel = resultPanel(button);
   panel.textContent = "running…";
   try {
-    const started = await post("/api/run", { run: button.dataset.run });
+    const started = await post("/api/run", {
+      run: button.dataset.run,
+      confirmed: Boolean(warning),
+    });
     const done = await untilDone(started.id);
     panel.replaceChildren(renderRun(done));
     button.classList.toggle("run-failed", !done.ok);

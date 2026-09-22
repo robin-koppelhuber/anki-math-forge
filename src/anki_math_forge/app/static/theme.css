@@ -1,0 +1,96 @@
+/* The decisions a theme is made of, and nothing else (ROADMAP.md §14).
+
+   Loaded before app.css, which reads these and holds no colour of its own
+   outside the one named exception below. That is a rule a test holds
+   (`tests/test_theme.py`): a seam nothing checks is a seam that closes
+   again in three commits.
+
+   A theme is this file. Light is `:root`; dark follows the operating
+   system under the media query, which is what "system" means and why it
+   needs no script. `[data-theme]` pins either one over the query, for a
+   switch that does not exist yet and costs nothing until it does.
+
+   **Not a theme decision, on purpose:**
+
+   - **Zotero's palette.** `#ffd400` is what a yellow highlight looks like
+     in the PDF, and a swatch that does not match the document it came
+     from makes you translate. It lives in app.css under `.swatch`, which
+     is the one place the test allows a literal colour.
+   - **What a state means.** `--warn` and `--bad` may change hue; which
+     state is drawn in which may not.
+   - **The page a crop is cut from.** A crop is a picture of a white
+     page, so `--paper` is white in both themes. In dark mode the triage
+     view is a bright rectangle on a dark ground, and that is content
+     rather than chrome: the answer is how it is framed, not its colour.
+
+   Existing names are kept exactly. `graph.js` reads seven of them as
+   strings off the computed style, and `ctx.strokeStyle = ""` is a silent
+   no-op, so renaming `--bg` would break the canvas with no error. */
+
+:root {
+  /* Surfaces and text. */
+  --bg: #fbfbfa;
+  --panel: #ffffff;
+  --ink: #1c1c1a;
+  --muted: #77756f;
+  --line: #e3e1dc;
+
+  /* The one colour the app is, and what a state means. */
+  --accent: #2f6f4f;
+  --warn: #8a6d1f;
+  --bad: #a33a2a;
+
+  /* Under a pointer. Used twelve times and declared nowhere until now, so
+     every use carried its own fallback, in four different strengths, and
+     a theme could not change what a hover looks like. Half-transparent
+     grey because it has to sit on both grounds. */
+  --hover: rgba(127, 127, 127, 0.12);
+
+  /* A picture of a page. The same in both themes; see above. */
+  --paper: #ffffff;
+
+  /* What sits on a filled accent or `--bad`: the text, and the lighter
+     wash a control inside it uses to say it is under the pointer. */
+  --on-accent: #ffffff;
+  --on-accent-wash: rgba(255, 255, 255, 0.25);
+  --on-accent-wash-strong: rgba(255, 255, 255, 0.35);
+
+  /* The banner that says the server is older than the code, which is
+     drawn in `--warn` and needs text that reads on it in either theme. */
+  --on-warn: #1a1205;
+  --on-warn-wash: rgba(0, 0, 0, 0.12);
+
+  /* Depth. Two of each, because they are two decisions: a dialog that
+     asks a question dims less than the gallery that takes over the
+     screen, and a toast floats less than the banner pinned above it. */
+  --scrim: rgba(0, 0, 0, 0.35);
+  --scrim-strong: rgba(0, 0, 0, 0.45);
+  --shadow: rgba(0, 0, 0, 0.18);
+  --shadow-strong: rgba(0, 0, 0, 0.3);
+
+  --radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1c1e;
+    --panel: #232427;
+    --ink: #e9e8e4;
+    --muted: #9a9891;
+    --line: #34363a;
+    --accent: #7fbf9a;
+    --warn: #d8bd6a;
+    --bad: #e08b7c;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #1b1c1e;
+  --panel: #232427;
+  --ink: #e9e8e4;
+  --muted: #9a9891;
+  --line: #34363a;
+  --accent: #7fbf9a;
+  --warn: #d8bd6a;
+  --bad: #e08b7c;
+}

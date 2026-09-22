@@ -1626,15 +1626,27 @@ it looked like:
 
 ## 12. Running a command from the website
 
-**Built, for the reads.** `POST /api/run` starts one in a thread and
-answers with an id; the page polls it and draws the result under the row.
-What follows is the thinking that got there, and it survived contact
-except in two places, both noted inline.
+**Built.** Every command with no model behind it runs from the page: a
+read on a click, a writer once it has said what it changes and you have
+said yes. `POST /api/run` starts one in a thread and answers with an id;
+the page polls it and draws the result under the row. What follows is the
+thinking that got there, and it survived contact except in two places,
+both noted inline.
 
-**The allow-list is the parser.** Only a subcommand declared `reads`
-(§15) may run here, so the app holds no second opinion about which
-commands are safe and a verb that starts writing stops being runnable on
-the same commit. Arity settles before permission: `forge anki push` has
+**What a command changes decides how it is asked for, not whether.** The
+parser declares an `effect` on every subcommand (§15). A `reads` runs on a
+click. A `repo` or an `anki` names what it will change in a dialog that
+says so in words, "changes your Anki collection, which nothing here can
+undo" rather than "are you sure", and the server refuses it unless the
+request says it was confirmed: a dialog is a courtesy to whoever is
+looking, and a tab left open since before a rename is not looking. A
+slash command is still copied. That is invariant 1's bargain, and it is
+the only line drawn.
+
+**The effect is the parser's, not the page's.** The app holds no second
+opinion about what a command changes, so a verb that starts writing
+starts asking first on the same commit. It began as an allow-list of the
+reads and grew into the whole map once the writers joined. Arity settles before permission: `forge anki push` has
 to be recognised as two words before anything asks whether it may run, or
 it falls back to `anki`, finds a read, and pushes.
 
@@ -1729,6 +1741,25 @@ The dry runs first, because a button that changes nothing is the one that
 needs no confirmation.
 
 ## 14. A visual pass, and a theme you can swap
+
+**The colour seam is built.** `static/theme.css` holds every colour
+decision and loads before `app.css`, which holds none outside Zotero's
+palette. `tests/test_theme.py` keeps it that way: no colour literal in
+`app.css` outside `.swatch`, no name read that is not declared, and no
+`var()` fallback outside the layout variables the script sets at runtime.
+Rendered before and after in both themes, four views are pixel-identical.
+
+What it named: twelve literals onto nine new tokens (`--paper`,
+`--on-accent` and its washes, `--on-warn`, two scrims, two shadows), and
+`--hover`, read twelve times and declared nowhere, now declared once.
+The light, dark and pinned positions are in the file and cost nothing
+until a switch sets `data-theme`.
+
+What it did not do, on purpose, is everything below that moves a pixel.
+The type scale, the radii and the small-caps label are measured and
+waiting; spacing is not a scale at all (see below). Each of those changes
+how something looks, which is the half that needs eyes.
+
 
 The functionality is roughly settled, so the next pass is how it looks. Two
 halves that are easy to confuse: **naming the decisions** so a theme is a
@@ -1995,6 +2026,64 @@ the wrong grading model. **As a standalone page**: escapes that model, but is
 a second product with its own state. Open first: what the source is, what is
 being reviewed, and whether spaced repetition is the right schedule for
 something you work through.
+
+## 16. Pictures that are not crops
+
+A card gets a picture by naming a unit, and the crop is rendered from the
+source document. That covers every picture a book already prints, and nothing
+else. Three cards in the Krause deck describe in words a picture that would
+say it faster: the Laplace density card, whose prose compares its tail to a
+Gaussian's; the multivariate Gaussian density card, whose sublevel sets are
+ellipsoids along the eigenvectors of $\boldsymbol{\Sigma}$; and the law of
+total variance card, whose intuition is a picture of scores grouped by class.
+
+Two routes, and they differ in what they give up. **Drawn here**, from TikZ or
+an equivalent carried in the card file and compiled on the way to Anki. The
+card keeps source rather than an image, which is the property the crop path
+already has: re-rendering fixes every card that shows it, and nothing binary
+enters `cards/`. The cost is a TeX toolchain wherever `anki push` runs.
+**Fetched**, from a URL in the picture reference. Cheap, and it gives that
+property up, because the far end can change or vanish and the licence belongs
+to somebody else.
+
+Three things to settle either way. Where a drawing lives, since a TikZ figure
+is longer than any section a card carries now. Whether `check` can refuse a
+picture it cannot draw, which it already does for a crop. And what
+`anki push` uploads, because Anki's media folder is one flat namespace and a
+generated picture needs the same `forge-<uid>-<n>` naming a crop gets.
+
+**Trigger:** a card whose `## prose` is describing a picture in words.
+
+## 17. Letting an edit reset a card's schedule
+
+`anki push` rewrites a note and leaves its scheduling alone. `reposition`
+touches only cards with `type == 0`, so anything you have started keeps its
+interval, and a card whose back was wrong and is now right comes back when it
+was already going to. On a mature card that is months away. This deck has the
+case: the variance-of-a-sum card carried the book's `2Cov[X, Y]` until a
+numeric check showed it false, and the corrected back inherited whatever
+interval the wrong one had earned.
+
+What is wanted is a judgement call rather than a rule. Most triage edits add a
+gloss or name a step, and those should disturb nothing. Some replace the
+answer, and the writer making the edit is the one who knows which just
+happened.
+
+Shape. A frontmatter key set during triage, **outside `content_hash`** and so
+listed in invariant 5 beside `status` and `augmented`. Setting it must not
+un-approve the card, or asking to see a card sooner would cost a re-review.
+`anki push` reads it, calls AnkiConnect (`forgetCards` sends the card back to
+new, `setDueDate` brings it forward while keeping its ease), and clears it.
+Clearing is the part to get right: it is an instruction for one push, not a
+property of the card.
+
+Open, and worth settling before any of it is built: whether a writer sets the
+key or only proposes it. A reset is not new content reaching Anki, so
+invariant 1 does not obviously cover it, but it does change what a human sees
+tomorrow without their having asked.
+
+**Trigger:** the first time a card's back is corrected after it has been
+pushed.
 
 ---
 

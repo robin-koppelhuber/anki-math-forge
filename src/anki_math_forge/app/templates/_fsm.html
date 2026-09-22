@@ -142,7 +142,10 @@
                                 L319.0,35.3 L318.9,35.6 L313.0,42.9 L318.9,43.0
                                 L319.0,44.4 Z"/>
     <text x="332" y="42">forge zotero import</text>
-    <text class="sub" x="332" y="58">the marks you made while reading:</text>
+    {# The colon only where a list follows it. The README's render passes
+       no project, so no scheme, and a sentence ending on a colon reads as
+       something that failed to load. #}
+    <text class="sub" x="332" y="58">the marks you made while reading{{ ':' if sf.units_from }}</text>
     {# This project's scheme, and no line at all without one. It used to
        fall back to three invented pairs, which read as the answer; saying
        there is none instead put a claim where the README render, which

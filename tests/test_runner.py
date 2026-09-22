@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 
 from anki_math_forge import cli
 from anki_math_forge import config as config_mod
-from anki_math_forge.app import command_names, create_app, jobs, reading_verbs
+from anki_math_forge.app import command_effects, create_app, jobs
 
 
 def a_repo(repo: Path) -> Path:
@@ -47,35 +47,77 @@ def finished(at: TestClient, run_id: str, seconds: float = 20.0) -> dict:
 # -- only what shows you something ------------------------------------------
 
 
-def test_the_allow_list_is_the_parser_not_a_list_kept_here() -> None:
-    """Every name in it is declared `reads` by the parser, and the writers
-    are not in it. An allow-list kept by hand is one that disagrees with
-    the tool it is guarding."""
-    reads = reading_verbs()
-
-    assert "check" in reads and "audit" in reads and "units" in reads
-    assert "anki" in reads, "the bare form is the dry run"
-    for writer in ("units extract", "anki push", "anki pull", "zotero import"):
-        assert writer not in reads, writer
+WRITERS = [
+    "uv run forge anki push",
+    "uv run forge units extract demo",
+    "uv run forge zotero import --tag anki",
+    "uv run forge anki pull",
+    "uv run forge cards new --unit demo:one --front a --back b",
+]
 
 
-@pytest.mark.parametrize(
-    "line",
-    [
-        "uv run forge anki push",
-        "uv run forge units extract demo",
-        "uv run forge zotero import --tag anki",
-        "uv run forge anki pull",
-        "uv run forge cards new --unit demo:one --front a --back b",
-    ],
-)
-def test_a_command_that_writes_is_refused(repo: Path, line: str) -> None:
+def test_what_a_command_does_comes_from_the_parser() -> None:
+    """Not a list kept beside it. A list kept by hand is one that
+    disagrees with the tool it is describing."""
+    effects = command_effects()
+
+    assert effects["check"] == "reads"
+    assert effects["anki"] == "reads", "the bare form is the dry run"
+    assert effects["units extract"] == "repo"
+    assert effects["anki push"] == "anki"
+    assert effects["anki pull"] == "anki"
+
+
+@pytest.mark.parametrize("line", WRITERS)
+def test_a_command_that_writes_is_not_run_until_it_is_confirmed(
+    repo: Path, line: str
+) -> None:
+    """The confirmation is checked here, not only drawn in the page: a
+    dialog is a courtesy to whoever is looking, and a stale tab is not
+    looking."""
     a_repo(repo)
 
     answer = client(repo).post("/api/run", json={"run": line})
 
+    assert answer.status_code == 409
+    assert "confirmed" in answer.json()["detail"]
+
+
+@pytest.mark.parametrize("line", WRITERS)
+def test_and_does_run_once_it_is(repo: Path, line: str) -> None:
+    a_repo(repo)
+    at = client(repo)
+
+    started = at.post("/api/run", json={"run": line, "confirmed": True})
+
+    assert started.status_code == 200
+    assert finished(at, started.json()["id"])["done"]
+
+
+def test_what_reaches_anki_says_so_rather_than_saying_are_you_sure(
+    repo: Path,
+) -> None:
+    """A confirmation is only worth having while it says what the label
+    does not."""
+    a_repo(repo)
+
+    said = client(repo).post(
+        "/api/run", json={"run": "uv run forge anki push"}
+    ).json()["detail"]
+
+    assert "Anki collection" in said and "undo" in said
+
+
+def test_a_slash_command_is_not_a_thing_this_can_run(repo: Path) -> None:
+    """Invariant 1's bargain: a model in the loop is pasted where you can
+    watch it."""
+    a_repo(repo)
+
+    answer = client(repo).post(
+        "/api/run", json={"run": "/extract-cards --project demo", "confirmed": True}
+    )
+
     assert answer.status_code == 400
-    assert "show you something" in answer.json()["detail"]
 
 
 def test_something_that_is_not_a_forge_command_is_refused(repo: Path) -> None:
@@ -89,9 +131,12 @@ def test_something_that_is_not_a_forge_command_is_refused(repo: Path) -> None:
 def test_a_quoted_project_name_survives_the_parse() -> None:
     """The offers quote the project, and a name with a space in it is the
     case a naive split gets wrong."""
-    argv = jobs.argv_for('uv run forge audit --project "a book"', *command_names())
+    argv, effect = jobs.argv_for(
+        'uv run forge audit --project "a book"', command_effects()
+    )
 
     assert argv == ["audit", "--project", "a book", "--json"]
+    assert effect == "reads"
 
 
 # -- and always in the background -------------------------------------------
@@ -190,17 +235,33 @@ def test_old_runs_are_forgotten_rather_than_kept_for_ever(repo: Path) -> None:
 # -- every offer the app draws a button for actually runs -------------------
 
 
-def test_every_read_only_offer_can_be_run(repo: Path) -> None:
-    """The button is drawn from `Offer.reads`, and this is the check that
-    the two agree: a row offered as runnable that the endpoint refuses is
-    a button that fails at the moment somebody presses it."""
+def test_every_offer_the_page_draws_a_button_for_actually_runs(repo: Path) -> None:
+    """A row offered as runnable that the endpoint refuses is a button
+    that fails at the moment somebody presses it."""
     from anki_math_forge.app import runs as runs_mod
 
     a_repo(repo)
-    both = command_names()
+    effects = command_effects()
+    at_ = runs_mod.Ambient(project="demo", zotero_key="K", state="all", origin="zotero")
+    for where in runs_mod.WHERE:
+        for row in runs_mod.propose(where, at_):
+            if not row.get("effect"):
+                continue
+            _, effect = jobs.argv_for(row["run"], effects)
+            assert effect == row["effect"], row["run"]
+
+
+def test_the_two_ways_of_saying_read_only_agree() -> None:
+    """`Offer.reads` splits the list in two and the parser's `effect`
+    decides what a click does. They describe the same thing, so a row
+    where they differ is one of the two lying."""
+    from anki_math_forge.app import runs as runs_mod
+
+    at_ = runs_mod.Ambient(project="demo", zotero_key="K", state="all", origin="zotero")
     for offer in runs_mod.OFFERS:
-        if offer.kind != "shell" or not offer.reads:
+        if offer.kind != "shell":
             continue
-        at_ = runs_mod.Ambient(project="demo", zotero_key="K", state="all")
         line = offer.run if isinstance(offer.run, str) else offer.run(at_)
-        jobs.argv_for(line, *both)  # raises Refused if it would not run
+        if "<" in line:  # a shape to fill in, not a command
+            continue
+        assert offer.reads == (runs_mod.effect_of(line) == "reads"), line

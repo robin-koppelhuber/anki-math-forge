@@ -1,10 +1,12 @@
 """Running a command from the website, in the background (ROADMAP.md §12).
 
-**Only a command that shows you something.** The parser declares an
-`effect` on every subcommand (docs/VERBS.md), and this refuses anything
-that is not `reads`. That is the whole safety story and it is one rule
-rather than a list kept by hand: a verb that starts writing tomorrow stops
-being runnable here on the same commit, without anybody remembering to
+**Every command with no model behind it**, which is what §12 set out to
+reach. The parser declares an `effect` on each one (docs/VERBS.md) and
+that decides how it is offered, not whether: a `reads` runs on a click,
+and a `repo` or an `anki` says what it will change and waits to be told
+again. The declaration is the whole safety story and it is one rule
+rather than a list kept by hand, so a verb that starts writing tomorrow
+starts asking first on the same commit, without anybody remembering to
 come back.
 
 **Always in the background.** `forge anki` is ten seconds on a deck of 150
@@ -133,16 +135,20 @@ class Refused(ValueError):
     """The command may not be run from here, and why."""
 
 
-def argv_for(line: str, reads: set[str], known: set[str]) -> list[str]:
-    """The argv inside an offered command line, if it may be run here.
+def argv_for(line: str, effects: dict[str, str]) -> tuple[list[str], str]:
+    """`(argv, effect)` for an offered command line, or a refusal.
 
-    `reads` is every subcommand the parser declares as showing you
-    something, and `known` is every subcommand there is. Both, because
-    the arity has to be settled before the permission: with only the
-    reading set, `forge anki push` fails to match as two words, falls
-    back to its first word, finds `anki` among the reads and runs the
-    push. The name is whatever the parser would resolve, and only then is
-    it asked whether it may run.
+    `effects` maps every subcommand, by the words you type, to what it
+    does: `reads`, `repo` or `anki`. The whole map rather than the
+    reading half of it, because arity has to be settled before
+    permission: knowing only the reads, `forge anki push` fails to match
+    as two words, falls back to its first word, finds `anki` among them
+    and runs the push. The name is whatever the parser would resolve, and
+    only then is it asked what it does.
+
+    Nothing is refused for writing. What writes needs saying out loud
+    first, which is the caller's job and not this one's; what is refused
+    here is a command the parser does not have.
     """
     words = shlex.split(line.replace("uv run ", "", 1))
     if not words or words[0] != "forge":
@@ -151,12 +157,18 @@ def argv_for(line: str, reads: set[str], known: set[str]) -> list[str]:
     if not rest:
         raise Refused("no command named")
     two = " ".join(rest[:2])
-    name = two if two in known else rest[0]
-    if name not in reads:
-        raise Refused(
-            f"`forge {name}` is not a command this can run. Only the ones that"
-            " show you something, which is what `forge --help` groups first"
-        )
+    name = two if two in effects else rest[0]
+    if name not in effects:
+        raise Refused(f"`forge {name}` is not a command")
     # `--json` for everything: the panel renders a result rather than a
     # transcript, and every one of these has the flag.
-    return [*rest, "--json"]
+    return [*rest, "--json"], effects[name]
+
+
+#: What to say before running one, by effect. A confirmation is only worth
+#: having while it says something the label does not, so each names what
+#: this particular command puts at risk rather than asking "are you sure".
+WARNINGS = {
+    "repo": "changes files in this repo. Run it?",
+    "anki": "changes your Anki collection, which nothing here can undo. Run it?",
+}

@@ -49,26 +49,35 @@
   {% if cmd.kind == 'note' %}
   <li class="run-note">{{ cmd.label }}</li>
   {% else %}
-  {# A read runs here; everything else is copied.
+  {# A shell command runs here; a slash command is copied.
 
-     Not a second control beside the copy button: the commands panel is
-     already the heaviest thing on three rails, and a run button added
-     next to each copy button takes fourteen shell rows to twenty-eight.
-     So the row is one or the other, and which it is follows `reads`,
-     the same field that groups the list. A writer stays copied because
-     that is invariant 1's bargain, and a slash command stays copied
-     because a model in the loop is the thing you paste where you can
-     watch it. #}
+     That split is invariant 1's bargain and it is the only one: a model
+     in the loop costs tokens, takes minutes and writes cards, so you
+     paste it where you can watch it. Everything with no model behind it
+     is plain Python that does what it says, and §12 set out to make all
+     of it reachable from the app.
+
+     One control per row, not a run button beside a copy button: the
+     panel is already the heaviest thing on three rails and that would
+     take fourteen shell rows to twenty-eight controls. The command is
+     still printed below, so it can be selected and pasted by hand.
+
+     `effect` rides along so the page knows which ones to ask about
+     first. The server checks it again, because a dialog is a courtesy
+     to whoever is looking and a stale tab is not looking. #}
   <li><button type="button"
-              class="run {{ cmd.kind }}{{ ' can-run' if cmd.reads }}"
-              {% if cmd.reads %}data-run="{{ cmd.run }}"{% else %}data-copy="{{ cmd.run }}"{% endif %}
+              class="run {{ cmd.kind }}{{ ' can-run' if cmd.effect }}"
+              {% if cmd.effect %}data-run="{{ cmd.run }}"
+              data-effect="{{ cmd.effect }}"{% else %}data-copy="{{ cmd.run }}"{% endif %}
               {# Where to paste it, and nothing else. This used to open
                  with `cmd.why`, which the `run-why` span below prints in
                  full: 915 duplicated words across five screens, 498 of
                  them on the setup stage, hidden behind a hover over text
                  that is already on the page. #}
-              title="{{ 'runs here, in the background; it changes nothing'
-                        if cmd.reads else
+              title="{{ ('runs here, in the background; it changes nothing'
+                         if cmd.effect == 'reads' else
+                         'runs here, in the background, once you confirm it')
+                        if cmd.effect else
                         ('paste into Claude Code' if cmd.kind == 'claude'
                          else 'paste into a shell') }}">
     <span class="run-label">{{ cmd.label }}
@@ -77,8 +86,14 @@
           costs tokens, takes minutes and produces something to review. That
           is the difference worth marking, and the two are pasted into
           different windows. -#}
-      <i class="run-who {{ cmd.kind }}{{ ' here' if cmd.reads }}">{{
-        'run' if cmd.reads else ('claude' if cmd.kind == 'claude' else 'shell') }}</i>
+      {#- `run` where it changes nothing, `writes` where it does. The
+          second is the one worth a different word: the badge is what you
+          read before clicking, and "shell" said where it would have been
+          pasted rather than what it is about to do. -#}
+      <i class="run-who {{ cmd.kind }}{{ ' here' if cmd.effect }}{{
+           ' writes' if cmd.effect in ('repo', 'anki') }}">{{
+        ('run' if cmd.effect == 'reads' else 'writes') if cmd.effect
+        else ('claude' if cmd.kind == 'claude' else 'shell') }}</i>
     </span>
     {# What it does, in one sentence. The label says which pass and how much
        is waiting; it does not say what the pass *is*, and these are commands

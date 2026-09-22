@@ -181,6 +181,7 @@ def measure(url: str, width: int) -> int:
 # either clips the diagram or leaves a field of background under it.
 PAGE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
+<link rel="stylesheet" href="theme.css">
 <link rel="stylesheet" href="app.css">
 <style>
   body {{ margin: 0; padding: 28px; background: var(--bg); }}
@@ -214,7 +215,10 @@ def render_states(out: Path, width: int, scale: int) -> None:
     # not reach the running app's /static.
     scratch = HERE / ".scratch"
     scratch.mkdir(exist_ok=True)
-    shutil.copy(TEMPLATES.parent / "static" / "app.css", scratch / "app.css")
+    # Both: app.css reads every colour off theme.css, so the diagram
+    # rendered from app.css alone comes out with none.
+    for name in ("theme.css", "app.css"):
+        shutil.copy(TEMPLATES.parent / "static" / name, scratch / name)
     page = scratch / "states.html"
     page.write_text(PAGE.format(width=width, body=body), encoding="utf-8")
 

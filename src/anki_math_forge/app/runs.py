@@ -168,16 +168,45 @@ class Offer:
     when: Callable[[Ambient], bool] = _always
 
     def render(self, at: Ambient) -> dict[str, Any]:
+        line = _say(self.run, at)
         row: dict[str, Any] = {
             "label": _say(self.label, at),
-            "run": _say(self.run, at),
+            "run": line,
             "kind": self.kind,
         }
         if self.why:
             row["why"] = self.why
         if self.reads:
             row["reads"] = True
+        # What the command itself says it does, asked of the parser rather
+        # than restated here. `reads` above is this repeated by hand, and
+        # it stays only because it is also what splits the list in two;
+        # the two cannot disagree, because a test compares them.
+        #
+        # Not on a line carrying a placeholder. `forge zotero import
+        # <citekey>` is a shape to fill in, and running it would take the
+        # angle brackets for an item key and report that no such item
+        # exists. Those stay copied, which is what they were always for.
+        if self.kind == "shell" and "<" not in line:
+            row["effect"] = effect_of(line)
         return row
+
+
+def effect_of(line: str) -> str:
+    """What a command line changes: `reads`, `repo` or `anki`.
+
+    Off the parser, through the same resolution the runner uses, so an
+    offer cannot describe itself as safer than the command it holds. A
+    line the parser does not recognise answers `reads`: it will be
+    refused on the way in anyway, and calling an unknown line a writer
+    would put a confirmation on a button that cannot do anything.
+    """
+    from . import command_effects, jobs
+
+    try:
+        return jobs.argv_for(line, command_effects())[1]
+    except jobs.Refused:
+        return "reads"
 
 
 def extracted(at: Ambient) -> bool:

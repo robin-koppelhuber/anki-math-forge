@@ -174,30 +174,28 @@ def _with_images(chunk: str, unit: str) -> str:
     return model.IMAGE_RE.sub(tag, chunk)
 
 
-def command_names() -> tuple[set[str], set[str]]:
-    """`(reads, every)`: the subcommands that show you something, and all
-    of them, by the words you type.
+def command_effects() -> dict[str, str]:
+    """Every subcommand, by the words you type, to what it does.
 
     Read off the parser rather than listed here, so the app cannot hold a
-    second opinion about which commands are safe to run from a button.
-    Both sets, because arity settles before permission: `forge anki push`
-    has to be recognised as two words before anything asks whether it may
-    run, or it falls back to `anki` and is allowed.
+    second opinion about what a command changes. The whole map rather
+    than the reading half of it, because arity settles before permission:
+    `forge anki push` has to be recognised as two words before anything
+    asks what it does, or it falls back to `anki` and looks like a read.
     """
-    from ..cli import READS, build_parser
+    from ..cli import build_parser
 
     top = next(
         a
         for a in build_parser()._actions
         if a.dest == "verb" and isinstance(getattr(a, "choices", None), dict)
     )
-    reads: set[str] = set()
-    every: set[str] = set()
+    found: dict[str, str] = {}
 
     def note(name: str, parser: Any) -> None:
-        every.add(name)
-        if getattr(parser, "_defaults", {}).get("effect") == READS:
-            reads.add(name)
+        effect = getattr(parser, "_defaults", {}).get("effect")
+        if effect:
+            found[name] = str(effect)
 
     for name, parser in dict(top.choices or {}).items():
         note(name, parser)
@@ -205,11 +203,17 @@ def command_names() -> tuple[set[str], set[str]]:
             if getattr(action, "dest", "") == "change" and getattr(action, "choices", None):
                 for word, child in action.choices.items():
                     note(f"{name} {word}", child)
-    return reads, every
+    return found
+
+
+def command_names() -> tuple[set[str], set[str]]:
+    """`(reads, every)`, for callers that only want the two sets."""
+    effects = command_effects()
+    return {n for n, e in effects.items() if e == "reads"}, set(effects)
 
 
 def reading_verbs() -> set[str]:
-    """Just the reads, for callers that only need the permission half."""
+    """Just the reads, for callers that only need that half."""
     return command_names()[0]
 
 
@@ -1619,22 +1623,29 @@ def create_app(config: Config) -> FastAPI:
     def start_run(body: dict[str, Any] = Body(...)) -> Any:
         """Run one of the offered commands, in the background.
 
-        Only the ones that show you something (ROADMAP.md §12): the
-        allow-list is every subcommand the parser declares `reads`, so it
-        is the same declaration `forge --help` groups by and the same one
-        `test_verbs.py` holds shut. A verb that starts writing stops being
-        runnable here on the same commit.
+        Every command with no model behind it (ROADMAP.md §12). What the
+        parser declares decides how it is asked for: a `reads` runs on a
+        click, and anything that writes has to be confirmed first.
 
-        Returns an id at once and nothing else. A `forge anki` over 150
-        cards is ten seconds of waiting on AnkiConnect, and a page that
-        stops for that is a page you stop using.
+        The confirmation is checked **here**, not only drawn in the page.
+        A dialog is a courtesy to whoever is looking; the rule is that a
+        request to change something has to say so, and a rule the server
+        does not hold is one a stale tab walks straight past.
+
+        Returns an id at once and nothing else. A `forge anki push` over
+        150 cards is ten seconds of waiting on AnkiConnect, and a page
+        that stops for that is a page you stop using.
         """
         line = str(body.get("run", "")).strip()
-        reads, every = command_names()
         try:
-            argv = jobs.argv_for(line, reads, every)
+            argv, effect = jobs.argv_for(line, command_effects())
         except jobs.Refused as exc:
             raise HTTPException(400, str(exc)) from exc
+        if effect != "reads" and not body.get("confirmed"):
+            raise HTTPException(
+                409,
+                f"`{line}` {jobs.WARNINGS[effect]} Ask again with `confirmed`.",
+            )
         return runner.start(argv, config.root).payload()
 
     @app.get("/api/run/{run_id}")
