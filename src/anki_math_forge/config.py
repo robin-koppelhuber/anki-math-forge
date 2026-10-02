@@ -241,6 +241,10 @@ class ProjectConfig:
     # a comment opening `# type:` as an annotation and fails to parse the
     # file.)
     tag_decks: Mapping[str, str] = field(default_factory=dict)
+    # Topic slug -> deck: the asks in `topics.md`, for a project that splits
+    # by what you asked for. A card goes where the units it was written from
+    # stand. File order decides here too.
+    topic_decks: Mapping[str, str] = field(default_factory=dict)
     # Free labels, so a picker with fifty papers in it can be narrowed. Not a
     # hierarchy: a source is one thing that may be several kinds of thing.
     # **Yours to invent.** Nothing writes one for you: a label the tool made up
@@ -777,7 +781,11 @@ class Config:
         return self.projects_dir / project / "units.jsonl"
 
     def deck_for(
-        self, project: str, card_type: str = "", tags: Sequence[str] = ()
+        self,
+        project: str,
+        card_type: str = "",
+        tags: Sequence[str] = (),
+        topics: Sequence[str] = (),
     ) -> str:
         """Which Anki deck this source's cards belong in.
 
@@ -801,13 +809,22 @@ class Config:
         un-approve it, because filing is not what a reviewer read
         (ROADMAP.md 10).
 
-        Most specific first: a tag names one card's subject, a type names a
-        whole class of card, and the project's own deck is the fallback.
+        And per *topic*, `[decks.by_topic]`: the asks in `topics.md` a card's
+        units stand under, by slug. Routed off what you asked for, so a card
+        proposed under "containers" lands in the containers deck without
+        anybody tagging it.
+
+        Most specific first: a tag names one card's subject, a topic names
+        the subject of everything proposed under it, a type names a whole
+        class of card, and the project's own deck is the fallback.
         """
         spec = self.projects.get(project)
         if spec:
             for tag, deck in spec.tag_decks.items():
                 if tag in tags:
+                    return deck
+            for slug, deck in spec.topic_decks.items():
+                if slug in topics:
                     return deck
         if spec and card_type and spec.decks.get(card_type):
             return spec.decks[card_type]
@@ -984,6 +1001,7 @@ def load(root: Path | None = None) -> Config:
             ),
             decks=_deck_map(spec.get("decks"), "by_type"),
             tag_decks=_deck_map(spec.get("decks"), "by_tag"),
+            topic_decks=_deck_map(spec.get("decks"), "by_topic"),
             tags=tuple(str(x) for x in spec.get("tags", ())),
         )
 
@@ -1051,10 +1069,11 @@ def _refuse_a_project_wide_document(spec: Mapping[str, Any], where: str) -> None
 
 
 def _deck_map(raw: Any, which: str) -> dict[str, str]:
-    """`[decks.by_type]` or `[decks.by_tag]`, in the order they were written.
+    """`[decks.by_type]`, `[decks.by_tag]` or `[decks.by_topic]`, in the
+    order they were written.
 
-    Two tables rather than one, because a type and a tag are different
-    questions and a single map would silently answer one with the other the
+    Separate tables, because a type, a tag and a topic are different
+    questions and a single map would silently answer one with another the
     first time somebody named a tag `identity`.
 
     A flat `[decks]` is read as the type map, which is what it always was.
@@ -1067,7 +1086,9 @@ def _deck_map(raw: Any, which: str) -> dict[str, str]:
         return {}
     # The older flat form: every key that is not one of the two sub-tables.
     return {
-        str(k): str(v) for k, v in table.items() if k not in ("by_type", "by_tag")
+        str(k): str(v)
+        for k, v in table.items()
+        if k not in ("by_type", "by_tag", "by_topic")
     }
 
 

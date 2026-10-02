@@ -16,11 +16,11 @@ from __future__ import annotations
 
 import html
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import check, latex, model, notetype, study
+from . import check, latex, model, notetype, study, topics
 from .anki import AnkiConnect, AnkiError
 from .config import Config
 from .model import Card
@@ -263,7 +263,7 @@ def upload_images(client: AnkiConnect, config: Config, card: Card) -> list[str]:
 @dataclass
 class CardOutcome:
     uid: str
-    action: str  # setup | add | update | unchanged | move | skip | error
+    action: str  # setup | add | update | unchanged | move | relearn | skip | error
     detail: str = ""
     # The few words naming the card. A uid answers "which file"; a report you
     # read to decide whether something went wrong is asking "which card", and
@@ -292,12 +292,13 @@ class SyncReport:
         return not check.errors(self.findings) and self.count("error") == 0
 
     def summary(self) -> str:
-        # `move` only when something moved: a deck change is rare, and a line
-        # reading "0 move" on every sync is a number nobody reads, which is
-        # how the one that is not zero gets missed.
+        # `move` and `relearn` only when something happened: both are rare,
+        # and a line reading "0 move" on every sync is a number nobody reads,
+        # which is how the one that is not zero gets missed.
         actions = ["add", "update", "unchanged", "skip", "error"]
-        if self.count("move"):
-            actions.insert(3, "move")
+        for rare in ("relearn", "move"):
+            if self.count(rare):
+                actions.insert(3, rare)
         parts = [f"{self.count(a)} {a}" for a in actions]
         prefix = "would sync: " if self.dry_run else "synced: "
         return prefix + ", ".join(parts)
@@ -340,9 +341,38 @@ def live_uid_counts(client: AnkiConnect, config: Config) -> dict[str, int]:
     return counts
 
 
-def decks_for(cards: list[Card], config: Config) -> list[str]:
+def deck_router(config: Config) -> Callable[[Card], str]:
+    """Which deck each card goes to: `Config.deck_for`, with the asks its
+    units stand under.
+
+    `topics.md` and the ledger are read once per project per run, and only
+    for a project with a `[decks.by_topic]` table: every other project
+    routes on what the card file says alone.
+    """
+    asks: dict[str, dict[str, tuple[str, ...]]] = {}
+
+    def route(card: Card) -> str:
+        project = card.project_name
+        spec = config.projects.get(project)
+        under: tuple[str, ...] = ()
+        if spec is not None and spec.topic_decks:
+            if project not in asks:
+                asks[project] = topics.asks_by_unit(config, project)
+            by_unit = asks[project]
+            under = tuple(
+                dict.fromkeys(slug for uid in card.units for slug in by_unit.get(uid, ()))
+            )
+        return config.deck_for(project, card.type, card.tags, under)
+
+    return route
+
+
+def decks_for(
+    cards: list[Card], config: Config, route: Callable[[Card], str] | None = None
+) -> list[str]:
     """Every deck this run will write to, in a stable order."""
-    return sorted({config.deck_for(card.project_name, card.type, card.tags) for card in cards})
+    route = route or deck_router(config)
+    return sorted({route(card) for card in cards})
 
 
 def source_positions(config: Config) -> dict[str, int]:
@@ -614,13 +644,18 @@ def rename_card_template(
 
 
 def ensure_collection(
-    client: AnkiConnect, config: Config, cards: list[Card], *, dry_run: bool
+    client: AnkiConnect,
+    config: Config,
+    cards: list[Card],
+    *,
+    dry_run: bool,
+    route: Callable[[Card], str] | None = None,
 ) -> list[str]:
     """Make sure every deck in play and the note type exist; report what was
     created."""
     created: list[str] = []
     live_decks = set(client.deck_names())
-    for deck in decks_for(cards, config):
+    for deck in decks_for(cards, config, route):
         if deck in live_decks:
             continue
         if not dry_run:
@@ -781,9 +816,10 @@ def run(
         return report
 
     # Nothing approved: do not conjure a deck or a note type for it.
+    route = deck_router(config)
     if ready:
         try:
-            created = ensure_collection(client, config, ready, dry_run=dry_run)
+            created = ensure_collection(client, config, ready, dry_run=dry_run, route=route)
         except AnkiError as exc:
             report.outcomes.append(CardOutcome("-", "error", str(exc)))
             return report
@@ -795,15 +831,28 @@ def run(
         # right at insertion costs nothing and needs no repositioning later.
         for card in in_study_order(ready, source_positions(config), config.study_order):
             try:
-                report.outcomes.append(_upsert(client, config, card, dry_run=dry_run))
+                report.outcomes.append(
+                    _upsert(client, config, card, dry_run=dry_run, route=route)
+                )
             except AnkiError as exc:
                 report.outcomes.append(CardOutcome(card.uid, "error", str(exc)))
+
+    if ready:
+        # After the upserts, so what you relearn is what the card says now,
+        # and only for cards whose upsert went through.
+        failed = {o.uid for o in report.outcomes if o.action == "error"}
+        try:
+            report.outcomes.extend(
+                relearn(client, config, [c for c in ready if c.uid not in failed], dry_run=dry_run)
+            )
+        except AnkiError as exc:
+            report.outcomes.append(CardOutcome("-", "error", f"relearn: {exc}"))
 
     if ready:
         # After the upserts, so a card added by this run is already where it
         # belongs and only the ones that predate the setting are named.
         named = {c.uid: c.gist for c in ready}
-        for moved in deck_drift(client, config, ready):
+        for moved in deck_drift(client, config, ready, route):
             if move_decks and not dry_run:
                 client.change_deck(moved.cards, moved.wanted)
                 report.outcomes.append(
@@ -868,7 +917,12 @@ class DeckDrift:
     cards: list[int]
 
 
-def deck_drift(client: AnkiConnect, config: Config, cards: list[Card]) -> list[DeckDrift]:
+def deck_drift(
+    client: AnkiConnect,
+    config: Config,
+    cards: list[Card],
+    route: Callable[[Card], str] | None = None,
+) -> list[DeckDrift]:
     """Approved cards whose notes are filed somewhere the config disagrees with.
 
     Anki settles a card's deck when the note is added, so editing `deck`
@@ -879,7 +933,8 @@ def deck_drift(client: AnkiConnect, config: Config, cards: list[Card]) -> list[D
     Two calls for the whole deck rather than two per card: every card of this
     note type, then their decks in one batch.
     """
-    wanted = {c.uid: config.deck_for(c.project_name, c.type, c.tags) for c in cards}
+    route = route or deck_router(config)
+    wanted = {c.uid: route(c) for c in cards}
     if not wanted:
         return []
     found = client.cards_info(client.find_cards(f'"note:{config.note_type}"'))
@@ -901,7 +956,82 @@ def deck_drift(client: AnkiConnect, config: Config, cards: list[Card]) -> list[D
     ]
 
 
-def _upsert(client: AnkiConnect, config: Config, card: Card, *, dry_run: bool) -> CardOutcome:
+#: What each `relearn:` value does in Anki, as the report says it.
+RELEARNED = {
+    "slightly": "due today, interval kept",
+    "more": "back into relearning",
+    "reset": "new again",
+}
+
+
+def relearn(
+    client: AnkiConnect, config: Config, cards: list[Card], *, dry_run: bool
+) -> list[CardOutcome]:
+    """Carry out `relearn:` and take it off the file (ROADMAP §17).
+
+    Whoever changed a card you have already studied says how much of it you
+    have to learn again; Anki is the only place that can act on it. Once it
+    has, the key comes off, or every push would do it again. Off the file
+    and not the card's content, so nothing is un-approved by it.
+
+    Only studied cards are touched: a card still new in Anki has nothing to
+    relearn, and the key comes off it all the same.
+    """
+    asked = [c for c in cards if c.relearn in model.RELEARN]
+    if not asked:
+        return []
+    studied: dict[str, list[int]] = {}
+    found = client.cards_info(client.find_cards(f'"note:{config.note_type}"'))
+    for info in found:
+        uid = str((info.get("fields", {}).get("uid") or {}).get("value", ""))
+        if int(info.get("type", 0)) != 0:
+            studied.setdefault(uid, []).append(int(info["cardId"]))
+
+    out: list[CardOutcome] = []
+    for card in asked:
+        how = card.relearn
+        ids = studied.get(card.uid, [])
+        detail = f"{how}: {RELEARNED[how]}" if ids else f"{how}: not studied yet, nothing to do"
+        if dry_run:
+            out.append(CardOutcome(card.uid, "relearn", detail, gist=card.gist))
+            continue
+        if ids and how == "slightly":
+            client.set_due_date(ids, "0")
+        elif ids and how == "more":
+            client.relearn_cards(ids)
+        elif ids:
+            client.forget_cards(ids)
+        if not _take_off_relearn(card):
+            detail += "; the file moved under this run, so take `relearn:` off by hand"
+            out.append(CardOutcome(card.uid, "error", detail, gist=card.gist))
+            continue
+        out.append(CardOutcome(card.uid, "relearn", detail, gist=card.gist))
+    return out
+
+
+def _take_off_relearn(card: Card) -> bool:
+    """Remove the key from a fresh read, checked against its mtime, twice."""
+    for _ in range(2):
+        if card.path is None:
+            return False
+        fresh = model.load(card.path)
+        fresh.set_grade("relearn", "")
+        try:
+            fresh.save(expect_mtime_ns=fresh.mtime_ns)
+            return True
+        except model.StaleFileError:
+            continue
+    return False
+
+
+def _upsert(
+    client: AnkiConnect,
+    config: Config,
+    card: Card,
+    *,
+    dry_run: bool,
+    route: Callable[[Card], str] | None = None,
+) -> CardOutcome:
     fields = fields_for(card, config)
     # Before the note, and not on a rehearsal: a dry run must not write to the
     # media folder any more than it writes a note.
@@ -919,7 +1049,7 @@ def _upsert(client: AnkiConnect, config: Config, card: Card, *, dry_run: bool) -
         )
 
     if not note_ids:
-        deck = config.deck_for(card.project_name, card.type, card.tags)
+        deck = (route or deck_router(config))(card)
         if not dry_run:
             client.add_note(deck, config.note_type, fields, tags)
         return CardOutcome(card.uid, "add", f"-> {deck}", gist=card.gist)

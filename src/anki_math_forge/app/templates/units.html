@@ -7,6 +7,7 @@
 <div id="deck" data-project="{{ project }}" data-mtime="{{ mtime }}">
   {% for unit in units %}
   <article class="unit item" data-id="{{ unit.id }}" data-state="{{ unit.state }}"
+           data-version="{{ unit.version }}"
            data-context-pages="{{ unit.context_pages }}"
            data-web="{{ 1 if unit.web else 0 }}" data-web-own="{{ 1 if unit.web_own else 0 }}" hidden>
     {# What a card from this unit would be about, as a model read it off the
@@ -324,6 +325,30 @@
    is empty before the first import, and after one that found nothing
    marked. #}
 <p class="empty-filter" id="empty-filter" hidden>{% if counts.values() | sum %}nothing here with this filter.{% else %}no units in {{ project }} yet.{% endif %}</p>
+
+{# A unit where there was nothing to segment: `forge units add`, typed in.
+   Markup only, keyed on `data-` names and the inputs' `name`s, which are
+   the endpoint's fields; `units.js` opens it on its key and posts it.
+   Enter in a line submits, Ctrl+Enter submits from the sample, Esc closes. #}
+<dialog class="prompt new-unit" data-new-unit-dialog>
+  <form method="dialog" data-new-unit-form>
+    <label>subject <input name="subject" required autocomplete="off" spellcheck="false"></label>
+    <label>gist <input name="gist" autocomplete="off"></label>
+    <label>sample <textarea name="preview" rows="4" spellcheck="false"></textarea></label>
+    {% if work_rows %}
+    <label>work <select name="document">
+      <option value="">none</option>
+      {% for row in work_rows %}<option value="{{ row.key }}">{{ row.label }}</option>{% endfor %}
+    </select></label>
+    {% endif %}
+    <label>tags <input name="tags" autocomplete="off" spellcheck="false"></label>
+    <label>references <input name="refs" autocomplete="off" spellcheck="false"></label>
+    <div class="prompt-actions">
+      <button type="button" data-new-unit-cancel>cancel</button>
+      <button value="ok">add</button>
+    </div>
+  </form>
+</dialog>
 {% endblock %}
 
 {% block keys %}

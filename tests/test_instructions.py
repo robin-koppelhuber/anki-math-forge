@@ -48,6 +48,16 @@ def test_no_source_is_named(path: Path) -> None:
         # that fires on everything says nothing about any of it.
         if len(name) < 4:
             continue
+        if re.fullmatch(r"[a-z]+", name):
+            # A name that is also an English word (`lean`) is only a name
+            # where it is used as one: a flag's value, a path, a unit id, or
+            # code. Anywhere else it is the word, and "a lean card" is not a
+            # default anybody chose.
+            used = re.search(
+                rf"(--project\s+|projects/|cards/|`){name}\b|\b{name}:[\w.]", text
+            )
+            assert not used, f"{path.name} names the source {name!r}; use <source>"
+            continue
         assert name not in text, f"{path.name} names the source {name!r}; use <source>"
 
 

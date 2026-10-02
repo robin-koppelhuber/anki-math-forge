@@ -28,7 +28,8 @@ Tests cite these by number. Each links to the reasoning.
 5. **Editing an approved card un-approves it.** `content_hash` covers what a
    reviewer read, and filing is not read. Outside it: `status`,
    `content_hash`, `## notes`, `## verify`, `verify`, `requires`,
-   `frequency`, `derivation`, `web`, `gist`, `augmented`, `tags`.
+   `frequency`, `derivation`, `web`, `gist`, `augmented`, `tags`,
+   `relearn`.
    Nothing rewrites a file to enforce this; `Card.demotion` reports it, and
    fixing the cause restores the approval with no re-review.
 6. **Card content guidelines live in the skill, not in code.** The Python never
@@ -58,7 +59,9 @@ Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 naming the card, for a list or a graph node; never reaches Anki) and
 `augmented` (whether `/augment` has been over it: the one card state that
 cannot be read off the content, since that pass's usual right answer is to add
-nothing). An unrecognised `frequency` or `derivation` is a `check` error.
+nothing) and `relearn` (`slightly | more | reset`: how much of a changed card
+to learn again; `anki push` does it in Anki once and takes the key off). An
+unrecognised `frequency`, `derivation` or `relearn` is a `check` error.
 
 Sections: `## front` and `## back` required; `conditions`, `prose`, `uses`,
 `proof`, `verify`, `notes` optional. Math is `$...$` / `$$...$$`. `## notes`

@@ -27,7 +27,7 @@ def test_every_offer_is_shown_somewhere_real() -> None:
     it."""
     for offer in runs.OFFERS:
         assert offer.where, offer.label
-        assert set(offer.where) <= set(runs.WHERE), offer.where
+        assert set(offer.where) <= set(runs.WHERE + runs.PANES), offer.where
         assert offer.scope in runs.SCOPES, offer.scope
         assert offer.kind in {"shell", "claude", "note"}, offer.kind
 
@@ -176,3 +176,17 @@ def test_an_offer_declares_its_own_condition() -> None:
         assert isinstance(offer, Offer)
         # Callable, total, and cheap: it runs once per offer per render.
         assert isinstance(offer.when(quiet), bool)
+
+
+def test_every_pane_list_comes_from_here() -> None:
+    """The setup stage built four command lines by hand, in a template,
+    while this module's docstring said every list came from here."""
+    from pathlib import Path
+
+    setup = (
+        Path(runs.__file__).parent / "templates" / "setup.html"
+    ).read_text(encoding="utf-8")
+
+    assert "runs([" not in setup, "a list written in the template"
+    for pane in runs.PANES:
+        assert runs.propose(pane, runs.Ambient(project="p")), f"{pane} offers nothing"

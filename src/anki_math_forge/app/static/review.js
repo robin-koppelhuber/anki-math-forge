@@ -13,6 +13,7 @@ function refresh(item, card) {
   }
   paintHeld(item, card);
   paintGrades(item, card);
+  paintChanges(item, card);
   paintAnnotations(item, card);
   // `plain_notes`, not `notes`: the annotations render as their own rows
   // now, so repainting the whole section here printed each one twice.
@@ -26,6 +27,18 @@ function refresh(item, card) {
   } else if (notes) {
     notes.remove();
   }
+}
+
+/* After a decision the record has a new snapshot, so what was listed as
+   changed is no longer pending. The history is redrawn on the next load. */
+function paintChanges(item, card) {
+  const box = item.querySelector("[data-changes]");
+  if (!box || !card.changes || card.changes.pending) return;
+  const list = box.querySelector("[data-change-pending]");
+  if (list) list.remove();
+  const head = box.querySelector("[data-changes-head]");
+  if (head) head.textContent = `unchanged since ${card.changes.after} ${card.changes.since}`;
+  box.open = false;
 }
 
 /* An approval that is not holding. Saying "draft" alone reads as work lost:
@@ -226,12 +239,22 @@ async function annotate(audience = "claude") {
 const GRADES = {
   frequency: ["core", "common", "rare", ""],
   derivation: ["definitional", "short", "long", ""],
+  relearn: ["slightly", "more", "reset", ""],
 };
+
+/* What a grading button says. `relearn` alone is a bare adverb, so it
+   carries its name; the value itself is on `data-value`. */
+function gradeLabel(key, value) {
+  if (!value) return `no ${key}`;
+  return key === "relearn" ? `relearn: ${value}` : value;
+}
 
 async function cycleGrade(item, key) {
   const steps = GRADES[key];
   const button = item.querySelector(`[data-grade="${key}"]`);
-  const now = button.classList.contains("missing") ? "" : button.textContent.trim();
+  const now = button.classList.contains("missing")
+    ? ""
+    : button.dataset.value || button.textContent.trim();
   const value = steps[(steps.indexOf(now) + 1) % steps.length];
   const result = await post(`/api/cards/${item.dataset.uid}/grade`, {
     key,
@@ -284,10 +307,15 @@ async function toggleAugmented(item) {
 }
 
 function paintGrades(item, card) {
-  [["frequency", card.frequency], ["derivation", card.derivation]].forEach(([key, value]) => {
+  [
+    ["frequency", card.frequency],
+    ["derivation", card.derivation],
+    ["relearn", card.relearn],
+  ].forEach(([key, value]) => {
     const button = item.querySelector(`[data-grade="${key}"]`);
     if (!button) return;
-    button.textContent = value || `no ${key}`;
+    button.textContent = gradeLabel(key, value);
+    button.dataset.value = value || "";
     button.classList.toggle("missing", !value);
   });
   const done = item.querySelector("[data-card-augmented]");
@@ -323,6 +351,76 @@ async function openEditor() {
   toast("opened in " + result.opened);
 }
 
+/* Front and back, edited here rather than in $EDITOR. The text comes from
+   the server when the dialog opens, so the save is checked against what was
+   on disk then. Success reloads onto the same card: the body is drawn by the
+   server, crops and all, and redrawing it here would be a second renderer. */
+async function editCard() {
+  const item = currentOf(deck);
+  const dialog = document.querySelector("[data-card-edit-dialog]");
+  if (!item || !dialog) return;
+  const form = dialog.querySelector("[data-card-edit-form]");
+  const response = await fetch(`/api/cards/${item.dataset.uid}/text`);
+  if (!response.ok) {
+    toast(`error ${response.status}`, "bad");
+    return;
+  }
+  const text = await response.json();
+  form.reset();
+  form.elements.front.value = text.front;
+  form.elements.back.value = text.back;
+  form.dataset.uid = text.uid;
+  form.dataset.mtime = text.mtime;
+  dialog.showModal();
+  form.elements.front.focus();
+}
+
+(function wireCardEdit() {
+  const dialog = document.querySelector("[data-card-edit-dialog]");
+  const form = dialog && dialog.querySelector("[data-card-edit-form]");
+  if (!form) return;
+  dialog.querySelector("[data-card-edit-cancel]").addEventListener("click", () =>
+    dialog.close(),
+  );
+  form.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const uid = form.dataset.uid;
+    const body = {
+      scope: viewScope(),
+      mtime: form.dataset.mtime,
+      front: form.elements.front.value,
+      back: form.elements.back.value,
+      note: form.elements.ask.checked ? form.elements.note.value : "",
+    };
+    const response = await fetch(`/api/cards/${uid}/text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (e) {
+      payload = { error: response.statusText };
+    }
+    if (!response.ok) {
+      // A 409 keeps what you typed: the file moved since the dialog opened,
+      // and closing would throw the edit away.
+      toast(payload.detail || payload.error || `error ${response.status}`, "bad");
+      return;
+    }
+    dialog.close();
+    location.hash = uid;
+    location.reload();
+  });
+})();
+
 /* Every key that writes waits for the one before it; moving and toggling do
    not. See `oneAtATime`. */
 bindKeys({
@@ -331,6 +429,7 @@ bindKeys({
   "back-to-draft": () => oneAtATime(() => act("unapprove")),
   undo: () => oneAtATime(undo),
   editor: openEditor,
+  "edit-card": editCard,
   "note-claude": () => oneAtATime(() => annotate("claude")),
   "note-me": () => oneAtATime(() => annotate("me")),
   "resolve-note": () => oneAtATime(() => resolveAnnotation(0)),

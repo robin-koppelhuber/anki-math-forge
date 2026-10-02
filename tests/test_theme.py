@@ -82,6 +82,28 @@ def test_dark_follows_the_system_and_can_be_pinned_either_way() -> None:
     assert ':root[data-theme="dark"]' in THEME, "dark can be pinned over light"
 
 
+def test_pinned_dark_is_the_same_dark_as_the_system_one() -> None:
+    """Dark is written twice, once under the media query and once for the
+    pin, because CSS has no way to say "this block, or that attribute".
+    Two copies drift the first time somebody tunes one."""
+    def block(selector: str) -> dict[str, str]:
+        body = next(body for sel, body in rules(THEME) if sel.endswith(selector))
+        return dict(re.findall(r"(--[\w-]+)\s*:\s*([^;]+);", body))
+
+    system = block(':root:not([data-theme="light"])')
+    pinned = block(':root[data-theme="dark"]')
+    assert system and system == pinned
+
+
+def test_the_pin_is_restored_before_the_first_stylesheet() -> None:
+    """In `app.js` it would apply after one paint in the system theme, and
+    every page load would flash the other colour."""
+    base = (STATIC.parent / "templates" / "base.html").read_text(encoding="utf-8")
+    restore = base.index("anki-forge.theme")
+    assert restore < base.index("theme.css"), "restored after the stylesheet loads"
+    assert "anki-forge.theme" in (STATIC / "app.js").read_text(encoding="utf-8")
+
+
 def test_the_names_the_canvas_reads_still_exist() -> None:
     """`graph.js` reads token names as strings off the computed style, and
     an unknown one is an empty string that `ctx.strokeStyle` silently

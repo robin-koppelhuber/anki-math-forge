@@ -19,6 +19,17 @@
    stop a browser running cached handlers against markup that has moved
    on. A control that renders and does nothing is indistinguishable from
    one that was never wired up. #}
+{# A pinned theme, before the first stylesheet. In `app.js` it would run
+   after the page had painted once in the system theme, and every page
+   load would flash. Nothing stored means the system decides. #}
+<script>
+try {
+  const pinned = localStorage.getItem("anki-forge.theme");
+  if (pinned === "light" || pinned === "dark") {
+    document.documentElement.dataset.theme = pinned;
+  }
+} catch (e) { /* no storage: the system decides */ }
+</script>
 <link rel="stylesheet" href="/static/theme.css?b={{ app_build }}">
 <link rel="stylesheet" href="/static/app.css?b={{ app_build }}">
 <script defer src="{{ kb }}/katex.min.js"></script>
@@ -120,6 +131,21 @@ for, and how much of each ask has units yet"
           title="what every setting resolved to, and where it came from"
           aria-label="settings">⚙</button>
   {% endif %}
+  {# Commands run from the page, on every page, because a run outlives the
+     page that started it. Hidden until this server has run something.
+     Markup only: `app.js` fills both from `/api/runs` and keys on the
+     `data-` names, so the look is free to change. #}
+  <button type="button" class="icon-button" data-runs-open hidden
+          title="commands run from the page" aria-label="runs">
+    <span data-runs-count></span></button>
+  <dialog class="runs-dialog" data-runs-dialog>
+    <form method="dialog"><button aria-label="close">&times;</button></form>
+    <ol class="runs-list" data-runs-list></ol>
+  </dialog>
+  {# system, light, dark, round again. `app.js` keys on the attribute and
+     sets `data-theme-now` to what is in force. #}
+  <button type="button" class="icon-button" data-theme-cycle
+          title="theme" aria-label="theme">&#9680;</button>
   {# A page with nothing to say about a project says its own thing here
      rather than leaving the row empty above a rail that starts under it. #}
   {% block topbar %}{% endblock %}

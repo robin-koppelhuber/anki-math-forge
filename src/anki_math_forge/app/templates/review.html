@@ -56,6 +56,29 @@
       <p class="gist{{ '' if card.gist_own else ' inherited' }}"
          title="{{ 'from this card' if card.gist_own else 'from the unit this card was written from' }}. A caption, never part of the card.">{{ card.gist }}</p>
       {% endif %}
+      {# What moved since you last decided on this card, from the record
+         kept on this machine (ROADMAP §21). Open when something did. Markup
+         only, keyed on `data-change`; `review.js` closes it after a
+         decision. #}
+      {% if card.changes %}{% set ch = card.changes %}
+      <details class="changes" data-changes{{ ' open' if ch.pending }}>
+        <summary data-changes-head>{{ 'changed' if ch.pending else 'unchanged' }} since {{ ch.after }} {{ ch.since }}</summary>
+        {% if ch.pending %}
+        <ul class="change-list" data-change-pending>
+          {% for f in ch.pending.fields %}<li data-change="field"><code>{{ f.key }}</code> {{ f.before if f.before is not none else '-' }} &rarr; {{ f.after if f.after is not none else '-' }}</li>{% endfor %}
+          {% for s in ch.pending.sections %}<li data-change="section"><code>{{ s.name }}</code> {{ s.summary }}</li>{% endfor %}
+          {% for line in ch.pending.resolved %}<li data-change="resolved">{{ line }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if ch.history %}
+        <ol class="change-history" data-change-history>
+          {% for entry in ch.history %}
+          <li>{{ entry.at }} &middot; {{ entry.decision }}{% if entry.change %}{% set c = entry.change %}{% set moved = (c.fields | map(attribute='key') | list) + (c.sections | map(attribute='name') | list) %}{% if moved %}: {{ moved | join(', ') }}{% endif %}{% if c.resolved %} ({{ c.resolved | length }} resolved){% endif %}{% endif %}</li>
+          {% endfor %}
+        </ol>
+        {% endif %}
+      </details>
+      {% endif %}
       {% if card.source %}<p class="src">{{ card.source }}</p>{% endif %}
       {% if card.tags %}<p class="tags">{% for tag in card.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</p>{% endif %}
       <p class="path"><code>{{ card.path }}</code></p>
@@ -88,6 +111,11 @@
           {# Whether the augmentation pass has been over this card. The one
              card state no amount of reading the file can answer, because the
              pass's usual right answer is to add nothing. #}
+          {# How much to learn again once this reaches Anki. Set by whoever
+             changed the card; `anki push` carries it out and takes it off. #}
+          <button type="button" class="grade {{ 'missing' if not card.relearn }}"
+                  data-grade="relearn" data-value="{{ card.relearn }}"
+                  title="how much of this card to learn again once it reaches Anki: slightly (due today), more (back into relearning), reset (new again). `anki push` does it once and takes it off. Not part of the content hash.">{{ ('relearn: ' ~ card.relearn) if card.relearn else 'no relearn' }}</button>
           <button type="button" class="grade augmented {{ 'on' if card.augmented }}"
                   data-card-augmented
                   title="whether `/augment` has been over this card. Click to set or withdraw it; withdrawing is how you ask for the pass again. Not part of the content hash.">{{ 'augmented' if card.augmented else 'not augmented' }}</button>
@@ -209,6 +237,23 @@
   {% endfor %}
 </div>
 <p class="empty-filter" id="empty-filter" hidden>nothing here with this filter.</p>
+
+{# Front and back, edited in place. Markup only: `review.js` fills it from
+   `/api/cards/<uid>/text` when it opens and keys on the `data-` names and
+   the fields' `name`s. The note is off unless you tick it, and its words
+   are yours to change. Ctrl+Enter saves from either text box. #}
+<dialog class="prompt card-edit" data-card-edit-dialog>
+  <form method="dialog" data-card-edit-form>
+    <label>front <textarea name="front" rows="5" spellcheck="false"></textarea></label>
+    <label>back <textarea name="back" rows="7" spellcheck="false"></textarea></label>
+    <label class="card-edit-ask"><input type="checkbox" name="ask"> ask claude to look
+      <input name="note" value="check my manual edit" autocomplete="off"></label>
+    <div class="prompt-actions">
+      <button type="button" data-card-edit-cancel>cancel</button>
+      <button value="ok">save</button>
+    </div>
+  </form>
+</dialog>
 {% endblock %}
 
 {% block keys %}

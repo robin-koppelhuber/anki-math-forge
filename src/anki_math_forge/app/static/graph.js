@@ -92,12 +92,15 @@ function palette() {
 }
 
 let colours = palette();
-if (window.matchMedia) {
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    colours = palette();
-    draw();
-  });
+function repaint() {
+  colours = palette();
+  draw();
 }
+if (window.matchMedia) {
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", repaint);
+}
+/* The switch in the top bar pins a theme without the system changing. */
+window.addEventListener("forge:theme", repaint);
 
 /* Where a node sits: what somebody dragged it to, else where the layout put
    it. Two maps rather than one, so putting a box back is deleting an entry

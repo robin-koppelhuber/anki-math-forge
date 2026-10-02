@@ -265,3 +265,47 @@ def test_the_two_ways_of_saying_read_only_agree() -> None:
         if "<" in line:  # a shape to fill in, not a command
             continue
         assert offer.reads == (runs_mod.effect_of(line) == "reads"), line
+
+
+# -- a result outlives the page that asked for it ---------------------------
+
+
+def test_the_list_says_what_ran_newest_first(repo: Path) -> None:
+    a_repo(repo)
+    at = client(repo)
+
+    first = at.post("/api/run", json={"run": "uv run forge audit"}).json()["id"]
+    second = at.post("/api/run", json={"run": "uv run forge check"}).json()["id"]
+    finished(at, first)
+    finished(at, second)
+
+    listed = at.get("/api/runs").json()
+    assert [r["id"] for r in listed["runs"]][:2] == [second, first]
+    assert listed["running"] == 0
+    assert listed["runs"][0]["run"] == "forge check", "as typed, without the --json"
+    assert listed["runs"][0]["effect"] == "reads"
+
+
+def test_the_list_says_which_runs_wrote(repo: Path) -> None:
+    a_repo(repo)
+    at = client(repo)
+
+    run = at.post(
+        "/api/run", json={"run": "uv run forge units classify", "confirmed": True}
+    ).json()
+    finished(at, run["id"])
+
+    assert at.get("/api/runs").json()["runs"][0]["effect"] == "repo"
+
+
+def test_every_page_carries_the_way_to_the_list(repo: Path) -> None:
+    """A run started on the setup stage is still worth reading from the
+    triage view, so the control is on every page, keyed by `data-` names
+    rather than by anything about how it looks."""
+    a_repo(repo)
+    at = client(repo)
+
+    for url in ("/units?project=demo&state=all", "/setup?project=demo", "/projects"):
+        page = at.get(url).text
+        assert "data-runs-open" in page, url
+        assert "data-runs-list" in page, url

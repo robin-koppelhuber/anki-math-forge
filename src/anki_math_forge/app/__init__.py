@@ -38,7 +38,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 from markupsafe import Markup
 
-from .. import check, latex, model, study
+from .. import changes, check, latex, model, study
 from .. import graph as graph_mod
 from .. import projects as projects_mod
 from .. import topics as topics_mod
@@ -57,6 +57,7 @@ from ..config import (
     save_study_order,
 )
 from ..ledger import Ledger, LockTimeout, Unit, open_ledgers
+from ..ledger import add_unit as add_unit_to
 from ..model import Card, StaleFileError
 from ..sync import (
     in_study_order,
@@ -1003,6 +1004,11 @@ def create_app(config: Config) -> FastAPI:
                 # One list per thing you can select. Rendered together and
                 # shown one at a time, like the panels themselves, so the
                 # page stays a plain document with the script doing nothing.
+                # The smaller panes' lists, from the same registry as the
+                # rest, so they run from the page like everything else.
+                "pane_offers": lambda pane: runs.propose(
+                    pane, runs.Ambient(project=name)
+                ),
                 "commands": {
                     # The panel that creates one carries its own command,
                     # under the form, where the thing it follows on from is.
@@ -1646,7 +1652,15 @@ def create_app(config: Config) -> FastAPI:
                 409,
                 f"`{line}` {jobs.WARNINGS[effect]} Ask again with `confirmed`.",
             )
-        return runner.start(argv, config.root).payload()
+        return runner.start(argv, config.root, effect).payload()
+
+    @app.get("/api/runs")
+    def list_runs() -> Any:
+        """Every run this server remembers, newest first, and how many are
+        still going. One request answers both the indicator and the list,
+        so the two cannot disagree about what is in flight."""
+        runs = [run.payload() for run in runner.listed()]
+        return {"running": sum(1 for r in runs if not r["done"]), "runs": runs}
 
     @app.get("/api/run/{run_id}")
     def read_run(run_id: str) -> Any:
@@ -1719,6 +1733,45 @@ def create_app(config: Config) -> FastAPI:
 
     # -- unit actions -----------------------------------------------------
 
+    @app.post("/api/units/{project}")
+    def add_unit(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """A unit typed in on the triage page: `forge units add` from a
+        dialog, through the same function, so the two cannot disagree about
+        the id it takes or what asking twice does."""
+        if not (config.projects_dir / project).is_dir():
+            raise HTTPException(404, f"no project {project!r}")
+
+        def listed(key: str) -> list[str]:
+            raw = body.get(key) or []
+            items = raw.split(",") if isinstance(raw, str) else list(raw)
+            return [str(item).strip() for item in items if str(item).strip()]
+
+        try:
+            unit, created = add_unit_to(
+                config.units_path(project),
+                project,
+                str(body.get("subject", "")).strip(),
+                gist=str(body.get("gist", "")),
+                preview=str(body.get("preview", "")),
+                document=str(body.get("document", "")).strip(),
+                lang=str(body.get("lang", "")).strip(),
+                tags=listed("tags"),
+                refs=listed("refs"),
+            )
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except LockTimeout:
+            return JSONResponse(
+                {"error": "units.jsonl is being written by something else; retry",
+                 "stale": True},
+                status_code=409,
+            )
+        return {
+            "created": created,
+            "unit": _unit_payload(unit, config),
+            "pipeline": pipeline_counts(config, _scope(body, project)),
+        }
+
     @app.post("/api/units/{project}/{unit_id:path}/state")
     def set_unit_state(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
         def act(ledger: Ledger) -> Unit:
@@ -1752,7 +1805,9 @@ def create_app(config: Config) -> FastAPI:
         text = str(body.get("text", "")).strip()
         if not text:
             raise HTTPException(400, "empty annotation")
-        return _mutate_ledger(config, project, body, lambda led: led.annotate(unit_id, text))
+        return _mutate_ledger(
+            config, project, body, lambda led: led.annotate(unit_id, text), unit_id
+        )
 
     @app.post("/api/units/{project}/{unit_id:path}/answer")
     def answer_unit_note(project: str, unit_id: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -1831,11 +1886,11 @@ def create_app(config: Config) -> FastAPI:
 
     @app.post("/api/cards/{uid}/approve")
     def approve(uid: str, body: dict[str, Any] = Body(...)) -> Any:
-        return _mutate_card(config, uid, body, lambda card: card.approve())
+        return _mutate_card(config, uid, body, lambda card: card.approve(), decided="approved")
 
     @app.post("/api/cards/{uid}/reject")
     def reject(uid: str, body: dict[str, Any] = Body(...)) -> Any:
-        return _mutate_card(config, uid, body, lambda card: card.reject())
+        return _mutate_card(config, uid, body, lambda card: card.reject(), decided="rejected")
 
     @app.post("/api/cards/{uid}/unapprove")
     def unapprove(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -1845,7 +1900,9 @@ def create_app(config: Config) -> FastAPI:
         matching), but changing your mind is not an edit -- and reaching for
         the editor to make a token change would be a worse way to say so.
         """
-        return _mutate_card(config, uid, body, lambda card: card.unapprove())
+        return _mutate_card(
+            config, uid, body, lambda card: card.unapprove(), decided="back to draft"
+        )
 
     @app.post("/api/cards/{uid}/grade")
     def set_grade(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -1862,10 +1919,17 @@ def create_app(config: Config) -> FastAPI:
         a mis-click.
         """
         key = str(body.get("key", ""))
-        if key not in ("frequency", "derivation"):
+        # `relearn` rides along: it is the same kind of thing, a judgement
+        # outside the hash that you may want to overrule while reading.
+        vocabularies = {
+            "frequency": model.FREQUENCIES,
+            "derivation": model.DERIVATIONS,
+            "relearn": model.RELEARN,
+        }
+        if key not in vocabularies:
             raise HTTPException(400, f"{key!r} is not a grading")
         value = str(body.get("value", ""))
-        allowed = model.FREQUENCIES if key == "frequency" else model.DERIVATIONS
+        allowed = vocabularies[key]
         if value and value not in allowed:
             raise HTTPException(400, f"{value!r} is not one of {', '.join(allowed)}")
         return _mutate_card(config, uid, body, lambda card: card.set_grade(key, value))
@@ -2010,6 +2074,50 @@ def create_app(config: Config) -> FastAPI:
         if not text:
             raise HTTPException(400, "empty annotation")
         return _mutate_card(config, uid, body, lambda card: card.edit_annotation(index, text))
+
+    @app.get("/api/cards/{uid}/text")
+    def card_text(uid: str) -> Any:
+        """Front and back as the file has them, for the editor to start from.
+
+        Read when the editor opens rather than carried on the page, so what
+        you edit is what is on disk now, and the mtime that comes with it is
+        what the save is checked against.
+        """
+        card = _find_card(config, uid)
+        if card is None or card.path is None:
+            raise HTTPException(404, f"no card {uid}")
+        return {
+            "uid": card.uid,
+            "front": card.section("front") or "",
+            "back": card.section("back") or "",
+            "mtime": str(card.mtime_ns or 0),
+        }
+
+    @app.post("/api/cards/{uid}/text")
+    def edit_card_text(uid: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Front and back, edited in place (ROADMAP §18).
+
+        Nothing here enforces invariant 5: an edit changes `content_hash`,
+        and that alone puts an approved card back in the draft pile. With
+        `note`, an annotation goes on in the same write, so asking for the
+        edit to be checked cannot be forgotten between two requests.
+
+        Not in the undo stack, like rewording an annotation: `restore` puts a
+        status back, and the way to take back a wording is to edit it again.
+        """
+        front = str(body.get("front", "")).strip()
+        back = str(body.get("back", "")).strip()
+        if not front or not back:
+            raise HTTPException(400, "a card needs a front and a back")
+        note = str(body.get("note", "")).strip()
+
+        def act(card: Card) -> None:
+            card.set_section("front", front)
+            card.set_section("back", back)
+            if note:
+                card.add_annotation(note)
+
+        return _mutate_card(config, uid, body, act)
 
     @app.post("/api/cards/{uid}/annotate")
     def annotate_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -4935,6 +5043,8 @@ def _unit_payload(
     image = crop_url(unit, context=pdf_context(config, unit.project))
     sample, lang = unit.scannable
     return {
+        # What the stale guard compares; see `unit_version`.
+        "version": unit_version(unit),
         # What the reader marked here and on the pages around it: the text
         # each one covers and whatever they wrote about it. The crop shows
         # where the marks are; this is what they say.
@@ -5025,6 +5135,10 @@ def _card_payload(
         # reviewing, which is a poor way to keep a dependency graph honest.
         "frequency": card.frequency,
         "derivation": card.derivation,
+        "relearn": card.relearn,
+        # What moved since you last decided on it (ROADMAP §21). Local to
+        # this machine and `None` for a card with no record yet.
+        "changes": changes.view(config, card),
         # The same permission the unit carries, resolved for this card: its own
         # answer if it has one, else the unit's, else the source's, else off.
         "web": _card_web(card, config),
@@ -5145,6 +5259,7 @@ def _mutate_card(
     body: dict[str, Any],
     action: Any,
     remember: Any = None,
+    decided: str = "",
 ) -> Any:
     card = _find_card(config, uid)
     if card is None or card.path is None:
@@ -5166,6 +5281,10 @@ def _mutate_card(
         card.save(expect_mtime_ns=expected)
     except StaleFileError as exc:
         return JSONResponse({"error": str(exc), "stale": True}, status_code=409)
+    if decided:
+        # A review decision is where the change record takes its snapshot,
+        # so the next review shows what moved after this one.
+        changes.record(config, card, decided)
     _, findings = _checked(config)
     return {
         "card": _card_payload(model.load(card.path), findings, config),
@@ -5175,6 +5294,24 @@ def _mutate_card(
         # what it is showing rather than with what was just clicked.
         "pipeline": pipeline_counts(config, _scope(body)),
     }
+
+
+def unit_version(unit: Unit) -> str:
+    """A short fingerprint of everything a unit records.
+
+    What the stale guard compares, one unit at a time. It used to compare
+    the mtime of the whole `units.jsonl`, so any write to any unit, a
+    background `units extract` over the rest of the book included,
+    refused the next keystroke on whatever you were looking at and
+    reloaded the page. What has to be refused is a decision about a unit
+    that moved under you, and nothing else.
+    """
+    text = json.dumps(unit.to_json(), sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:12]
+
+
+class _UnitMoved(Exception):
+    """The unit a write was aimed at is not the one the page drew."""
 
 
 def _mutate_ledger(
@@ -5187,14 +5324,26 @@ def _mutate_ledger(
     path = config.units_path(project)
     if not path.exists():
         raise HTTPException(404, f"no ledger for source {project!r}")
+    # The unit's own version where the page sent one, and the file's mtime
+    # only where it did not: a page that predates the per-unit guard, or a
+    # write that is not about one unit.
+    version = str(body.get("version", "")).strip()
     expected = _expected_mtime(body)
-    if expected is not None and path.stat().st_mtime_ns != expected:
+    if not (version and unit_id) and expected is not None and (
+        path.stat().st_mtime_ns != expected
+    ):
         return JSONResponse(
             {"error": f"{path.name} changed on disk; reload and retry", "stale": True},
             status_code=409,
         )
     try:
         with Ledger.edit(path) as ledger:
+            if version and unit_id:
+                # Inside the lock, so nothing can move it between the check
+                # and the write.
+                drawn = ledger.get(unit_id)
+                if drawn is not None and unit_version(drawn) != version:
+                    raise _UnitMoved
             # Captured inside the lock, before the action, so undo restores
             # what was actually there rather than what the browser last
             # happened to see.
@@ -5203,6 +5352,11 @@ def _mutate_ledger(
                 unit = action(ledger)
             except (KeyError, ValueError) as exc:
                 raise HTTPException(400, str(exc)) from exc
+    except _UnitMoved:
+        return JSONResponse(
+            {"error": f"{unit_id} changed on disk; reload and retry", "stale": True},
+            status_code=409,
+        )
     except LockTimeout:
         # The same answer as a mtime that moved, because it is the same
         # situation one moment earlier: somebody else is in the file. This
@@ -5219,6 +5373,7 @@ def _mutate_ledger(
         )
     return {
         "unit": _unit_payload(unit, config),
+        "version": unit_version(unit) if isinstance(unit, Unit) else "",
         "mtime": _mtime(path),
         "before": before,
         # So the filter rail can follow the decision without a page load --

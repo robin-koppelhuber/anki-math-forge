@@ -98,11 +98,30 @@ function viewScope() {
   return (deck && deck.dataset.project) || "";
 }
 
+/* The unit a write is aimed at, if it is one: the id sits in the URL of
+   every unit write, so this is found here once rather than passed in at
+   every call site. */
+function unitOf(url) {
+  const match = /^\/api\/units\/[^/]+\/(.+)\/[a-z-]+$/.exec(url);
+  if (!match) return null;
+  return document.querySelector(`.unit.item[data-id="${CSS.escape(match[1])}"]`);
+}
+
 async function post(url, body) {
+  /* The unit's own version, so the server refuses this only if *that*
+     unit changed. Comparing the whole ledger's mtime made any background
+     run, an extract over the rest of the book, cost you a reload on your
+     next keystroke here. */
+  const unit = unitOf(url);
+  const version = unit ? unit.dataset.version : "";
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scope: viewScope(), ...(body || {}) }),
+    body: JSON.stringify({
+      scope: viewScope(),
+      ...(version ? { version } : {}),
+      ...(body || {}),
+    }),
   });
   let payload = {};
   try {
@@ -119,6 +138,7 @@ async function post(url, body) {
     toast(payload.detail || payload.error || `error ${response.status}`, "bad");
     throw new Error(payload.detail || payload.error || response.statusText);
   }
+  if (unit && payload.version) unit.dataset.version = payload.version;
   return payload;
 }
 
@@ -443,6 +463,39 @@ function cycleGuide() {
   ["guide-cycle", "guide-tab"].forEach((id) => {
     const button = document.getElementById(id);
     if (button) button.addEventListener("click", cycleGuide);
+  });
+})();
+
+/* The theme: what the system says, or pinned to one. The pinned value is
+   applied by an inline script in `base.html` before anything paints; this
+   only changes it. `theme.css` does the rest off `data-theme`, and the
+   canvas, which draws with colours read once, listens for `forge:theme`. */
+const THEME_KEY = "anki-forge.theme";
+const THEMES = ["system", "light", "dark"];
+
+function applyTheme(theme) {
+  if (theme === "light" || theme === "dark") {
+    document.documentElement.dataset.theme = theme;
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+  document.querySelectorAll("[data-theme-cycle]").forEach((button) => {
+    button.dataset.themeNow = theme;
+    button.title = "theme: " + (theme === "system" ? "follows the system" : theme);
+  });
+}
+
+(function wireTheme() {
+  let theme = document.documentElement.dataset.theme || "system";
+  applyTheme(theme);
+  document.querySelectorAll("[data-theme-cycle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      theme = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length];
+      forget(THEME_KEY, theme === "system" ? null : theme);
+      applyTheme(theme);
+      window.dispatchEvent(new CustomEvent("forge:theme", { detail: theme }));
+      toast(button.title);
+    });
   });
 })();
 
@@ -1241,6 +1294,64 @@ document.addEventListener("click", async (event) => {
     delete button.dataset.busy;
   }
 });
+
+/* Every run this server remembers, so a result outlives the page that
+   asked for it. The button says how many are still going, or just that
+   there are runs to read; the dialog lists them, newest first.
+
+   Its own poll, fast while something is in flight and slow otherwise:
+   the endpoint is a dictionary read, and the four-second counts tick is
+   too slow to say "done" for a run that took half a second. */
+(function watchRuns() {
+  const open = document.querySelector("[data-runs-open]");
+  const dialog = document.querySelector("[data-runs-dialog]");
+  const list = document.querySelector("[data-runs-list]");
+  if (!open || !dialog || !list) return;
+  let last = "";
+
+  async function refresh() {
+    let answer;
+    try {
+      answer = await (await fetch("/api/runs")).json();
+    } catch {
+      return 5000;
+    }
+    open.hidden = !answer.runs.length;
+    open.dataset.running = String(answer.running);
+    open.querySelector("[data-runs-count]").textContent = answer.running
+      ? `${answer.running} running`
+      : "runs";
+    /* Redrawn only when something changed, or an open <details> would
+       snap shut under the reader every second. */
+    const signature = JSON.stringify(answer.runs.map((r) => [r.id, r.done]));
+    if (signature !== last) {
+      last = signature;
+      list.replaceChildren(...answer.runs.map(runRow));
+    }
+    return answer.running ? 800 : 5000;
+  }
+
+  function runRow(run) {
+    const row = document.createElement("li");
+    row.dataset.run = run.id;
+    row.dataset.state = run.done ? (run.ok ? "ok" : "failed") : "running";
+    row.dataset.effect = run.effect;
+    const fold = document.createElement("details");
+    const head = document.createElement("summary");
+    const when = new Date(run.at * 1000).toLocaleTimeString();
+    head.textContent = `${when}  ${run.run}  ${run.done ? (run.ok ? "ok" : "failed") : "running…"}`;
+    fold.appendChild(head);
+    if (run.done) fold.appendChild(renderRun(run));
+    row.appendChild(fold);
+    return row;
+  }
+
+  open.addEventListener("click", () => dialog.showModal());
+  (async function loop() {
+    const wait = document.visibilityState === "visible" ? await refresh() : 5000;
+    setTimeout(loop, wait);
+  })();
+})();
 
 async function untilDone(id) {
   /* Its own poll rather than the four second counts tick: a run is

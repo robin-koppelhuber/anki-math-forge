@@ -695,6 +695,63 @@ document.addEventListener("click", (event) => {
   }
 });
 
+/* A unit typed in: the dialog in `units.html`, posted to the endpoint that
+   `forge units add` shares. The new unit is not in the deck, which the server
+   drew, so success goes to it by address. A refusal keeps the dialog open
+   with what you typed, which is why this is not `post()`: that one reloads
+   on a 409. */
+async function newUnit() {
+  const dialog = document.querySelector("[data-new-unit-dialog]");
+  const form = dialog && dialog.querySelector("[data-new-unit-form]");
+  if (!form) return;
+  form.reset();
+  dialog.showModal();
+  form.elements.subject.focus();
+}
+
+(function wireNewUnit() {
+  const dialog = document.querySelector("[data-new-unit-dialog]");
+  const form = dialog && dialog.querySelector("[data-new-unit-form]");
+  if (!form) return;
+  const project = document.getElementById("deck").dataset.project;
+  dialog.querySelector("[data-new-unit-cancel]").addEventListener("click", () =>
+    dialog.close(),
+  );
+  form.elements.preview.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const body = { scope: viewScope() };
+    new FormData(form).forEach((value, key) => (body[key] = String(value)));
+    const response = await fetch("/api/units/" + encodeURIComponent(project), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let payload = {};
+    try {
+      payload = await response.json();
+    } catch (e) {
+      payload = { error: response.statusText };
+    }
+    if (!response.ok) {
+      toast(payload.detail || payload.error || `error ${response.status}`, "bad");
+      return;
+    }
+    dialog.close();
+    const id = payload.unit.id;
+    toast(payload.created ? id + " added" : id + " was already there");
+    const state = payload.created ? "new" : "all";
+    location.href =
+      "/units?project=" + encodeURIComponent(project) + "&state=" + state +
+      "#" + encodeURIComponent(id);
+  });
+})();
+
 /* Every key that writes goes through `oneAtATime`; the ones that only move or
    toggle a panel do not. Guarding at the key rather than inside the write
    functions is deliberate: `Q` is a state change *and* a note, and a guard one
@@ -721,6 +778,7 @@ bindKeys({
   "context-size": () => oneAtATime(cycleContext),
   "web-lookups": () => oneAtATime(cycleWeb),
   "pdf-view": cyclePdfView,
+  "new-unit": newUnit,
   next: () => deck.nextPending(),
   prev: () => deck.prev(),
   "next-alt": () => deck.nextPending(),

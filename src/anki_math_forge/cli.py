@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from . import audit as audit_mod
+from . import changes as changes_mod
 from . import check as check_mod
 from . import classify as classify_mod
 from . import extract as extract_mod
@@ -413,6 +414,11 @@ def _fill_cards_filters(p: argparse.ArgumentParser) -> None:
     p.add_argument("--status", default="all", help="draft, approved, rejected, or all")
     p.add_argument("--section", default=None)
     p.add_argument("--limit", type=int, default=0)
+    p.add_argument(
+        "--changes",
+        action="store_true",
+        help="what moved on each card since you last decided on it (kept on this machine only)",
+    )
     p.add_argument("--json", action="store_true")
 
 
@@ -867,17 +873,23 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                     file=sys.stderr,
                 )
             if not args.dry_run and report.units and not refused:
-                ledger = ledger_mod.Ledger.load(config.units_path(source))
-                added, refreshed = ledger.upsert(report.units)
-                # Narrowing `documents` leaves the earlier import behind,
-                # describing a PDF this source has stopped reading. Untouched
-                # units go; anything decided stays and is reported.
-                dropped, kept = ledger.drop_from_documents(report.excluded)
-                # And narrowing `units_from` leaves behind units whose colour
-                # no longer starts one. Same trade, for the same reason: this
-                # run is the moment the scheme and the ledger are both in hand.
-                orphans, decided = ledger.drop_from_scheme(scheme.makes_a_unit)
-                ledger.save()
+                # Through `Ledger.edit`, under the lock, like every other
+                # write. This was the one that loaded and saved bare, which is
+                # the last-writer-wins case the lock exists for, and the page
+                # can start an import now while you are triaging the same
+                # ledger.
+                with ledger_mod.Ledger.edit(config.units_path(source)) as ledger:
+                    added, refreshed = ledger.upsert(report.units)
+                    # Narrowing `documents` leaves the earlier import behind,
+                    # describing a PDF this source has stopped reading.
+                    # Untouched units go; anything decided stays and is
+                    # reported.
+                    dropped, kept = ledger.drop_from_documents(report.excluded)
+                    # And narrowing `units_from` leaves behind units whose
+                    # colour no longer starts one. Same trade, for the same
+                    # reason: this run is the moment the scheme and the
+                    # ledger are both in hand.
+                    orphans, decided = ledger.drop_from_scheme(scheme.makes_a_unit)
                 # And the text layer cached for a document nothing reads any
                 # more. `source-text` prints every one it finds, so leaving it
                 # would hand a card writer a paper this source has dropped.
@@ -1368,44 +1380,30 @@ def _add_unit(args: argparse.Namespace, config: Config) -> int:
     if not args.project:
         print("--add needs --project", file=sys.stderr)
         return MISUSE
-    # `slugify` answers "card" for anything with no letters or digits in it,
-    # which is the right fallback when a slug is being derived from a card's
-    # front and the wrong one here: it would file every unnameable proposal
-    # under one id and silently make the second a no-op against the first.
-    if not re.search(r"[a-zA-Z0-9]", args.add):
-        print(f"--add {args.add!r} has nothing to make an id from", file=sys.stderr)
-        return MISUSE
-    slug = model.slugify(args.add)
-
     folder = config.projects_dir / args.project
     if not folder.is_dir():
         known = ", ".join(sorted(config.projects)) or "(none)"
         print(f"no project {args.project!r}; configured: {known}", file=sys.stderr)
         return FAILED
-
-    unit_id = f"{args.project}:{slug}"
-    path = config.units_path(args.project)
-    with ledger_mod.Ledger.edit(path) as led:
-        if led.get(unit_id) is not None:
-            print(f"{unit_id} is already there, left alone")
-            return OK
-        led.units.append(
-            ledger_mod.Unit(
-                id=unit_id,
-                # Whatever locator it has, which for a proposal is usually
-                # nothing at all. A work, where the project reads several:
-                # `crop_context` and the page window are facts about a
-                # document, and without this one there is nothing to resolve
-                # them against.
-                locator=ledger_mod.Locator(document=args.document),
-                gist=args.gist or "",
-                preview=args.preview or "",
-                lang=args.lang,
-                tags=list(args.tag),
-                refs=list(args.ref),
-            )
+    try:
+        unit, created = ledger_mod.add_unit(
+            config.units_path(args.project),
+            args.project,
+            args.add,
+            gist=args.gist or "",
+            preview=args.preview or "",
+            document=args.document,
+            lang=args.lang,
+            tags=args.tag,
+            refs=args.ref,
         )
-    print(f"{unit_id}  new" + (f"  {args.gist}" if args.gist else ""))
+    except ValueError as exc:
+        print(f"--add: {exc}", file=sys.stderr)
+        return MISUSE
+    if not created:
+        print(f"{unit.id} is already there, left alone")
+        return OK
+    print(f"{unit.id}  new" + (f"  {unit.gist}" if unit.gist else ""))
     return OK
 
 
@@ -1772,6 +1770,9 @@ def cmd_new(args: argparse.Namespace, config: Config) -> int:
     folder = unit_ids[0].split(":", 1)[0] if unit_ids else ""
     path = config.cards_dir / folder / f"{uid}-{model.slugify(args.front)}.md"
     card.save(path)
+    # The first snapshot, so the first review can show what the passes after
+    # this one did to the stub.
+    changes_mod.record(config, card, "written")
 
     for unit_id in unit_ids:
         with ledger_mod.Ledger.edit(ledgers[unit_id.split(":", 1)[0]].path) as led:
@@ -1938,6 +1939,11 @@ def cmd_cards(args: argparse.Namespace, config: Config) -> int:
                         "gist": c.gist,
                         "tags": c.tags,
                         "path": str(c.path),
+                        **(
+                            {"changes": changes_mod.view(config, c)}
+                            if args.changes
+                            else {}
+                        ),
                     }
                     for c in cards
                 ],
@@ -1953,8 +1959,29 @@ def cmd_cards(args: argparse.Namespace, config: Config) -> int:
         # The gist, not the front: a LaTeX front is unreadable in a column
         # and the gist exists for exactly this.
         print(f"{card.uid}  {card.effective_status:9} {card.gist or card.unit}")
+        if args.changes:
+            for line in _change_lines(changes_mod.view(config, card)):
+                print("    " + line)
     print(f"\n{len(cards)} cards")
     return OK
+
+
+def _change_lines(seen: dict[str, Any] | None) -> list[str]:
+    """`--changes`, for a person: what moved since the last decision."""
+    if seen is None:
+        return ["no change record on this machine"]
+    pending = seen["pending"]
+    if not pending:
+        return [f"unchanged since {seen['after']} {seen['since']}"]
+    out = [f"since {seen['after']} {seen['since']}:"]
+    out += [
+        f"  {f['key']}: {f['before'] if f['before'] is not None else '-'}"
+        f" -> {f['after'] if f['after'] is not None else '-'}"
+        for f in pending["fields"]
+    ]
+    out += [f"  {s['name']}: {s['summary']}" for s in pending["sections"]]
+    out += [f"  resolved: {line}" for line in pending["resolved"]]
+    return out
 
 
 def cmd_projects(args: argparse.Namespace, config: Config) -> int:

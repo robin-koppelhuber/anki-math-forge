@@ -814,6 +814,30 @@ confidently wrong one gets filtered on later and shapes what you drill.
 Three values each, deliberately. A 1–10 scale would be invented precision that
 no two sessions would apply the same way.
 
+## Relearn
+
+When you change a card that is already in Anki, decide how much of it the
+reader has to learn again, and say so in the frontmatter:
+
+`relearn: slightly | more | reset`
+
+- `slightly` — the card says the same thing more clearly: a gloss, a
+  condition spelled out that was already implied, a tidier proof. One
+  review settles it. In Anki: due today, interval kept.
+- `more` — the card now asks for something it did not: a new condition
+  that changes when it holds, a second term in the answer, a proof you are
+  now expected to reproduce. In Anki: back into relearning, as if forgotten.
+- `reset` — it is a different card under the same uid: the front asks a
+  different question, or the answer changed. In Anki: new again.
+
+Leave it off when the change is to wording only, or to anything outside
+what a reviewer reads (`## notes`, tags, gradings). Leave it off on a card
+that has never been pushed: there is nothing to relearn.
+
+`anki push` carries it out once the card is approved again, and takes the
+key off the file. It is outside `content_hash`, so setting it does not
+un-approve anything; the edit that prompted it already did.
+
 ## Working from a unit
 
 **A card is not one-to-one with a unit.** A display equation the segmenter cut

@@ -183,8 +183,29 @@ def run(
             # so it does not queue up behind itself.
             report.skipped.append((comment.uid, "already recorded; cleared in Anki"))
         elif not dry_run:
-            card.add_annotation(line)
-            card.save()
+            # Against the mtime it was loaded at, like every write the app
+            # makes, and once more from a fresh read if something got there
+            # first: the change is one appended line, so re-reading and
+            # appending is always right. If it still moves, the comment is
+            # left in Anki rather than cleared, because after this run the
+            # line in the file would have been the only copy.
+            written = False
+            for _ in range(2):
+                card.add_annotation(line)
+                try:
+                    card.save(expect_mtime_ns=card.mtime_ns)
+                    written = True
+                    break
+                except model.StaleFileError:
+                    fresh = model.find(config.cards_dir, comment.uid)
+                    if fresh is None:
+                        break
+                    card = fresh
+            if not written:
+                report.skipped.append(
+                    (comment.uid, "card changed while this ran; left in Anki for next time")
+                )
+                continue
 
         if not dry_run:
             try:

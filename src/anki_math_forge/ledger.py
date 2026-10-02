@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -48,7 +49,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .model import ANNOTATION_PREFIX, annotation_audience, note_body, write_atomic
+from .model import ANNOTATION_PREFIX, annotation_audience, note_body, slugify, write_atomic
 
 STATES = ("new", "queued", "skipped", "carded")
 
@@ -832,6 +833,7 @@ def lock(path: Path, timeout: float = LOCK_TIMEOUT) -> Iterator[None]:
     finally:
         lockfile.unlink(missing_ok=True)
 
+
 def open_ledgers(projects_dir: Path) -> dict[str, Ledger]:
     """Every units.jsonl under the sources directory, keyed by source name."""
     ledgers: dict[str, Ledger] = {}
@@ -840,3 +842,53 @@ def open_ledgers(projects_dir: Path) -> dict[str, Ledger]:
     for path in sorted(projects_dir.glob("*/units.jsonl")):
         ledgers[path.parent.name] = Ledger.load(path)
     return ledgers
+
+
+def add_unit(
+    path: Path,
+    project: str,
+    subject: str,
+    *,
+    gist: str = "",
+    preview: str = "",
+    document: str = "",
+    lang: str = "",
+    tags: list[str] | None = None,
+    refs: list[str] | None = None,
+) -> tuple[Unit, bool]:
+    """A unit where there was nothing to segment, and whether it is new.
+
+    `forge units add` and the dialog on the triage page both write through
+    here. It writes no front and no back, which is the line between triage
+    and review (invariant 3).
+
+    The id is `<project>:<slug of subject>`, so asking twice adds once. An
+    existing unit comes back exactly as it is: it may have been triaged
+    since, and a proposal must not walk over a decision.
+    """
+    # `slugify` answers "card" for anything with no letters or digits in it,
+    # which would file every unnameable proposal under one id and make the
+    # second a silent no-op against the first.
+    if not re.search(r"[a-zA-Z0-9]", subject):
+        raise ValueError(f"{subject!r} has nothing to make an id from")
+    unit_id = f"{project}:{slugify(subject)}"
+    with Ledger.edit(path) as led:
+        existing = led.get(unit_id)
+        if existing is not None:
+            return existing, False
+        unit = Unit(
+            id=unit_id,
+            # Whatever locator it has, which for a proposal is usually nothing
+            # at all. A work, where the project reads several: `crop_context`
+            # and the page window are facts about a document, and without this
+            # one there is nothing to resolve them against.
+            locator=Locator(document=document),
+            # One line, as `units set --gist` stores it.
+            gist=" ".join(gist.split()),
+            preview=preview,
+            lang=lang,
+            tags=list(tags or []),
+            refs=list(refs or []),
+        )
+        led.units.append(unit)
+    return unit, True

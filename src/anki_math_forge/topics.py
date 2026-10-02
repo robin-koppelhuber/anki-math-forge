@@ -177,3 +177,20 @@ def coverage(config: Config, project: str, ledger: Ledger | None = None) -> Cove
         covered=sum(t.covered for t in topics),
         topics=topics,
     )
+
+
+def asks_by_unit(config: Config, project: str) -> dict[str, tuple[str, ...]]:
+    """Every unit that stands under an ask, and those asks by slug, in the
+    order `topics.md` writes them.
+
+    What `[decks.by_topic]` routes on. One unit can sit under two asks
+    where two outlines list the same entry.
+    """
+    found: dict[str, list[str]] = {}
+    for topic in read(config, project):
+        for entry in topic.outline:
+            for unit_id in entry.units:
+                asks = found.setdefault(unit_id, [])
+                if topic.slug not in asks:
+                    asks.append(topic.slug)
+    return {unit_id: tuple(asks) for unit_id, asks in found.items()}

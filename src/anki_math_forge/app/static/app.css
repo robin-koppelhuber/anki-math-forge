@@ -3727,3 +3727,61 @@ header.bar.shelf-bar {
    break. It sits on the line under the title now rather than in a column
    sized to the button beside it, where it ran through the button. */
 .known-note { overflow-wrap: anywhere; }
+
+/* The list of runs. Functional only: wide enough to read a result in, and
+   a dot that says how each one went. The look is open. */
+.runs-dialog {
+  width: min(52rem, 92vw);
+  max-height: 80vh;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.runs-dialog::backdrop { background: var(--scrim); }
+.runs-dialog form { text-align: right; }
+.runs-list { list-style: none; margin: 0; padding: 0; }
+.runs-list > li { border-bottom: 1px solid var(--line); padding: 0.3rem 0; }
+.runs-list > li[data-state="failed"] summary { color: var(--bad); }
+.runs-list > li[data-state="running"] summary { color: var(--muted); }
+[data-runs-open][data-running]:not([data-running="0"]) { color: var(--accent); }
+
+/* The new-unit dialog: the prompt's look, with several fields. Layout
+   only; the look is the prompt's. */
+.new-unit form { display: grid; gap: 0.5rem; min-width: min(32rem, 90vw); }
+.new-unit label { display: grid; gap: 0.2rem; margin: 0; }
+.new-unit textarea,
+.new-unit select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+}
+.new-unit textarea { font-family: ui-monospace, monospace; resize: vertical; }
+
+/* The card editor: the same layout as the new-unit dialog. */
+.card-edit form { display: grid; gap: 0.5rem; min-width: min(40rem, 92vw); }
+.card-edit label { display: grid; gap: 0.2rem; margin: 0; }
+.card-edit textarea {
+  font: inherit;
+  font-family: ui-monospace, monospace;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  resize: vertical;
+}
+.card-edit .card-edit-ask { display: flex; align-items: center; gap: 0.5rem; }
+.card-edit .card-edit-ask input[type="checkbox"] { width: auto; }
+.card-edit .card-edit-ask input[name="note"] { flex: 1; }
+
+/* What moved on a card since the last decision. Layout only. */
+.changes { font-size: 12px; margin: 0.4rem 0; }
+.changes summary { cursor: pointer; color: var(--muted); }
+.changes[open] summary { color: var(--ink); }
+.change-list, .change-history { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+.change-list li { margin: 0.15rem 0; overflow-wrap: anywhere; }
+.change-history { color: var(--muted); }

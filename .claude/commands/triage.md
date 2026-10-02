@@ -101,15 +101,18 @@ the urgent ones queue behind the speculative ones.
    | write | `resolved: asked what $H_\theta$ is — the Hessian in $\theta$, now glossed in ## prose` |
    | not | `resolved: asked what $H_\theta$ is — the Hessian in $\theta$, the matrix of second derivatives, which the book itself uses unglossed where it first appears and again in the Laplace approximation chapter, so ## prose now names it and draws out that the Fisher information is therefore the average curvature of the negative log-likelihood` |
 
-   There is no notes archive to append to, and none to create. Deleting a
-   note used to be unrecoverable, which is the whole reason one existed;
-   `cards/` is tracked now, so a card's own history holds every line it has
-   ever carried. For any other source an archive would be gitignored
-   alongside the ledger it was archiving, which is no protection at all.
+   There is no notes archive to append to, and none to create. The
+   `resolved:` line is the record. Most of `cards/` is not in git (see
+   `.gitignore`), so for most cards the file is the only history there is,
+   and a line you delete outright is gone.
 
    The edit changes `content_hash`, so an approved card drops back to `draft`
    and re-enters review automatically. That is the intended behaviour — do not
    re-approve anything yourself.
+
+   If the card is already in Anki and the edit changed what it asks, set
+   `relearn:` as the **card-writing** skill describes. A note that came from
+   Anki review usually means the card is in Anki.
 
 5. Confirm nothing is left dangling:
 

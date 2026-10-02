@@ -69,6 +69,8 @@ UNITS: tuple[Key, ...] = (
     Key("pdf-view", "p", "crop/page/doc"),
     Key("skip-with-reason", "S", "skip + reason"),
     Key("back-to-new", "u", "back to new"),
+    # `+` is "add" on the canvas too, where it adds a card.
+    Key("new-unit", "+", "new unit"),
     Key("next", "j", "next", sep=True),
     Key("prev", "k", "prev"),
     Key("next-alt", "ArrowDown", ""),
@@ -84,6 +86,7 @@ REVIEW: tuple[Key, ...] = (
     Key("back-to-draft", "u", "back to draft"),
     Key("undo", "z", "undo", sep=True),
     Key("editor", "e", "$EDITOR"),
+    Key("edit-card", "E", "edit front/back"),
     Key("note-claude", "n", "note for claude"),
     Key("note-me", "N", "note for me"),
     Key("resolve-note", "x", "resolve first note"),
@@ -148,6 +151,7 @@ SHARED: dict[str, str] = {
     "ArrowDown": "next",
     "ArrowUp": "previous",
     "?": "the guide",
+    "+": "add something new: a unit in triage, a card on the canvas",
 }
 
 BY_VIEW: dict[str, tuple[Key, ...]] = {

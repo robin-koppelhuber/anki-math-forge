@@ -50,6 +50,11 @@ class Run:
     id: str
     argv: list[str]
     started: float
+    #: What it changes, so a list of runs can say which ones wrote.
+    effect: str = "reads"
+    #: Wall-clock start, for a list a person reads. `started` is monotonic
+    #: and only good for measuring.
+    at: float = field(default_factory=time.time)
     done: bool = False
     ok: bool = False
     seconds: float = 0.0
@@ -63,7 +68,9 @@ class Run:
     def payload(self) -> dict[str, Any]:
         return {
             "id": self.id,
-            "run": "forge " + " ".join(self.argv),
+            "run": "forge " + " ".join(a for a in self.argv if a != "--json"),
+            "effect": self.effect,
+            "at": round(self.at),
             "done": self.done,
             "ok": self.ok,
             "seconds": round(self.seconds, 2),
@@ -79,8 +86,13 @@ class Runner:
     runs: dict[str, Run] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def start(self, argv: list[str], root: Any) -> Run:
-        run = Run(id=uuid.uuid4().hex[:12], argv=list(argv), started=time.monotonic())
+    def start(self, argv: list[str], root: Any, effect: str = "reads") -> Run:
+        run = Run(
+            id=uuid.uuid4().hex[:12],
+            argv=list(argv),
+            started=time.monotonic(),
+            effect=effect,
+        )
         with self.lock:
             self.runs[run.id] = run
             # Oldest first, so the trim takes the ones nobody is watching.
@@ -92,6 +104,16 @@ class Runner:
     def get(self, run_id: str) -> Run | None:
         with self.lock:
             return self.runs.get(run_id)
+
+    def listed(self) -> list[Run]:
+        """Every run this server remembers, newest first.
+
+        So a result outlives the page that asked for it: start a push,
+        go and triage something else, and the answer is still there to
+        read when it lands.
+        """
+        with self.lock:
+            return list(reversed(self.runs.values()))
 
     def _work(self, run: Run, root: Any) -> None:
         """The command, in this process, with its output captured.

@@ -111,6 +111,7 @@ def check_card(
     for field_name, vocabulary in (
         ("frequency", model.FREQUENCIES),
         ("derivation", model.DERIVATIONS),
+        ("relearn", model.RELEARN),
     ):
         value = str(card.frontmatter.get(field_name, "") or "")
         if value and value not in vocabulary:
@@ -435,6 +436,7 @@ def check_deck(
     findings.extend(check_requires(cards))
     findings.extend(check_images(cards, config))
     findings.extend(check_sources(config))
+    findings.extend(check_topic_decks(config))
 
     by_uid: dict[str, list[Card]] = defaultdict(list)
     for card in cards:
@@ -528,6 +530,33 @@ def check_sources(config: Config) -> list[Finding]:
                     "the other with `url`",
                 )
             )
+    return findings
+
+
+def check_topic_decks(config: Config) -> list[Finding]:
+    """Every `[decks.by_topic]` key names an ask in `topics.md`.
+
+    A key that names none routes nothing, and the only symptom is cards
+    landing in the project's own deck, which looks like the feature not
+    working. A warning: the cards still go somewhere sensible.
+    """
+    from . import topics
+
+    findings: list[Finding] = []
+    for name, spec in config.projects.items():
+        if not spec.topic_decks:
+            continue
+        asked = {topic.slug for topic in topics.read(config, name)}
+        for slug in spec.topic_decks:
+            if slug not in asked:
+                findings.append(
+                    Finding(
+                        WARN,
+                        "deck-topic-unknown",
+                        f"[decks.by_topic] in {name} names {slug!r}, which no "
+                        "heading in topics.md slugifies to; no card will go there",
+                    )
+                )
     return findings
 
 

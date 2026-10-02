@@ -1226,3 +1226,89 @@ def test_a_reference_is_not_asked_which_marks_make_units(repo: Path) -> None:
     assert "units_from" not in (
         repo / "projects" / "cpp" / "project.toml"
     ).read_text(encoding="utf-8")
+
+
+# -- routing a deck by topic ------------------------------------------------
+
+
+BY_TOPIC = '[decks.by_topic]\nthe-standard-containers = "Cpp::Containers"\n'
+
+
+def proposed_card(repo: Path, uid: str, unit: str, tags: str = "[]") -> Path:
+    from anki_math_forge import model
+
+    path = repo / "cards" / "cpp" / f"{uid}-x.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        f"---\nuid: {uid}\ntype: identity\nstatus: draft\n"
+        f'source: "C++"\nunit: "{unit}"\ntags: {tags}\n---\n\n'
+        "## front\n\n$a$\n\n## back\n\n$b$\n",
+        encoding="utf-8",
+    )
+    card = model.load(path)
+    card.approve()
+    card.save()
+    return path
+
+
+def topic_project(repo: Path, block: str) -> config_mod.Config:
+    """The outline above, with one entry proposed and a deck table."""
+    a_project(repo)
+    path = repo / "projects" / "cpp" / "project.toml"
+    path.write_text(f'title = "C++"\ndeck = "Cpp"\n\n{block}', encoding="utf-8")
+    run(repo, "units", "add", "vector erase-remove", "--project", "cpp")
+    run(repo, "units", "add", "something off the outline", "--project", "cpp")
+    return config_mod.load(repo)
+
+
+def test_a_card_goes_where_its_unit_was_asked_for(repo: Path) -> None:
+    """Nobody tagged it: it was proposed under the containers ask, and
+    that is what the deck is for."""
+    from anki_math_forge import sync
+    from conftest import FakeAnki
+
+    config = topic_project(repo, BY_TOPIC)
+    proposed_card(repo, "aa11bb", "cpp:vector-erase-remove")
+    proposed_card(repo, "cc22dd", "cpp:something-off-the-outline")
+    anki = FakeAnki()
+
+    sync.run(config, client=anki)
+
+    decks = {n["fields"]["uid"]: n["deck"] for n in anki.notes.values()}
+    assert decks == {"aa11bb": "Cpp::Containers", "cc22dd": "Cpp"}
+
+
+def test_a_tag_outranks_a_topic(repo: Path) -> None:
+    """A tag is one card's own subject; a topic is everything proposed
+    under it."""
+    from anki_math_forge import model, sync
+
+    config = topic_project(repo, BY_TAG + "\n" + BY_TOPIC)
+    tagged = proposed_card(repo, "aa11bb", "cpp:vector-erase-remove", '["algorithms"]')
+
+    route = sync.deck_router(config)
+    assert route(model.load(tagged)) == "Cpp::Algorithms"
+
+
+def test_a_topic_outranks_a_type(repo: Path) -> None:
+    from anki_math_forge import model, sync
+
+    config = topic_project(repo, BY_TOPIC + '\n[decks.by_type]\nidentity = "Cpp::Facts"\n')
+    on_outline = proposed_card(repo, "aa11bb", "cpp:vector-erase-remove")
+    off_outline = proposed_card(repo, "cc22dd", "cpp:something-off-the-outline")
+
+    route = sync.deck_router(config)
+    assert route(model.load(on_outline)) == "Cpp::Containers"
+    assert route(model.load(off_outline)) == "Cpp::Facts"
+
+
+def test_a_topic_deck_naming_no_ask_is_a_warning(repo: Path) -> None:
+    """Otherwise the only symptom is every card in the project's own deck."""
+    from anki_math_forge import check
+
+    config = topic_project(repo, '[decks.by_topic]\ncontainers = "Cpp::Containers"\n')
+
+    found = check.check_topic_decks(config)
+    assert [f.code for f in found] == ["deck-topic-unknown"]
+    assert found[0].level == check.WARN
+    assert "containers" in found[0].message

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -261,3 +262,55 @@ def test_anki_error_while_clearing_is_reported_not_swallowed(config: Config) -> 
     assert report.imported == []
     assert not report.ok
     assert model.find(config.cards_dir, "aaa111").annotations(), "recorded before clearing"
+
+
+def _edit_under(monkeypatch: pytest.MonkeyPatch, times: int) -> None:
+    """Someone else writes the file just before each of the next `times`
+    saves: the triage page, an agent, an editor."""
+    real = model.Card.save
+    left = [times]
+
+    def save(self: model.Card, path: Path | None = None, **kwargs: object) -> Path:
+        if left[0] and self.path is not None:
+            left[0] -= 1
+            text = self.path.read_text(encoding="utf-8")
+            self.path.write_text(text.replace("$Y$", "$Y'$"), encoding="utf-8")
+            stat = self.path.stat()
+            os.utime(self.path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+        return real(self, path, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(model.Card, "save", save)
+
+
+def test_an_edit_made_mid_run_is_kept_and_the_comment_still_lands(
+    config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The card is re-read and the line appended again, so neither write
+    is lost."""
+    anki = synced(config, "aaa111")
+    anki.set_feedback("aaa111", "check the sign")
+    _edit_under(monkeypatch, 1)
+
+    report = feedback.run(config, client=anki)
+
+    card = model.find(config.cards_dir, "aaa111")
+    assert card.annotations() == ["@claude check the sign"]
+    assert "$Y'$" in card.path.read_text(encoding="utf-8"), "the other edit survives"
+    assert anki.get_feedback("aaa111") == ""
+    assert [c.uid for c in report.imported] == ["aaa111"]
+
+
+def test_a_card_that_keeps_moving_leaves_the_comment_in_anki(
+    config: Config, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Clearing it would leave no copy anywhere."""
+    anki = synced(config, "aaa111")
+    anki.set_feedback("aaa111", "check the sign")
+    _edit_under(monkeypatch, 5)
+
+    report = feedback.run(config, client=anki)
+
+    assert model.find(config.cards_dir, "aaa111").annotations() == []
+    assert anki.get_feedback("aaa111") == "check the sign"
+    assert report.imported == []
+    assert report.ok, "not an error: the next pull takes it"

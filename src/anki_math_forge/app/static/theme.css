@@ -7,8 +7,9 @@
 
    A theme is this file. Light is `:root`; dark follows the operating
    system under the media query, which is what "system" means and why it
-   needs no script. `[data-theme]` pins either one over the query, for a
-   switch that does not exist yet and costs nothing until it does.
+   needs no script. `[data-theme]` pins either one over the query: the
+   switch in the top bar sets it, and `base.html` restores it before the
+   first paint.
 
    **Not a theme decision, on purpose:**
 

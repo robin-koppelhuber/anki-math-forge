@@ -187,6 +187,18 @@ class AnkiConnect:
             warning_check=True,
         )
 
+    def set_due_date(self, card_ids: list[int], days: str) -> None:
+        """Anki's "set due date". `"0"` is today, interval unchanged."""
+        self.invoke("setDueDate", cards=card_ids, days=days)
+
+    def relearn_cards(self, card_ids: list[int]) -> None:
+        """Into the relearning queue, as if you had answered Again."""
+        self.invoke("relearnCards", cards=card_ids)
+
+    def forget_cards(self, card_ids: list[int]) -> None:
+        """New again. The review history stays."""
+        self.invoke("forgetCards", cards=card_ids)
+
     def add_tags(self, note_ids: list[int], tags: str) -> None:
         self.invoke("addTags", notes=note_ids, tags=tags)
 

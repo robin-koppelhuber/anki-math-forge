@@ -39,6 +39,15 @@ from typing import Any
 #: not about a project at all.
 WHERE = ("shelf", "units", "review", "project", "topic", "work")
 
+#: The setup stage's smaller panes, each with a short list of its own. They
+#: were dict literals in `setup.html`, which is the drift this module was
+#: written to end: four command lines nobody could run from the page, in a
+#: file whose comments said every list came from here.
+#:
+#: `references` is the shelf on the project pane, `bookless` a source with
+#: no address, `add-source` and `new-topic` the two panes that create one.
+PANES = ("references", "bookless", "add-source", "new-topic")
+
 #: How wide a command reaches, narrowest first. A note is not a command and
 #: frames the list rather than sitting in it, so it goes above everything.
 SCOPES = ("note", "work", "topic", "project", "repo")
@@ -521,6 +530,46 @@ OFFERS: tuple[Offer, ...] = (
         " the line here is the only copy. Repo-wide, like the sync it"
         " mirrors.",
     ),
+    # -- the setup stage's smaller panes ----------------------------------
+    Offer(
+        where=("references",),
+        kind="claude",
+        label="propose some references",
+        run=lambda at: f"/sources{at.src}",
+        why="reads what this project is for and proposes places to check a"
+        " card against. Nothing is accepted: each line waits for you.",
+    ),
+    Offer(
+        where=("bookless",),
+        label="put it in Zotero and import it",
+        run=lambda at: f"uv run forge zotero import <citekey>{at.src}",
+        why="mark up what is worth carding in Zotero, then run this. It writes"
+        " the item key, the attachments and the marks into a source here.",
+    ),
+    Offer(
+        where=("add-source",),
+        reads=True,
+        label="what is on the shelf, and what is already a source",
+        run="uv run forge zotero",
+        why='reads Zotero and writes nothing. It is the answer to "which of'
+        ' these have I not imported yet".',
+    ),
+    Offer(
+        where=("add-source",),
+        label="import one into this project",
+        run=lambda at: f"uv run forge zotero import <citekey>{at.src}",
+        why="turns the marks you declared into units, and files them under"
+        " this project rather than under the cite key.",
+    ),
+    Offer(
+        where=("new-topic",),
+        kind="claude",
+        label="outline it and write the units",
+        run=lambda at: f'/propose{at.src} "<the subject>"',
+        why="reads what you wrote, outlines what the subject covers, and"
+        " writes a unit per entry. Subjects, never drafts: triage still"
+        " decides.",
+    ),
 )
 
 
@@ -531,7 +580,7 @@ def propose(where: str, at: Ambient) -> list[dict[str, Any]]:
     is the order the offers are written in, which is the order you would do
     them in.
     """
-    if where not in WHERE:  # pragma: no cover - a typo, not a state
+    if where not in WHERE + PANES:  # pragma: no cover - a typo, not a state
         raise ValueError(f"no screen called {where!r}")
     ranked = [
         (SCOPES.index(offer.scope), n, offer)

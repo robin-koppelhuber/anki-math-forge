@@ -1666,6 +1666,16 @@ structured object, so the panel adds the flag itself and draws whatever
 comes back: a table where it is a list of flat records, lines otherwise.
 A renderer per verb is nine things to keep in step with nine reports.
 
+**A run outlives the page that started it.** The top bar of every page
+carries a count of runs in flight, and opening it lists what this server
+has run, newest first, with each result. `GET /api/runs` is the list.
+
+**A background write does not cost you a reload.** The stale guard on a
+unit compares that unit, by a fingerprint of what it records, rather than
+the mtime of the whole `units.jsonl`. An extract over the rest of the book
+no longer refuses your next keystroke in triage. `zotero import` and
+`anki pull` take the same locks and guards as every other writer.
+
 
 The commands panel gives you a line to copy. Some of those commands need no
 Claude and no watching: `zotero import`, `anki push`, `check`, and
@@ -1752,8 +1762,10 @@ Rendered before and after in both themes, four views are pixel-identical.
 What it named: twelve literals onto nine new tokens (`--paper`,
 `--on-accent` and its washes, `--on-warn`, two scrims, two shadows), and
 `--hover`, read twelve times and declared nowhere, now declared once.
-The light, dark and pinned positions are in the file and cost nothing
-until a switch sets `data-theme`.
+The switch is built too: a control in the top bar cycles system, light
+and dark, the choice is kept in `localStorage`, and an inline script in
+`<head>` applies it before the first paint. The canvas redraws when it
+changes.
 
 What it did not do, on purpose, is everything below that moves a pixel.
 The type scale, the radii and the small-caps label are measured and
@@ -1939,6 +1951,108 @@ parser, `forge --help` groups by it, and a test refuses a writing parser
 reachable in one word. Every old spelling still runs, hidden from `--help`,
 and prints the new form once on stderr.
 
+
+## 17. Letting an edit reset a card's schedule
+
+**Built.** `relearn: slightly | more | reset` in the frontmatter, set by
+whoever changed a card that is already in Anki: due today with its
+interval kept, back into relearning, or new again. The writer decides; the
+review view shows the call and can change it. `anki push` does it once the
+card is approved again, for studied cards only, and takes the key off the
+file. It is outside `content_hash`. The card-writing skill says when to
+set which, and `/triage` points there.
+
+What follows is the reasoning it was built from.
+
+`anki push` rewrites a note and leaves its scheduling alone. `reposition`
+touches only cards with `type == 0`, so anything you have started keeps its
+interval, and a card whose back was wrong and is now right comes back when it
+was already going to. On a mature card that is months away. This deck has the
+case: the variance-of-a-sum card carried the book's `2Cov[X, Y]` until a
+numeric check showed it false, and the corrected back inherited whatever
+interval the wrong one had earned.
+
+What is wanted is a judgement call rather than a rule. Most triage edits add a
+gloss or name a step, and those should disturb nothing. Some replace the
+answer, and the writer making the edit is the one who knows which just
+happened.
+
+Shape. A frontmatter key set during triage, **outside `content_hash`** and so
+listed in invariant 5 beside `status` and `augmented`. Setting it must not
+un-approve the card, or asking to see a card sooner would cost a re-review.
+`anki push` reads it, calls AnkiConnect (`forgetCards` sends the card back to
+new, `setDueDate` brings it forward while keeping its ease), and clears it.
+Clearing is the part to get right: it is an instruction for one push, not a
+property of the card.
+
+Open, and worth settling before any of it is built: whether a writer sets the
+key or only proposes it. A reset is not new content reaching Anki, so
+invariant 1 does not obviously cover it, but it does change what a human sees
+tomorrow without their having asked.
+
+**Settled:** the writer sets it. The change that prompted it already
+un-approved the card, so a human reads both before either reaches Anki.
+
+## 18. Editing a card in the page
+
+**Built.** `E` on the review view opens front and back in a dialog; `e`
+still hands the file to `$EDITOR`. The text is read from disk when the
+dialog opens and the save is checked against that mtime. One option, off
+by default: a note on the card, prefilled "check my manual edit". An edit
+to an approved card un-approves it through the hash and nothing else
+(invariant 5).
+
+Left: a KaTeX preview beside the text, because an unbalanced `$` is the
+usual mistake.
+
+## 19. A unit from nothing, in the page
+
+**Built.** `+` in triage opens a dialog for a subject, a gist, a sample,
+tags and references, and the work where a project reads several. It writes
+through `ledger.add_unit`, the function `forge units add` uses, so the two
+agree on the id and on what asking twice does. A unit, not a card, because
+the unit is the decision (invariant 9).
+
+## 20. Handing a project a pile of notes
+
+Context dumped at a whole project, and a pass that sorts each piece to the
+card it belongs to or proposes a new one. Two modes: write the changes
+directly, or stop at units and `@me` notes for a human to decide. The
+second matches the rest of the tool, where a pass proposes and a human
+decides, and it is the one to build first.
+
+## 21. What a pass changed, card by card
+
+**Built**, as a record of what changed between review decisions rather
+than per pass. A pass edits files by many routes, an agent's Edit
+included, and no hook sees all of them. A snapshot is taken when
+`cards new` writes a card and at each approve, reject or back to draft;
+the review page compares the file with the last one. It lists the
+frontmatter keys that moved, one line per section whose text moved, and
+the `resolved:` lines added since, which are what the writer said it did.
+Each decision files that difference into a history kept beside it.
+`forge cards --changes` prints the same.
+
+Local, in `.forge/changes/`, and not in git, because `.gitignore` excludes
+`cards/*` except the Cookbook. Losing it loses the history and nothing
+else. `/triage` no longer claims a card's history is in git.
+
+## 22. A deck per topic inside a project
+
+**Built.** `[decks.by_topic]` maps an ask in `topics.md`, by slug, to a
+deck. A card goes where the units it was written from stand, so a card
+proposed under "containers" lands in the containers deck without anybody
+tagging it. Most specific first: tag, then topic, then type, then the
+project's deck. `check` warns about a key that names no ask.
+
+Per source was the first idea and the wrong one: a project reads several
+works to answer one question, and the question is what a deck is for.
+
+## 23. The docs against the style guide
+
+A pass over every document against docs/STYLE.md. The command rename
+changed their command lines; nothing has read them for the prose rules
+since.
 ---
 
 # Ideas, not scheduled
@@ -2054,37 +2168,15 @@ generated picture needs the same `forge-<uid>-<n>` naming a crop gets.
 
 **Trigger:** a card whose `## prose` is describing a picture in words.
 
-## 17. Letting an edit reset a card's schedule
+## 24. Decks for facts many sources restate
 
-`anki push` rewrites a note and leaves its scheduling alone. `reposition`
-touches only cards with `type == 0`, so anything you have started keeps its
-interval, and a card whose back was wrong and is now right comes back when it
-was already going to. On a mature card that is months away. This deck has the
-case: the variance-of-a-sum card carried the book's `2Cov[X, Y]` until a
-numeric check showed it false, and the corrected back inherited whatever
-interval the wrong one had earned.
-
-What is wanted is a judgement call rather than a rule. Most triage edits add a
-gloss or name a step, and those should disturb nothing. Some replace the
-answer, and the writer making the edit is the one who knows which just
-happened.
-
-Shape. A frontmatter key set during triage, **outside `content_hash`** and so
-listed in invariant 5 beside `status` and `augmented`. Setting it must not
-un-approve the card, or asking to see a card sooner would cost a re-review.
-`anki push` reads it, calls AnkiConnect (`forgetCards` sends the card back to
-new, `setDueDate` brings it forward while keeping its ease), and clears it.
-Clearing is the part to get right: it is an instruction for one push, not a
-property of the card.
-
-Open, and worth settling before any of it is built: whether a writer sets the
-key or only proposes it. A reset is not new content reaching Anki, so
-invariant 1 does not obviously cover it, but it does change what a human sees
-tomorrow without their having asked.
-
-**Trigger:** the first time a card's back is corrected after it has been
-pushed.
-
+Probability and calculus facts recur across the books and papers here.
+Later: a project per subject holding them, and a pass that moves cards in
+and merges duplicates. Three facts to plan around. A merged card cites
+several sources, which `unit:` already allows as a list. A uid is the
+note's identity in Anki, so the surviving card should keep one of the
+originals' uids to keep its review history. And `anki push` deletes
+nothing, so the note a merge retires stays in Anki until removed there.
 ---
 
 # What the Cookbook taught us

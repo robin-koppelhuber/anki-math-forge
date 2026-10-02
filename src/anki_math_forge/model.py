@@ -40,6 +40,7 @@ FRONTMATTER_ORDER = (
     "verify",
     "web",
     "augmented",
+    "relearn",
 )
 
 # Two optional judgements about a card, both coarse on purpose.
@@ -56,6 +57,16 @@ FRONTMATTER_ORDER = (
 # precision that no two sessions would apply the same way.
 FREQUENCIES = ("core", "common", "rare")
 DERIVATIONS = ("definitional", "short", "long")
+
+# How much of a card you have to learn again after it changed, for a card
+# you have already studied (ROADMAP §17). Set by whoever changed it, read
+# once by `anki push`, and taken off the file once Anki has it.
+#
+# `slightly` -- a clarification, a gloss, a tidier proof: due today, interval
+# kept, so one review settles it. `more` -- the card now asks for something
+# it did not: back into relearning, as if you had forgotten it. `reset` --
+# it is a different card under the same uid: new again.
+RELEARN = ("slightly", "more", "reset")
 
 # Canonical section order. Unknown sections keep file order and land after.
 # Reading order on the card, and the order sections are written in a file.
@@ -140,6 +151,11 @@ UNHASHED_SECTIONS = frozenset({"notes", "verify"})
 # identical; a tag that changes what the question means belongs in
 # `## conditions`, which renders with the front. It is also what lets a deck
 # be routed by tag (ROADMAP.md 10) without re-tagging counting as an edit.
+#
+# `relearn` is an instruction to Anki about your schedule, carried out once
+# and then removed. Hashing it would mean `anki push` un-approved every card
+# it had just finished with. No card carries it yet, so exempting it changes
+# no digest that exists.
 UNHASHED_FRONTMATTER = frozenset({
     "status",
     "content_hash",
@@ -151,6 +167,7 @@ UNHASHED_FRONTMATTER = frozenset({
     "gist",
     "augmented",
     "tags",
+    "relearn",
 })
 
 # There used to be a second, older exemption set here, accepted as a fallback
@@ -494,6 +511,12 @@ class Card:
         what the card claims. Take it off to ask for the pass again.
         """
         return bool(self.frontmatter.get("augmented", False))
+
+    @property
+    def relearn(self) -> str:
+        """How much to learn again once this change reaches Anki: one of
+        `RELEARN`, or empty. Outside `content_hash`."""
+        return str(self.frontmatter.get("relearn") or "").strip()
 
     @property
     def verify_enabled(self) -> bool:

@@ -349,6 +349,22 @@ class FakeAnki(AnkiConnect):
         deck = query.split('deck:"', 1)[-1].rstrip('"') if 'deck:"' in query else ""
         return [c["cardId"] for c in self.cards.values() if not deck or c["deck"] == deck]
 
+    # `relearn:` (ROADMAP §17). The fake records what was asked rather than
+    # simulating a scheduler: the test is about which call is made.
+    def _do_setDueDate(self, cards: list[int], days: str) -> bool:
+        for card_id in cards:
+            self.cards[card_id]["relearned"] = f"due {days}"
+        return True
+
+    def _do_relearnCards(self, cards: list[int]) -> None:
+        for card_id in cards:
+            self.cards[card_id]["relearned"] = "relearning"
+
+    def _do_forgetCards(self, cards: list[int]) -> None:
+        for card_id in cards:
+            self.cards[card_id]["relearned"] = "forgotten"
+            self.cards[card_id]["type"] = 0
+
     def _do_changeDeck(self, cards: list[int], deck: str) -> None:
         if deck not in self.decks:
             self.decks.append(deck)

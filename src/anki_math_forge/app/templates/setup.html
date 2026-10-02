@@ -366,13 +366,7 @@
       <p class="setup-empty">No <code>references.md</code>.</p>
       {% endif %}
 
-      {{ runs([{
-        'kind': 'claude',
-        'label': 'propose some references',
-        'why': 'reads what this project is for and proposes places to check'
-               ' a card against. Nothing is accepted: each line waits for you.',
-        'run': '/sources --project "' ~ project ~ '"',
-      }]) }}
+      {{ runs(pane_offers('references')) }}
 
       {% if untopiced %}
       <h3 class="pane-cap">outside every outline</h3>
@@ -504,15 +498,7 @@
          command, it carries the marking scheme and the crop settings with
          it, and it is the only route that ends with units. Adding
          `zotero = "..."` by hand would declare an item nobody marked. #}
-      {{ runs([{
-        'kind': 'shell',
-        'label': 'put it in Zotero and import it',
-        'why': 'mark up what is worth carding in Zotero, then run this. It'
-               ' writes the item key, the attachments and the marks into a'
-               ' source here.',
-        'run': 'uv run forge zotero import <citekey> --project "' ~ project ~ '"',
-        'reads': false,
-      }]) }}
+      {{ runs(pane_offers('bookless')) }}
       {% endif %}
 
       {# The asks standing on it: the relation read backwards, and a way
@@ -796,16 +782,7 @@ document twice is two ledgers of units and two notes per card">read only,
       </form>
 
       <h3 class="pane-cap">or import one</h3>
-      {{ runs([
-        {'kind': 'shell', 'label': 'what is on the shelf, and what is already a source',
-         'why': 'reads Zotero and writes nothing. It is the answer to "which'
-                ' of these have I not imported yet".',
-         'run': 'uv run forge zotero'},
-        {'kind': 'shell', 'label': 'import one into this project',
-         'why': 'turns the marks you declared into units, and files them'
-                ' under this project rather than under the cite key.',
-         'run': 'uv run forge zotero import <citekey> --project "' ~ project ~ '"'},
-      ]) }}
+      {{ runs(pane_offers('add-source')) }}
     </section>
 
     {# -- the two writes --------------------------------------------------- #}
@@ -830,14 +807,7 @@ document twice is two ledgers of units and two notes per card">read only,
         <button type="submit" class="form-go">create it</button>
       </form>
       <h3 class="pane-cap">then</h3>
-      {{ runs([{
-        'kind': 'claude',
-        'label': 'outline it and write the units',
-        'why': 'reads what you wrote, outlines what the subject covers, and'
-               ' writes a unit per entry. Subjects, never drafts: triage'
-               ' still decides.',
-        'run': '/propose --project "' ~ project ~ '" "<the subject>"',
-      }]) }}
+      {{ runs(pane_offers('new-topic')) }}
     </section>
 
   </div>
