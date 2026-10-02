@@ -27,6 +27,14 @@ from .ledger import Ledger, Unit
 # A crop this much wider or taller than its neighbours is worth a look.
 OUTLIER_RATIO = 3.0
 
+# The states in which a flag can still change a decision.
+UNDECIDED = ("new", "queued")
+
+# Closer than this, in PDF points, and two crops in one column are one
+# display cut in two. A line of 10pt body text is about 12pt from baseline
+# to baseline.
+LINE_HEIGHT = 12.0
+
 
 @dataclass(frozen=True)
 class Finding:
@@ -91,7 +99,9 @@ def audit(
 
     _check_numbering(report, numbered, seen)
     _check_geometry(report, units)
+    _check_fragments(report, units)
     _check_transcription(report, units)
+    _check_relation(report, numbered)
     if makes_a_unit is not None:
         _check_scheme(report, units, makes_a_unit)
     return report
@@ -219,6 +229,65 @@ def _check_geometry(report: Report, units: list[Unit]) -> None:
                     f"crop overlaps {second.id} by {overlap:.0f}pt on page {page}",
                     first.id,
                 )
+
+
+def _check_fragments(report: Report, units: list[Unit]) -> None:
+    """An unnumbered crop right against a numbered one, in the same column.
+
+    Almost always the continuation line of a display the segmenter cut in
+    two: stacked lines do not overlap, so they arrive as separate regions,
+    and the numbering check is satisfied either way because the number
+    exists. ROADMAP §2. Only units still waiting for a decision: one that
+    was skipped or carded has been looked at.
+    """
+    by_page: dict[int, list[Unit]] = {}
+    for unit in units:
+        if unit.locator.page is not None and unit.locator.bbox is not None:
+            by_page.setdefault(unit.locator.page, []).append(unit)
+    for group in by_page.values():
+        anchors = [u for u in group if u.locator.ref[1]]
+        loose = [u for u in group if not u.locator.ref[1] and u.state in UNDECIDED]
+        for unit in loose:
+            box = unit.locator.bbox or [0.0, 0.0, 0.0, 0.0]
+            for anchor in anchors:
+                other = anchor.locator.bbox or [0.0, 0.0, 0.0, 0.0]
+                side_by_side = min(box[2], other[2]) - max(box[0], other[0]) > 0
+                gap = max(other[1] - box[3], box[1] - other[3])
+                if side_by_side and 0 <= gap < LINE_HEIGHT:
+                    _flag(
+                        report,
+                        "fragment-suspected",
+                        f"{gap:.0f}pt from {anchor.id}, in the same column: probably "
+                        "a line of that display, cut off from it",
+                        unit.id,
+                    )
+                    break
+
+
+def _check_relation(report: Report, numbered: list[Unit]) -> None:
+    """A numbered unit whose transcription states no relation.
+
+    The mirror of `units classify`'s `no-relation`, which only looks at
+    unnumbered units. A number says the document asserts a result, so a
+    crop holding nothing but `(178)` is the number with its equation cut
+    off, not a result. Read from the transcription, so it says nothing about
+    a unit nobody has transcribed, and only of units still waiting for a
+    decision.
+    """
+    from .classify import RELATION
+
+    for unit in numbered:
+        if unit.state not in UNDECIDED:
+            continue
+        text = unit.tex_source or unit.tex_auto
+        if text and not RELATION.search(text):
+            _flag(
+                report,
+                "numbered-no-relation",
+                "numbered, but the transcription states no relation: the equation "
+                "may have been cut off from its number",
+                unit.id,
+            )
 
 
 # A row separator eaten by a tool layer that collapses backslashes leaves a

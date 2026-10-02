@@ -369,10 +369,20 @@ async function editCard() {
   form.reset();
   form.elements.front.value = text.front;
   form.elements.back.value = text.back;
+  previewCardEdit(form);
   form.dataset.uid = text.uid;
   form.dataset.mtime = text.mtime;
   dialog.showModal();
   form.elements.front.focus();
+}
+
+/* What the text renders as, under each box, so an unbalanced `$` shows
+   before the save rather than in the next review. */
+function previewCardEdit(form) {
+  form.querySelectorAll("[data-card-edit-preview]").forEach((box) => {
+    box.textContent = form.elements[box.dataset.cardEditPreview].value;
+    renderMath(box);
+  });
 }
 
 (function wireCardEdit() {
@@ -387,6 +397,11 @@ async function editCard() {
       event.preventDefault();
       form.requestSubmit();
     }
+  });
+  let pending = 0;
+  form.addEventListener("input", () => {
+    clearTimeout(pending);
+    pending = setTimeout(() => previewCardEdit(form), 150);
   });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();

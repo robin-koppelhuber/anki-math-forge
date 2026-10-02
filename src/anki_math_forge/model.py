@@ -733,11 +733,12 @@ class Card:
     def effective_status(self) -> str:
         """`status`, except that an approval which no longer holds is a draft.
 
-        DESIGN.md §8 promises that resolving an annotation "drops the card back
-        to `draft` and re-enters review automatically". Nothing rewrites the
-        file to make that true -- and it should not, silently -- so the rule
-        lives here instead: a card that cannot go to Anki counts as a draft
-        everywhere it matters, which is what puts it back in the review queue.
+        DESIGN.md §8 promises that after the edit resolving an annotation,
+        "the card counts as a draft and re-enters review automatically".
+        Nothing rewrites the file to make that true, and it should not,
+        silently. So the rule lives here: a card that cannot go to Anki counts
+        as a draft everywhere it matters, which is what puts it back in the
+        review queue.
         """
         return "draft" if self.demotion else self.status
 

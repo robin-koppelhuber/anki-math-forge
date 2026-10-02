@@ -166,3 +166,20 @@ def test_a_lost_record_costs_nothing(
 )
 def test_one_line(was: str, now: str, says: str) -> None:
     assert changes.one_line(was, now) == says
+
+
+def test_the_review_page_draws_the_rounds_before(
+    client: TestClient, card_path: Path
+) -> None:
+    client.post("/api/cards/7f3a2b/approve", json={"mtime": mtime(card_path)})
+    card = model.load(card_path)
+    card.frontmatter["frequency"] = "rare"
+    card.set_section("prose", "Why it holds.")
+    card.save()
+    client.post("/api/cards/7f3a2b/approve", json={"mtime": mtime(card_path)})
+
+    page = client.get("/review?status=all")
+
+    assert page.status_code == 200
+    assert "data-change-history" in page.text
+    assert "approved: frequency, prose" in page.text

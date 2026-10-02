@@ -1,9 +1,9 @@
 """`todo` -- the open `@claude` annotations, for Claude Code (DESIGN.md §8).
 
 An annotation is an open request. Resolving one means deleting the line and
-making the edit; the edit changes `content_hash`, so the card drops back to
-`draft` and re-enters review automatically. Nothing here resolves anything --
-it only reports.
+making the edit. The edit no longer matches `content_hash`, so the card
+counts as a draft and re-enters review automatically. Nothing here resolves
+anything; it only reports.
 """
 
 from __future__ import annotations

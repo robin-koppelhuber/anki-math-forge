@@ -228,6 +228,10 @@ class ProjectConfig:
     order: str = "printed"
     # Pages either side handed to a card writer, or `chapter`; -1 inherits.
     context_pages: int | str = -1
+    # The rendered front's length cap, where this deck's material needs a
+    # different one from the repo's: a formula reference fits in 160, a
+    # statement from a paper often does not. 0 inherits.
+    front_char_cap: int = 0
     # Card type -> deck, for a source whose restatements and explanations want
     # different new-card rates. Empty means every type lands in `deck`.
     decks: Mapping[str, str] = field(default_factory=dict)
@@ -715,6 +719,11 @@ class Config:
             )
         )
 
+    def front_char_cap_for(self, project: str) -> int:
+        """The front length `check` allows, the project's if it set one."""
+        spec = self.projects.get(project)
+        return spec.front_char_cap if spec and spec.front_char_cap > 0 else self.front_char_cap
+
     def context_pages_for(
         self, project: str, unit: int | str | None = None, document: str = ""
     ) -> int | str:
@@ -999,6 +1008,7 @@ def load(root: Path | None = None) -> Config:
             context_pages=context_size(
                 spec.get("context_pages", -1), f"[projects.{name}] context_pages"
             ),
+            front_char_cap=int(spec.get("front_char_cap", 0) or 0),
             decks=_deck_map(spec.get("decks"), "by_type"),
             tag_decks=_deck_map(spec.get("decks"), "by_tag"),
             topic_decks=_deck_map(spec.get("decks"), "by_topic"),

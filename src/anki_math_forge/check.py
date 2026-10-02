@@ -209,11 +209,12 @@ def check_card(
     # -- length -----------------------------------------------------------
     front = card.section("front") or ""
     length = latex.rendered_length(front)
-    if length > config.front_char_cap:
+    cap = config.front_char_cap_for(card.project_name)
+    if length > cap:
         add(
             ERROR,
             "front-too-long",
-            f"rendered front is ~{length} chars, cap is {config.front_char_cap} "
+            f"rendered front is ~{length} chars, cap is {cap} "
             "-- a prompt this long is usually two cards",
         )
 

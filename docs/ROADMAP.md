@@ -18,7 +18,7 @@ the next free number.
 
 ## 1. The dependency canvas: what it does not do yet
 
-Built, at `/graph`, per source, and `[app] graph = false` turns it off.
+Built, at `/graph`, per project, and `[app] graph = false` turns it off.
 `graph.py` holds the graph and its layout with no app in it, `graph.js` draws
 it, and `projects/<name>/graph.json` holds whatever you dragged.
 
@@ -34,25 +34,23 @@ it, and `projects/<name>/graph.json` holds whatever you dragged.
   does not fit.
 - **Quadtree hit-testing.** Linear over every node on `pointermove` is fine at
   700. Revisit past a few thousand.
-- **Browser tests for the other two views.** `tests/browser/` covers the
-  canvas, because a `<canvas>` and a pointer are what the rest of the suite
-  cannot reach. The other two are markup and are covered as markup; the case
-  for driving them anyway is the closed dialog that still painted over the
-  canvas.
 
 ## 2. Two audit checks that would have caught dropped content
 
-Small, mechanical, and they belong in `audit.py`, which is not frozen. The
-evidence for both is in "What the Cookbook taught us".
+**Built**, in `audit.py`, over units still waiting for a decision (`new` or
+`queued`). Against the committed Cookbook ledger they flag 20 and 6.
 
-- **`fragment-suspected`:** an unnumbered unit directly above or below a
-  numbered one, in the same horizontal band, closer than a line height, is
-  almost certainly a continuation of it. The contiguity oracle is satisfied
-  either way, because the number exists.
-- **A numbered unit whose crop holds no relation symbol.** The mirror of the
-  `no-relation` rule `units classify` already applies to unnumbered units.
-  It would have caught `matrix-cookbook:3.2:178`, which holds nothing but
-  `(178)`.
+- **`fragment-suspected`:** an unnumbered unit within a line height
+  (12pt) above or below a numbered one, in the same column. The numbering
+  check is satisfied either way, because the number exists.
+- **`numbered-no-relation`:** a numbered unit whose transcription states no
+  relation, the mirror of `units classify`'s `no-relation`. Most of the
+  Cookbook's are a display's last line carrying the number while the `=` sat
+  on the line above. Read from the transcription, so a unit nobody has
+  transcribed says nothing. `matrix-cookbook:3.2:178`, which holds only
+  `(178)`, has an empty transcription and is caught as the fragment's
+  neighbour instead. The relation pattern learnt `\iff` and the arrows on
+  the way.
 
 A third signal belongs to whatever segments next: **a line ending in a
 trailing binary operator cannot be the end of an equation.** Every
@@ -60,13 +58,14 @@ continuation line in §6.2 and §7.7–7.9 ends in `×` or `+`.
 
 ## 3. Small and named
 
-- **The `§` prefix on every section label.** Cosmetic, except that it reaches
-  a card's `Source` field in Anki.
-- **`front_char_cap` is not per-source.** 160 characters suits a formula
-  reference and is tight for a statement from a paper.
-- **Nothing writes an `intuition` card yet.** Teaching the card-writing skill
-  the second kind is guidance, not code, and it belongs with the first prose
-  source that has marks worth explaining.
+- **The `§` prefix on every section label. Kept.** It is written into a
+  card's `source:` when `cards new` runs, and `source` is inside
+  `content_hash`. Dropping it would leave old cards with it and new cards
+  without, or un-approve every card that has it, for a character.
+- **`front_char_cap` per project. Built.** `front_char_cap` in a
+  `project.toml` overrides `[cards]`; `check` reads the card's project.
+- **`intuition` cards.** The skill had the guidance already; it now has a
+  worked example of one, good and bad. The Krause project's cards use it.
 
 ## 11. Pulling context from Obsidian notes
 
@@ -75,7 +74,7 @@ the conventions the source declares. What it cannot hand over is the note you
 already wrote about this material, which is where your notation, your worked
 example and the thing that confused you the first time live.
 
-The shape that fits: a vault path in the config, and `context` adding the
+The shape that fits is a vault path in the config, with `context` adding the
 notes that match the unit, by title, by tag, or by a link to a term the gist
 names. Read-only, the way the Zotero client is. A third input beside the crop
 and the conventions, not a replacement for either.
@@ -118,7 +117,7 @@ improve the sources that already exist:
 3. a frontend that proposes units where there is no document
 4. code on a card
 
-**A frontend owes five things**, and nothing states this today:
+**A frontend owes five things**:
 
 - a stable id that survives a re-run
 - a locator, as much of one as it can fill
@@ -332,8 +331,9 @@ do not have in the rail.
 
 Five steps. Two need Claude and three are file edits.
 
-1. **Ask.** `forge topic add "how to use the standard containers"` records
-   the ask and nothing else.
+1. **Ask.**
+   `forge topic add "how to use the standard containers" --project <p>`
+   records the ask and nothing else.
 2. **Sources, if you want them.** A pass appends what it found, as links
    with a line each on why. You add and delete.
 3. **Approving is leaving them in.** No approved flag, the same way an
@@ -375,7 +375,7 @@ short, because nothing knows what the subject contains.
   the honest answer. An outline of sixty entries is the signal to split the
   topic.
 
-None of it is enforced. A propose with no outline just proposes.
+None of it is enforced. A propose with no outline still proposes.
 
 ### What a project is on disk
 
@@ -464,9 +464,9 @@ explanations, and the "here is code, is it right" card waits until there are
 enough of them to know what it wants.
 
 **Where a card goes** is a first-match chain, which is what `deck_for`
-already is: the card's own tag, then its topic, then its source, then the
-project's type map, then the project's deck. Topic above source, because a
-topic says what the material is about and a source says where it was
+already is: the card's own tag, then its topic, then the project's type
+map, then the project's deck. Topic and not source, because a topic says
+what the material is about and a source says where it was
 printed, and a deck is something you study rather than somewhere you read.
 Most links are unset in any given project, so the chain is long on paper and
 short in practice.
@@ -476,15 +476,15 @@ A language version is a tag. `cpp20` is filterable in Anki, which is where
 says so in `## conditions`, which renders with the front, so the question is
 asked in the right setting.
 
-**Routing needs `tags` out of the content hash.** As it stands, re-tagging
-a card to move decks un-approves it for a change nobody reviewed, which is
-invariant 5 firing on something it was not written for.
+**Routing needs `tags` out of the content hash.** Before the exemption,
+re-tagging a card to move decks un-approved it for a change nobody
+reviewed, which is invariant 5 firing on something it was not written for.
 
 Exempting it is the consistent answer rather than a convenience, because the
 inconsistency is already there: `frequency` and `derivation` are exempt
-**and they become Anki tags**, `freq::core` and `derive::short`. So today
-changing `freq::core` does not un-approve a card and changing
-`tags: [core]` does, and they are the same kind of statement landing in the
+**and they become Anki tags**, `freq::core` and `derive::short`. So
+changing `freq::core` did not un-approve a card and changing
+`tags: [core]` did, and they are the same kind of statement landing in the
 same place. That is an accident of which field a value lives in, not a
 policy.
 
@@ -497,7 +497,7 @@ a subject tag is content does not survive the test: change
 identical. A tag that changes what the question means belongs in
 `## conditions`, which renders with the front.
 
-What it costs: `check` stops noticing a tag typo on an approved card. That
+The cost is that `check` stops noticing a tag typo on an approved card. That
 is already true of `frequency`, mitigated there by a vocabulary that free
 tags do not have. The rest is already wired, since `anki push` diffs tags
 against the live note and `deck_drift` plus `--move-decks` move what the new
@@ -518,9 +518,9 @@ which is right for six and wrong for forty.
   thing review does
 - the topic is a separate single-select, beside the section tree rather than
   among the tags
-- `frequency` and `derivation` become filters. They are chips on a card
-  today and you cannot select by them
-- the graph takes them too. It has no filters at all today, so this is the
+- `frequency` and `derivation` become filters. They were chips on a card
+  and you could not select by them
+- the graph takes them too. It had no filters at all, so this was the
   first one: a topic or a subject looked at alone, on the canvas as well as
   in the list
 
@@ -532,7 +532,8 @@ describes, which is an index and not a store.
 ### Code on a card
 
 The review view already handles fenced blocks: `render_body` splits on the
-fences and emits `<pre>`, which KaTeX skips. Three gaps are left.
+fences and emits `<pre>`, which KaTeX skips. Three gaps were left, and
+build step 5 closed them.
 
 - `check` runs KaTeX over `## back`, so a fence has to be cut out first, the
   way `_prose_only` cuts out display math
@@ -542,7 +543,7 @@ fences and emits `<pre>`, which KaTeX skips. Three gaps are left.
 
 Highlighting is not built into Anki. The add-ons bake Pygments HTML into the
 field when you type it, which we do not need because we write the field. Run
-Pygments at sync, the way a picture is rendered at sync: the card file keeps
+Pygments at push time, the way a picture is: the card file keeps
 plain code, the field gets classes, and the colours live in the note type
 CSS so night mode works. No add-on for anyone you share the deck with.
 MathJax skips `pre` and `code` by default, so the maths renderer leaves it
@@ -692,7 +693,7 @@ because the reasoning is the part worth having later.
    and it is already derived.
 
    **A source's panel is where the per-work settings live**, each saying
-   whether the work set it or inherited it. See "what belongs to a work"
+   whether the work set it or inherited it. See "what belongs to a source"
    below.
 
    Three columns, every ratio draggable: what to run next, what the project
@@ -710,8 +711,8 @@ because the reasoning is the part worth having later.
    point: re-making it by hand was the one thing this screen could not hand
    over.
 
-   `approved` doubles as "what sync would push". Nothing local records a note
-   id, so whether a card is *in* Anki is a question only the dry run can
+   `approved` doubles as "what `anki push` would push". Nothing local records a
+   note id, so whether a card is *in* Anki is a question only the dry run can
    answer, and a panel does not make network calls to draw a number.
 
    Starting another project moved to the picker. It is not something this
@@ -731,7 +732,7 @@ because the reasoning is the part worth having later.
    **Narrow first, then the repo.** You are looking at one project, so the
    command about that project comes before the one about everything:
    `anki push --project` above `anki push`, `zotero import --project` above
-   `zotero import --tag anki`. Both flags are new. Scoping a sync is safe
+   `zotero import --tag anki`. Both flags are new. Scoping a push is safe
    because nothing there deletes, and its lint stays repo-wide because a
    duplicate uid is a repo-wide fact.
 
@@ -762,9 +763,9 @@ because the reasoning is the part worth having later.
    Where they agree, which is nearly always, the rows merge and the legend is
    the one it always was. The guide's `units_from` row goes quiet with more
    than one work, the same way the crop rows do.
-5. Fenced code through `check` and `anki push`, highlighted by Pygments at sync
-   as an optional extra. No note type version bump: the CSS changed, so the
-   first sync wants `--templates`, and a new model name would orphan every
+5. Fenced code through `check` and `anki push`, highlighted by Pygments at
+   push time. No note type version bump: the CSS changed, so the first
+   `anki push` wants `--templates`, and a new model name would orphan every
    note on the old one.
 6. Both lists and the canvas filter by tag, `frequency` and `derivation`
    are selectable and not only readable, and the commands panel offers the
@@ -898,19 +899,19 @@ Adding a work the repo already reads offers the same distinction as a
 checkbox: a reference is free, and extracting is a claim on the document
 that one project holds.
 
-### What belongs to a work
+### What belongs to a source
 
 A project may read several works, so every setting had to be asked which of
 the three levels it is a fact about. The answer moved three things and left
 the rest alone.
 
 - **Repo.** The Anki connection and the flag map, the Zotero data directory,
-  `language`, `front_char_cap`, `study_order`. None of them is about a
-  document or a deck.
-- **Project.** `deck` and the two deck maps, `order`, `web`, `tags`, and the
+  `language`, `study_order`. None of them is about a document or a deck.
+  `front_char_cap` is set here and a project may override it.
+- **Project.** `deck` and the three deck maps, `order`, `web`, `tags`, and the
   `[conventions]` table. These are decisions about a *deck*: which pile the
   cards go in and what the reader may do while writing them.
-- **Work.** `crop_context`, `crop_width`, `units_from`, the colour meanings,
+- **Source.** `crop_context`, `crop_width`, `units_from`, the colour meanings,
   `convention_keyword`, and now `context_pages`, which moved. How much page
   a card writer needs is a fact about how a book is set, exactly like how
   much page frames an equation, and a project reading a dense textbook and a
@@ -947,12 +948,12 @@ next section.
 
 A `[[sources]]` entry is the other kind. It carries a marking scheme, crop
 settings and a file, so it is not something a pass should write. What the app
-does write is the half with no judgement in it: **a reference**, either a
-work the repo already reads somewhere else or a page you type in. A paper can sit in two projects, cited by one and
-extracted from by another, and adding it copies nothing, because a Zotero
-work is its item key and a reference is its URL. `forge sources` lists every
-work across every project, which is the question that had no answer once a
-source stopped being a project.
+does write is the half with no judgement in it: **a reference**, either a work
+the repo already reads somewhere else or a page you type in. A paper can sit in
+two projects, cited by one and extracted from by another, and adding it copies
+nothing, because a Zotero work is its item key and a reference is its URL.
+`forge sources` lists every work across every project, which is the question
+that had no answer once a source stopped being a project.
 
 Refused where the project is configured in `forge.toml` rather than its own
 `project.toml`: a folder's file wins over the root file key by key, so
@@ -1017,7 +1018,7 @@ new part into its note, labelled by the tail of its address:
     note = "container: the complexity tables; algorithm: equal_range and
             lower_bound; named_req: what a comparator must satisfy"
 
-Both halves are labelled, not just the new one: widening
+Both halves are labelled, not only the new one: widening
 `.../w/cpp/container` leaves the old note describing a page the address no
 longer names, so it takes the tail it used to carry. Only while the address
 is moving, because after that the note is already labelled.
@@ -1176,7 +1177,7 @@ there is a ledger, a pair nobody used prints `0` rather than nothing.
 ### Two gates and a label
 
 Three settings on a work's panel look like three answers to one question,
-and they are not. Worth saying once, because the panel now says it too:
+and they are not.
 
 - **`extract`** is the gate. Anything segmented out of this work here, yes
   or no. `authoritative` is not a fourth thing: it is the name this answer
@@ -1196,13 +1197,13 @@ every box in the editor wrote a list that meant the opposite of what it
 said. `None` is nobody said and `frozenset()` is none of them, and the
 resolver asks `is not None`.
 
-**The editor offers the scheme, not the marks it happens to find.** Its
-rows came from the marks in the ledger alone, so a narrowed scheme, which
-takes the untouched units of a dropped colour with it, emptied the table:
-the mapping read as deleted and came back only after a re-import. The vocabulary is the
-union of what is marked, what the work declares and what the scheme in
-force names, so the table is the same before the first import, after it,
-and after switching extraction off and on.
+**The editor offers the scheme, not the marks it happens to find.** Its rows
+came from the marks in the ledger alone, so a narrowed scheme, which takes the
+untouched units of a dropped colour with it, emptied the table: the mapping
+read as deleted and came back only after a re-import. The vocabulary is the
+union of what is marked, what the work declares and what the scheme in force
+names, so the table is the same before the first import, after it, and after
+switching extraction off and on.
 
 ### A setting that changes the ledger
 
@@ -1391,7 +1392,7 @@ is the exception the per-unit grant exists for, and a refusal on a unit
 of a project that allows the web keeps the shelf: saying "not the web for
 this one" is not saying "nothing at all".
 
-**And which references, not just whether.** A reference carries `offer`,
+**And which references, not only whether.** A reference carries `offer`,
 defaulting to the project's, defaulting to `true`. Off, it stays
 declared, cited and findable and stops arriving with every unit: six
 places to look is a reading list nobody works through, and the
@@ -1424,7 +1425,7 @@ it, and the source's panel says it in chips.
 What a box cannot do is unsay the derived half. An ask whose units came
 out of a book read that book, and those are shown checked and fixed.
 
-### An import declares the work
+### An import declares the source
 
 `forge zotero import <item> --project <name>` wrote the units and not the
 source. The only thing that ever wrote a `[[sources]]` table was
@@ -1464,7 +1465,7 @@ It follows that "a work is extracted from by one project" is no longer a
 rule the app has to *refuse*: it has no way to break it. `check_sources`
 still reports a pair somebody wrote by hand.
 
-### A work is extracted from by one project
+### A source is extracted from by one project
 
 Read by as many as you like. A paper cited by one deck and segmented by
 another is the case the shelf exists for, and a reference costs nothing
@@ -1483,7 +1484,7 @@ it. An error rather than a warning, because every view here is scoped to one
 project: two copies look like one copy from wherever you are standing, right
 up until they are both in Anki.
 
-### One folder per project, and several works in it
+### One folder per project, and several sources in it
 
 `projects/<name>/` holds the ledger, the prose files, and whatever documents
 the project reads. It already carries several works, and nothing needs a
@@ -1600,15 +1601,14 @@ not one, and invariant 1 is the reason.
 
 ## 13. Keeping the suite fast
 
-1299 tests in about 80 seconds, four workers, and the cap is the point:
+1546 tests in about two minutes, four workers, and the cap is the point:
 `-n auto` on a machine with sixteen cores is sixteen Chromes, which is a way
 to run out of memory rather than a way to go faster. `--dist loadscope`
 keeps a module's tests on one worker, because the browser modules start a
 uvicorn per module and scattering their tests would start it once per
 worker instead.
 
-What actually costs time here is worth writing down, because it was not what
-it looked like:
+What costs time here is not what it looked like:
 
 - **A broken page costs 30 seconds per test, silently.** Deleting a helper
   that `graph.js` used made every graph page throw on load, and the 22
@@ -1643,12 +1643,12 @@ looking, and a tab left open since before a rename is not looking. A
 slash command is still copied. That is invariant 1's bargain, and it is
 the only line drawn.
 
-**The effect is the parser's, not the page's.** The app holds no second
-opinion about what a command changes, so a verb that starts writing
-starts asking first on the same commit. It began as an allow-list of the
-reads and grew into the whole map once the writers joined. Arity settles before permission: `forge anki push` has
-to be recognised as two words before anything asks whether it may run, or
-it falls back to `anki`, finds a read, and pushes.
+**The effect is the parser's, not the page's.** The app holds no second opinion
+about what a command changes, so a verb that starts writing starts asking first
+on the same commit. It began as an allow-list of the reads and grew into the
+whole map once the writers joined. Arity settles before permission: `forge anki
+push` has to be recognised as two words before anything asks whether it may
+run, or it falls back to `anki`, finds a read, and pushes.
 
 **Always in the background**, which is stronger than "an indicator while
 it runs". `forge anki` is ten seconds against 150 cards, almost all of it
@@ -1702,7 +1702,8 @@ the project table does too. Only that table, because `create_app` is handed
 a config and must honour it.
 
 **A long run** is `zotero import`, `anki push`, `units extract`. Those want
-a job to start, report and finish, which the app has none of.
+a job to start, report and finish, which `app/jobs.py` and
+`POST /api/run` now provide.
 
 ### What a long run should look like
 
@@ -1727,7 +1728,7 @@ and the errors first, is both easier to read than the console and *less*
 code than streaming: no transport, no buffering, no cancel semantics.
 
 The piece worth keeping from one and two is **progress, not output**. A
-sync of 150 cards takes a while and a screen that says nothing looks
+push of 150 cards takes a while and a screen that says nothing looks
 broken. So: a small indicator in the header while a run is in flight, a
 count when the run knows one (`42 of 150`), and the result rendered as a
 table when it finishes. No transcript, no chat.
@@ -1748,7 +1749,8 @@ runs at, and only the plain-Python half is ever a candidate for a button.
 `anki pull --dry-run`), each returning the same structured report its
 `--json` already returns, and one component that renders an outcome table.
 The dry runs first, because a button that changes nothing is the one that
-needs no confirmation.
+needs no confirmation. Built as one `POST /api/run` for every verb with no
+model behind it.
 
 ## 14. A visual pass, and a theme you can swap
 
@@ -1779,7 +1781,7 @@ file, and **making the decisions better** so the thing reads well. The first
 is mechanical and testable; the second is taste and needs eyes. Doing the
 first makes the second cheap, which is the order to take them in.
 
-### What is already true
+### What was true before the seam
 
 `app.css` is one file, 3713 lines, 890 rules. It is in better shape than a
 file that size sounds:
@@ -1930,8 +1932,8 @@ The taste half wants the shapes to stop moving first.
 ## 4. Publishing, what is left
 
 **The demo recording.** `assets/make_assets.py` carries the shot list in its
-docstring. Not scriptable: the interesting part is the pace of triage and no
-script knows how long to pause.
+docstring. It cannot be scripted, because the interesting part is the pace
+of triage and no script knows how long to pause.
 
 **Half of this does not run without Claude Code**, the flip side of having no
 LLM code in the tool. The committed ledger and the `.apkg` export are the
@@ -2002,13 +2004,13 @@ by default: a note on the card, prefilled "check my manual edit". An edit
 to an approved card un-approves it through the hash and nothing else
 (invariant 5).
 
-Left: a KaTeX preview beside the text, because an unbalanced `$` is the
-usual mistake.
+Each box has a KaTeX preview under it, redrawn as you type, because an
+unbalanced `$` is the usual mistake and shows there as a raw `$`.
 
 ## 19. A unit from nothing, in the page
 
 **Built.** `+` in triage opens a dialog for a subject, a gist, a sample,
-tags and references, and the work where a project reads several. It writes
+tags and references, and the source where a project reads several. It writes
 through `ledger.add_unit`, the function `forge units add` uses, so the two
 agree on the id and on what asking twice does. A unit, not a card, because
 the unit is the decision (invariant 9).
@@ -2017,9 +2019,15 @@ the unit is the decision (invariant 9).
 
 Context dumped at a whole project, and a pass that sorts each piece to the
 card it belongs to or proposes a new one. Two modes: write the changes
-directly, or stop at units and `@me` notes for a human to decide. The
+directly, or stop at units and `@me` annotations for a human to decide. The
 second matches the rest of the tool, where a pass proposes and a human
 decides, and it is the one to build first.
+
+**The second is built**, as `/sort-notes`: a piece about a card becomes an
+`@me` line on it, a piece about an uncarded unit an `@me` annotation on the
+unit, and anything new a unit through `forge units add` with the note as its
+sample. Nothing is resolved and no card content is touched. The first mode
+waits until the second has been used enough to show what it gets wrong.
 
 ## 21. What a pass changed, card by card
 
@@ -2045,14 +2053,23 @@ proposed under "containers" lands in the containers deck without anybody
 tagging it. Most specific first: tag, then topic, then type, then the
 project's deck. `check` warns about a key that names no ask.
 
-Per source was the first idea and the wrong one: a project reads several
-works to answer one question, and the question is what a deck is for.
+Per source was the first idea, and the wrong one. A project reads several
+sources to answer one question, and the question is what a deck is for.
 
 ## 23. The docs against the style guide
 
 A pass over every document against docs/STYLE.md. The command rename
 changed their command lines; nothing has read them for the prose rules
 since.
+
+**Done for CLAUDE.md, CONTRACT.md, DESIGN.md and VERBS.md, and for what was
+false in this file.** Stale commands, statements the code no longer bears
+out, em dashes and `--` in prose, colon glue, and the banned words. Left:
+"work" meaning source in about a hundred lines of §10 (the headings are
+fixed), "sync" as a noun in DESIGN.md, and a handful of quantifiers with no
+witness to hand. The README's prose is the author's; its command tables are
+current.
+
 ---
 
 # Ideas, not scheduled
@@ -2099,8 +2116,8 @@ area annotations are figure units already, "a figure card needs a `type`
 beyond `identity`" stopped being one when `intuition` landed, and a card
 can now carry a picture (`![...](unit:<id>)`, rendered and uploaded by
 `anki push`).
-What is left is segmenter work -- finding a figure in a book nobody marked up
--- and the segmenter is frozen.
+What is left is segmenter work (finding a figure in a book nobody marked
+up), and the segmenter is frozen.
 
 Worth doing alone if the fallback segmenter is ever touched: fraction rules
 from the vector layer as a math signal in `score_line`, which would make it
@@ -2177,6 +2194,7 @@ several sources, which `unit:` already allows as a list. A uid is the
 note's identity in Anki, so the surviving card should keep one of the
 originals' uids to keep its review history. And `anki push` deletes
 nothing, so the note a merge retires stays in Anki until removed there.
+
 ---
 
 # What the Cookbook taught us

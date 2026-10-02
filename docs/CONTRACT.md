@@ -14,10 +14,11 @@ Tests cite these by number.
 
 Traffic is one-way, with one exception. `anki pull` takes review comments and
 flags out of Anki, writes them into the card's `## notes` as annotations, and
-erases them from Anki in the same pass. An imported note is addressed like any
-other, `@claude` unless the comment or the flag's meaning opens `@me`. The erase is not tidiness: without
-it, every run re-imports the same comment, and a note you had already resolved
-comes back on the next pull. It is also what keeps invariant 2 true. Anki holds
+erases them from Anki in the same pass. An imported annotation is addressed
+like any other, `@claude` unless the comment or the flag's meaning opens
+`@me`. The erase is not tidiness. Without it, every run re-imports the same
+comment, and an annotation you had already resolved comes back on the next
+pull. It is also what keeps invariant 2 true. Anki holds
 that text until you pull it and never longer.
 
 ### 2. Files are the source of truth
@@ -47,11 +48,12 @@ become a card by inheritance.
 Enforced by `content_hash`, which covers what a reviewer read and nothing
 else. Outside it: `status`, `content_hash`, `## notes`, `## verify`,
 `verify`, `requires`, `frequency`, `derivation`, `web`, `gist`, `augmented`,
-`tags`.
+`tags`, `relearn`.
 
-The last seven are not claims the card makes. Three decide when you meet it,
+The last eight are not claims the card makes. Three decide when you meet it,
 one is a permission granted to whoever writes it, one is the caption it
-appears under in a list, one is where it is filed, and approving a card is
+appears under in a list, one is where it is filed, one is an instruction to
+Anki that `anki push` carries out once and removes, and approving a card is
 not approving its position in the queue.
 
 `tags` is the one that had to be argued for, because it does reach Anki.
@@ -67,7 +69,7 @@ routed by tag without re-tagging demoting the card.
 state of a card is read off the card: a stub has no optional sections, an
 unjudged one has no gradings, a held approval has a digest that no longer
 matches. Augmentation cannot be, because its usual right answer is to add
-nothing -- most cards should come out of it with no conditions and no proof --
+nothing (most cards should come out of it with no conditions and no proof),
 so a card the pass finished and a card it never opened are the same file. It
 records that the work happened, which is why hashing it would mean the pass
 un-approving every card it decided to leave alone.
@@ -120,7 +122,7 @@ the bound needs independence".
 
 It is a reading, and **no pass that writes content consumes it**.
 `/extract-cards` still works from the crop, the page and the brief. Keeping it
-out of that path is the safety property: a machine's guess, written where the
+out of that path is the safety property. A machine's guess, written where the
 next pass reads instructions, is indistinguishable from yours one pass later.
 Its value is that disagreeing with it costs one keystroke here, where the same
 misunderstanding found after a card exists costs a rewrite.
@@ -140,15 +142,16 @@ the wording costs no re-review, and it never reaches Anki.
 **The card stage** is where content is settled. `/extract-cards` and `/augment`
 pull whatever context the unit was granted (the page it was printed on, the
 pages either side or the whole chapter, the source's conventions, web lookups
-where those were granted) and iterate until `check` passes and a human can approve.
+where those were granted) and iterate until `check` passes and a human can
+approve.
 
 Depth belongs here. At triage it buys nothing and costs the throughput the
 stage exists for.
 
-One consequence worth stating: **you do not have to be able to transcribe a
-unit in order to triage it.** `tex_auto` exists to keep a segmented source
-legible enough to judge ([DESIGN.md](DESIGN.md) §4), which is the same two
-questions, not a head start on the answer (invariant 4). A marked passage
+**You do not have to be able to transcribe a unit in order to triage it.**
+`tex_auto` exists to keep a segmented source legible enough to judge
+([DESIGN.md](DESIGN.md) §4), which is the same two questions, not a head start
+on the answer (invariant 4). A marked passage
 carries the sentence it covers and needs nothing more. A boxed figure carries
 neither text nor maths and is still obviously worth a card or obviously not.
 On a prose source the subject of a unit is what you highlighted and what you
@@ -160,14 +163,14 @@ renders no transcription pane at all rather than an empty one.
 ## Card format
 
 One markdown file per card in [cards/](../cards/), named
-`<source>/<uid>-<slug>.md`. The folder is filing only. `unit:` is the one place
-a card's source is recorded, and every loader `rglob`s, so a card in the wrong
-folder still loads and still syncs.
+`<project>/<uid>-<slug>.md`. The folder is filing only. `unit:` is the one
+place a card's source is recorded, and every loader `rglob`s, so a card in the
+wrong folder still loads and still pushes.
 
 Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
-`unit`, `tags`, `verify`, and optionally `frequency`, `derivation`, `web` and
-`gist`.
+`unit`, `tags`, `verify`, and optionally `frequency`, `derivation`, `web`,
+`gist`, `augmented` and `relearn`.
 
 Sections: `## front` and `## back` are required. `conditions`, `prose`, `uses`,
 `proof`, `verify`, `notes` are optional. They read in that order on the card:
@@ -208,6 +211,9 @@ things. File order decides, so a card carrying two of them lands somewhere
 you can predict. A tag outranks a type, because a tag names one card's
 subject and a type names a whole class of card.
 
+`[decks.by_topic]` sends a card by the ask in `topics.md` its units stand
+under, and ranks between the two: tag, then topic, then type.
+
 Re-tagging a card moves it between decks and does not un-approve it: the
 content hash covers what a reviewer read, and filing is not read.
 `anki push` reports what is left behind under the old name, and
@@ -237,7 +243,7 @@ them, and the uid stays last so two machines build the same deck.
 
 ---
 
-## Conventions belong to a source, not to this file
+## Conventions belong to a project, not to this file
 
 Which layout a derivative uses, what the entries are, what a bare symbol means:
 each is a fact about one book and one deck, not about this tool. Naming any of
@@ -254,9 +260,9 @@ Markdown below it.
 
 What a key can express, and what the tool acts on. About the project:
 `title`, `citation`, `deck`, `order`, `tags`, `context_pages`, `web`, and a
-`[conventions]` table. About each work it reads, in a `[[sources]]` table of
-its own: `files`/`tex`, `zotero`, `attachments`, `url`,
-`crop_context`/`crop_width`, and that work's reading of its Zotero marks.
+`[conventions]` table. About each source it reads, in a `[[sources]]` table
+of its own: `files`/`tex`, `zotero`, `attachments`, `url`,
+`crop_context`/`crop_width`, and that source's reading of its Zotero marks.
 
 **The split is the point.** A project holds one ledger, one deck and one
 conventions file; a source is a thing you read, and a project may read
@@ -303,8 +309,8 @@ business to declare.
 ### `web`
 
 Whether whoever writes or augments a card from this source may look things up.
-Off repo-wide, and overridable per source, per unit (from triage, `w`) and per
-card.
+Off repo-wide, and overridable per project, per unit (from triage, `w`) and
+per card.
 
 Off by default because the failure is invisible. A card should say what *this
 source* says, hypotheses and notation included. The web's cleaner statement of
@@ -312,7 +318,7 @@ the general theorem, substituted for the printed one, reads as a better card
 until the condition the paper had, and the general version does not, turns out
 to be the point.
 
-`forge context` resolves unit over source over repo and says the answer in
+`forge context` resolves unit over project over repo and says the answer in
 words, so the pass reading it never has to work out whose setting won.
 
 ### `conventions.md`
@@ -325,7 +331,7 @@ exists.
 **There is no file until you write one.** Nothing generates a placeholder,
 because a placeholder saying "nothing recorded yet" is indistinguishable from a
 real one to everything that reads it, and would silence the warning it should
-raise. If a source has none, `context` says so. An absent convention means a
+raise. If a project has none, `context` says so. An absent convention means a
 card writer is guessing.
 
 ### Why TOML
@@ -339,11 +345,11 @@ project. Discovery does not guess.
 
 `forge.toml` keeps what is genuinely repo-wide: `[cards] language`, the note
 type, `[anki] deck` as a fallback, `[cards] web` as the floor under every
-source's permission, `[zotero]` defaults. A source imported from Zotero falls
-back to `Zotero::<title>` rather than to `[anki] deck`: a shelf you are
+project's permission, `[zotero]` defaults. A project reading a Zotero item
+falls back to `Zotero::<title>` rather than to `[anki] deck`: a shelf you are
 reading through is not the deck you have decided to keep, and one parent is
 what makes an import studiable or removable in one move. Naming a `deck` in
-the source overrides it. A `[projects.<name>]` block there still
+the project overrides it. A `[projects.<name>]` block there still
 works for a repo that has not moved yet. Conventions are the one thing it does
 not keep.
 

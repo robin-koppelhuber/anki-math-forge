@@ -42,7 +42,8 @@ RELATION = re.compile(
     "[=<>≤≥≈≡∝≠]"
     r"|\\(?:leq|geq|neq|approx|equiv|propto|sim|simeq|cong"
     "|subset|subseteq|supset|supseteq|in|ni|succ|succeq|prec|preceq"
-    "|ll|gg|doteq|triangleq)"
+    "|ll|gg|doteq|triangleq"
+    "|iff|implies|impliedby|Leftrightarrow|Rightarrow|Longleftrightarrow)"
     "(?![a-zA-Z])"  # a macro name ends here: \in must not match \infty
 )
 

@@ -393,3 +393,21 @@ def test_maths_wrapped_inside_one_inline_span_is_not_a_wrapped_sentence(
     repo: Path, config: Config
 ) -> None:
     assert not wrapped(repo, config, "$a +\nb$")
+
+
+def test_a_project_may_set_its_own_front_cap(repo: Path) -> None:
+    """A formula reference fits in 160 characters; a statement from a paper
+    often does not, and the deck is the place that knows which it is."""
+    from anki_math_forge import config as config_mod
+
+    long_front = "\n## front\n" + ("a statement from a paper " * 8) + "\n\n## back\n$b$\n"
+    write(repo, long_front)
+    assert "front-too-long" in codes(lint(repo, config_mod.load(repo)))
+
+    (repo / "projects" / "demo" / "project.toml").write_text(
+        "front_char_cap = 400\n", encoding="utf-8"
+    )
+    config = config_mod.load(repo)
+    assert config.front_char_cap_for("demo") == 400
+    assert config.front_char_cap_for("elsewhere") == config.front_char_cap
+    assert "front-too-long" not in codes(lint(repo, config))

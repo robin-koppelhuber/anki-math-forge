@@ -88,6 +88,22 @@ CONFIG = (
 )
 
 
+def _remove(path: Path) -> None:
+    """Delete, waiting out a reader.
+
+    Windows refuses to delete a file another process has open, and the
+    server may still be reading the deck for a command the last test
+    started from the page: a run outlives the page that began it.
+    """
+    for _ in range(50):
+        try:
+            path.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            time.sleep(0.1)
+    path.unlink(missing_ok=True)
+
+
 def lay_out(repo: Path) -> None:
     """Write the config, the deck and the ledger, replacing what the last test
     left.
@@ -103,11 +119,11 @@ def lay_out(repo: Path) -> None:
     # and the next test counted it: one test adding a card to try something
     # became three failures somewhere else.
     for stale in cards.glob("*.md"):
-        stale.unlink()
+        _remove(stale)
     (repo / "projects" / "demo").mkdir(parents=True, exist_ok=True)
     (repo / "projects" / "demo" / "demo.tex").write_text(DEMO_TEX, encoding="utf-8")
-    (repo / "projects" / "demo" / "units.jsonl").unlink(missing_ok=True)
-    (repo / "projects" / "demo" / "graph.json").unlink(missing_ok=True)
+    _remove(repo / "projects" / "demo" / "units.jsonl")
+    _remove(repo / "projects" / "demo" / "graph.json")
     for uid, gist, needs, frequency, derivation in DECK:
         graded = ""
         if frequency:

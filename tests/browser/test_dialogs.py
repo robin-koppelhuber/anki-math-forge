@@ -85,3 +85,22 @@ def test_the_theme_switch_cycles_and_is_remembered(page, live) -> None:  # type:
     assert page.evaluate(root) == "system"
     page.reload()
     assert page.evaluate(root) == "system"
+
+
+def test_the_editor_previews_what_it_will_render(page, live) -> None:  # type: ignore[no-untyped-def]
+    page.goto(f"{live}/review?project=demo&status=draft#ccc333")
+    page.wait_for_selector('[data-uid="ccc333"]:not([hidden])')
+
+    page.keyboard.press("Shift+E")
+    page.wait_for_selector("[data-card-edit-dialog][open]")
+    page.wait_for_selector('[data-card-edit-preview="front"] .katex')
+    page.fill("[data-card-edit-form] [name=back]", "$x^2$ and $y")
+
+    # After the debounce: the box held the old back until then.
+    page.wait_for_function(
+        "document.querySelector('[data-card-edit-preview=\"back\"]').innerText.includes('y')"
+    )
+    shown = page.inner_text('[data-card-edit-preview="back"]')
+    assert page.locator('[data-card-edit-preview="back"] .katex').count() == 1
+    assert "$y" in shown, "an unclosed dollar stays visible"
+    assert not page.complaints, page.complaints

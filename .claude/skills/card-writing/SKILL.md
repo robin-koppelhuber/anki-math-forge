@@ -903,5 +903,39 @@ formula, though note that in numerator layout you would write $X^{-1}$ instead.
 The front is a topic prompt, the back mixes answer, derivation and a second
 convention, and nothing states the layout the card actually uses.
 
+**Good**, an `intuition` card from a marked paragraph:
+
+``markdown
+## front
+Why does Hoeffding's inequality need the $X_i$ to be independent?
+
+## back
+The proof bounds $\mathbb{E}\,e^{\lambda S_n}$, and independence is what lets
+that factor into $\prod_i \mathbb{E}\,e^{\lambda X_i}$, one bounded factor
+per term.
+
+## prose
+Without it the terms can move together, and the sum is only as concentrated
+as one term scaled by $n$.
+``
+
+The front asks *why* and has one answer: the step where the hypothesis is
+used. No `## conditions` and no `## verify`. The back names the move, not
+the class ("because they are sub-Gaussian" answers a different question).
+
+**Bad**, same paragraph:
+
+``markdown
+## front
+Hoeffding's inequality and independence
+
+## back
+Hoeffding's inequality bounds the deviation of a sum of bounded random
+variables from its mean, and it assumes they are independent.
+``
+
+A topic for a front, and a back that restates the hypothesis without saying
+what it does.
+
 *Add rejected cards here as you meet them during review — a rejection with a
 one-line reason is the most useful thing this file can accumulate.*

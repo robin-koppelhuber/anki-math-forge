@@ -21,7 +21,7 @@ Tests cite these by number. Each links to the reasoning.
 2. **Files are the source of truth.** The web app is a view over them. Anything
    it does is also doable by editing a file.
 3. **Extraction produces units, never cards.** Geometry, never image files.
-   Every unit arrives `new`, whichever door it came in by: a Zotero import is
+   Every unit arrives `new`, whichever door it came in by. A Zotero import is
    not triage.
 4. **`tex_auto` is a hint.** The crop is authoritative. A transcription error
    must not become a card by inheritance.
@@ -49,8 +49,8 @@ Tests cite these by number. Each links to the reasoning.
 ## Card format
 
 One markdown file per card in [cards/](cards/), named
-`<source>/<uid>-<slug>.md`. The folder is filing only: `unit:` records the
-source and every loader `rglob`s.
+`<project>/<uid>-<slug>.md`. The folder is filing only. `unit:` records the
+project, and every loader `rglob`s.
 
 Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 (`draft | approved | rejected`), `content_hash` (set on approval), `source`,
@@ -75,8 +75,8 @@ in is the writer's call. `check` refuses a card whose picture cannot be drawn.
 
 Code is a fenced block, ```` ```cpp ````. It is not read as maths and not
 counted as wrapped prose, and `anki push` renders it as a highlighted `<pre>`.
-The file keeps plain code;
-the colours are added on the way to Anki, so nobody needs an add-on.
+The file keeps plain code; the colours are added on the way to Anki, so nobody
+needs an add-on.
 
 `identity` states a fact and `verify` can check it numerically. `intuition`
 explains one and has no `## verify` and no `## conditions`.
@@ -114,7 +114,7 @@ uv run forge topic add 'a subject' --project <p> --ask '...'
 uv run forge units add 'a subject' --project <p> --gist '...' --preview '...'
                                         #   the third door in, for `/propose`: a unit
                                         #   where there was nothing to segment
-uv run forge sources                    # every work in the repo, and which project reads it
+uv run forge sources                    # every source in the repo, and which project reads it
 uv run forge sources remove <key> --project <p>
                                         #   take one out: its table and the units it
                                         #   owns. Refused while cards stand on it
@@ -122,7 +122,7 @@ uv run forge sources remove <key> --project <p>
 uv run forge zotero                     # what Zotero has, and what is already a source
 uv run forge zotero import --tag anki   # what you marked up in Zotero -> units
 uv run forge units classify             # *propose* skips; applies nothing
-uv run forge audit                      # is the index trustworthy? 1..N, no gaps
+uv run forge audit                      # is the ledger trustworthy? 1..N, no gaps
 uv run forge crops --section 2.4 --untranscribed --out DIR --json
 uv run forge context <unit-id>          # the page it was printed on (--pages N for more,
                                         #   counted *either side*: 3 hands over seven;
@@ -134,12 +134,14 @@ uv run forge units set <id> --web yes|no|inherit   # grant or refuse them
                                         #   context`: none | references | web.
                                         #   Per reference, `offer` says whether it
                                         #   is handed over at all
-uv run forge source-text <src>          # the book text, for card-writing context
+uv run forge source-text [project]      # the book text, for card-writing context
 uv run forge check                      # lint (always; blocks `anki push`)
 uv run forge units --state queued --json
-uv run forge units --ungisted           # no one-line subject yet; `/gist` fills them
+uv run forge units --ungisted           # no gist yet; `/gist` fills them
 uv run forge units set <id> --gist 'Lemma 2'
 uv run forge cards new --unit <id> --front '$...$' --back '$...$' --gist 'what it is'
+uv run forge cards --changes            # what moved on each card since the last
+                                        #   review decision; kept in .forge/, not git
 uv run forge todo                       # open annotations, @claude and @me
 uv run forge serve                      # project setup, units triage, card review, the
                                         #   dependency canvas (`[app] graph = false`
@@ -152,7 +154,8 @@ uv run forge anki pull                  # Anki review comments/flags -> @claude 
 uv run forge verify                     # opt-in numeric check
 ```
 
-Every verb that prints for a human takes `--json`. That is the interface to
+Every verb that prints for a human takes `--json`, except `project new`,
+`project delete`, `anki export` and `source-text`. That is the interface to
 read from, not the human output.
 
 `uv run pytest` · `uv run ruff check .` · `uv run mypy`
@@ -180,8 +183,9 @@ deliberately separate and is not frozen.
 
 - Boring implementations. This has to stay legible in six months.
 - Annotations are a scratchpad: lines in `## notes` starting `@claude` are open
-  requests. Resolve one by deleting the line and making the edit. The edit
-  changes `content_hash`, which drops the card back to `draft` automatically.
+  requests. Resolve one by deleting the line and making the edit. The edit no
+  longer matches `content_hash`, so the card counts as a draft again
+  automatically.
 - When the design doc does not answer something, make a small call and note it
   in a comment. Do not block.
 - `uv sync --extra pdf` for PDF work; `npm install` gives `check` the real

@@ -319,3 +319,69 @@ def test_without_a_scheme_nothing_is_checked(tmp_path: Path) -> None:
     led = ledger_of(tmp_path, [anchored("s:a", "blue")])
 
     assert [f for f in audit.audit(led, "s").findings if f.code.startswith("scheme-")] == []
+
+
+# -- dropped content (ROADMAP §2) -------------------------------------------
+
+
+def loose(uid: str, top: float, left: float = 100.0, state: str = "new") -> Unit:
+    """An unnumbered crop on page 1."""
+    return Unit(
+        id=uid,
+        locator=Locator(section="1", page=1, bbox=[left, top, left + 300.0, top + 12.0]),
+        state=state,
+    )
+
+
+def codes(report: audit.Report, unit_id: str) -> list[str]:
+    return [f.code for f in report.findings if f.unit_id == unit_id]
+
+
+def test_a_line_cut_off_its_display_is_suspected(tmp_path: Path) -> None:
+    """Right above the numbered line, in the same column: one display, two
+    regions."""
+    led = ledger_of(tmp_path, [loose("src:1:a", top=84.0), numbered(1, top=100.0)])
+
+    report = audit.audit(led, "src")
+
+    assert codes(report, "src:1:a") == ["fragment-suspected"]
+    assert "src:1:a" in report.flagged
+
+
+def test_a_crop_a_paragraph_away_is_not(tmp_path: Path) -> None:
+    led = ledger_of(tmp_path, [loose("src:1:a", top=40.0), numbered(1, top=100.0)])
+    assert codes(audit.audit(led, "src"), "src:1:a") == []
+
+
+def test_a_crop_in_the_other_column_is_not(tmp_path: Path) -> None:
+    led = ledger_of(
+        tmp_path, [loose("src:1:a", top=114.0, left=420.0), numbered(1, top=100.0)]
+    )
+    assert codes(audit.audit(led, "src"), "src:1:a") == []
+
+
+def test_a_skipped_fragment_has_been_looked_at(tmp_path: Path) -> None:
+    led = ledger_of(
+        tmp_path, [loose("src:1:a", top=114.0, state="skipped"), numbered(1, top=100.0)]
+    )
+    assert codes(audit.audit(led, "src"), "src:1:a") == []
+
+
+def test_a_number_with_no_equation_is_flagged(tmp_path: Path) -> None:
+    """`matrix-cookbook:3.2:178` holds nothing but `(178)`."""
+    cut = numbered(2, top=40.0)
+    cut.tex_auto = "(178)"
+    led = ledger_of(tmp_path, [numbered(1), cut])
+
+    report = audit.audit(led, "src")
+
+    assert codes(report, cut.id) == ["numbered-no-relation"]
+    assert codes(report, "src:1:1") == []
+
+
+def test_an_untranscribed_number_says_nothing(tmp_path: Path) -> None:
+    unread = numbered(1)
+    unread.tex_auto = ""
+    unread.transcription = "none"
+    report = audit.audit(ledger_of(tmp_path, [unread]), "src")
+    assert "numbered-no-relation" not in codes(report, unread.id)

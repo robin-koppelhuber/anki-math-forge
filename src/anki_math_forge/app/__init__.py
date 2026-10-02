@@ -4630,6 +4630,13 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
         add(where, "order", spec.order, origin, name)
         add(
             where,
+            "front_char_cap",
+            config.front_char_cap_for(name),
+            origin if spec.front_char_cap > 0 else inherited,
+            name,
+        )
+        add(
+            where,
             "web",
             "allowed" if config.web_for(name) else "off",
             origin if spec.web is not None else inherited,
