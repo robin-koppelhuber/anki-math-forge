@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.test_runner import finished
 
 from anki_math_forge import cli
 from anki_math_forge import config as config_mod
@@ -111,6 +112,10 @@ def test_the_server_builds_runs_and_refuses(config: Config) -> None:
     assert asked.status_code == 409, "a writer has to be confirmed"
     started = client.post("/api/actions/check/run", json={"values": {}})
     assert started.status_code == 200 and started.json()["verb"] == "check"
+    # A run is a thread that swaps the process's `sys.stdout` while it works.
+    # Left going, it swallows what the next test prints, and on a slower
+    # machine than this one it was still going.
+    finished(client, started.json()["id"])
 
 
 # -- which project a Zotero item goes to -------------------------------------
