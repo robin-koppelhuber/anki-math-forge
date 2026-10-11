@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.test_runner import finished
 
 from anki_math_forge import cli
 from anki_math_forge import config as config_mod
@@ -15,6 +16,20 @@ from anki_math_forge.app import actions, create_app, runs
 from anki_math_forge.config import Config
 
 PROJECTS = ["book", "cpp"]
+
+
+def finished(client: TestClient, run_id: str) -> dict[str, Any]:
+    """Poll the way the page does, until the run is done.
+
+    Kept here and not imported from `test_runner`: `tests/` is not a package,
+    so a test module cannot import another one by name.
+    """
+    for _ in range(400):
+        run = client.get(f"/api/run/{run_id}").json()
+        if run["done"]:
+            return dict(run)
+        time.sleep(0.05)
+    raise AssertionError("run never finished")
 
 
 def argv(key: str, **values: object) -> list[str]:
