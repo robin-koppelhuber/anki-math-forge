@@ -299,6 +299,9 @@ def write_source_stub(
         "# Which Zotero item this is. The units carry attachment keys, and this",
         "# is what they hang off.",
         f'zotero = "{item.key}"',
+        # The work's own name, so a second work in this project does not
+        # leave this one named by its item key.
+        f'title = "{item.title}"',
         "",
         "# Which of its attachments to read, by title or by key. Empty means",
         "# all of them; name them when the item carries more than one PDF of",
@@ -351,11 +354,13 @@ def build(
     zotero: ZoteroConfig,
     documents: tuple[str, ...] = (),
     text_for: Callable[[str, Path], int] | None = None,
+    marks_for: Callable[[str, list[Mark]], int] | None = None,
 ) -> ImportReport:
     """Every unit-making mark on every PDF of one Zotero item.
 
     `documents` names the attachments to read, by title or key; empty is all of
-    them. `text_for` caches a document's text layer and returns its size.
+    them. `text_for` caches a document's text layer and returns its size, and
+    `marks_for` every mark in it, unit-making or not.
     Passed in rather than done here, so this stays a function of Zotero and a
     config and nothing else has to exist for a test to call it.
     """
@@ -413,12 +418,23 @@ def build(
         # as often on the page before as on this one.
         if text_for is not None:
             report.text_chars += text_for(attachment.key, pdf)
+        heights = page_heights(pdf)
+        if marks_for is not None:
+            marks_for(
+                attachment.key,
+                [
+                    to_mark(a, heights.get(a.page or 0))
+                    for a in sorted(
+                        (a for a in mine if a.page), key=lambda a: (a.sort_index, a.key)
+                    )
+                ],
+            )
         report.units.extend(
             units_for(
                 source,
                 attachment,
                 mine,
-                page_heights(pdf),
+                heights,
                 zotero,
                 section=attachment.title,
                 toc=outline(pdf),

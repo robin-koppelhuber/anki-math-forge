@@ -10,7 +10,7 @@ decide whether a unit is worth carding if all you can see is a picture
 
 Arguments: `$ARGUMENTS`
 
-- **`--project NAME`** — which source. **Ask if it is not given and the repo
+- **`--project NAME`** — which project. **Ask if it is not given and the repo
   has more than one**: none of the commands below defaults to a source, so
   leaving it out silently means *every* source in the repo.
 - **`--section SECTION`** — one section, as `locator.section` spells it, or
@@ -18,7 +18,7 @@ Arguments: `$ARGUMENTS`
 - a bare word — model override: `haiku`, `sonnet`, or `opus`. Default: the
   transcriber agent's own setting (`sonnet`).
 
-Pass `--source` and `--section` straight through to every `forge` command
+Pass `--project` and `--section` straight through to every `forge` command
 here; they are the same flags. The units view writes this line for you with
 whatever you had filtered to, which is where the quoting comes from.
 
@@ -39,8 +39,8 @@ parallel** — several `Agent` calls in one message.
 1. See what needs doing:
 
    ```
-   uv run forge units --project <PROJECT> --state new --json
-   uv run forge audit
+   uv run --no-sync forge units --project <PROJECT> --state new --json
+   uv run --no-sync forge audit
    ```
 
    Units with `transcription: "none"` or `"failed"` need reading. Units with
@@ -50,7 +50,7 @@ parallel** — several `Agent` calls in one message.
 2. Work out the sections and their sizes:
 
    ```
-   uv run forge units --project <PROJECT> --state all --json
+   uv run --no-sync forge units --project <PROJECT> --state all --json
    ```
 
    Group by `locator.section`. Aim at a few dozen units per subagent: enough
@@ -60,12 +60,12 @@ parallel** — several `Agent` calls in one message.
    group by page instead.
 
 3. Dispatch one `transcriber` subagent per section, in parallel, passing the
-   section in the prompt and `model` only if `$2` was given:
+   section in the prompt and `model` only if a model word was given:
 
    > Transcribe section `<SECTION>` of `<SOURCE>`. Render the crops with
-   > `uv run forge crops --project <PROJECT> --section <SECTION> --untranscribed --json`,
+   > `uv run --no-sync forge crops --project <PROJECT> --section <SECTION> --untranscribed --json`,
    > read each one, and record it with
-   > `uv run forge units set <id> --tex '<latex>'`.
+   > `uv run --no-sync forge units set <id> --tex '<latex>'`.
    > Follow your instructions exactly: transcribe what is printed, annotate
    > anything unreadable or suspicious, never guess.
 
@@ -78,8 +78,8 @@ parallel** — several `Agent` calls in one message.
    summaries:
 
    ```
-   uv run forge audit
-   uv run forge units --project <PROJECT> --state new --json   # count "ok"
+   uv run --no-sync forge audit
+   uv run --no-sync forge units --project <PROJECT> --state new --json   # count "ok"
    ```
 
 5. Report: how many transcribed per section, how many the KaTeX gate refused,

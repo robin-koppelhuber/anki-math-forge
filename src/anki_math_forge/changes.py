@@ -13,12 +13,29 @@ decide on it in review (approve, reject, back to draft). The review page
 compares the file with the last snapshot, so it sees every edit made since,
 whoever made it and however. Each decision files the difference it was made
 over into the history.
+
+**One entry per look.** What moved since your last decision is a list, not
+one sum. Each time the record looks at a card and finds it changed since the
+last look (the review page drawing it, `forge cards --changes`, the editor
+saving) the difference is filed as an entry of its own, with when and from
+where. Two `@claude` passes with a look between them are two entries, each
+carrying the `resolved:` lines it added; two with none between them are one,
+because nothing sees an agent's edit as it happens. A decision files the
+entries into that round of the history and starts the list again.
+
+**Where an edit came from** is listed when something says so, and never
+guessed (`origins`). The page's editor records itself when it saves. A
+`resolved:` line names its asker: `inbox <stamp>:` is a dump from the
+project's inbox, anything else a settled `@claude` note. `augmented`
+turning on is `/augment`. An edit in `$EDITOR` says nothing, so nothing is
+listed for it.
 """
 
 from __future__ import annotations
 
 import difflib
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,6 +54,10 @@ KEPT = 20
 
 #: A one-line summary is one line in an aside 240px wide.
 WIDTH = 60
+
+#: How a line the inbox sorter wrote opens: `inbox 2026-10-03 14:02:`, with
+#: ` (2)` after the minute for the second dump in it.
+_INBOX = re.compile(r"^inbox (\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?: \(\d+\))?):")
 
 
 @dataclass
@@ -126,6 +147,21 @@ def one_line(was: str, now: str) -> str:
     return text + (f" (+{more} more)" if more else "")
 
 
+def origins(change: Change, by: list[str]) -> list[str]:
+    """Who made the changes in `change`, as far as anything says.
+
+    `by` is what writers recorded about themselves (`note_edit`); the rest
+    is read off the change itself.
+    """
+    found = list(by)
+    for line in change.resolved:
+        inbox = _INBOX.match(line)
+        found.append(f"inbox dump {inbox.group(1)}" if inbox else "a settled @claude note")
+    if any(key == "augmented" and after for key, _, after in change.fields):
+        found.append("/augment")
+    return list(dict.fromkeys(found))
+
+
 def _clip(text: str, width: int = WIDTH // 2) -> str:
     return text if len(text) <= width else text[: width - 1] + "…"
 
@@ -163,7 +199,13 @@ def record(config: Config, card: Card, decision: str) -> None:
         if rec.get("seen") is not None:
             entry["since"] = rec.get("at", "")
             entry["after"] = rec.get("decision", "")
-            entry["change"] = diff(rec["seen"], now).as_dict()
+            change = diff(rec["seen"], now)
+            entry["change"] = change.as_dict()
+            notes = _entries(rec, now)
+            entry["notes"] = notes
+            entry["from"] = list(
+                dict.fromkeys([f for note in notes for f in note.get("from", [])])
+            )
         history.append(entry)
         rec = {"seen": now, "at": at, "decision": decision, "history": history[-KEPT:]}
         path = _path(config, card.uid)
@@ -173,6 +215,74 @@ def record(config: Config, card: Card, decision: str) -> None:
         return
 
 
+def ensure(config: Config, card: Card) -> None:
+    """Start a card's record if it has none, from what the file says now.
+
+    The review page calls this for every card it draws. Without it a card
+    approved before the record existed had no snapshot, so the edit a
+    `/triage` pass made to it showed nothing: there was nothing to compare
+    against. From the first time you see a card, every later edit shows.
+    """
+    if not card.uid:
+        return
+    if load(config, card.uid) is None:
+        record(config, card, "first seen")
+    else:
+        observe(config, card)
+
+
+def _entries(rec: dict[str, Any], now: dict[str, Any]) -> list[dict[str, Any]]:
+    """The filed entries, then what moved since the last look as one more,
+    unfiled and undated."""
+    entries = list(rec.get("notes", []))
+    base = rec.get("checkpoint") or rec.get("seen")
+    live = diff(base, now) if base is not None else Change()
+    if live:
+        entries.append(
+            {"at": "", "change": live.as_dict(), "from": origins(live, []), "live": True}
+        )
+    return entries
+
+
+def observe(config: Config, card: Card, by: str = "") -> None:
+    """File what changed since the last look as an entry of its own.
+
+    `by` is a writer saying who it is: the page's editor, which knows. The
+    rest is read off the change (`origins`). Like `record`, it never fails
+    the write it follows.
+    """
+    rec = load(config, card.uid)
+    if rec is None or rec.get("seen") is None:
+        record(config, card, "first seen")
+        return
+    now = snapshot(card)
+    since = diff(rec.get("checkpoint") or rec["seen"], now)
+    if not since:
+        return
+    entry = {
+        "at": time.strftime("%Y-%m-%d %H:%M"),
+        "change": since.as_dict(),
+        "from": origins(since, [by] if by else []),
+    }
+    rec["notes"] = [*rec.get("notes", []), entry][-KEPT:]
+    rec["checkpoint"] = now
+    try:
+        write_atomic(_path(config, card.uid), json.dumps(rec, indent=1, ensure_ascii=False))
+    except OSError:
+        return
+
+
+def note_edit(config: Config, card: Card, who: str) -> None:
+    """The editor saved this card: file the change, naming who made it."""
+    observe(config, card, by=who)
+
+
+def pending(config: Config, card: Card) -> bool:
+    """Whether anything moved on this card since its last snapshot."""
+    rec = load(config, card.uid)
+    return bool(rec and rec.get("seen") is not None and diff(rec["seen"], snapshot(card)))
+
+
 def view(config: Config, card: Card) -> dict[str, Any] | None:
     """What the review page and `forge cards --changes` show: what moved
     since the last snapshot, and the rounds before it, newest first. `None`
@@ -180,10 +290,15 @@ def view(config: Config, card: Card) -> dict[str, Any] | None:
     rec = load(config, card.uid)
     if rec is None or rec.get("seen") is None:
         return None
-    pending = diff(rec["seen"], snapshot(card))
+    now = snapshot(card)
+    moved = diff(rec["seen"], now)
+    entries = _entries(rec, now) if moved else []
     return {
         "since": rec.get("at", ""),
         "after": rec.get("decision", ""),
-        "pending": pending.as_dict() if pending else None,
+        "pending": moved.as_dict() if moved else None,
+        # Everything that moved, newest entry first, each its own note.
+        "entries": list(reversed(entries)),
+        "from": list(dict.fromkeys([f for e in entries for f in e.get("from", [])])),
         "history": list(reversed(rec.get("history", []))),
     }

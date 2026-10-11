@@ -121,6 +121,57 @@
 {% endif %}
 {% endmacro %}
 
+{# A table of settings: what each is, a control showing what is in force,
+   and whose answer that is. A control saves when it changes, through `url`,
+   and the page comes back on `pane`. The reset takes the key out, so the
+   value is inherited again; a row with nothing to inherit (a convention, a
+   tag's deck) says "remove" instead. `add` is a last row that writes a new
+   key under `add.prefix`. What a row means sits under its control, so the
+   rows read as one table. #}
+{% macro settings_table(rows, url, pane, add=none) %}
+<div class="read-table">
+  {% for row in rows %}
+  <div class="read-row{{ ' own' if row.own }}" data-set-row
+       {% if row.edit %}data-set-url="{{ url }}" data-set-pane="{{ pane }}" data-set-key="{{ row.key }}"{% endif %}>
+    <span class="read-label">{{ row.label }}</span>
+    <span class="read-control">
+      {% if row.edit and row.edit.kind == 'choice' %}
+      <select data-set-input aria-label="{{ row.label }}">
+        {% for value, label in row.edit.choices %}
+        <option value="{{ value }}"{{ ' selected' if value == row.edit.current }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% elif row.edit %}
+      <input data-set-input value="{{ row.edit.current }}" aria-label="{{ row.label }}"
+             placeholder="{{ row.edit.placeholder }}" autocomplete="off" spellcheck="false"
+             {{ 'inputmode=decimal' if row.edit.kind == 'number' }}>
+      {% if row.edit.unit %}<span class="read-unit">{{ row.edit.unit }}</span>{% endif %}
+      {% else %}
+      <span class="read-value">{{ row.value | inline }}</span>
+      {% endif %}
+    </span>
+    <span class="read-from">
+      {% if row.own %}set here{% if row.edit %}
+      <button type="button" class="link-button" data-set-reset>{{ row.reset | default('use inherited') }}</button>{% endif %}
+      {% else %}inherited{% endif %}
+    </span>
+    <span class="read-what">{{ row.what | inline }}</span>
+  </div>
+  {% endfor %}
+  {% if add %}
+  <form class="read-row read-add" data-set-add data-set-url="{{ url }}" data-set-pane="{{ pane }}"
+        data-set-prefix="{{ add.prefix }}">
+    <span class="read-label">add</span>
+    <span class="read-control read-pair">
+      <input name="key" placeholder="{{ add.key }}" aria-label="{{ add.key }}" autocomplete="off" spellcheck="false">
+      <input name="value" placeholder="{{ add.value }}" aria-label="{{ add.value }}" autocomplete="off" spellcheck="false">
+    </span>
+    <span class="read-from"><button type="submit" class="link-button">add</button></span>
+  </form>
+  {% endif %}
+</div>
+{% endmacro %}
+
 {% block main %}
 {# Split once, at the top: the list of sources shows the proposals, each
    one has a panel of its own, and the project's panel still lists the
@@ -129,35 +180,19 @@
 {% set settled = shelf_lines | rejectattr('proposed') | list %}
 <div class="setup" id="setup">
 
-  {# What to run, for the thing you have selected. The same bargain the rail
-     on the triage page makes: copied, never launched, so nothing writes
-     cards with nobody looking. What it can say that the other panel cannot
-     is the *scope*: triage does not know which ask you are working through,
-     and this screen is where you picked it. #}
-  <aside class="setup-runs" id="setup-runs" aria-label="what to run next">
-    <div class="rail-head">
-      <span class="rail-title">run next</span>
-      <button type="button" class="rail-fold" id="runs-fold"
-              title="hide this column">&#8249;</button>
-    </div>
-    <div class="setup-runs-scroll">
-      {% for pane, rows in commands.items() %}
-      <div data-runs="{{ pane }}" hidden>{{ runs(rows) }}</div>
-      {% endfor %}
-      <p class="setup-empty">Copied, not launched.</p>
-    </div>
-  </aside>
-  <div class="splitter" data-splitter="setupRuns"
-       title="drag to resize · double-click to reset"></div>
-  <button type="button" class="rail-tab left" id="runs-tab"
-          title="what to run next" aria-controls="setup-runs" hidden>&#9776;</button>
-
   <aside class="setup-panel" id="setup-panel" aria-label="what this project holds">
     {# The project itself, above the split and outside both lists: it is what
        the two lists belong to, not a third item in one of them. #}
     <button type="button" class="setup-who" data-pane="project">
-      <span class="setup-who-name">{{ project_facts.title or project }}</span>
+      <span class="setup-who-name">{{ (project_facts.title or project).split() | join(' ') }}</span>
       <span class="setup-who-what">{{ project_facts.deck }}</span>
+    </button>
+    {# What you know about the subject and have not placed yet. Beside the
+       project rather than in the lists below it: it is about the deck as a
+       whole, not one ask or one source. #}
+    <button type="button" class="setup-who setup-inbox" data-pane="inbox">
+      <span class="setup-who-name">inbox</span>
+      <span class="setup-who-what">{% if inbox.waiting %}{{ inbox.waiting }} unsorted{% else %}nothing unsorted{% endif %}</span>
     </button>
 
     {# The two lists and the handle between them, in a box of their own: the
@@ -210,7 +245,7 @@
         <button type="button" data-kind="authoritative">authoritative</button>
         <button type="button" data-kind="reference">reference</button>
         <button type="button" class="filter-sync" id="topic-sync" data-sync
-                title="only the works the selected topic drew on">this topic</button>
+                title="only the sources the selected topic drew on">this topic</button>
       </div>
       {% endif %}
       <ul class="setup-pick" id="source-list">
@@ -268,20 +303,76 @@
        title="drag to resize · double-click to reset"></div>
 
   <div class="setup-detail" id="setup-detail">
+  {# The scrolling box measures itself and this lays out inside it: whether
+     there is room for two columns depends on how wide you dragged the list,
+     not on the window. #}
+  <div class="setup-columns">
+
+    {# What to run next, for the thing you have selected: a few quick picks
+       at the top of the pane they are about, rather than a column of their
+       own. A command with no model behind it runs here, and its "more"
+       button opens it in the commands window to change what it runs on; a
+       slash command is copied. #}
+    <section class="setup-next" id="setup-runs" aria-label="what to run next">
+      {% for pane, rows in commands.items() %}
+      <div data-runs="{{ pane }}" hidden>{{ runs(rows) }}</div>
+      {% endfor %}
+    </section>
 
     {# -- the project ------------------------------------------------------ #}
     <section class="setup-pane" data-pane="project">
-      <header class="pane-head">
-        <h2>{{ project_facts.title or project }}</h2>
+      {# The name it is shown by, yours to change. The folder name is in
+         every unit id and stays, so it is said under the title rather than
+         offered for editing. #}
+      {% set shown = (project_facts.title or project).split() | join(' ') %}
+      {% if project_facts.own_file %}
+      <header class="pane-head" data-title-edit data-project="{{ project }}">
+        <div class="pane-title">
+          <h2 data-title-show>{{ shown }}</h2>
+          <button type="button" class="link-button" data-title-rename>rename</button>
+        </div>
+        <form class="pane-title-form" data-title-form hidden>
+          <input name="title" value="{{ shown }}"
+                 aria-label="what this project is called" autocomplete="off">
+          <button type="submit" class="form-go">save</button>
+          <button type="button" class="link-button" data-title-cancel>cancel</button>
+        </form>
+        <p class="pane-what">Folder <code>{{ project }}</code>, which starts every unit
+          id and does not change.</p>
       </header>
+      {% else %}
+      <header class="pane-head">
+        <h2>{{ shown }}</h2>
+        <p class="pane-what">Folder <code>{{ project }}</code>, which starts every unit
+          id and does not change. Declared in <code>forge.toml</code>, so its
+          <code>title</code> is changed there.</p>
+      </header>
+      {% endif %}
 
       {{ open_in({}) }}
       {{ counts_strip(pipeline, {}) }}
 
+      {% if project_settings %}
+      <dl class="setup-facts">
+        <dt>material</dt><dd>{{ project_facts.origin or 'nothing declared' }}</dd>
+      </dl>
+      {% for group in project_settings %}
+      {% if group.rows or group.add %}
+      <h3 class="pane-cap">{{ group.title }}</h3>
+      {{ settings_table(group.rows, '/api/projects/' ~ (project | urlencode) ~ '/setting', 'project', group.add) }}
+      {% endif %}
+      {% endfor %}
+      {% else %}
       <dl class="setup-facts">
         <dt>deck</dt><dd>{{ project_facts.deck }}</dd>
         {% for card_type, deck in project_facts.decks %}
         <dt>deck · {{ card_type }}</dt><dd>{{ deck }}</dd>
+        {% endfor %}
+        {% for tag, deck in project_facts.tag_decks %}
+        <dt>deck · tag {{ tag }}</dt><dd>{{ deck }}</dd>
+        {% endfor %}
+        {% for slug, deck in project_facts.topic_decks %}
+        <dt>deck · topic {{ slug }}</dt><dd>{{ deck }}</dd>
         {% endfor %}
         <dt>material</dt><dd>{{ project_facts.origin or 'nothing declared' }}</dd>
         {% if project_facts.citation %}
@@ -291,13 +382,34 @@
         <dt>order</dt><dd>{{ project_facts.order or 'printed' }}</dd>
         <dt>web lookups</dt><dd>{{ 'allowed' if project_facts.web else 'off' }}
           <span class="from">{{ 'set here' if project_facts.web_own else 'inherited' }}</span></dd>
+        <dt>pages handed over</dt><dd>{{ project_facts.context_pages }}
+          <span class="from">{{ 'set here' if project_facts.context_pages_own else 'inherited' }}</span></dd>
+        <dt>front length cap</dt><dd>{{ project_facts.front_char_cap }}
+          <span class="from">{{ 'set here' if project_facts.front_char_cap_own else 'inherited' }}</span></dd>
         {% for key, value in project_facts.declared %}
         <dt>conventions.{{ key }}</dt><dd>{{ value | inline }}</dd>
         {% endfor %}
       </dl>
+      {% endif %}
       {% if sources | length > 1 %}
       <p class="pane-next">Crop settings and mark meanings are per document,
-        on each work's own panel.</p>
+        on each source's own panel.</p>
+      {% endif %}
+
+      {# What "inherited" above is inherited from: the repo-wide values in
+         `forge.toml`, folded because you open it to look one up. Read-only,
+         like the file it describes. #}
+      {% if repo_settings %}
+      <details class="setup-repo" data-repo-settings>
+        <summary class="pane-cap">repo-wide, in forge.toml</summary>
+        <dl class="setup-facts">
+          {% for group, rows in repo_settings %}{% for row in rows %}
+          <dt>{{ group }} · {{ row.key }}</dt>
+          <dd>{{ row.value | string | inline if row.value not in ('', None) else 'unset' }}
+            <span class="from">{{ row['from'] }}</span></dd>
+          {% endfor %}{% endfor %}
+        </dl>
+      </details>
       {% endif %}
 
       {# Both prose files, shown so you can see whether they say anything
@@ -455,6 +567,94 @@
     </section>
     {% endfor %}
 
+    {# -- the inbox ---------------------------------------------------------- #}
+    {# Things that belong in the deck without your knowing where. `/sort-notes`
+       hands each dump to the `note-sorter`, which writes under it where each
+       piece went. "propose" parks pieces as `@me` notes and units; "modify
+       existing cards" edits them, each of which is a draft again until
+       approved; both ticked, it chooses per piece. Two lists, unsorted and
+       sorted, and nothing else a dump can be: put a sorted one back to sort
+       it again. #}
+    {% macro mode_boxes(mode) %}
+    <span class="mode-boxes">
+      <label title="@me notes and units for you"><input type="checkbox" data-mode="propose"
+        {{ 'checked' if mode in ('propose', 'both') }}> propose</label>
+      <label title="edits the cards, cards anything new"><input type="checkbox" data-mode="write"
+        {{ 'checked' if mode in ('write', 'both') }}> modify existing cards</label>
+    </span>
+    {% endmacro %}
+    <section class="setup-pane" data-pane="inbox">
+      <header class="pane-head">
+        <h2>inbox</h2>
+      </header>
+      <form class="inbox-add" data-inbox>
+        <textarea name="text" rows="3" aria-label="add to the inbox"
+                  placeholder="a fact, a correction, a result"></textarea>
+        <div class="inbox-add-foot">
+          {# Propose is ticked: it changes no card until you act. Both ticked
+             is the sorter's choice per piece, not a third mode to pick. #}
+          <span class="inbox-mode" data-mode-boxes>{{ mode_boxes('propose') }}</span>
+          <span class="form-note">ctrl+enter</span>
+          <button type="submit" class="form-go">add</button>
+        </div>
+      </form>
+      {% set unsorted = inbox.dumps | selectattr('state', 'equalto', 'waiting') | list %}
+      {% set sorted_ = inbox.dumps | selectattr('state', 'equalto', 'sorted') | list %}
+
+      {# Unsorted is where you work, so it starts open. Sorted is what you have
+         read already, so it starts shut: the count is what you need from it. #}
+      <details class="dump-list" data-dumps="unsorted" open>
+        <summary class="pane-cap">unsorted <span class="dump-count">{{ unsorted | length }}</span></summary>
+        {% for dump in unsorted %}
+        <article class="dump" data-dump="{{ dump.stamp }}" data-state="waiting">
+          <header class="dump-head">
+            <span class="dump-when">{{ dump.stamp }}</span>
+            {# Still yours to change: it has not been placed yet. #}
+            <span class="dump-mode {{ dump.mode }}" data-dump-mode data-mode-boxes>{{ mode_boxes(dump.mode) }}</span>
+          </header>
+          <p class="dump-text">{{ dump.text }}</p>
+        </article>
+        {% else %}<p class="setup-empty">none</p>{% endfor %}
+      </details>
+
+      <details class="dump-list" data-dumps="sorted">
+        <summary class="pane-cap">sorted <span class="dump-count">{{ sorted_ | length }}</span></summary>
+        {% for dump in sorted_ %}
+        {% set mode_of = inbox_modes | selectattr('value', 'equalto', dump.mode) | first %}
+        <article class="dump" data-dump="{{ dump.stamp }}" data-state="sorted">
+          <header class="dump-head">
+            <span class="dump-when">{{ dump.stamp }}</span>
+            <span class="dump-mode {{ dump.mode }}" title="{{ mode_of.what }}">{{ mode_of.label }}</span>
+            <button type="button" class="link-button" data-dump-state="waiting"
+                    title="put it back in unsorted, to be placed again">unsort</button>
+          </header>
+          <p class="dump-text">{{ dump.text }}</p>
+          {% if dump.brief %}
+          {# Where each piece went. A dump can touch forty cards, so it is a
+             list to open and not a row of chips under the text. #}
+          {% set bits = [] %}
+          {% if dump.units %}{% set _ = bits.append(dump.units | length ~ (' unit' if dump.units | length == 1 else ' units')) %}{% endif %}
+          {% if dump.cards %}{% set _ = bits.append(dump.cards | length ~ (' card' if dump.cards | length == 1 else ' cards')) %}{% endif %}
+          <details class="dump-went">
+            <summary>{{ bits | join(' · ') if bits else (dump.brief | length ~ ' lines') }}</summary>
+            <ul class="dump-brief">
+              {% for line in dump.brief %}<li>{{ line | dump_line(project) }}</li>{% endfor %}
+            </ul>
+            {# Where to settle what it did. An edit shows under "changed since
+               decided", whoever made it; a proposal is an open `@me` note. #}
+            {% if dump.cards %}
+            <p class="dump-open">
+              {% if dump.mode != 'propose' %}<a class="chip" href="{{ filter_url('/review', {}, project=project, status='all', changed='yes') }}">changed</a>{% endif %}
+              {% if dump.mode != 'write' %}<a class="chip" href="{{ filter_url('/review', {}, project=project, status='all', annotated='me') }}">@me</a>{% endif %}
+            </p>
+            {% endif %}
+          </details>
+          {% endif %}
+        </article>
+        {% else %}<p class="setup-empty">none</p>{% endfor %}
+      </details>
+    </section>
+
     {# -- one source ------------------------------------------------------- #}
     {% for work in sources %}
     <section class="setup-pane" data-pane="source:{{ work.key }}">
@@ -475,8 +675,8 @@
       {{ open_in({'document': work.key}) }}
       {{ counts_of(work.holding, {'document': work.key}) }}
 
+      {% set source_url = '/api/sources/' ~ (project | urlencode) ~ '/' ~ (work.key | urlencode) ~ '/setting' %}
       <dl class="setup-facts">
-        {% if work.citation %}<dt>cited as</dt><dd>{{ work.citation | inline }}</dd>{% endif %}
         {% if work.files %}<dt>files</dt><dd>{{ work.files | join(', ') }}</dd>{% endif %}
         {% if work.tex %}<dt>tex</dt><dd>{{ work.tex }}</dd>{% endif %}
         {% if work.zotero %}<dt>Zotero item</dt><dd>{{ work.zotero }}</dd>{% endif %}
@@ -485,6 +685,8 @@
         {% if work.url %}
         <dt>at</dt><dd><a href="{{ work.url }}" rel="noreferrer">{{ work.url }}</a></dd>{% endif %}
       </dl>
+      <h3 class="pane-cap">about it</h3>
+      {{ settings_table(work.about, source_url, 'source:' ~ work.key) }}
 
       {# A reference with no address is a book you own. Nothing here can
          open it, which is exactly what makes it a reference; and it is
@@ -581,16 +783,37 @@
          that drifts. #}
       {% if work.files or work.tex or work.zotero %}
       <h3 class="pane-cap">how it is read</h3>
-      <ul class="setup-settings">
-        {% for row in work.settings %}
-        <li>
-          <span class="set-key">{{ row.key }}</span>
-          <span class="set-value">{{ row.value | inline }}</span>
-          <span class="from">{{ 'set here' if row.own else 'inherited' }}</span>
-          <span class="set-what">{{ row.what | inline }}</span>
-        </li>
-        {% endfor %}
-      </ul>
+      {# One row per setting: what it is, a control showing what is in force,
+         and whose answer that is. The control saves when you change it,
+         into this source's `[[sources]]` table; "use inherited" takes the
+         key out. What it means sits under the control, in the same column,
+         so the four rows read as one table. #}
+      {{ settings_table(work.settings, source_url, 'source:' ~ work.key) }}
+
+      {# The document's own chapters, so `section`, `chapter` and `part`
+         are a number of pages you can see before choosing one. From the
+         PDF's outline; a document without one says so in the window a card
+         writer gets instead. #}
+      {% if work.outline %}
+      <details class="read-outline" data-outline>
+        <summary class="pane-cap">its chapters, as the PDF's outline has them</summary>
+        <table class="read-chapters">
+          <thead><tr><th>chapter</th><th>pages</th><th></th></tr></thead>
+          <tbody>
+          {% for row in work.outline %}
+          {% if row.part and (loop.first or work.outline[loop.index0 - 1].part != row.part) %}
+          <tr class="read-part"><td colspan="3">{{ row.part }}</td></tr>
+          {% endif %}
+          <tr{{ ' class=large' if row.large }}>
+            <td>{{ row.title }}</td>
+            <td>{{ row.printed }}</td>
+            <td>{{ row.count }} page{{ '' if row.count == 1 else 's' }}</td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </details>
+      {% endif %}
       {% endif %}
 
       {# What a colour means, and which marks become units. The one setting
@@ -613,6 +836,17 @@
          each of which reads as a lookup that failed. #}
       {% set counted = work.scheme | map(attribute='count') | select | list %}
       <h3 class="pane-cap">what its marks mean</h3>
+      {# Saving the scheme does not touch the ledger; only an import reads the
+         marks again. So a colour switched on after the last import is still
+         sitting inside other units, and this says so with the import beside it. #}
+      {% if work.waiting_marks and work.authoritative %}
+      <p class="scheme-waiting">{{ work.waiting_marks }} mark{{ '' if work.waiting_marks == 1 else 's' }}
+        of a colour that makes units {{ 'is' if work.waiting_marks == 1 else 'are' }} not a unit yet:
+        the scheme changed after the last import.
+        <button type="button" class="run can-run scheme-import"
+                data-run="uv run forge zotero import {{ work.zotero }} --project {{ project }}"
+                data-effect="repo">import now</button></p>
+      {% endif %}
       <form class="scheme-edit" data-scheme="{{ work.key }}"
             data-marks="{{ 1 if work.zotero else 0 }}">
         <table class="scheme-table">
@@ -726,7 +960,7 @@
       {% if elsewhere %}
       <h3 class="pane-cap">already in this repo</h3>
       <input type="search" class="known-search" id="known-search"
-             placeholder="find a work by name, project or citation"
+             placeholder="find a source by name, project or citation"
              autocomplete="off" spellcheck="false"
              aria-label="narrow the list of works">
       <ul class="setup-known" id="known-list">
@@ -740,7 +974,7 @@
           <span class="known-kind">{{ 'authoritative' if work.authoritative
             else 'reference' }}{{ ' · ' ~ work.origin if work.origin }}
             {%- if work.authoritative %} · <span class="known-note"
-              title="a work is extracted from by one project: the same
+              title="a source is extracted from by one project: the same
 document twice is two ledgers of units and two notes per card">read only,
               {{ work.project }} extracts from it</span>{% endif %}</span>
           {# Always as a reference. The item key and the files are what
@@ -757,9 +991,9 @@ document twice is two ledgers of units and two notes per card">read only,
         </li>
         {% endfor %}
       </ul>
-      <p class="setup-empty" id="known-none" hidden>No work matches that.</p>
+      <p class="setup-empty" id="known-none" hidden>No source matches that.</p>
       {% else %}
-      <p class="setup-empty">Every work this repo knows is already read here.</p>
+      <p class="setup-empty">Every source this repo knows is already read here.</p>
       {% endif %}
 
       {# A page you found yourself. The same three fields a proposed line
@@ -810,6 +1044,7 @@ document twice is two ledgers of units and two notes per card">read only,
       {{ runs(pane_offers('new-topic')) }}
     </section>
 
+  </div>
   </div>
 </div>
 {% endblock %}

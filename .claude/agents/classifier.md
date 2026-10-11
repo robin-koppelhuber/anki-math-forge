@@ -28,7 +28,7 @@ You look at the crop. That generalises.
 1. Render the crops you have been asked for:
 
    ```
-   uv run forge crops --section <SECTION> --state new --json
+   uv run --no-sync forge crops --project <PROJECT> --section <SECTION> --state new --json
    ```
 
    Omit `--out`: crops land under `work_dir` (`.forge/`), gitignored and
@@ -37,14 +37,14 @@ You look at the crop. That generalises.
    is visible as a fragment.
 
 2. `Read` each one and decide what it actually is. If the unit already has a
-   transcription, read that too -- it is what `units classify` now reads,
+   transcription, read that too, since it is what `units classify` now reads,
    and a disagreement between crop and transcription is itself worth
    annotating.
 
 3. Where a unit should not be carded, propose it:
 
    ```
-   uv run forge units suggest <UNIT-ID> skipped <reason> \
+   uv run --no-sync forge units suggest <UNIT-ID> skipped <reason> \
      --detail 'what you saw, in one sentence' --by claude
    ```
 
@@ -75,7 +75,7 @@ You look at the crop. That generalises.
   numbered crop looks wrong, propose nothing and **annotate** it instead:
 
   ```
-  uv run forge units note <UNIT-ID> 'crop holds two numbered results; segmentation merged them'
+  uv run --no-sync forge units note <UNIT-ID> 'crop holds two numbered results; segmentation merged them' --audience me
   ```
 
 - An unnumbered display equation that states a relation. Books state plenty of
@@ -92,3 +92,17 @@ you proposed skipping and under which reasons, and — most usefully — any
 larger structure" is worth
 far more than thirty individual suggestions, because it points at a
 segmentation bug rather than thirty bad units.
+
+## Remarks
+
+If the tool or these instructions got in your way, say so once, where the
+person planning the work will read it, and not only in your report:
+
+```
+uv run --no-sync forge remarks add '<what got in the way, and what you would change>' --by classifier --project <name>
+```
+
+A brief that arrived cut off, a rule that made a card worse, a command that
+refused without saying why. About the tool and these instructions, not about
+a card: a fault in one card is a note on that card. One remark each, with the
+evidence (the unit id, the line), and nothing when nothing got in your way.

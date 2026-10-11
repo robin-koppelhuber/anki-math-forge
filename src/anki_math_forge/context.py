@@ -15,7 +15,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .config import CHAPTER, REFERENCES_FILE, TOPICS_FILE, Config
+from . import outline as outline_mod
+from .config import CHAPTER, PART, REFERENCES_FILE, TOPICS_FILE, WINDOW_WORDS, Config
 from .extract import source_text_path, source_text_quality
 from .ledger import open_ledgers
 
@@ -34,6 +35,9 @@ class UnitContext:
     # has no way to tell how much it is holding.
     window: str = "the page it was printed on"
     pages: list[int] = field(default_factory=list)
+    #: The same window as fields: which entry of the outline, its pages as
+    #: printed, and whether it is large. Empty for a count of pages.
+    span: dict[str, Any] = field(default_factory=dict)
     # Whether the prose above is worth reading, or is a scan's worth of
     # nothing. Mechanical: see `extract.text_quality`.
     text_quality: str = "ok"
@@ -90,6 +94,7 @@ class UnitContext:
             "page_text": self.page_text,
             "window": self.window,
             "pages": self.pages,
+            "span": self.span,
             "text_quality": self.text_quality,
             "text_trouble": self.text_trouble,
             "page_units": self.page_units,
@@ -124,8 +129,9 @@ class UnitContext:
             "\n## the setting this project is read in\n"
             + (
                 self.conventions
-                or "(none recorded -- write projects/<name>/conventions.md,"
-                " or whoever writes a card here is guessing at what is ambient)"
+                or "(none recorded: ask the human for projects/<name>/conventions.md"
+                " with an @me note, or whoever writes a card here is guessing at"
+                " what is ambient)"
             )
         )
         if self.declared:
@@ -167,8 +173,11 @@ class UnitContext:
             out.append(
                 "\n## what the reader marked here\n"
                 "   The first is why this unit exists; the rest are what was"
-                " marked on the pages around it. What a colour means is"
-                " declared in the config, not inferred here."
+                " marked on the pages handed over below, whether its colour"
+                " makes a unit or not. A `(skipped)` is a unit the reader"
+                " decided not to card, which is still something they noticed."
+                " What a colour means is declared in the config, not inferred"
+                " here."
                 "\n   A `>` line is what the reader wrote about the mark, in"
                 " their own words rather than the page's."
             )
@@ -179,7 +188,9 @@ class UnitContext:
                 # spanning a line break carried the newline through and broke
                 # the alignment for everything under it.
                 said = " ".join(str(entry["text"]).split())
-                out.append(f" {flag} {label:<34} {said[:76]}")
+                fate = f" ({entry['fate']})" if entry.get("fate") else ""
+                page = f"p.{entry['page']} " if entry.get("page") else ""
+                out.append(f" {flag} {label:<34} {page}{said[:76]}{fate}")
                 if entry.get("comment"):
                     wrote = " ".join(str(entry["comment"]).split())
                     out.append(f"   {'':<34} > {wrote}")
@@ -290,7 +301,8 @@ def assemble(
         text = path.read_text(encoding="utf-8")
     quality = source_text_quality(config, source, unit.locator.document)
 
-    wanted, window = _window(ledger, unit, text, spread)
+    found = window_for(config, unit, spread, ledger=ledger, text=text)
+    wanted, window = found.pages, found.text
     spec = config.projects.get(source)
     web_from = (
         "unit" if unit.web is not None else "source" if spec and spec.web is not None else "repo"
@@ -329,6 +341,7 @@ def assemble(
         page_text=_pages(text, wanted),
         window=window,
         pages=wanted,
+        span=found.as_dict() if found.word else {},
         text_quality=quality.verdict,
         text_trouble=quality.describe() if quality.verdict != "ok" else "",
         page_units=_page_units(ledger, unit.locator.page),
@@ -340,59 +353,196 @@ def assemble(
                 # Resolved now, not at import: editing your scheme should
                 # change what every unit reads as, not only the new ones.
                 "meaning": scheme.means(m.kind, m.colour),
-                "text": m.content,
-                # What the reader wrote *about* the passage, beside what the
-                # passage says. `Mark.content` gives the comment only for a
-                # note, so a sentence typed onto a highlight reached the units
-                # view and stopped there: the one pass that most needs to know
-                # what you meant was the one that could not see it.
-                "comment": "" if m.kind == "note" else m.comment,
+                # What the passage says, cut to a column when printed. A note
+                # covers no passage, so it has none.
+                "text": "" if m.kind == "note" else m.text,
+                # What the reader wrote *about* the passage, printed whole.
+                # A sticky note's comment used to ride in `text` instead, and
+                # the column cut it at 76 characters: "make one card for
+                # Bayesian smoothing and one for the equations of K..." lost
+                # its second request. Notes are where instructions are
+                # written, so they go where nothing is cut.
+                "comment": m.comment,
                 "proposes": scheme.convention_in(m.comment),
                 "own": m.key in unit.id,
+                # What came of it: a mark that made a unit says where that
+                # unit stands, and `skipped` is the reader's own "not a card".
+                # A mark that made none says so. Either way it is context.
+                "fate": fate_of(ledger, source, m.key, unit.id),
+                "page": m.page,
             }
-            for m in unit.marks
+            for m in ambient_marks(config, source, unit, wanted)
         ],
     )
 
 
-def _window(
-    ledger: Any, unit: Any, text: str, spread: int | str | None
-) -> tuple[list[int], str]:
-    """Which pages to hand over, and how to say what they are.
+@dataclass(frozen=True)
+class Window:
+    """What a card writer is handed, and how to say it.
+
+    `source` says where a word's span came from: `outline`, the PDF's own
+    table of contents; `labels`, the units' section labels, for a document
+    with none; or `count`, a number of pages either side.
+    """
+
+    pages: list[int]
+    text: str
+    word: str = ""
+    title: str = ""
+    first: int = 0
+    last: int = 0
+    printed: str = ""
+    source: str = "count"
+
+    @property
+    def large(self) -> bool:
+        return len(self.pages) >= outline_mod.LARGE
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "word": self.word,
+            "title": self.title,
+            "first": self.first,
+            "last": self.last,
+            "count": len(self.pages),
+            "printed": self.printed,
+            "source": self.source,
+            "large": self.large,
+            "text": self.text,
+            "short": self.short,
+        }
+
+    @property
+    def short(self) -> str:
+        """The window in a few words, for a chip: which entry, which pages,
+        how many. `text` is the sentence the heading uses."""
+        count = len(self.pages)
+        if not count:
+            return "no page to hand over"
+        pages = self.printed or (
+            f"p. {self.first}" if self.first == self.last else f"pp. {self.first}-{self.last}"
+        )
+        if not self.word:
+            first, last = self.pages[0], self.pages[-1]
+            pages = f"p. {first}" if first == last else f"pp. {first}-{last}"
+        size = f"{count} page{'' if count == 1 else 's'}"
+        return " · ".join(part for part in (self.title, pages, size) if part)
+
+
+def window_for(
+    config: Config,
+    unit: Any,
+    spread: int | str | None = None,
+    *,
+    ledger: Any = None,
+    text: str = "",
+) -> Window:
+    """Which pages a card writer gets for this unit, and how to say it.
 
     Triage wants one page: you are deciding whether a region is worth carding
     and a wall of text makes that harder. A pass that writes the card wants as
     much as is reasonable, because an identity's conditions are printed around
     it and the sentence that states them is as likely to be on the previous
-    page as this one. There is no reason to be stingy there, so the window
-    opens up rather than making the caller ask page by page.
+    page as this one.
 
-    `chapter` is the size that is not a count. Ten pages either side of a
-    result is most of one chapter and a slice of the next; the chapter itself
-    is the span the book states its standing assumptions in, and where it
-    starts is a fact about the book rather than a number a caller can guess.
+    A word (`section`, `chapter`, `part`) is a span the book itself states,
+    read off the PDF's outline (`outline.py`). A document with no outline
+    falls back to the units' section labels, and says so, because that is a
+    weaker answer: it only knows sections somebody marked something in.
     """
+    if spread is None:
+        spread = config.context_pages_for(unit.project, unit.context_pages, unit.locator.document)
     page = unit.locator.page
     if page is None:
-        return [], "the page it was printed on"
-    if spread == CHAPTER:
-        ends = _last_page(text, page)
-        name, first, last = _chapter_span(ledger, unit, ends)
-        if name:
-            where = f'the chapter it was printed in, "{name}"'
-        elif first > 1 or last < ends:
-            # Printed before the first chapter starts: front matter, a preface,
-            # or a segmenter that filed this one nowhere. Named for what it is
-            # rather than promised as a chapter.
-            where = "the pages before the first chapter"
-        else:
-            where = "the whole document, which declares no chapters"
-        return list(range(first, last + 1)), f"{where} (pages {first} to {last})"
-    span = int(spread or 0)
-    wanted = [p for p in range(page - span, page + span + 1) if p > 0]
-    if not span:
-        return wanted, "the page it was printed on"
-    return wanted, f"the pages it was printed among ({span} either side of page {page})"
+        # A unit out of a `.tex` file, or one proposed with no document: there
+        # is no page to count from, so nothing beyond the unit is handed over.
+        return Window([], "no page: the unit carries none, so no pages are handed over")
+    if spread in WINDOW_WORDS:
+        word = str(spread)
+        found = outline_mod.of_document(config, unit.project, unit.locator.document)
+        span = found.span(page, word, unit.locator.section) if found else None
+        if span is not None:
+            return Window(
+                list(range(span.first, span.last + 1)),
+                _say(word, span.title, span.first, span.last, span.printed),
+                word,
+                span.title,
+                span.first,
+                span.last,
+                span.printed,
+                "outline",
+            )
+        if ledger is None:
+            from .ledger import Ledger
+
+            ledger = Ledger.load(config.units_path(unit.project))
+        return _by_labels(ledger, unit, text, word)
+    count = int(spread or 0)
+    wanted = [p for p in range(page - count, page + count + 1) if p > 0]
+    if not count:
+        return Window(wanted, "the page it was printed on")
+    return Window(wanted, f"the pages it was printed among ({count} either side of page {page})")
+
+
+def _say(word: str, title: str, first: int, last: int, printed: str, *, how: str = "") -> str:
+    """`the chapter it was printed in, "Linear Regression" (pp. 39-50, PDF
+    pages 49-60; 12 pages)`. The printed numbers first, because those are
+    the ones you check against the book."""
+    count = last - first + 1
+    span = f"{first}-{last}" if first != last else f"{first}"
+    # "PDF pages" only beside the printed numbers, where the two differ and
+    # saying which is which is the point.
+    pages = f"{printed}, PDF pages {span}" if printed else f"pages {span}"
+    size = f"{count} page{'' if count == 1 else 's'}"
+    if count >= outline_mod.LARGE:
+        size += ", a large window"
+    return f'the {word} it was printed in, "{title}" ({pages}; {size}{how})'
+
+
+def _by_labels(ledger: Any, unit: Any, text: str, word: str) -> Window:
+    """A word's span from the units' section labels, for a document with no
+    outline. A numbered label groups by its leading number (`2.4` is in
+    chapter 2); an unnumbered one is a span of its own."""
+    page = int(unit.locator.page)
+    ends = _last_page(text, page)
+    how = "; from the units' section labels: the document has no outline to read"
+    if word == PART or ledger is None:
+        return Window(
+            list(range(1, ends + 1)),
+            f"the whole document, which has no outline to find a {word} in (pages 1-{ends})",
+            word,
+            "the whole document",
+            1,
+            ends,
+            "",
+            "labels",
+        )
+    group = chapter_of if word == CHAPTER else (lambda section: section.strip())
+    name, first, last = _label_span(ledger, unit, ends, group)
+    if not name and first == 1 and last >= ends:
+        # Nothing declared a table of contents, so the chapter is the document,
+        # and the heading says which of the two happened.
+        return Window(
+            list(range(1, ends + 1)),
+            f"the whole document, which declares no {word}s (pages 1-{ends})",
+            word,
+            "the whole document",
+            1,
+            ends,
+            "",
+            "labels",
+        )
+    title = name or f"the pages before the first {word}"
+    return Window(
+        list(range(first, last + 1)),
+        _say(word, title, first, last, "", how=how),
+        word,
+        title,
+        first,
+        last,
+        "",
+        "labels",
+    )
 
 
 def _pages(text: str, wanted: list[int]) -> str:
@@ -433,32 +583,33 @@ def chapter_of(section: str) -> str:
     return section.strip()
 
 
-def _chapter_span(ledger: Any, unit: Any, last: int) -> tuple[str, int, int]:
-    """`(chapter, first page, last page)` for the chapter this unit is in.
+def _label_span(ledger: Any, unit: Any, last: int, group: Any) -> tuple[str, int, int]:
+    """`(name, first page, last page)` for the group of labels this unit is in.
 
-    Worked out from the ledger rather than from the PDF outline: the units are
-    already here and already carry the section the document declared for them,
-    so this needs no second reader and cannot disagree with the section rail.
-    A chapter runs from its first unit's page to the page before the next
-    chapter starts, which covers the pages at its end that hold no unit.
+    A group runs from its first unit's page to the page before the next group
+    starts. By page rather than by this unit's own label, because plenty of
+    units have none and one printed in the middle of chapter 3 wants chapter
+    3 either way: the last group to have started.
 
-    By page rather than by this unit's own section, because plenty of units
-    have no section -- a segmenter files what it can -- and one printed in the
-    middle of chapter 3 wants chapter 3 either way. It is the same reading
-    `zotero.section_at` applies to a table of contents: the last chapter to
-    have started.
+    Where no later group starts, a numbered group (chapter 3 of a book that
+    numbers them) runs to the end of the document. An unnamed one stops at
+    the last page holding a unit of its own: the labels only know sections
+    somebody marked something in, and running to the end handed a unit in
+    the last marked section the rest of the book.
     """
     page = unit.locator.page
     starts: dict[str, int] = {}
+    reach: dict[str, int] = {}
     for other in ledger:
         # Page 17 of the appendix is not page 17 of the paper, so a
         # multi-document source groups within one document only.
         if other.locator.document != unit.locator.document or other.locator.page is None:
             continue
-        key = chapter_of(other.locator.section)
+        key = group(other.locator.section)
         if not key:
             continue
         starts[key] = min(starts.get(key, other.locator.page), other.locator.page)
+        reach[key] = max(reach.get(key, other.locator.page), other.locator.page)
     ordered = sorted(starts.items(), key=lambda pair: pair[1])
     if not ordered:
         return "", 1, last
@@ -468,8 +619,52 @@ def _chapter_span(ledger: Any, unit: Any, last: int) -> tuple[str, int, int]:
             break
         here, first = name, begins
     after = [begins for _, begins in ordered if begins > first]
-    end = after[0] - 1 if after else last
+    if after:
+        end = after[0] - 1
+    elif here.isdigit():
+        end = last
+    else:
+        end = reach.get(here, page)
     return here, first, max(end, page)
+
+
+def fate_of(ledger: Any, source: str, key: str, own: str) -> str:
+    """The state of the unit a mark made, or empty for one that made none."""
+    if f"{source}:{key}" == own:
+        return ""
+    made = ledger.get(f"{source}:{key}")
+    return str(made.state) if made is not None else ""
+
+
+def ambient_marks(
+    config: Config, source: str, unit: Any, pages: list[int]
+) -> list[Any]:
+    """The marks a card writer is handed: this unit's own, then every mark in
+    the pages whose text it is handed.
+
+    The window decides, not a fixed neighbourhood. A unit used to carry the
+    marks one page either side of it, and a writer given a chapter of text
+    got three pages of what the reader thought about it. Now the marks are
+    those inside the same pages as the text, from the whole document's marks
+    as cached at import, so a colour that makes no unit and a unit that was
+    skipped still say what the reader noticed. Without the cache (an import
+    from before it existed) the unit's own neighbours stand in, cut to the
+    window the same way.
+    """
+    from .extract import document_marks
+
+    own, near = unit.marks[:1], unit.marks[1:]
+    cached = document_marks(config, source, unit.locator.document)
+    pool = cached or near
+    found: dict[str, Any] = {}
+    for mark in pool:
+        if mark.key in unit.id:
+            continue
+        if pages and mark.page not in pages:
+            continue
+        found.setdefault(mark.key, mark)
+    ordered = sorted(found.values(), key=lambda m: (m.page or 0, m.order, m.key))
+    return [*own, *ordered]
 
 
 def _page_units(ledger: Any, page: int | None) -> list[dict[str, Any]]:
@@ -492,6 +687,7 @@ def _page_units(ledger: Any, page: int | None) -> list[dict[str, Any]]:
         }
         for u in rows
     ]
+
 
 def shelf(config: Config, project: str, *, printed_in: str = "") -> str:
     """The reference material a project keeps: the declared half and the prose.
@@ -553,9 +749,7 @@ def references_prose(config: Config, project: str) -> str:
     path = config.projects_dir / project / REFERENCES_FILE
     if not path.exists():
         return ""
-    return re.sub(
-        r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M
-    ).strip()
+    return re.sub(r"^#.*$", "", path.read_text(encoding="utf-8"), count=1, flags=re.M).strip()
 
 
 def asks(config: Config, project: str) -> str:

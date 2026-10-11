@@ -24,12 +24,12 @@ from . import changes as changes_mod
 from . import check as check_mod
 from . import classify as classify_mod
 from . import extract as extract_mod
-from . import latex, model, todo, verify
+from . import latex, model, remarks, todo, verify
 from . import ledger as ledger_mod
 from . import projects as projects_mod
 from . import topics as topics_mod
 from .anki import AnkiConnect, AnkiError
-from .config import CHAPTER, PROJECT_TOML, Config, ConfigError, context_size, load
+from .config import PROJECT_TOML, WINDOW_WORDS, Config, ConfigError, context_size, load
 
 OK, FAILED, MISUSE = 0, 1, 2
 
@@ -78,7 +78,8 @@ def _force_utf8() -> None:
 
 
 def _window(value: str) -> int | str:
-    """`--pages` / `--context-pages`: a number of pages, or `chapter`.
+    """`--pages` / `--context-pages`: a number of pages, or a word of the
+    outline: `section`, `chapter`, `part`.
 
     The same vocabulary the TOML files take, so what you widen one call with is
     what you write onto the unit afterwards.
@@ -127,7 +128,8 @@ def _fill_zotero_import(p: argparse.ArgumentParser) -> None:
         "--project",
         default=None,
         help=(
-            "which project to file the units under (default: the cite key). "
+            "which project to file the units under (default: the project that "
+            "already declares the item, else a new one named by its cite key). "
             "On its own, with no item and no --tag, it re-reads the Zotero "
             "items that project already declares: the narrow form of a "
             "re-import, for when you have marked up more of a book you have "
@@ -287,10 +289,10 @@ def _fill_units_add(p: argparse.ArgumentParser) -> None:
         default="",
         metavar="KEY",
         help=(
-            "which of --project's works it came out of, by source key or file "
+            "which of --project's sources it came out of, by source key or file "
             "name. Only needed where a project reads several: it is what "
             "settles the crop and context settings for the unit, and what "
-            "links an ask to the works it drew on"
+            "links an ask to the sources it drew on"
         ),
     )
     p.add_argument("--lang", default="", help="what --preview is written in, e.g. `cpp`")
@@ -389,8 +391,8 @@ def _fill_units_set(p: argparse.ArgumentParser) -> None:
         default=None,
         metavar="N",
         help=(
-            "how many pages either side a card writer gets, or `chapter` for "
-            "the chapter it is in. Set it during triage, when you can see the "
+            "how many pages either side a card writer gets, or `section`, `chapter` or `part` for "
+            "that span of the document's outline. Set it during triage, when you can see the "
             "hypotheses are two pages back. A large number means the whole "
             "document; -1 goes back to inheriting the source's setting"
         ),
@@ -417,7 +419,8 @@ def _fill_cards_filters(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--changes",
         action="store_true",
-        help="what moved on each card since you last decided on it (kept on this machine only)",
+        help="what moved on each card since you last decided on it (kept on this "
+        "machine only). A card with no record starts one, from the file as it is",
     )
     p.add_argument("--json", action="store_true")
 
@@ -440,10 +443,10 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "one word shows you something, two words change something.\n"
             "  reads   check  audit  verify  todo  units  cards  sources\n"
-            "          zotero  context  source-text  crops  serve\n"
+            "          remarks  zotero  context  source-text  crops  serve\n"
             "  writes  units extract|classify|add|set|note|suggest\n"
             "          zotero import   sources remove   project new|delete\n"
-            "          topic add       cards new\n"
+            "          topic add       cards new   remarks add\n"
             "  anki    anki push  anki pull  anki export\n"
             "          (`forge anki` on its own says what a push would do)"
         ),
@@ -547,6 +550,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = taken.add_parser("remove", help="take a work out of a project")
     _fill_sources_remove(p)
     p.set_defaults(run=cmd_sources, effect=REPO)
+    p = taken.add_parser(
+        "update", help="re-read everything a project reads: its Zotero items and its files"
+    )
+    p.add_argument("--project", default=None, help="one project; every project without it")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_sources_update, effect=REPO)
 
     # -- zotero ------------------------------------------------------------
     zotero = subs.add_parser("zotero", help="what Zotero holds, and what is already a source")
@@ -626,8 +635,8 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help=(
-            "pages either side to print, or `chapter` for the whole chapter "
-            "this unit is in. Defaults to whatever the unit, its source or the "
+            "pages either side to print, or `section`, `chapter` or `part` for "
+            "that span of the document's outline. Defaults to whatever the unit, its source or the "
             "repo asks for, so a unit marked during triage as needing more "
             "gets it without the caller knowing"
         ),
@@ -687,6 +696,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--json", action="store_true")
     p.set_defaults(run=cmd_check, effect=READS)
+
+    # -- remarks: what the passes say about the tool ------------------------
+    said = subs.add_parser(
+        "remarks", help="what the passes said about the tool and their instructions"
+    )
+    said.add_argument("--by", default=None, help="only what this pass said")
+    said.add_argument("--json", action="store_true")
+    said.set_defaults(run=cmd_remarks, effect=READS)
+    saying = said.add_subparsers(dest="change", metavar="<change>")
+    p = saying.add_parser("add", help="say one thing, once")
+    p.add_argument("text", help="what got in the way, and what you would change")
+    p.add_argument("--by", required=True, help="which pass you are, e.g. card-writer")
+    p.add_argument("--project", default="", help="the project it came up in, if it did")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(run=cmd_remarks_add, effect=REPO)
 
     p = subs.add_parser("todo", help="open @claude and @me annotations")
     p.add_argument(
@@ -807,7 +831,7 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
 
         reports = []
         for item in items:
-            source = args.project or _project_name(item)
+            source = args.project or _home_of(config, item)
             spec = config.projects.get(source)
             # This item's own table, if the project already declares it.
             # By the key in hand rather than by `spec.source()`, which
@@ -839,8 +863,12 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                 text_for=None
                 if args.dry_run
                 else _text_cacher(config, config.extracting(item.key) or source),
+                marks_for=None
+                if args.dry_run
+                else _marks_cacher(config, config.extracting(item.key) or source),
             )
-            reports.append((source, item, report, refused))
+            change: dict[str, int] = {}
+            reports.append((source, item, report, refused, change))
             if not args.dry_run:
                 stub = config.projects_dir / source / PROJECT_TOML
                 # This work's own scheme, by the key in hand. Without the
@@ -890,6 +918,16 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
                     # reason: this run is the moment the scheme and the
                     # ledger are both in hand.
                     orphans, decided = ledger.drop_from_scheme(scheme.makes_a_unit)
+                    # What changed, and what is there now: the units of this
+                    # item, and of the whole project.
+                    read = {key for key, _, _ in report.attachments} | {item.key}
+                    change.update(
+                        added=added,
+                        refreshed=refreshed,
+                        dropped=dropped + orphans,
+                        in_ledger=sum(1 for u in ledger.units if u.locator.document in read),
+                        project_units=len(ledger.units),
+                    )
                 # And the text layer cached for a document nothing reads any
                 # more. `source-text` prints every one it finds, so leaving it
                 # would hand a card writer a paper this source has dropped.
@@ -937,11 +975,14 @@ def cmd_zotero(args: argparse.Namespace, config: Config) -> int:
     if args.json:
         print(
             json.dumps(
-                [_zotero_row(source, item, r, no) for source, item, r, no in reports],
+                [
+                    _zotero_row(source, item, r, no, change)
+                    for source, item, r, no, change in reports
+                ],
                 indent=2,
             )
         )
-    return OK if all(r.ok for _, _, r, _ in reports) else FAILED
+    return OK if all(r.ok for _, _, r, _, _ in reports) else FAILED
 
 
 def _list_zotero(client: Any, config: Config, args: argparse.Namespace) -> int:
@@ -992,6 +1033,15 @@ def _list_zotero(client: Any, config: Config, args: argparse.Namespace) -> int:
     return OK
 
 
+def _marks_cacher(config: Config, source: str) -> Any:
+    """The same, for every mark in a document."""
+
+    def cache(document: str, marks: list[Any]) -> int:
+        return extract_mod.cache_document_marks(config, source, document, marks)
+
+    return cache
+
+
 def _text_cacher(config: Config, source: str) -> Any:
     """Bound here rather than in the loop, so the closure keeps this source."""
 
@@ -1018,6 +1068,27 @@ def _zotero_lookup(client: Any, wanted: str) -> list[Any]:
     return exact or found
 
 
+def _home_of(config: Config, item: Any) -> str:
+    """The project an item is imported into when none is named.
+
+    The one that already declares it, if any: an item imported once into
+    `cpp` with `--project cpp` is `cpp`'s, and a later `--tag anki` that
+    filed it under its cite key made a second project holding the same
+    book. Only an item no project declares gets a project of its own,
+    named after its cite key. Where two declare it, the one that extracts
+    from it wins.
+    """
+    owners = [
+        name
+        for name, spec in config.projects.items()
+        if any(work.zotero_key == item.key for work in spec.sources)
+    ]
+    if owners:
+        extracting = config.extracting(item.key)
+        return extracting if extracting in owners else owners[0]
+    return _project_name(item)
+
+
 def _project_name(item: Any) -> str:
     """The cite key if Better BibTeX gave it one, else the Zotero key.
 
@@ -1027,7 +1098,9 @@ def _project_name(item: Any) -> str:
     return item.citation_key or item.key
 
 
-def _zotero_row(source: str, item: Any, report: Any, refused: bool) -> dict[str, Any]:
+def _zotero_row(
+    source: str, item: Any, report: Any, refused: bool, change: dict[str, int] | None = None
+) -> dict[str, Any]:
     """One import, as the machine interface reports it.
 
     `units` is what is in the ledger, so a refused run says none and puts
@@ -1057,6 +1130,9 @@ def _zotero_row(source: str, item: Any, report: Any, refused: bool) -> dict[str,
         ),
         "unmapped": report.unmapped,
         "skipped": report.skipped,
+        # This run's change, and the state after it. Empty on a dry run and
+        # where nothing was imported.
+        **(change or {}),
     }
 
 
@@ -1454,8 +1530,8 @@ def _mutate_unit(
                 print(
                     f"{args.id}: card writers get "
                     + (
-                        "the chapter it is in"
-                        if asked == CHAPTER
+                        f"the {asked} it is in"
+                        if asked in WINDOW_WORDS
                         else f"{asked} page(s) either side"
                     )
                     + ("" if target.context_pages is not None else " (inherited)")
@@ -1673,7 +1749,7 @@ def cmd_classify(args: argparse.Namespace, config: Config) -> int:
         if args.dry_run:
             print("  (dry run -- nothing changed)")
         elif report.classified:
-            print(f"  review them with: forge units --state skipped --project {report.project}")
+            print(f"  review them with: forge units --suggested --project {report.project}")
     return OK
 
 
@@ -1719,14 +1795,28 @@ def cmd_audit(args: argparse.Namespace, config: Config) -> int:
 
 
 def cmd_source_text(args: argparse.Namespace, config: Config) -> int:
-    """Print a source's cached text layer -- the context a card writer needs."""
+    """Print a project's cached text layers: the context a card writer needs.
+
+    Every one it has. A book segmented here caches one file, `text.md`; a
+    project read from Zotero caches one per document, `text-<KEY>.md`, and
+    reading only the first form failed on every Zotero project. Each layer
+    is headed by the document it came from when there is more than one.
+    """
     names = [args.project] if args.project else sorted(config.projects)
     for name in names:
-        path = extract_mod.source_text_path(config, name)
-        if not path.exists():
-            print(f"no cached text for {name!r}; run `forge units extract`", file=sys.stderr)
+        folder = config.projects_dir / name
+        layers = sorted(folder.glob("text.md")) + sorted(folder.glob("text-*.md"))
+        if not layers:
+            print(
+                f"no cached text for {name!r}; run `forge units extract` or "
+                "`forge zotero import --project`",
+                file=sys.stderr,
+            )
             return FAILED
-        print(path.read_text(encoding="utf-8"))
+        for layer in layers:
+            if len(layers) > 1:
+                print(f"# {layer.stem.removeprefix('text-') or name}\n")
+            print(layer.read_text(encoding="utf-8"))
     return OK
 
 
@@ -1816,6 +1906,35 @@ def cmd_check(args: argparse.Namespace, config: Config) -> int:
         backend = latex.checker(config.extra_macros)
         print(f"{len(cards)} cards, {bad} errors, {warn} warnings (latex: {backend.describe()})")
     return FAILED if check_mod.errors(findings) else OK
+
+
+def cmd_remarks(args: argparse.Namespace, config: Config) -> int:
+    """What the passes said about the tool, oldest first."""
+    found = [r for r in remarks.remarks(config) if not args.by or r.by == args.by]
+    if args.json:
+        print(json.dumps([r.as_dict() for r in found], indent=2, ensure_ascii=False))
+        return OK
+    if not found:
+        print("no remarks")
+        return OK
+    for r in found:
+        where = f" · {r.project}" if r.project else ""
+        print(f"{r.stamp} · {r.by}{where}\n    {r.text}")
+    print(f"\n{len(found)} remarks, in {remarks.shown(config)}")
+    return OK
+
+
+def cmd_remarks_add(args: argparse.Namespace, config: Config) -> int:
+    try:
+        total = remarks.add(config, args.text, by=args.by, project=args.project)
+    except ConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return FAILED
+    if args.json:
+        print(json.dumps({"ok": True, "remarks": total}))
+    else:
+        print(f"said; {total} in {remarks.shown(config)}")
+    return OK
 
 
 def cmd_todo(args: argparse.Namespace, config: Config) -> int:
@@ -1925,6 +2044,13 @@ def cmd_cards(args: argparse.Namespace, config: Config) -> int:
     cards.sort(key=lambda c: (c.project_name, c.unit, c.uid))
     if args.limit:
         cards = cards[: args.limit]
+    if args.changes:
+        # A card with no record gets one now, from what the file says: the
+        # edit made after this call is then a change the review page shows.
+        # `/sort-notes` relies on it before writing a note into a card. The
+        # record is a local cache in `.forge/`, never a card or the ledger.
+        for card in cards:
+            changes_mod.ensure(config, card)
 
     if args.json:
         print(
@@ -1938,6 +2064,12 @@ def cmd_cards(args: argparse.Namespace, config: Config) -> int:
                         "units": c.units,
                         "gist": c.gist,
                         "tags": c.tags,
+                        # What `/augment` selects on: drafts the pass has not
+                        # been over, and drafts somebody has asked about since.
+                        "augmented": c.augmented,
+                        "open_claude": sum(
+                            1 for n in c.annotations() if model.annotation_audience(n) == "claude"
+                        ),
                         "path": str(c.path),
                         **(
                             {"changes": changes_mod.view(config, c)}
@@ -2052,6 +2184,80 @@ def cmd_topics(args: argparse.Namespace, config: Config) -> int:
         if row["ask"]:
             print(f"    {row['ask'].splitlines()[0]}")
     return OK
+
+
+def cmd_sources_update(args: argparse.Namespace, config: Config) -> int:
+    """Re-read every source a project reads, whichever door it came in by.
+
+    Its Zotero items through the import, its PDF and TeX files through the
+    segmenter: the two commands you would otherwise run one after the other,
+    and the second forgotten. A part that fails (Zotero closed, a file
+    missing) is reported and the other part still runs.
+    """
+    names = [args.project] if args.project else sorted(config.projects)
+    if args.project and args.project not in config.projects:
+        print(f"no project {args.project!r}", file=sys.stderr)
+        return FAILED
+    out: dict[str, Any] = {"zotero": [], "extract": [], "said": []}
+    worst = OK
+    for name in names:
+        spec = config.projects[name]
+        if any(w.zotero_key and w.authoritative for w in spec.sources):
+            code, printed, said = _captured(
+                cmd_zotero,
+                argparse.Namespace(
+                    item=None, tag=None, project=name, dry_run=False, json=True,
+                    list_items=False,
+                ),
+                config,
+            )
+            out["zotero"] += _json_rows(printed)
+            out["said"] += [f"{name}: {line}" for line in said.splitlines() if line.strip()]
+            worst = max(worst, code)
+        if any((w.files or w.tex) and w.authoritative for w in spec.sources):
+            code, printed, said = _captured(
+                cmd_extract,
+                argparse.Namespace(project=name, pages=None, json=True),
+                config,
+            )
+            out["extract"] += _json_rows(printed)
+            out["said"] += [f"{name}: {line}" for line in said.splitlines() if line.strip()]
+            worst = max(worst, code)
+    if args.json:
+        print(json.dumps(out, indent=2, ensure_ascii=False))
+        return worst
+    for row in out["zotero"]:
+        print(f"{row.get('source')}: {row.get('citation')}: "
+              f"{row.get('added', 0)} new, {row.get('in_ledger', 0)} in the ledger")
+    for row in out["extract"]:
+        print(f"{row.get('project')}: {row.get('found', 0)} found, "
+              f"{row.get('added', 0)} new, {row.get('total', 0)} in the ledger")
+    for line in out["said"]:
+        print(line, file=sys.stderr)
+    return worst
+
+
+def _captured(run: Any, args: argparse.Namespace, config: Config) -> tuple[int, str, str]:
+    """A verb's exit code, what it printed, and what it said on stderr."""
+    import contextlib
+    import io
+
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        try:
+            code = int(run(args, config))
+        except ConfigError as exc:
+            print(str(exc), file=sys.stderr)
+            code = FAILED
+    return code, out.getvalue(), err.getvalue()
+
+
+def _json_rows(printed: str) -> list[Any]:
+    try:
+        rows = json.loads(printed) if printed.strip() else []
+    except json.JSONDecodeError:
+        return []
+    return rows if isinstance(rows, list) else [rows]
 
 
 def cmd_sources(args: argparse.Namespace, config: Config) -> int:

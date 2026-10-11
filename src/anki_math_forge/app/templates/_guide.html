@@ -127,7 +127,8 @@
         <dd>{{ 'full page width' if sf.crop_width == 'page' else 'the box itself' }},
             {{ sf.crop_context | round | int }}pt around it</dd>
         <dt>context</dt>
-        <dd>{% if sf.context_pages == 'chapter' %}the chapter it is in, per card written
+        <dd>{% if sf.context_pages in ('section', 'chapter', 'part') %}the {{ sf.context_pages }}
+            it is in, from the document's outline, per card written
             {%- else %}{{ sf.context_pages }} page{{ '' if sf.context_pages == 1 else 's' }}
             either side, per card written{% endif %}</dd>
         {% else %}
@@ -140,8 +141,8 @@
             {%- else %}<span class="warn">no conventions.md</span>. Whoever
             writes a card here is guessing at what is ambient{% endif %}</dd>
       </dl>
-      <p class="rail-more"><button type="button" class="link-button" data-settings>every
-        setting, and where it came from &rarr;</button></p>
+      <p class="rail-more"><a href="{{ filter_url('/setup', {}, project=project) }}">every
+        setting, and where it came from &rarr;</a></p>
     </section>
     {% endif %}
 

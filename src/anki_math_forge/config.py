@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import tomllib
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -389,41 +389,49 @@ def zotero_deck(title: str, key: str = "") -> str:
     return f"{ZOTERO_DECK}::{name}"
 
 
-#: The one window size that is not a number of pages. A card writer is given
-#: the unit's page and some number either side; between "ten pages" and "the
-#: whole book" the size you actually want is the chapter, because a chapter is
-#: the span a book states its standing assumptions in and no count of pages
-#: either side knows where it starts. Stored as the word, in the ledger and in
-#: both TOML files, so the file says what it means.
+#: A window size that is not a number of pages. A card writer is given the
+#: unit's page and some number either side; between "ten pages" and "the whole
+#: book" the size you usually want is the chapter, because a chapter is the
+#: span a book states its standing assumptions in and no count of pages either
+#: side knows where it starts. Stored as the word, in the ledger and in both
+#: TOML files, so the file says what it means.
 CHAPTER = "chapter"
+#: The two other sizes the document's outline defines: the section a unit was
+#: printed in, and the part. Read off the PDF's own table of contents
+#: (`outline.py`), so what each covers is the book's answer.
+SECTION = "section"
+PART = "part"
+WINDOW_WORDS = (SECTION, CHAPTER, PART)
 
 
 def context_size(value: Any, where: str) -> int | str:
-    """A window: a number of pages either side, or `chapter`.
+    """A window: a number of pages either side, or `section`, `chapter` or
+    `part`.
 
     Both TOML levels and the ledger accept either, and all three keep whichever
     was written. A number that is out of range is not refused -- 999 is how you
     ask for the whole document, and `_pages` simply skips the pages that are
     not there.
     """
+    expected = f"expected a number of pages or one of {', '.join(WINDOW_WORDS)}"
     if isinstance(value, str):
         word = value.strip().lower()
-        if word == CHAPTER:
-            return CHAPTER
+        if word in WINDOW_WORDS:
+            return word
         if word.lstrip("-").isdigit():
             return int(word)
-        raise ConfigError(f"{where} = {value!r}; expected a number of pages or {CHAPTER!r}")
+        raise ConfigError(f"{where} = {value!r}; {expected}")
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ConfigError(f"{where} = {value!r}; expected a number of pages or {CHAPTER!r}")
+        raise ConfigError(f"{where} = {value!r}; {expected}")
     return value
 
 
 def context_asked(value: int | str) -> bool:
     """Whether this level has an opinion about the window.
 
-    A negative number is how a number says it does not; `chapter` always does.
+    A negative number is how a number says it does not; a word always does.
     """
-    return value == CHAPTER or (isinstance(value, int) and value >= 0)
+    return value in WINDOW_WORDS or (isinstance(value, int) and value >= 0)
 
 
 #: What a comment has to open with to be asking for a convention rather than
@@ -885,7 +893,13 @@ class Config:
         if unit is True:
             return "web"
         spec = self.projects.get(source)
-        level = (spec.context if spec else "") or self.context
+        level = spec.context if spec else ""
+        # A project's `web = true` or `false`, where it sets no `context`: the
+        # older key, still written and still shown, which this ignored, so a
+        # project granting lookups was handed none.
+        if not level and spec is not None and spec.web is not None:
+            level = "web" if spec.web else ("references" if self.context == "web" else "")
+        level = level or self.context
         if unit is False and level == "web":
             # Refused here, whatever the project allows. It still gets the
             # references: saying "not the web for this one" is not saying
@@ -1158,6 +1172,14 @@ def _sources(root: Path, spec: dict[str, Any], where: str) -> tuple[SourceConfig
                 meanings=_meanings(raw.get("meanings") or {}, f"{where} sources[{i}].meanings"),
             )
         )
+    # A Zotero work with no title of its own is named by its item key, which
+    # is a hash to anyone reading it. The import that started a project wrote
+    # the item's title on the project and none on the work, so where exactly
+    # one Zotero work is untitled, that title is its own.
+    untitled = [n for n, w in enumerate(out) if w.zotero_key and not w.title]
+    if len(untitled) == 1 and spec.get("title"):
+        n = untitled[0]
+        out[n] = replace(out[n], title=str(spec["title"]))
     return tuple(out)
 
 
@@ -1213,6 +1235,9 @@ REFERENCES_FILE = "references.md"
 # it to whoever writes a card, because the ask says what you wanted and the
 # unit alone cannot.
 TOPICS_FILE = "topics.md"
+# Notes dumped at the project from the setup stage, waiting for `/sort-notes`
+# to turn each into a unit or an `@me` annotation. Emptied as it is sorted.
+INBOX_FILE = "inbox.md"
 FENCE = "+++"
 
 

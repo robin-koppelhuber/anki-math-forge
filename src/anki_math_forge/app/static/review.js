@@ -6,7 +6,7 @@ const activeStatus = new URLSearchParams(location.search).get("status") || "draf
 
 function refresh(item, card) {
   item.dataset.mtime = card.mtime;
-  const badge = item.querySelector(".badge");
+  const badge = item.querySelector(".meta-head .badge");
   if (badge) {
     badge.textContent = card.status;
     badge.className = "badge state-" + card.status;
@@ -23,22 +23,88 @@ function refresh(item, card) {
     const div = document.createElement("div");
     div.className = "notes";
     div.textContent = card.plain_notes;
-    item.querySelector(".meta").appendChild(div);
+    panelBody(item, "notes").appendChild(div);
   } else if (notes) {
     notes.remove();
   }
 }
 
-/* After a decision the record has a new snapshot, so what was listed as
-   changed is no longer pending. The history is redrawn on the next load. */
+/* The body of one of a card's panels. */
+function panelBody(item, key) {
+  return item.querySelector(`[data-panel="${key}"] .panel-body`);
+}
+
+/* A panel's small label beside its title. */
+function panelCount(item, key, text) {
+  const label = item.querySelector(`[data-panel="${key}"] [data-panel-count]`);
+  if (label) label.textContent = text;
+}
+
+/* What moved since the last decision, redrawn after every write: a grade
+   click shows up in it at once, and after a decision the record has a new
+   snapshot, so the list empties. One entry per look, newest first, each a
+   note of its own. The history is redrawn on the next load. */
 function paintChanges(item, card) {
-  const box = item.querySelector("[data-changes]");
-  if (!box || !card.changes || card.changes.pending) return;
-  const list = box.querySelector("[data-change-pending]");
-  if (list) list.remove();
-  const head = box.querySelector("[data-changes-head]");
-  if (head) head.textContent = `unchanged since ${card.changes.after} ${card.changes.since}`;
-  box.open = false;
+  const panel = item.querySelector('[data-panel="changes"]');
+  const body = panel && panel.querySelector(".panel-body");
+  if (!body || !card.changes) return;
+  const moved = card.changes.pending;
+  const entries = card.changes.entries || [];
+  const head = body.querySelector("[data-changes-head]");
+  if (head) {
+    head.textContent = `${moved ? "changed" : "unchanged"} since ${card.changes.after} ${card.changes.since}`;
+  }
+  panel.toggleAttribute("data-moved", Boolean(moved));
+  panelCount(item, "changes", entries.length ? String(entries.length) : "");
+  let list = body.querySelector("[data-change-pending]");
+  if (!moved) {
+    if (list) list.remove();
+    return;
+  }
+  if (!list) {
+    list = document.createElement("ol");
+    list.className = "change-entries";
+    list.dataset.changePending = "";
+    if (head) head.after(list);
+    else body.prepend(list);
+  }
+  const shown = (value) => (value === null || value === undefined ? "-" : String(value));
+  const row = (kind, name, rest) => {
+    const li = document.createElement("li");
+    li.dataset.change = kind;
+    if (name) {
+      const code = document.createElement("code");
+      code.textContent = name;
+      li.append(code, " ");
+    }
+    li.append(rest);
+    return li;
+  };
+  list.replaceChildren(
+    ...(entries.length ? entries : [{ at: "", change: moved, from: card.changes.from || [] }]).map(
+      (entry) => {
+        const li = document.createElement("li");
+        li.className = "change-entry";
+        li.dataset.changeEntry = "";
+        const title = document.createElement("p");
+        title.className = "change-entry-head";
+        title.textContent =
+          (entry.at || "just now") + (entry.from && entry.from.length ? ` · from ${entry.from.join(", ")}` : "");
+        const items = document.createElement("ul");
+        items.className = "change-list";
+        items.append(
+          ...entry.change.resolved.map((line) => row("resolved", "", line)),
+          ...entry.change.fields.map((f) =>
+            row("field", f.key, `${shown(f.before)} → ${shown(f.after)}`),
+          ),
+          ...entry.change.sections.map((sec) => row("section", sec.name, sec.summary)),
+        );
+        li.append(title, items);
+        return li;
+      },
+    ),
+  );
+  panel.dataset.default = "open";
 }
 
 /* An approval that is not holding. Saying "draft" alone reads as work lost:
@@ -54,7 +120,9 @@ function paintHeld(item, card) {
   if (!banner) {
     banner = document.createElement("p");
     banner.className = "held";
-    meta.insertBefore(banner, item.querySelector(".findings, .checks-ok"));
+    // Straight under the head: it says why the status there is not the
+    // one the file declares.
+    meta.insertBefore(banner, meta.querySelector(".meta-head").nextSibling);
   }
   banner.textContent =
     card.demotion === "annotated"
@@ -67,24 +135,9 @@ function paintHeld(item, card) {
    nothing had happened -- and the only way to see it was a reload. */
 function paintAnnotations(item, card) {
   if (!card.annotations) return;
-  let list = item.querySelector(".annotations");
-  if (!card.annotations.length) {
-    if (list) list.remove();
-    return;
-  }
-  if (!list) {
-    list = document.createElement("ul");
-    list.className = "annotations";
-    const meta = item.querySelector(".meta");
-    /* The same order the template renders: what people wrote, then what the
-       linter made of it. A list inserted below the findings would put a note
-       you just wrote underneath a machine's reading of the card it is about. */
-    meta.insertBefore(
-      list,
-      item.querySelector(".notes, .checks-what, .findings, .checks-ok") ||
-        item.querySelector("figure.crop"),
-    );
-  }
+  const list = item.querySelector(".annotations");
+  panelCount(item, "notes", card.annotations.length ? String(card.annotations.length) : "");
+  if (!list) return;
   list.textContent = "";
   card.annotations.forEach((note, index) => {
     const row = document.createElement("li");
@@ -323,6 +376,8 @@ function paintGrades(item, card) {
     done.textContent = card.augmented ? "augmented" : "not augmented";
     done.classList.toggle("on", Boolean(card.augmented));
   }
+  // The fold's summary says the two gradings, so it says the new ones.
+  panelCount(item, "details", `${card.frequency || "no frequency"} · ${card.derivation || "no derivation"}`);
   const web = item.querySelector("[data-card-web]");
   if (!web) return;
   web.textContent = card.web ? "web: allowed" : "web: no";
@@ -351,14 +406,21 @@ async function openEditor() {
   toast("opened in " + result.opened);
 }
 
-/* Front and back, edited here rather than in $EDITOR. The text comes from
-   the server when the dialog opens, so the save is checked against what was
-   on disk then. Success reloads onto the same card: the body is drawn by the
-   server, crops and all, and redrawing it here would be a second renderer. */
-async function editCard() {
+/* How tall each box starts. The rest get four lines. */
+const EDIT_ROWS = { front: 4, back: 6, proof: 8 };
+
+/* A card's text, edited here rather than in $EDITOR. The server says which
+   sections this card's type allows and what each holds now, so the save is
+   checked against what was on disk when the dialog opened. A section the
+   card does not have yet is a button under the fields rather than an empty
+   box. `focus` is the section a pencil was clicked on. Success reloads onto
+   the same card: the body is drawn by the server, crops and all, and
+   redrawing it here would be a second renderer. */
+async function editCard(focus) {
   const item = currentOf(deck);
   const dialog = document.querySelector("[data-card-edit-dialog]");
-  if (!item || !dialog) return;
+  const shape = document.querySelector("[data-card-edit-field]");
+  if (!item || !dialog || !shape) return;
   const form = dialog.querySelector("[data-card-edit-form]");
   const response = await fetch(`/api/cards/${item.dataset.uid}/text`);
   if (!response.ok) {
@@ -366,21 +428,74 @@ async function editCard() {
     return;
   }
   const text = await response.json();
+  // A server started before the editor took every section sends two.
+  const sections = text.sections || [
+    { name: "front", body: text.front, required: true, allowed: true },
+    { name: "back", body: text.back, required: true, allowed: true },
+  ];
   form.reset();
-  form.elements.front.value = text.front;
-  form.elements.back.value = text.back;
+  const fields = form.querySelector("[data-card-edit-fields]");
+  const more = form.querySelector("[data-card-edit-more]");
+  const add = form.querySelector("[data-card-edit-add]");
+  fields.replaceChildren();
+  add.replaceChildren();
+  for (const section of sections) {
+    const field = shape.content.firstElementChild.cloneNode(true);
+    field.dataset.section = section.name;
+    field.querySelector(".card-edit-preview").dataset.cardEditPreview = section.name;
+    field.querySelector(".card-edit-name").textContent = section.name;
+    field.querySelector(".card-edit-hint").textContent = section.required
+      ? ""
+      : section.allowed
+        ? "optional; save it empty to remove it"
+        : `a ${text.type} card has no ${section.name}: empty it`;
+    const area = field.querySelector("textarea");
+    area.name = section.name;
+    area.value = section.body;
+    area.defaultValue = section.body;
+    area.rows = EDIT_ROWS[section.name] || 4;
+    // `## verify` is code for the numeric check, not maths to render.
+    if (section.name === "verify") field.classList.add("code");
+    field.hidden = !section.body && !section.required && section.name !== focus;
+    fields.appendChild(field);
+    if (field.hidden) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "link-button";
+      button.textContent = `+ ${section.name}`;
+      button.addEventListener("click", () => {
+        field.hidden = false;
+        button.remove();
+        more.hidden = !add.children.length;
+        area.focus();
+      });
+      add.appendChild(button);
+    }
+  }
+  more.hidden = !add.children.length;
+  const gist = item.querySelector(".gist");
+  form.querySelector("[data-card-edit-title]").textContent = gist
+    ? gist.textContent.trim()
+    : text.uid;
   previewCardEdit(form);
   form.dataset.uid = text.uid;
   form.dataset.mtime = text.mtime;
   dialog.showModal();
-  form.elements.front.focus();
+  const target = (focus && form.elements[focus]) || form.elements.front;
+  target.focus();
+  target.scrollIntoView({ block: "nearest" });
 }
 
 /* What the text renders as, under each box, so an unbalanced `$` shows
    before the save rather than in the next review. */
 function previewCardEdit(form) {
-  form.querySelectorAll("[data-card-edit-preview]").forEach((box) => {
-    box.textContent = form.elements[box.dataset.cardEditPreview].value;
+  form.querySelectorAll(".card-edit-field").forEach((field) => {
+    const box = field.querySelector(".card-edit-preview");
+    if (field.hidden || field.classList.contains("code")) {
+      box.textContent = "";
+      return;
+    }
+    box.textContent = field.querySelector("textarea").value;
     renderMath(box);
   });
 }
@@ -389,6 +504,10 @@ function previewCardEdit(form) {
   const dialog = document.querySelector("[data-card-edit-dialog]");
   const form = dialog && dialog.querySelector("[data-card-edit-form]");
   if (!form) return;
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-edit-card]");
+    if (button) editCard(button.dataset.editCard || "");
+  });
   dialog.querySelector("[data-card-edit-cancel]").addEventListener("click", () =>
     dialog.close(),
   );
@@ -406,13 +525,19 @@ function previewCardEdit(form) {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const uid = form.dataset.uid;
-    const body = {
-      scope: viewScope(),
-      mtime: form.dataset.mtime,
-      front: form.elements.front.value,
-      back: form.elements.back.value,
-      note: form.elements.ask.checked ? form.elements.note.value : "",
-    };
+    // Only what you changed, so a section you did not touch is not
+    // rewritten on its way through.
+    const sections = {};
+    form.querySelectorAll(".card-edit-field textarea").forEach((area) => {
+      if (area.value !== area.defaultValue) sections[area.name] = area.value;
+    });
+    const note = form.elements.ask.checked ? form.elements.note.value : "";
+    if (!Object.keys(sections).length && !note) {
+      dialog.close();
+      toast("nothing changed");
+      return;
+    }
+    const body = { scope: viewScope(), mtime: form.dataset.mtime, sections, note };
     const response = await fetch(`/api/cards/${uid}/text`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -444,7 +569,7 @@ bindKeys({
   "back-to-draft": () => oneAtATime(() => act("unapprove")),
   undo: () => oneAtATime(undo),
   editor: openEditor,
-  "edit-card": editCard,
+  "edit-card": () => editCard(""),
   "note-claude": () => oneAtATime(() => annotate("claude")),
   "note-me": () => oneAtATime(() => annotate("me")),
   "resolve-note": () => oneAtATime(() => resolveAnnotation(0)),
@@ -453,6 +578,7 @@ bindKeys({
   "next-alt": () => deck.nextPending(),
   "prev-alt": () => deck.prev(),
   filters: toggleFilters,
+  search: findCard,
   // The shelf is a page now, not a dialog over this one.
   projects: () => (location.href = "/projects"),
   guide: cycleGuide,
@@ -589,4 +715,165 @@ document.addEventListener("click", (event) => {
     location.hash = uid;
   }
   // Otherwise the href does the work: it clears the filters that hide it.
+});
+
+/* The aside's panels: fold one by clicking its title, move one by dragging
+   its grip, or with Alt and the arrow keys from the title. Both are remembered
+   in this browser, and for every card, so the layout you settle on is the one
+   every card has. What the page guessed (`data-default`) applies to a panel
+   you have not touched. Without storage the guess stands, and moving still
+   works for the page. */
+(function wirePanels() {
+  const KEY = "forge.review.panels";
+  let saved = { order: [], shut: {} };
+  try {
+    const raw = JSON.parse(localStorage.getItem(KEY) || "{}");
+    saved = { order: raw.order || [], shut: raw.shut || {} };
+  } catch {
+    /* storage refused or unreadable: the page's own order and defaults */
+  }
+  const store = () => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(saved));
+    } catch {
+      /* remembered for this page only */
+    }
+  };
+  const keysIn = (container) => [...container.children].map((p) => p.dataset.panel);
+
+  function arrange(container) {
+    const present = keysIn(container);
+    const wanted = [
+      ...saved.order.filter((k) => present.includes(k)),
+      ...present.filter((k) => !saved.order.includes(k)),
+    ];
+    wanted.forEach((key) => container.appendChild(container.querySelector(`[data-panel="${key}"]`)));
+  }
+
+  function shut(panel) {
+    const key = panel.dataset.panel;
+    return key in saved.shut ? saved.shut[key] : panel.dataset.default !== "open";
+  }
+
+  function fold(panel) {
+    const closed = shut(panel);
+    panel.classList.toggle("folded", closed);
+    const toggle = panel.querySelector(".panel-toggle");
+    if (toggle) toggle.setAttribute("aria-expanded", String(!closed));
+  }
+
+  const all = () => document.querySelectorAll("[data-panels]");
+  const settle = () => {
+    all().forEach(arrange);
+    document.querySelectorAll(".panel").forEach(fold);
+  };
+  settle();
+
+  function remember(container) {
+    saved.order = keysIn(container);
+    store();
+    all().forEach((other) => other !== container && arrange(other));
+  }
+
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest(".panel-toggle");
+    if (!toggle) return;
+    const panel = toggle.closest(".panel");
+    saved.shut[panel.dataset.panel] = !shut(panel);
+    store();
+    document
+      .querySelectorAll(`.panel[data-panel="${panel.dataset.panel}"]`)
+      .forEach(fold);
+  });
+
+  /* From the keyboard: Alt and Up or Down on a title moves its panel. */
+  document.addEventListener("keydown", (event) => {
+    const toggle = event.target.closest && event.target.closest(".panel-toggle");
+    if (!toggle || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault();
+    const panel = toggle.closest(".panel");
+    const neighbour =
+      event.key === "ArrowUp" ? panel.previousElementSibling : panel.nextElementSibling;
+    if (!neighbour) return;
+    if (event.key === "ArrowUp") panel.parentElement.insertBefore(panel, neighbour);
+    else panel.parentElement.insertBefore(neighbour, panel);
+    remember(panel.parentElement);
+    toggle.focus();
+  });
+
+  /* By dragging the grip. The panel under the pointer decides: above its
+     middle the dragged one goes before it, below, after. */
+  let dragged = null;
+  document.addEventListener("dragstart", (event) => {
+    const grip = event.target.closest && event.target.closest(".panel-grip");
+    if (!grip) return;
+    dragged = grip.closest(".panel");
+    dragged.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", dragged.dataset.panel);
+  });
+  document.addEventListener("dragover", (event) => {
+    if (!dragged) return;
+    const over = event.target.closest && event.target.closest(".panel");
+    if (!over || over === dragged || over.parentElement !== dragged.parentElement) return;
+    event.preventDefault();
+    const box = over.getBoundingClientRect();
+    const after = event.clientY > box.top + box.height / 2;
+    over.parentElement.insertBefore(dragged, after ? over.nextSibling : over);
+  });
+  document.addEventListener("dragend", () => {
+    if (!dragged) return;
+    dragged.classList.remove("dragging");
+    remember(dragged.parentElement);
+    dragged = null;
+  });
+})();
+
+/* Find a card: the shared palette over every card in the project, whatever
+   the filters say. A card in this list is jumped to; one that is not is
+   opened by its link, with the filters off. Shift+Enter keeps the query as a
+   filter on the list instead. */
+function findCard() {
+  const project = document.getElementById("deck").dataset.project || "";
+  const where = (query) =>
+    `/api/cards/find?project=${encodeURIComponent(project)}&q=${encodeURIComponent(query)}`;
+  finder.open({
+    title: "find a card",
+    placeholder: "text, gist, tag or uid",
+    unnamed: "no gist yet",
+    delay: 120,
+    rows: async (query) => {
+      const found = await (await fetch(where(query))).json();
+      return {
+        ...found,
+        rows: found.rows.map((card) => ({
+          name: card.gist,
+          where: `${card.status} · ${card.uid}`,
+          uid: card.uid,
+          href: card.href,
+        })),
+      };
+    },
+    count: (rows, found) => `${found.matched} of ${found.total}`,
+    foot: "enter jumps · shift+enter filters the list",
+    pick: (row) => {
+      finder.close();
+      const at = deck.items.findIndex((item) => item.dataset.uid === row.uid);
+      if (at < 0) {
+        location.href = row.href;
+        return;
+      }
+      deck.show(at);
+      history.replaceState(null, "", `#${row.uid}`);
+    },
+    shiftEnter: (query) => {
+      const url = new URL(location.href);
+      if (query.trim()) url.searchParams.set("q", query.trim());
+      else url.searchParams.delete("q");
+      location.href = url.toString();
+    },
+  });
+}
+document.addEventListener("click", (event) => {
+  if (event.target.closest("[data-find]")) findCard();
 });

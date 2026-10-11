@@ -1,8 +1,7 @@
 # Roadmap
 
-What is left, what the Cookbook taught us about its own extraction, and what
-was rejected and why. The milestones in [DESIGN.md](DESIGN.md) §13 are built
-and gone from this file; git history has them.
+What is left to build, a short account of what is built, the evidence the
+Cookbook's extraction left, and what was rejected and why.
 
 This file is about the tool. What is worth carding, and which sources to
 import, is about one deck and lives in an untracked `ROADMAP.private.md`
@@ -12,62 +11,308 @@ beside it.
 `§9`), so a section keeps its number wherever it moves to and a new one takes
 the next free number.
 
+**A built section is a summary.** The reasoning written while building it,
+the alternatives and the bugs on the way, is in git: `git log -p --
+docs/ROADMAP.md`. The milestones in [DESIGN.md](DESIGN.md) §13 are built and
+gone from this file entirely.
+
 ---
 
 # What is left
 
-## 1. The dependency canvas: what it does not do yet
+## 30. Running the passes with your own API key
 
-Built, at `/graph`, per project, and `[app] graph = false` turns it off.
-`graph.py` holds the graph and its layout with no app in it, `graph.js` draws
-it, and `projects/<name>/graph.json` holds whatever you dragged.
+**Next.** The passes (`/transcribe`, `/classify`, `/gist`, `/extract-cards`,
+`/augment`, `/sort-notes`, `/triage`) run in Claude Code, where you watch
+them. With an API key and credits they could also run from the website, in
+the background, and be billed to the key. The reason to build it is cost and
+reach, not a different way of writing cards.
 
-- **A second edge kind.** `requires` is the only one, and `Edge.kind` is
-  already carried through for the next. Nothing proposes a second: two cards
-  from one unit and two cards in one section are not dependencies.
-- **Concept nodes.** A node is a card, and "the adjugate" is one idea carried
-  by three cards. It is a second builder beside `card_graph` and a
-  `?graph=concepts` on the route, which is what that seam is for. Build it
-  when one idea is carried by enough cards that the graph reads as
-  duplication.
-- **Zoom.** Pan is enough and the browser zooms. Revisit when a real source
-  does not fit.
-- **Quadtree hit-testing.** Linear over every node on `pointermove` is fine at
-  700. Revisit past a few thousand.
+**One runner, the same prompts.** The runner reads the agent and skill files
+in `.claude/` verbatim and gives the model the same tools the slash commands
+use: `forge context`, `forge cards new`, `forge units note`. It writes
+drafts, notes and suggestions through those verbs, so everything it does is
+a file edit you could have made, and nothing reaches Anki (invariants 1 and
+2). It lives in its own package, so the core stays free of a vendor in its
+dependencies, as the rejection asked.
 
-## 2. Two audit checks that would have caught dropped content
+**Invariant 6 is settled.** It means the guidelines stay in the skill and no
+code writes or tidies card text itself, not that no process calls a model
+([CONTRACT.md](CONTRACT.md) §6). The runner is on the right side of it as long
+as it loads the skill unchanged and writes through the verbs. What is left to
+change when it lands is [DESIGN.md](DESIGN.md) §2, which still says the Python
+contains no LLM API code.
 
-**Built**, in `audit.py`, over units still waiting for a decision (`new` or
-`queued`). Against the committed Cookbook ledger they flag 20 and 6.
+**Billing in the website.**
+- Every call is one line in `.forge/usage.jsonl`: when, which pass, project,
+  model, input, output and cached tokens, whether it was batched, and the
+  cost from a price table in `forge.toml` (prices change, so they are config,
+  not code).
+- A usage page: spend by day, pass, project and model, and the number that
+  matters, **cost per approved card**, since a pass that writes cards you
+  reject is more expensive than its tokens say.
+- A run says what it will cost before it starts ("about 40 units, 180k input
+  tokens, about $2.10") and asks, like a write does. Budgets in `forge.toml`
+  (per day, in total) stop a pass part way and say so.
+- The key is read from an environment variable the config names. It is
+  never written to a file.
 
-- **`fragment-suspected`:** an unnumbered unit within a line height
-  (12pt) above or below a numbered one, in the same column. The numbering
-  check is satisfied either way, because the number exists.
-- **`numbered-no-relation`:** a numbered unit whose transcription states no
-  relation, the mirror of `units classify`'s `no-relation`. Most of the
-  Cookbook's are a display's last line carrying the number while the `=` sat
-  on the line above. Read from the transcription, so a unit nobody has
-  transcribed says nothing. `matrix-cookbook:3.2:178`, which holds only
-  `(178)`, has an empty transcription and is caught as the fragment's
-  neighbour instead. The relation pattern learnt `\iff` and the arrows on
-  the way.
+**Batching and context, the bulk of the saving.**
+- **Message batches** for what does not wait on you. Transcription,
+  classification, gists, stubs and augmenting are independent per unit or
+  card, so they go as one batch at about half the price, and the result is
+  read when it lands. Passes that talk to you (`/triage`, `/sort-notes`) stay
+  live.
+- **Prompt caching.** Order a request so the part shared across a run comes
+  first and the unit comes last: the skill, the project's conventions and
+  the page window, then the unit. A section's units share a window, so group
+  by section and the window is paid for once.
+- **One window per section**, not one `forge context` per unit. Today each
+  writer re-reads the same eleven thousand characters for every unit on a
+  page.
+- **A model per pass**, from the agent's own frontmatter: the small model for
+  gists and classifying, the large one for card writing.
+- A cheap first pass can decide whether an expensive one is worth running:
+  skip units `/classify` already proposes to skip.
 
-A third signal belongs to whatever segments next: **a line ending in a
-trailing binary operator cannot be the end of an equation.** Every
-continuation line in §6.2 and §7.7–7.9 ends in `×` or `+`.
+**Order of work.** The usage log and its page first, since they are useful
+for the passes you already run if the runner writes them too. Then one pass
+end to end (`/gist`, the smallest), then batching, then the writers.
 
-## 3. Small and named
+## 27. Documents nobody marked up
 
-- **The `§` prefix on every section label. Kept.** It is written into a
-  card's `source:` when `cards new` runs, and `source` is inside
-  `content_hash`. Dropping it would leave old cards with it and new cards
-  without, or un-approve every card that has it, for a character.
-- **`front_char_cap` per project. Built.** `front_char_cap` in a
-  `project.toml` overrides `[cards]`; `check` reads the card's project.
-- **`intuition` cards.** The skill had the guidance already; it now has a
-  worked example of one, good and bad. The Krause project's cards use it.
+The path for a PDF with no Zotero marks is deprecated as it stands, and it
+needs a rework before a new source goes through it. Today that path is
+`extract/pdf.py`, frozen (§9) and fitted to the Matrix Cookbook, with
+`forge audit`, `/transcribe` and `units classify` checking its output after
+the fact. Every project added since reads a source marked up in Zotero, or
+has no document at all.
+
+A source marked up in Zotero is not part of this. A mark is a unit
+already, with its own geometry, and an image or area mark is a figure unit.
+
+What the rework has to answer, collected from the sections it replaces:
+
+- **Segmenting a book that is not the Cookbook.** A model reading page
+  images and reporting `(kind, label, page, bbox)` was the plan once (§5,
+  dropped). Whatever is built keeps three things: the locator generalises
+  by a shim, so `pdf.py` is never edited; the 1..N contiguity check runs
+  per label family; and extraction produces units, never cards.
+- **Figures and anything that is not a text block.** `page_blocks()` skips
+  every block whose `type != 0` and never reads `page.get_drawings()`. A
+  diagram never enters the ledger, and an equation set as an image or drawn
+  as vectors is lost without a word. TeX draws fraction rules as thin filled
+  rectangles, which is a signal for maths that does not depend on font
+  names.
+- **A line ending in a binary operator cannot end an equation.** Every
+  continuation line in the Cookbook's §6.2 and §7.7–7.9 ends in `×` or `+`.
+- **Agreement between two extractions.** The equation number is an exact
+  join key. A second pass that reads the *page*, never our crops, and is
+  joined on it checks the first. A round trip, rendering `tex_auto` with
+  KaTeX and comparing it with the crop, is the only check that catches a
+  wrong transcription rather than a missing equation. A coverage check asks
+  whether every named statement on a page is inside a unit.
+
+## 35. Course material without Zotero
+
+A course produces a dozen exercise sheets, quizzes and slides, each used
+once. One Zotero item apiece buries the library, and none of them is a work
+to cite. The deck still wants cards from them.
+
+**Decided: marks in the PDF, made with the browser's own tools.** Firefox and
+Chrome annotate a PDF and save a copy, so the app gets no annotation editor,
+which would be rebuilding Zotero's reader. A Zotero item for the course with
+the sheets as its attachments also works today, but it leaves the PDFs in a
+synced library. It stays the fallback.
+
+A source's parts are its files, and a mark's section is the PDF's outline or,
+when it has none, the attachment's title, so each sheet is a row in the
+section filter. A local file declared with `[[sources]] files = [...]` has no
+door to units today: `extract/pdf.py` is fitted to one book and looks for
+numbered equations (§27).
+
+**Why it is small.** `Mark` is not Zotero-shaped, and `units_for` in
+`extract/zotero.py` already turns a list of annotations and a scheme into
+units. What is missing is a producer that reads a PDF's annotation layer into
+the same objects.
+
+**Spike first.** What each browser writes decides which of its tools are
+supported, and nobody has checked. Annotate one page in each browser with a
+highlight, a typed note and a drawn rectangle, save, and read what PyMuPDF
+sees: subtype, colour, quad points, contents and name.
+
+- Is a highlight a `Highlight` with quad points, or ink?
+- Does a comment survive the save?
+- Which colours exist, and do they map onto the scheme's names?
+- Does a viewer keep annotation names when it saves again?
+
+**What to build once the spike has answered.**
+
+1. **The reader.** A new module under `extract/`, never `pdf.py`. The kind
+   comes from the subtype, the colour is the nearest name in the scheme's
+   palette, the covered text comes from the quad points through the page's
+   text layer, and the comment from `/Contents`. The key is the annotation's
+   `/NM` when it has one, otherwise page, box and kind, so reading a file
+   again adds nothing twice and the rules for marks that vanished apply as
+   they do for Zotero. The scheme, the page-width crop of invariant 8, the
+   marks window and triage then work unchanged.
+2. **A folder as a source.** `files` is an explicit list, so every new sheet
+   is an edit to `project.toml`. A `folder` key, or globs in `files`, makes a
+   new sheet a file dropped into the folder, and `forge sources update` picks
+   it up. The file's name is its section.
+3. **Freehand highlighting.** A stroke drawn over a line of text is ink, not
+   a text selection. It should count as a highlight over the text under it.
+   `Unit.drawn_box` assumes a rectangle dragged round a figure, and a stroke
+   across one line is a thin strip.
+4. **The round trip.** A browser saves a copy and writes nothing back to the
+   project, so the folder is watched. A file that changed is offered for
+   re-reading on the setup stage, the way the page already notices changed
+   files. The app adds one link that opens the document in the browser's own
+   viewer.
+
+The scheme tables are called `zotero`. Local PDFs either reuse them or they
+get a neutral name, which is a small decision to make with the reader.
+
+**Not planned: drawing a box in the page.** The browsers' draw and rectangle
+tools make the area mark, which is what it would have been.
+
+**Open questions.**
+
+- What a card from an exercise asks. The card-writing skill is written for
+  identities. An exercise yields the method, or the one step that is not
+  obvious, and the numbers are not worth a card. That is a paragraph in the
+  course's `conventions.md` first, and in the skill once it holds across
+  courses.
+- Sheets with no solutions. The writer would have to solve the exercise. A
+  step the source does not state belongs in `## notes`, as invariant 7 asks of
+  an added condition.
+- Dropping a course after the exam. `forge sources remove` refuses while
+  cards stand on a source, and a picture card renders from its document, so
+  the PDFs stay as long as the cards do.
+
+## 31. A graph that separates what is not connected
+
+`graph.py` places a node at its layer (the longest path from a card with no
+prerequisites) and its row by study order, across **every** card at once.
+Two components with nothing between them therefore share columns and
+interleave, and a single stray `requires` joins two clusters into one tangle
+with no way to see which edge did it.
+
+Established ways, in the order to try them:
+- **Lay out each connected component alone, then pack them.** The standard
+  fix: Graphviz packs components, and ELK's `separateConnectedComponents` does
+  the same. Each component gets the layered layout it already has, the
+  component rectangles are packed side by side or in rows, largest first, and
+  a gap between them says "these are separate".
+- **A real layered layout inside each** (Sugiyama: rank, order to minimise
+  crossings, then place) in place of "row by study order", which keeps the
+  queue's order and ignores crossings. Dagre or ELK in the browser do this; the
+  study order stays as the tie-break.
+- **Bridges and articulation cards.** An edge whose removal splits a
+  component, and a card whose removal does, are the "single links that mess
+  things up". Find them with Tarjan's algorithm (linear), draw bridges
+  differently, and list them: "this one `requires` joins 14 cards to 9".
+- **Components as a first-class list.** A side panel of components with their
+  sizes, click to focus one and fade the rest, and the isolated cards counted
+  in a line rather than drawn as dots (the canvas already hides them by
+  default).
+- **Collapse.** A component (or a cluster by section) folded to one box that
+  opens on click, for a deck with hundreds of cards.
+
+Nothing dragged is touched: `graph.json` still outranks any computed
+position, and a packed layout is the starting arrangement only.
+
+## 14. A visual pass, and a theme you can swap
+
+Work for the time between features: none of it changes what a command does.
+
+**Built:** the colour seam. `static/theme.css` holds every colour and loads
+before `app.css`, which holds none outside Zotero's palette, and
+`tests/test_theme.py` keeps it that way. A control in the top bar cycles
+system, light and dark, applied before the first paint.
+
+**Left, the half that needs eyes:**
+
+1. **One type scale, one spacing scale, one radius set.** Mechanical. The
+   type scale and radii are measured; spacing is not a scale at all yet.
+2. **Density per surface.** A rail, a card and a document are three
+   densities, stated once rather than per rule.
+3. **Borders.** Nearly everything is a 1px hairline, including things that
+   would read better grouped by space.
+4. **The empty states.** Each panel says "nothing yet" in its own voice.
+5. **One design language for controls.** How an input, a choice, a switch
+   and a button look, and how a value shows where it came from: set here,
+   inherited, or a default nobody chose. The settings tables, the card
+   editor, the command builder and the triage chips each answer it
+   differently now.
+6. **Clutter.** A line of standing prose earns its place when it says what
+   the control cannot: what a command will do to your files, why a pass is
+   missing.
+7. **A narrow window.** Nothing overflows at 1024px, but both rails keep
+   their remembered widths and leave the deck about 290px. Folding a rail by
+   width has to survive the window growing again: remember a fold done by
+   hand, treat a fold done by width as temporary. A decision, not a patch.
+8. **A theme picker.** The seam makes a theme one file of the names
+   `theme.css` declares. A picker would offer several, each such a file,
+   and keep the choice the way the switch does.
+
+## 16. Pictures that are not crops
+
+A card gets a picture by naming a unit, and the crop is rendered from the
+source document. That covers every picture a book already prints, and nothing
+else. Three cards in the Krause deck describe in words a picture that would
+say it faster: the Laplace density card, whose prose compares its tail to a
+Gaussian's; the multivariate Gaussian density card, whose sublevel sets are
+ellipsoids along the eigenvectors of $\boldsymbol{\Sigma}$; and the law of
+total variance card, whose intuition is a picture of scores grouped by class.
+
+Two routes, and they differ in what they give up. **Drawn here**, from TikZ or
+an equivalent carried in the card file and compiled on the way to Anki. The
+card keeps source rather than an image, which is the property the crop path
+already has: re-rendering fixes every card that shows it, and nothing binary
+enters `cards/`. The cost is a TeX toolchain wherever `anki push` runs.
+**Fetched**, from a URL in the picture reference. Cheap, and it gives that
+property up, because the far end can change or vanish and the licence belongs
+to somebody else.
+
+Three things to settle either way. Where a drawing lives, since a TikZ figure
+is longer than any section a card carries now. Whether `check` can refuse a
+picture it cannot draw, which it already does for a crop. And what
+`anki push` uploads, because Anki's media folder is one flat namespace and a
+generated picture needs the same `forge-<uid>-<n>` naming a crop gets.
+
+**The drawn route is the one wanted.** The card writer writes the figure as
+TikZ, or another text format a TeX toolchain compiles, the same way it
+writes the card's LaTeX, and the figure is reviewed with the card. Finding
+the figures a book prints, when nobody marked it up, is §27.
+
+**Trigger:** a card whose `## prose` is describing a picture in words. The
+three Krause cards above have met it already.
+
+## 24. Decks for facts many sources restate
+
+Probability and calculus facts recur across the books and papers here.
+Later: a project per subject holding them, and a pass that moves cards in
+and merges duplicates. Three facts to plan around. A merged card cites
+several sources, which `unit:` already allows as a list. A uid is the
+note's identity in Anki, so the surviving card should keep one of the
+originals' uids to keep its review history. And `anki push` deletes
+nothing, so the note a merge retires stays in Anki until removed there.
+
+## 4. Publishing, what is left
+
+**The demo recording.** `assets/make_assets.py` carries the shot list in its
+docstring. It cannot be scripted, because the interesting part is the pace
+of triage and no script knows how long to pause.
+
+**Half of this does not run without Claude Code**, the flip side of having no
+LLM code in the tool. The committed ledger and the `.apkg` export are the
+mitigation: they show the output without running the half a stranger cannot.
 
 ## 11. Pulling context from Obsidian notes
+
+**Blocked on the vault.** Nothing here can start until the Obsidian vault is
+reachable through Nextcloud, and it is a large piece of work after that.
 
 `forge context <unit>` hands a card writer the page a unit was printed on and
 the conventions the source declares. What it cannot hand over is the note you
@@ -96,2053 +341,254 @@ every assumption `locator` makes stops holding.
 **Trigger:** the first card whose conventions you type out of a note instead
 of reading off the page.
 
+---
+
+# Built
+
+## 1. The dependency canvas
+
+At `/graph`, per project; `[app] graph = false` turns it off. `graph.py`
+builds and lays out the graph with no app in it, `graph.js` draws it, and
+`projects/<name>/graph.json` keeps what you dragged. An arrow is a
+`requires`, drawn by dragging between two cards. Ctrl and the wheel zoom
+about the pointer. Nothing more is planned.
+
+## 2. Two audit checks that would have caught dropped content
+
+In `audit.py`, over units still waiting for a decision.
+`fragment-suspected` is an unnumbered crop within a line of a numbered one in
+the same column; `numbered-no-relation` is a numbered unit whose
+transcription states no relation. Against the Cookbook ledger they flag 20
+and 6.
+
+## 3. Small and named
+
+The `§` prefix on section labels stays: it is in `source:`, which is hashed.
+`front_char_cap` may be set per project. The card-writing skill has a worked
+`intuition` example.
+
 ## 10. Projects, sources and topics
 
-A deck you want on a subject where no single book is canonical. You say "I
-want cards for how to use the standard containers", a pass proposes units,
-you triage them the usual way, and the cards are written, reviewed and
-iterated like every other card.
-
-Only the first layer changes. `units extract` and `zotero import` are two
-frontends that fill one ledger, and everything after the ledger already
-ignores which door a unit came in by (invariant 3). This is a third
-frontend, plus generality in the middle.
-
-Worked through, it stops being one feature. It is four, and three of them
-improve the sources that already exist:
-
-1. sources become first-class inside a project, with their own settings, and
-   a source may be a URL
-2. topics: an optional grouping with an ask and an outline
-3. a frontend that proposes units where there is no document
-4. code on a card
-
-**A frontend owes five things**:
-
-- a stable id that survives a re-run
-- a locator, as much of one as it can fill
-- something scannable, so triage is not guesswork
-- a subject and not a draft. A gist, a short preview, some references. The
-  moment a frontend emits a front and a back, triage has become review
-- `state: new`, and no opinion about anything after that
-
-### The vocabulary, and a rename
-
-Two things were called a source: the directory under `sources/`, and
-the document a unit was printed in. They are now separate concepts and the
-word has to go to one of them.
-
-- **project**: what `sources/<name>/` was. One ledger, one deck, one
-  `conventions.md`, one graph.
-- **source**: one work inside it. A book, a paper, a URL. This is the
-  meaning `Card.source` has always had, which is the evidence the word
-  belongs here.
-- **file**: a physical PDF under a source. A book delivered as fifteen
-  chapter PDFs is one source with fifteen files.
-- **topic**: optional, described below.
-
-**The depth is fixed at project, source, file, and there are no parent
-relations.** A source is one work, and a work's parts are its files. Nesting
-beyond that is what the "split the project" rule below is for.
-
-There is then no such thing as a custom project. There are projects, and
-some have no authoritative source.
-
-What gets renamed: `sources/`, `source.toml`, `SourceConfig`, `--source`,
-`Unit.source`, the picker. In the same commit as the config split, since
-that pass touches all of it, and by migrating rather than by keeping the old
-spellings working (below).
-
-What does not: **`Card.source`**, which is now exactly right. And **the
-`src::` Anki tag**, though not for the reason I first gave. It could be
-migrated, because `anki push` diffs tags against the live note and adds and
-removes them, so the next run would move every card over. It stays because
-it is fine: the tag's job is filtering inside Anki, "src" still reads as
-provenance, and renaming it breaks saved searches in a collection for no
-gain in the repo.
-
-### How big is a project
-
-**A project's scope is the scope over which one `conventions.md` is true.**
-
-CLAUDE.md refuses a repo-wide conventions table because a convention is a
-fact about one book, and it names the failure it prevents: a statistics
-paper told it writes matrix calculus in denominator layout. A project called
-"probability theory" recreates that one level down. Two books that do not
-share a notation leave no sentence in that file true, and every card writer
-is handed something misleading.
-
-Several authoritative sources in one project is fine and expected: a tight
-cluster of papers is one subject and one notation. The signal is not
-plurality, it is **two sources that disagree about their settings**. That is
-also exactly when somebody would ask for a parent relation, so the ask is
-the signal to split rather than to nest.
-
-### Properties, not kinds
-
-**No stage distinguishes source types. Every stage decides from properties
-of the unit, the card, the source and the project in front of it.** That is
-the whole design, and most of what would otherwise need arguing follows.
-
-It is already the house style in one place: `from_marks` in the units view,
-whose comment says it decides which passes are offered and that it is a
-property of the units rather than a setting. Two invariants half say it too.
-3 ends "whichever door it came in by", and 7 is careful to be authoritative
-only "for what is printed". The rest is that applied everywhere instead of
-twice.
-
-Two sorts of property.
-
-**What it has.** Derived, stored nowhere. Geometry, page text, an
-authoritative source, references, marks, tags, a preview and its language.
-`has_crop` and `from_marks` are the two that exist.
-
-**What was decided.** A tri-state on the unit, falling back through the
-chain. `web` and `context_pages` are both already this, and both put the
-decision on the unit for the reason triage is where you can see it.
-
-**The list is open.** The test for adding to it is whether some stage would
-otherwise have to ask what kind of thing it is looking at. That test is what
-keeps it from filling with settings nobody reads.
-
-Today the screen is built from constants, and each of these becomes a read
-of what the unit has:
-
-- **the context chip.** `CONTEXT_STEPS` is a fixed tuple of page counts. A
-  page-backed unit should offer pages and its chapter; a unit with
-  references should offer this one or all of them. Same chip, same stored
-  setting, a vocabulary that comes from the unit.
-- **the commands panel.** `commands_for` takes one ad-hoc `from_marks` flag.
-  Each row declares what it needs instead, and the panel shows the rows
-  whose needs are met: no `/transcribe` where there is nothing to
-  transcribe, no `/propose` where a source already answers what to cover.
-- **the aside and the pdf view cycling** already read `has_crop`. The guide
-  and `project_facts` should describe what is there rather than assume a
-  document.
-- **the rail.** The tag group appears when there are tags.
-
-None of this is new behaviour for a book. It is the same screens deciding
-from the unit instead of from a constant, which is also what keeps the two
-kinds of deck from drifting into two front ends.
-
-### What a unit stands on
-
-**At most one authoritative source, and zero to many references.**
-
-At most one, because two things that settle it can conflict with nothing to
-break the tie. A card built from several units still has one authoritative
-source each; merging is a card-level thing and does not need the unit to
-hold two.
-
-This lands on what exists. `locator.document` keeps its current meaning, the
-authoritative file, and page and bbox keep resolving against it with no
-migration. Which source that file belongs to is looked up rather than
-stored, because file to source is many to one and declared. Plurality lives
-in a new list beside it, so nothing existing becomes a list.
-
-**So there is no `authority` setting.** A unit has an authoritative source
-or it does not, and that is read off the links. Promoting a reference into
-the authoritative slot is how you say "this one I did look up and it
-settles it", which is more concrete than a tri-state and needs no
-inheritance. `has_crop` stays separate and answers the other half: whether
-that authoritative source has geometry you can check against at review.
-
-Invariants 4 and 7 were always carrying this as an assumption. Naming it
-lets them stand as written instead of growing an exception. What the two
-cases cost is one paragraph at the end of this section rather than a rule
-each.
-
-### Topics
-
-**A source answers "what does this say". A topic answers "what should we
-cover".**
-
-A topic is an ask in the words you used, an outline of what it means to
-cover, any references particular to it, and a few defaults. It is what
-supplies settings, context and provenance when no single source does.
-
-**Zero by default, for every project.** A source with marks has already
-answered the coverage question: the marks are the decision. Giving every
-source a topic would put an empty outline on every book, which is a null
-object and carries no information. **A topic exists if and only if somebody
-wrote one**, and nothing auto-creates one for a source, a project or an
-import.
-
-Two shapes, both real:
-
-- **standing alone**, where there is no definitive source and the topic is
-  the only thing that can say what to cover
-- **augmenting a source**, where a book is authoritative and you want a
-  slice its own structure cannot express, with an outline of its own:
-  "concentration inequalities", which crosses chapters and is not a section
-
-Not required even in a sourceless project. Proposing into one with no topic
-works; you get no outline, no recorded ask and no shared defaults, which is
-why writing one is in practice the first thing you do there.
-
-**Topics are not tags.** A tag like `invalidation` spans topics by design
-and a topic does not. A topic is provenance and a tag is a property of the
-content, so a unit has at most one topic and any number of tags, and they
-want different controls: a picker and a search box.
-
-**Topics do not duplicate sources**, because the two hold nearly disjoint
-things. A source holds files, a marking scheme, crop settings, cached text
-and a citation, all of it about reading a document. A topic holds an ask, an
-outline and references, all of it about deciding what to cover. The overlap
-is references, deck and a couple of permissions, which is a small shared
-shape rather than a second system.
-
-### The setup stage
-
-Every project already has a pre-unit stage. It has no view and no name, so
-it happens by editing TOML: which item, which files, which marks become
-units, what the colours mean, which deck, what is ambient. That is not
-triage and not review, and it is where a project with no book spends all of
-its effort.
-
-So it gets a view, for every project and not only for the new kind. A list
-on the left of the sources and the topics, a panel on the right for whatever
-is selected. The topic list is empty for most projects, and an empty list is
-a true statement about them.
-
-- **a source** shows its files, whether it is authoritative, which marks
-  become units, what the colours mean, its citation, its deck
-- **a topic** shows the ask, the outline with which entries have units, its
-  references, its defaults
-- **the project** shows the deck, the conventions, the permissions
-
-Three things to hold to.
-
-**It writes files and nothing else.** Everything it does is doable by
-editing a file, per invariant 2. A form that starts owning its fields is the
-failure here.
-
-**Only decisions that change what the next pass does.** Deck, permissions,
-marks, references, outline. Not `crop_width`, not `katex_base`, nothing that
-is a fact about a machine. "Defaults etc." is unbounded and ends as forty
-fields nobody reads.
-
-**The outline is what makes it worth opening.** Configuration alone will rot
-because you will edit the TOML instead. Build the topic half first; the
-source half is mostly giving `project_facts` and the scheme legend room they
-do not have in the rail.
-
-### A topic, start to finish
-
-Five steps. Two need Claude and three are file edits.
-
-1. **Ask.**
-   `forge topic add "how to use the standard containers" --project <p>`
-   records the ask and nothing else.
-2. **Sources, if you want them.** A pass appends what it found, as links
-   with a line each on why. You add and delete.
-3. **Approving is leaving them in.** No approved flag, the same way an
-   annotation is resolved by deleting it. The list is what you left.
-4. **Outline, then propose.** Below.
-5. **The usual pipeline.** Units arrive `new`, and triage is triage.
-
-**A topic has no state of its own.** Where it has got to is derivable, so it
-is derived: no references means nobody has looked, no outline means nobody
-has planned, no unit carrying the tag means nothing has been proposed. Same
-call as `has_crop`, and it is what keeps this from adding a second state
-machine beside the ledger's.
-
-**The gate is that the steps are separate commands.** `units classify` already
-works this way: it proposes and applies nothing. Nothing mechanical enforces
-the pause, and nothing should. The pause is that you run the next command.
-
-#### Breadth, which is step 4
-
-A single pass asked for forty proposals produces twelve and stops. It is
-satisficing under length pressure, and nothing tells it that twelve is
-short, because nothing knows what the subject contains.
-
-- **Outline first, as its own pass.** One short line per thing to cover, no
-  detail. Forty of those is cheap to generate, which is exactly why the
-  failure does not happen there.
-- **You edit the outline, not the units.** Deleting padding and adding the
-  obvious gap costs three lines here and forty edits later. It is also a
-  second look before anything enters the ledger.
-- **Fan out the fill.** One subagent per chunk of the outline, which is what
-  `/transcribe` already does per section and for the same reasons. A small
-  list is easy to finish, so the pressure never builds.
-- **Coverage becomes a diff.** Outline entries with no unit against them,
-  printed by `forge`. Mechanical, counting rather than judging, and the same
-  kind of question `audit`'s contiguity oracle asks about extraction. It
-  also makes a second run resumable rather than a re-run.
-- **Do not ask for a number.** "Produce forty" produces padding, and padding
-  survives triage because none of it is clearly wrong. Twelve is sometimes
-  the honest answer. An outline of sixty entries is the signal to split the
-  topic.
-
-None of it is enforced. A propose with no outline still proposes.
-
-### What a project is on disk
-
-A directory, a `project.toml`, and prose files beside it. No kind key: once
-the config splits, a project with no authoritative source is one whose
-sources declare no files, and that absence is the fact.
-
-`project.toml` gains a table per source: its key or URL, its files, whether
-it is authoritative, its marking scheme when it has one, its topics, its
-deck. **Structured relations go here and not in prose**, because a relation
-written in a prose file is the one that drifts.
-
-`references.md` is the project's shelf of reference material, one entry each,
-in prose, with no schema. A shelf to check against, not things to card.
-
-`topics.md` holds the asks and the outlines, a heading each. One file rather
-than a directory: there are ten of these, not a thousand.
-
-`conventions.md` changes meaning in a project with no authoritative source.
-For a book it describes what the source does. With no source it decides what
-the deck does: which language version is ambient, how a snippet is written,
-what is assumed. Write it before the first proposal, not after the first
-batch reads inconsistent.
-
-### Where a thing lives, and what may be overridden
-
-The split already exists and is written down in `config.py`. Naming it
-rather than inventing a new one:
-
-- **TOML: what the tool acts on.** It resolves a path, runs an import,
-  routes a deck, branches on it.
-- **`[conventions]`, free-form keys: a short fact that reaches the writer
-  verbatim.** Nothing branches on one except `layout`.
-- **Markdown: prose the writer reads.**
-
-The test for anything new is **does any Python branch on it.** Yes, TOML. No
-and it is a sentence, markdown. No and it is a label, the conventions table.
-
-A fourth case appears here and is worth naming: **markdown the tool counts
-but does not interpret.** A topic's outline is read only to find its
-entries, which is what `annotation_audience` already does with a prefix at
-line start. Counting lines is not a schema.
-
-That splits a topic across two files, the ask and the outline in markdown
-and any defaults in TOML, joined by slug. Not novel: `project.toml` and
-`conventions.md` are already one thing split by whether the tool acts on it,
-and most topics will carry no TOML block at all.
-
-**Everything is overridable except a short list**, and the list is short
-because the test is narrow: **overriding is allowed unless it would make two
-things in the same deck mean different things without saying so.**
-
-- **Identity and derived facts** are not settings. You cannot override
-  whether a unit has a crop; you change the thing.
-- **Conventions.** Overriding `layout` on one unit puts two cards in one
-  deck that read differently with nothing on either saying which. That is
-  the silent mixing CLAUDE.md exists to prevent, so a convention is declared
-  at the level it is true and does not cascade down.
-- **Reading settings stop at the source.** A unit cannot have its own
-  marking scheme; it was already imported by one.
-
-Permissions, windows, decks and tags all pass the test, which is why they
-are free. `layout` fails it.
-
-### Units
-
-Ids are slugs, `<project>:<slug>`, so a re-run adds only what is new.
-
-**Units grow `tags`, which cards already have.** The first draft made the
-topic the middle segment of the id, because a section is filtered everywhere
-and it was free. Wrong shape: a section is where something sits in a
-document. The topic is a field of its own, single-valued, and tags are the
-many-valued thing beside it.
-
-A unit has no `tex_auto`. It has a preview: for code, a snippet too small to
-run, enough to see the point. Rather than a field beside `tex_auto`, this is
-the moment to say what those three fields have always been, a machine's
-reading of the unit and how far to trust it. `Unit.tex` is already the
-accessor, so the seam exists. Generalise it to a preview with a language if
-that stays cheap; otherwise a parallel field and two spellings of one idea.
-
-### Cards
-
-No new card type yet. `identity` and `intuition` carry definitions and
-explanations, and the "here is code, is it right" card waits until there are
-enough of them to know what it wants.
-
-**Where a card goes** is a first-match chain, which is what `deck_for`
-already is: the card's own tag, then its topic, then the project's type
-map, then the project's deck. Topic and not source, because a topic says
-what the material is about and a source says where it was
-printed, and a deck is something you study rather than somewhere you read.
-Most links are unset in any given project, so the chain is long on paper and
-short in practice.
-
-A language version is a tag. `cpp20` is filterable in Anki, which is where
-"drill only these" is decided. A card that departs from the ambient version
-says so in `## conditions`, which renders with the front, so the question is
-asked in the right setting.
-
-**Routing needs `tags` out of the content hash.** Before the exemption,
-re-tagging a card to move decks un-approved it for a change nobody
-reviewed, which is invariant 5 firing on something it was not written for.
-
-Exempting it is the consistent answer rather than a convenience, because the
-inconsistency is already there: `frequency` and `derivation` are exempt
-**and they become Anki tags**, `freq::core` and `derive::short`. So
-changing `freq::core` did not un-approve a card and changing
-`tags: [core]` did, and they are the same kind of statement landing in the
-same place. That is an accident of which field a value lives in, not a
-policy.
-
-The rule every existing exemption already implies: **the hash covers what a
-reviewer read, and filing is not read.** `requires` says where a card sits
-in the queue, `frequency` says when you meet it, a tag says where it is
-filed, and approving a card is not approving its filing. The objection that
-a subject tag is content does not survive the test: change
-`matrix-calculus` to `linear-algebra` and the claim on the card is
-identical. A tag that changes what the question means belongs in
-`## conditions`, which renders with the front.
-
-The cost is that `check` stops noticing a tag typo on an approved card. That
-is already true of `frequency`, mitigated there by a vocabulary that free
-tags do not have. The rest is already wired, since `anki push` diffs tags
-against the live note and `deck_drift` plus `--move-decks` move what the new
-deck says.
-
-### Filtering, which is the UI work
-
-This matters more without a book. A book gives you sections, and a section
-is a real division somebody made. A project gives you tags you invented,
-there are more of them, and they are how you find anything.
-
-The left rail does not scale to that. Every filter is a written-out row,
-which is right for six and wrong for forty.
-
-- a tag group with a search box: type to narrow, click to select, selected
-  tags pin to the top, counts beside each, several at once
-- one control, both views. Units carry tags now, so triage needs the same
-  thing review does
-- the topic is a separate single-select, beside the section tree rather than
-  among the tags
-- `frequency` and `derivation` become filters. They were chips on a card
-  and you could not select by them
-- the graph takes them too. It had no filters at all, so this was the
-  first one: a topic or a subject looked at alone, on the canvas as well as
-  in the list
-
-Nothing here is specific to a sourceless project. A book with four hundred
-cards wants it too, and a tag filter carrying counts is the first thing
-likely to make a page render slowly enough to want what "a database" below
-describes, which is an index and not a store.
-
-### Code on a card
-
-The review view already handles fenced blocks: `render_body` splits on the
-fences and emits `<pre>`, which KaTeX skips. Three gaps were left, and
-build step 5 closed them.
-
-- `check` runs KaTeX over `## back`, so a fence has to be cut out first, the
-  way `_prose_only` cuts out display math
-- `section-wrapped` fires on anything multi-line, and code is meant to be
-  multi-line
-- `to_anki_html` turns newlines into `<br>`, so a fence has to become `<pre>`
-
-Highlighting is not built into Anki. The add-ons bake Pygments HTML into the
-field when you type it, which we do not need because we write the field. Run
-Pygments at push time, the way a picture is: the card file keeps
-plain code, the field gets classes, and the colours live in the note type
-CSS so night mode works. No add-on for anyone you share the deck with.
-MathJax skips `pre` and `code` by default, so the maths renderer leaves it
-alone.
-
-### Boundaries to fix while doing this
-
-Not a rewrite. Six seams this leans on that are blurred today, each cheaper
-to sharpen now than to work around twice.
-
-**`ProjectConfig` holds two things.** Who a project is and where its deck
-goes, and how to read its documents. The second half becomes a table per
-source, and `document_for`, `crop_width_for`, `crop_context_for` and
-`zotero_for` hang off it. That is what removes the need for a kind.
-
-**Settings resolve by walking a chain, not a fixed ladder.** Unit, source,
-project, repo today. Written as a walk, a parent relation or a topic layer
-is one extra link and no caller changes. Written as four hardcoded lookups,
-it is a rewrite each time.
-
-**The frontend contract is written down and has one door.** In `ledger.py`'s
-docstring, with `forge units add` the only way in for a frontend that is
-not a segmenter.
-
-**The two views build their context by hand.** `/units` and `/review` each
-compute `from_marks`, the filter dict and the counts inline, and they have
-drifted once. One builder, which is also where the resolved properties land,
-so a widget cannot read a different value than a pass.
-
-**`check` says "skip these sections" in four places.** Fenced code makes it
-five. One notion of which sections are linted as prose.
-
-**`forge.toml` needs a pass, not a rename.** `[repo] projects_dir` becomes
-`projects_dir`. `[zotero] units_from` and `[zotero.meanings]` are a marking
-scheme, which is a property of a source rather than of a vendor, so the
-data directory stays as a machine fact and the scheme becomes the last link
-of a chain in a section not named after a company. And the
-`Zotero::<title>` fallback inside `deck_for` is provenance picking a deck,
-which belongs in the routing chain rather than as a branch in the middle of
-it. Same code as the config split, so the same pass.
-
-### Migrating rather than staying compatible
-
-**No compatibility code for our own file formats.** There are two projects
-with real content, the Cookbook and the Krause script, and everything else
-is demo that never reached Anki. Carrying a fallback forever to avoid
-editing two files is the worse trade.
-
-So: no `projects/` falling back to `sources/`, no `--source` alias, no
-list-of-strings form of the source table. A script moves the two projects
-and the tests move with them.
-
-**`LEGACY_UNHASHED_FRONTMATTER` goes with it.** It exists so that widening
-the exemption does not invalidate a deck stamped under the old rule, and
-the same migration re-stamps every approved card instead. That is honest
-because nothing about those cards changed except the rule, it is one time
-rather than permanent, and it clears the way for the `tags` exemption above
-and for whatever the next one is.
-
-**The line is at the collection.** Repo files get migrated; a live Anki
-collection does not. Tags are safe because `anki push` diffs them, so a renamed
-tag would migrate itself. The note type is not: renaming it orphans every
-note and its review history, which is what `PREVIOUS_NAMES` is for and it
-stays.
-
-One thing deliberately not migrated: `Locator.equation`. Its shim exists
-because `extract/pdf.py` is frozen, not for compatibility, so rewriting 751
-ledger lines to say `kind` and `label` would still leave the shim in place
-on the write side. No new fact, so no change.
-
-### What the website does, and what it does not
-
-The setup stage is file edits: create a project, add a source, write a
-topic, keep or drop a reference. Instant, local, no Claude, which is what
-§12 is about, and the app already rewrites card markdown line by line to
-resolve and edit annotations, so this is that machinery pointed at another
-file.
-
-The proposing passes stay copyable commands in the panel. That is what
-"Triggering Claude from the website" settled and nothing here reopens it.
-The division is clean enough to state: **the website edits files, Claude
-Code does the thinking, and the commands panel is the handover.**
-
-### Docs and pictures
-
-**Done.** The DESIGN.md §2 diagram shows all three doors into the ledger and
-the verb table names `zotero import` and `sources`; §6 describes the shelf
-and the setup stage beside the three deck views; CLAUDE.md carries
-`forge sources` and says a convention belongs to a project.
-
-**Left:**
-
-- **README**: prose is yours. It is missing pictures on cards today, and
-  this is a second gap, so both want the same pass.
-- **assets**: `triage.png` and `review.png` were retaken part way through
-  the setup work, so they show the commands panel before it was split into
-  action and info and before a command stopped breaking mid-token. Retake
-  both. The setup stage deserves a shot of its own, which means
-  `make_assets.py` needs a rule for picking a project the way it picks a
-  marked-up one by a `demo` tag. `states.png` stands: the states do not
-  change.
-
-### Build order
-
-**Built.** The eight steps below are done, and what each one settled is kept
-because the reasoning is the part worth having later.
-
-1. A project with no source walks from `units add` to a note in Anki,
-   covered by `tests/test_end_to_end_project.py`. The premise held: only the
-   first layer changed.
-2. The config split, the rename, the `forge.toml` pass, `units add` with
-   slug ids, unit tags, the preview, the reference list, the migration and
-   the `tags` exemption. Settings resolve through one walk outwards
-   (`config.settled`) rather than a ladder written out at each call site, so
-   a parent relation or a layer for topics is one more argument and not four
-   edits.
-3. `forge context` says plainly when nothing settles a card, and hands over
-   the unit's references, the project's shelf and the ask where the page
-   would be.
-4. The setup stage, at `/setup`: what a project reads, what you asked for,
-   and which outline entries still have no unit. That last is the only thing
-   on it you cannot read off a file, and it is where a pass that stopped
-   halfway stops looking like a subject that was smaller than you thought.
-   One write, recording an ask, which is a heading appended to `topics.md`.
-   A list and a panel: asks on top, sources underneath, a handle between
-   them, and whichever you pick opens on the right. Every panel is rendered
-   and the script shows one, so the page is still a plain document without
-   it, and the fragment says which panel, so it is a link you can send. The
-   page drops both rails, which were a triage filter and a guide to triage
-   beside the one screen that is all controls, and it takes the whole window:
-   a centred column with the page showing round it read as a dialog somebody
-   had forgotten to close.
-
-   **An ask stays selected while you read its works.** One with four behind
-   it is the case the panel is for, so picking an ask narrows the list below
-   to the works it drew on and stays lit itself. That relation is derived,
-   not declared: a unit records the document it was printed in and the
-   references it stands on, and an outline entry joins to its units by slug,
-   so it is a walk over what the ask produced. A third list in a file would
-   be a fourth thing to keep in step, and it would go stale the first time a
-   pass proposed a unit against a work nobody had written down. `units add`
-   takes `--document` for the same reason: a proposal from a cluster has to
-   be able to say which paper.
-
-   The works list also filters by what a work *is*, which is a property and
-   not a kind key: `authoritative` is "there is something here to segment",
-   and it is already derived.
-
-   **A source's panel is where the per-work settings live**, each saying
-   whether the work set it or inherited it. See "what belongs to a source"
-   below.
-
-   Three columns, every ratio draggable: what to run next, what the project
-   holds, and whichever one you picked. The commands column folds away,
-   because what to run is a question you ask twice a session and the other
-   two are what you are reading. It is scoped to the *selection*, which is
-   the thing this screen can say and the triage rail cannot: triage has no
-   idea which ask you are working through.
-
-   Each panel counts what it is holding, in both halves of the pipeline, and
-   every count is a link that lands on the triage or review view already
-   narrowed to that ask or that work (`?topic=` and `?document=`, resolved
-   through the unit a card was written from). The rail over there says where
-   the deck came from and offers the way out. Carrying the selection is the
-   point: re-making it by hand was the one thing this screen could not hand
-   over.
-
-   `approved` doubles as "what `anki push` would push". Nothing local records a
-   note id, so whether a card is *in* Anki is a question only the dry run can
-   answer, and a panel does not make network calls to draw a number.
-
-   Starting another project moved to the picker. It is not something this
-   project holds, so it was never a row in this project's lists.
-
-   **Which work a unit belongs to is asked, never matched.** A Zotero work
-   declares the *item* key while its units carry *attachment* keys, and
-   empty `attachments` means all of them, so a hand-rolled `document in
-   (key, *attachments)` matched nothing: the Krause book's panel counted
-   zero units for a work with fifty-six, and offered it the transcription
-   pass it had already ruled out for marked-up sources. `ProjectConfig.source`
-   is the one definition of that mapping and everything goes through it. A
-   work with no `key` and no `zotero` is named after the file it reads, for
-   the same reason: a work nothing can refer to cannot be filtered to,
-   counted, or copied into another project.
-
-   **Narrow first, then the repo.** You are looking at one project, so the
-   command about that project comes before the one about everything:
-   `anki push --project` above `anki push`, `zotero import --project` above
-   `zotero import --tag anki`. Both flags are new. Scoping a push is safe
-   because nothing there deletes, and its lint stays repo-wide because a
-   duplicate uid is a repo-wide fact.
-
-   **A pass is offered only where it applies.** `units extract` segments a
-   document in the repo, so a work that arrived from Zotero is offered
-   `zotero import` instead: a command that does nothing is worse than no
-   command. A marked-up work is offered no transcription pass, which the
-   triage rail had known for a while and the setup column had not.
-
-   The rail gained the filter that matched: **works**, where a project reads
-   more than one, and above the properties, because project, work, section,
-   unit is the order the material nests in. A section says where in the
-   book; this says which book. Several at once select the union, like the
-   tags, because a cluster of papers is read as one deck. One work is the
-   project, so the group is absent there rather than offering a row that
-   selects what is already on screen. The section group goes the same way
-   when nothing has a section: every unit in one bucket called "no section"
-   is a control that selects the whole deck. The bucket stays wherever there
-   are real sections beside it, because that is where the units the
-   segmenter could not place go.
-
-   **Two works can disagree about a colour.** A marking scheme belongs to a
-   document, and a project reading two books marked up in different years
-   has two readings of `highlight/green`. Everything that explains a mark
-   resolves per work now: the panel beside a crop reads that unit's work's
-   scheme, and the guide's legend groups by *reading* rather than by pair, so
-   a disagreement lands as two rows and each says which works it speaks for.
-   Where they agree, which is nearly always, the rows merge and the legend is
-   the one it always was. The guide's `units_from` row goes quiet with more
-   than one work, the same way the crop rows do.
-5. Fenced code through `check` and `anki push`, highlighted by Pygments at
-   push time. No note type version bump: the CSS changed, so the first
-   `anki push` wants `--templates`, and a new model name would orphan every
-   note on the old one.
-6. Both lists and the canvas filter by tag, `frequency` and `derivation`
-   are selectable and not only readable, and the commands panel offers the
-   passes a project can actually run. The context chip is absent where there
-   are no pages. The three groups are **one** control: a search box that
-   lists nothing until you ask, narrows as you type, and shows what is on as
-   chips under it. One comma-separated parameter carries the lot, which is
-   what makes several at once mean **or**: separate parameters can only
-   narrow each other, and a second choice nearly always emptied the deck.
-   Selected filters do not pin to the top of the list as this page first
-   proposed: the chips say what is on, and a list that rearranges itself
-   under the pointer is worse than one that does not.
-7. Docs: the DESIGN diagram shows three doors rather than one, CLAUDE.md and
-   CONTRACT.md carry the vocabulary, and the assets are re-rendered. **The
-   README's prose is still the author's to write.** Pictures on cards and
-   code on cards both work; the README does not yet say a card can carry
-   either, and it says nothing about a deck with no book behind it.
-8. End to end over both halves: `tests/test_end_to_end_project.py` for the
-   pipeline and `tests/browser/test_project_view.py` for the screens.
-
-### The shelf is a page
-
-`/projects`, and the app opens on it. Landing on a deck meant landing on
-whichever project happened to be first, which is an answer to a question
-nobody asked; what you do first is choose what to work on.
-
-It was a dialog over whatever you were reading. A dialog with a left rail in
-it is a page that has not admitted it yet, and as a page it can be filtered
-by a link, which is how every other list here works. The rail holds the tag
-filter, the form that starts a project with no document, and the repo-wide
-commands; the middle keeps the free-text search, centred over the grid it
-narrows.
-
-**No project is in force here.** This is the one screen that is not about
-one, so it carries none of the row that is: no project name, no setup link,
-no canvas, no settings panel. Each of those needs a project, and the page
-answered "which one" with whichever sorted first, then offered its setup
-stage. The search sits in the bar instead, in a cell the width of the rail
-so the two line up, which is also why the page needs no heading: the bar
-says where you are. The counts poll behind the reload hint asks for
-`scope=repo` here, for the same reason: without it the shelf offered a
-reload when one arbitrary project changed and stayed quiet for the rest.
-
-**Two tags narrow here and widen on the deck rail.** The same control over
-different things. A unit's tags are subjects it could be about, so two of
-them is a union and asking for both of two narrow tags on a deck would
-empty it. A project's tags are facets of one thing (`cpp`, `paper`,
-`reference`), so asking for `cpp` and `paper` means the paper about C++.
-The word between the chips says which, because two chips side by side look
-the same either way round and the answer decides whether a second choice
-widens the shelf or narrows it. Each tag counts what picking it would
-*leave*, over what the other choices already left; a tag that would leave
-nothing is dimmed rather than dropped, so the list does not reshuffle under
-the pointer.
-
-**Material is a label, not a filter.** Where a project's material came from
-is worth saying on the card, and it is not how anyone picks one: you choose
-by name, by subject, or by how much is left to do. It filtered for as long
-as this screen was a source picker, and it is a project picker now.
-
-**Commands are split by what they do.** An info command shows you something
-and an action command changes a file, and that difference is the whole
-reason these are copied rather than launched, so it is worth more than a
-sentence in a tooltip. The action commands come first, because they are the
-work; each half folds, because four you run and six you read is ten boxes in
-a 240px column with the one you want under the other nine.
-
-The multi-select filter is one macro now (`_pick.html`), shared by the rail
-and the shelf, and the list of commands is another (`_runs.html`), shared by
-those two and the setup stage. Four spellings of the same markup is how one
-of them ends up without the hover that says where to paste it.
-
-### A command is an object, not a place it is written
-
-`app/runs.py`. Every list of commands in the app comes from one registry:
-`Offer` says what to run, what to say about it, and the one condition that
-decides whether it applies; `Ambient` is every fact it may be keyed on.
-
-An offer reads ambient state and **never which screen is asking**. `where`
-says which screens may show it, so a command that belongs on two of them is
-one object in two lists rather than two objects free to disagree. They did
-disagree: the same command was written as a dict literal in three places,
-and `/transcribe` was offered against a Zotero item on the setup stage and
-refused on the triage rail. The screen that offered it was wrong, and the
-one that was right could not fix the other.
-
-The rest follows from having one table. Ordering is a property of the
-command rather than of the list it lands in: `scope` runs `work`, `topic`,
-`project`, `repo`, narrowest first, because you are looking at one work and
-the repo-wide form is what you reach for afterwards. A condition is written
-once, so a work with nothing segmented out of it yet is offered the
-segmenter and not the passes that read a crop, on every screen at once. And
-a project of several works gets both doors, `zotero import --project` and
-`units extract`, which the branch-per-screen version could not express: it
-asked what kind the project was and there was only room for one answer.
-
-Writing a condition once also makes it worth getting right. `/transcribe`
-was gated on the `new` count, which is a triage state standing in for
-"nobody has read this crop yet": sixteen new units that had all been
-transcribed still offered the pass, and running it reported nothing to do.
-It is gated on an `untranscribed` count now, and the label says that
-number instead of guessing from the other one.
-
-Adding a screen is adding a name to `WHERE` and a `where` to the offers
-that belong on it. Adding a command is one entry.
-
-### Editing a scheme where you can see the marks
-
-What a colour means, and which marks become units, is the one part of the
-config you change while *looking* at the marks: you import a book, triage
-twenty units, and find that the orange highlights were the ones worth
-carding. Until now that meant opening the TOML and remembering the
-`"kind/colour"` spelling.
-
-It is on the work's own panel, because a scheme belongs to a document. Only
-for a work that came from Zotero, because marks do; only the pairs that work
-actually carries plus the ones it declares, because eight colours across six
-kinds is forty-eight rows and nobody has forty-eight meanings; and the
-"makes a unit" checkbox only where something is extracted from the work,
-because a mark cannot make a unit in a document nothing is segmented out of.
-
-**The writer is line-wise, not a rewrite.** A generated `project.toml` is
-mostly comments, and a round trip through a TOML writer would produce a
-correct file with all of them gone, which is a worse file than the one you
-started with. `scheme.py` finds the one `[[sources]]` table it has to change
-and edits the lines inside it. It parses the result before writing: a file
-it refuses to read is a project that will not load, and the app would
-otherwise have written it while saying it had saved.
-
-Adding a work the repo already reads offers the same distinction as a
-checkbox: a reference is free, and extracting is a claim on the document
-that one project holds.
-
-### What belongs to a source
-
-A project may read several works, so every setting had to be asked which of
-the three levels it is a fact about. The answer moved three things and left
-the rest alone.
-
-- **Repo.** The Anki connection and the flag map, the Zotero data directory,
-  `language`, `study_order`. None of them is about a document or a deck.
-  `front_char_cap` is set here and a project may override it.
-- **Project.** `deck` and the three deck maps, `order`, `web`, `tags`, and the
-  `[conventions]` table. These are decisions about a *deck*: which pile the
-  cards go in and what the reader may do while writing them.
-- **Source.** `crop_context`, `crop_width`, `units_from`, the colour meanings,
-  `convention_keyword`, and now `context_pages`, which moved. How much page
-  a card writer needs is a fact about how a book is set, exactly like how
-  much page frames an equation, and a project reading a dense textbook and a
-  six-page paper has two answers. `context_pages_for` already said so in its
-  own docstring while reading the project's value.
-
-The settings panel behind the gear follows: a group per work rather than one
-flat project group, because one `crop_context` under a project's name is one
-book's number labelled as the deck's. The guide's "this source" card says
-"per source" instead of a number when the project reads more than one.
-
-**`[conventions]` is the open question.** It is project-level, and
-`conventions.md` is one file per project, while `layout` decides what every
-derivative on every card from *that book* means. A cluster whose two papers
-disagree about notation has nowhere to say so. Splitting it per work is not
-hard (the table would sit in `[[sources]]` and `conventions_for` would take a
-document, like the rest), but it changes what an existing card's derivative
-means the moment two works disagree, so it wants a deliberate sitting rather
-than a quiet default. Until then, a project whose works
-disagree about notation is a project to split.
-
-### Accepting a source
-
-Two shelves, and both have a flow now.
-
-`references.md` is prose, and a line carries its own pending state: `- [ ]
-something` is proposed and nothing else is. The checkbox is markdown anyone
-would write for "not yet", `check` never reads it, and a pass that stops
-proposing leaves nothing behind to clean up, so there is no second file to
-keep in step. `/sources` writes the pending lines; the setup stage shows
-them among the sources, with take and reject; both are the edit you would
-make in an editor. Taking one writes the `[[sources]]` table, which is the
-next section.
-
-A `[[sources]]` entry is the other kind. It carries a marking scheme, crop
-settings and a file, so it is not something a pass should write. What the app
-does write is the half with no judgement in it: **a reference**, either a work
-the repo already reads somewhere else or a page you type in. A paper can sit in
-two projects, cited by one and extracted from by another, and adding it copies
-nothing, because a Zotero work is its item key and a reference is its URL.
-`forge sources` lists every work across every project, which is the question
-that had no answer once a source stopped being a project.
-
-Refused where the project is configured in `forge.toml` rather than its own
-`project.toml`: a folder's file wins over the root file key by key, so
-writing one would not add a table, it would replace that project's whole
-source list with the single entry.
-
-### A proposed source becomes a source
-
-Proposed, accepted, set up: three steps in one list. A pass writes
-`- [ ] Name (address), what it is for` into `references.md`, the setup
-stage shows those lines **among the sources**, and taking one writes a
-`[[sources]]` table and lands on its panel.
-
-**The list, not the shelf.** The proposals were on the project's own panel,
-under the shelf, which is where a reference lives and not where anybody
-looks for a source. A pass proposed six and they read as having gone
-nowhere; the report said it had written them and the sources list said
-nothing had happened.
-
-**Accepting writes the table.** It used to take the checkbox off and leave
-the prose, so a proposed source never became one: no panel, no settings,
-nowhere to say how to read it. The line leaves `references.md` as the table
-appears, because the same fact in two files is the one that drifts.
-
-Nothing accepted this way is authoritative. It has no files and no item
-key, which is the whole of what that means, so no pass runs against it and
-`check_sources` has nothing to say about it.
-
-**Three parts, split on the address.** A name, a URL in brackets, and what
-it is for. The URL is the only part with a syntax, so it is what the split
-is made on: everything before is the name, everything after is the purpose.
-A line with no address is all name, which is right for a book you own.
-
-**`note` is the half that is not an address.** Which questions a source
-answers, which part to read, what to cite. It comes across from the
-proposal and is editable on the work's panel, which is the "setting up the
-source" step: for a reference it is the *only* setting, because every other
-one on that panel is about cutting a crop out of a page.
-
-`forge context` hands it over, with the declared references above the prose
-half of `references.md`. A reference nothing reaches is a line in a config
-file, and that was the argument for putting it in prose in the first place;
-it is answered by the writer of the context handing over both.
-
-**What a key looks like.** Slugged from the title and cut at a word, not at
-a character: it goes in a table, in a unit id and on a command line, and
-`cppreference-the-containers-libr` is a word you have to check against the
-file every time. A collision takes a `-2`.
-
-### One source per site
-
-Several pages of one site are one source, read in several places, and the
-note says which. Six rows for six pages of cppreference is six times the
-same source: a card writer handed all six learns nothing the first one did
-not say, and the shelf that was meant to be short is a list to skim.
-
-So adding a page of somewhere the project already reads does not add a row.
-It widens that source to the deepest address both are under and folds the
-new part into its note, labelled by the tail of its address:
-
-    url  = "https://en.cppreference.com/w/cpp"
-    note = "container: the complexity tables; algorithm: equal_range and
-            lower_bound; named_req: what a comparator must satisfy"
-
-Both halves are labelled, not only the new one: widening
-`.../w/cpp/container` leaves the old note describing a page the address no
-longer names, so it takes the tail it used to carry. Only while the address
-is moving, because after that the note is already labelled.
-
-**The host alone is not the rule.** Two arXiv papers are
-`arxiv.org/abs/<id>` each, and merging them would make one source out of
-two unrelated documents, which is a worse error than six rows for one
-manual. Two shared path segments is the line: it is where a path stops
-naming the site and starts naming a section of something. It is a
-heuristic, it is written down in `SHARED_SEGMENTS`, and the case it is
-wrong about is two sections of one book hosted at `site.com/a` and
-`site.com/b`, which stay two rows until somebody merges them by hand.
-
-**And the ask is the other half of the rule.** Two asks reading two parts
-of one site are two sources, because the thing a card is checked against
-is the part and not the domain: widening them together would hand whoever
-is writing about containers a note about threads. So a source records
-which ask it serves (`topics`), and the merge only folds a page into a
-source with the same one.
-
-Where that comes from: a `##` heading in `references.md`, naming the ask,
-with the proposals for it underneath. A heading is what anybody writing
-the file by hand would use, and reading one is the same thing the outline
-counter already does with a prefix: read, not parsed. It is taken off the
-*file* when the line is accepted, rather than from whatever the browser
-had selected, because the file is what survives an edit.
-
-Never into a work something is extracted from. A page of a website is not
-part of a book somebody is segmenting, whatever the addresses share.
-
-### A source you can take out again
-
-`forge sources remove <key> --project <p>`, and a folded control on the
-source's own panel, with the key typed to confirm.
-
-What goes: the `[[sources]]` table, and **the units that came out of it**.
-A unit whose work is gone has no crop to render, no scheme to read and no
-settings to resolve, and `units extract` writes them again from the document if
-it comes back. The document itself is never touched.
-
-Cards are the gate, as they are for a whole project: `--force` is how you
-say you mean it, and the app does not offer the override. The ledger keeps
-every line that was not this work's, byte for byte, because it is a record
-of decisions and rewriting the lines nobody asked about makes a diff
-nobody can read.
-
-### What a proposed book is
-
-A reference with a name, and no address, because nothing here can open it:
-"Josuttis, The C++ Standard Library, 2nd edition" is a work you have on a
-shelf. It reaches a card writer as a line, which is all a reference is.
-
-It has the same three parts as a page, with nothing in the middle one, and
-`, for ` is what ends the name where an address would. That is a guess
-about prose rather than a syntax, so it takes the **last** one (a title can
-carry one: "A Course in Combinatorics, for Beginners") and what it
-produces is editable on the panel. Getting it wrong costs one field
-somebody retypes; not trying costs a title with a whole sentence in it.
-
-It is also one step away from being more than a reference, and the panel
-**proposes that step rather than taking it**: put the document in Zotero,
-mark up what is worth carding, and run
-`forge zotero import <citekey> --project <name>`. That command writes the
-item key, the attachments and the marks together, which is what turns a
-reference into something units come out of. Declaring `zotero = "..."` by
-hand would name an item nobody marked.
-
-### Authoritative is a property, not only a shape
-
-It was derived: a work with files, a tex file or an item key was
-authoritative, and nothing else was. That is the right default and it was
-the only answer available, so a paper you own, want cited, and want no
-units out of could not be said. `extract = false` says it, and the
-work's own panel has the switch.
-
-It only ever turns extraction **off**. A work with no document has
-nothing to segment, and `extract = true` on one would be a claim the
-folder cannot honour; the honest way to make something authoritative is
-to give it a document.
-
-**It is reversible, and that took two goes.** Turning it off deleted
-every untouched unit of the work, on the reasoning that a unit whose work
-nothing is extracted from is one no pass can render. That reasoning was
-wrong: `extract = false` does not remove the document, so the crops still
-render from the geometry the units carry and the scheme still resolves.
-What it produced was a switch that destroyed work in one direction and
-did nothing in the other, so turning it off to see what it did cost five
-units and turning it back on did not return them.
-
-Off now stops units coming out of the work and leaves the ledger alone,
-in both directions. The import refuses to add units to such a work and
-says how many marks it passed over, which is the one place new ones would
-have arrived. The scheme rule is unaffected: unchecking a colour still
-forgets the untouched units that colour made, because those units should
-not exist under the scheme you just wrote.
-
-### Provenance is not permission
-
-`ProjectConfig.source(document)` answers two questions through one
-fallback, and they want different rules. **Which work did this unit come
-out of** must survive `extract = false`: the units you already triaged
-keep naming its attachments, and asking for `authoritative` there left
-every one of them belonging to nothing the moment the switch went off,
-taking their crops, their scheme and their mark counts with them. **Which
-work do I segment now** must keep reading `extract`, or `forge units extract`
-is handed a work somebody refused.
-
-So they are two functions. `source(document)` is provenance and never
-reads `extract`; `segments()` is permission and always does, and
-`extract.run` is its only caller. Both keep the older rule that stops the
-guessing: exactly one candidate or none, because reading one book's
-scheme onto another's crops is the failure this function exists to
-prevent. Provenance counts the works that hold a *document*, permission
-the ones the switch is on for, and that is the whole difference between
-them.
-
-Counting the wrong set was not hypothetical. With two books in a project
-and one switched off, `source` fell through to "the single authoritative
-work" and handed **every** unit to the other book: the works filter
-showed none under the switched-off one and all of them under its
-neighbour, its panel said "nothing has been imported from this work yet",
-and removing the neighbour offered to take the other book's units with
-it.
-
-The import refuses rather than warns. `extract = false` says no units
-come out of this work and an import is the one place they would arrive,
-so it reports the marks it passed over and writes none. Re-running to
-refresh a title, the other reason to run it, still works, and so does
-the text layer: that is context for the units already there.
-
-### Two readers of references.md
-
-`shelf()` is what a card writer is handed: the declared references and
-the prose, composed. `references_prose()` is what the setup stage shows:
-the file, and nothing else.
-
-They were one function, and the page read the composed version, so every
-accepted reference came back as a shelf line with an accept button on it,
-for a source that was already accepted. The buttons did nothing either
-way: `drop_proposal` cannot find a line that is not in the file, and
-accepting one would have written a second table for a work already
-declared.
-
-The page also never drew the prose half, so a `references.md` written as
-paragraphs rendered as "No references.md". It draws it now, and the empty
-state keys on the file rather than on the list items.
-
-### A zero is an answer, and ten zeroes are not
-
-The mark tally counts what is in the ledger. A work nothing has been
-imported from has nothing to count, and the column printed ten blanks,
-each of which reads as a lookup that failed. The column is drawn only
-where there is something to count, and the reason is said once. Where
-there is a ledger, a pair nobody used prints `0` rather than nothing.
-
-### Two gates and a label
-
-Three settings on a work's panel look like three answers to one question,
-and they are not.
-
-- **`extract`** is the gate. Anything segmented out of this work here, yes
-  or no. `authoritative` is not a fourth thing: it is the name this answer
-  goes by once the work has a document, and the derivation is
-  `has a document and extract is not false`.
-- **`units_from`** is the second gate, under the first. Given that
-  extraction is on, which marks start a unit. Unchecking every row is the
-  same answer as closing the gate above, for this work.
-- **`meanings`** is a **label**, not a gate. What a colour means shows on
-  the unit and in triage whether or not anything is extracted, and it
-  never decides whether something exists.
-
-**An empty answer is an answer.** `units_from = []` was read as "nobody
-said" and inherited the repo-wide list, so the one action that says "stop
-making units out of this" was the one action with no effect: unchecking
-every box in the editor wrote a list that meant the opposite of what it
-said. `None` is nobody said and `frozenset()` is none of them, and the
-resolver asks `is not None`.
-
-**The editor offers the scheme, not the marks it happens to find.** Its rows
-came from the marks in the ledger alone, so a narrowed scheme, which takes the
-untouched units of a dropped colour with it, emptied the table: the mapping
-read as deleted and came back only after a re-import. The vocabulary is the
-union of what is marked, what the work declares and what the scheme in force
-names, so the table is the same before the first import, after it, and after
-switching extraction off and on.
-
-### A setting that changes the ledger
-
-Unchecking a colour in the scheme editor left its units in place, as full
-units, in every count and every filter and every pass. The editor calls
-`apply_scheme` now, which is `drop_from_scheme` pointed at a project
-rather than at one import: untouched units of a pair that no longer makes
-one are forgotten, decided ones stay and are reported.
-
-The switch above does **not** call it. It used to, on the reasoning that
-the two questions were one question a level apart, and that let the one
-control promising to keep your units delete some of them for a reason it
-never named. The scheme rule lives in the scheme editor.
-
-### What else was reading the switch
-
-A work that holds units and makes no more was unreachable until the
-switch stopped deleting them, so everything that had been using
-`authoritative` as shorthand for something else was correct by accident.
-Nine places were not, and each had picked a different wrong synonym:
-
-- **"is this project made of anything"**, four views deep. A project with
-  a Zotero item and a full ledger reported "nothing declared", lost the
-  import from its command rail and was offered `forge units extract`, which
-  errors. `project_origin` answers what the material *is*, and the switch
-  does not change that.
-- **"are there units here to read"**, on the panel's command rail. It
-  said "nothing to run" over three untranscribed crops. The passes that
-  read units ask `readable` now; the two that make units keep asking
-  `extracted`.
-- **"does a setting apply"**. The crop width, the crop context and the
-  page window are in force for the units already there, and the panel
-  stopped showing them. A setting in force with nowhere to read it off is
-  the one that drifts.
-- **"which marks make a unit"**. The column was drawn only for a
-  switched-on work, so the save omitted `units_from`, and `scheme.write`
-  dropped the key rather than leaving it alone as its docstring promised.
-  Saving a caption deleted the work's own scheme and then judged its
-  units against the repo-wide one.
-- **"is this two projects extracting one work"**, in `check`. Turning the
-  switch off in the second one left both ledgers full and silenced the
-  error, which is the duplication the check exists to catch. It counts
-  the projects a work has units in.
-- **"is this shelf material"**, for a card writer. A book you stopped
-  segmenting is a reference to every other card in the project and is
-  still the book *its own* units were cropped from, so `context.shelf`
-  takes a work off its own shelf and leaves it on everyone else's.
-- **"does anything settle what this card says"**. A unit from a `.tex`
-  work has no crop, so the switch was the whole answer for it: switching
-  the work off told a card writer there was no source at all and withheld
-  the page the unit was printed on.
-- **"what kind of thing is this"**, in `forge sources`. A book with
-  extraction off printed as `reference`, in the same column as a URL
-  somebody put on the shelf. Three states, three words.
-- **the diagram**, which printed three invented mark pairs whenever the
-  project's own list came back empty.
-
-### Which source, and which ask, in the rail
-
-The two coarsest divisions there are, and the triage rail had neither as a
-control. `document` was filtered but its group appeared only for a project
-declaring two works, and it dimmed a row by `authoritative`, so a book
-switched off with fifty-six units in it read as unavailable. `topic` was
-filtered and had no control at all: it appeared as a read-only line saying
-where the deck had been opened from, because the only way to set one was
-to arrive from the setup stage.
-
-Both are `_pick.html` now, the control the tags already use, which prints
-the word that joins two chips on the control itself. **Sources take the
-union** and **asks take the intersection**, and those are not arbitrary: a
-cluster of related papers is read as one deck, so a second paper adds; an
-ask states what the deck should contain, so a second ask asks what is
-under both.
-
-The intersection is well defined and thin. A unit joins an ask by its
-slug and carries one, so two asks leave something only where both
-outlines list the same entry. That is a real state and a rare one, and
-the per-row counts are computed over what the other filters left, so a
-pair that would empty the deck reads 0 before the click rather than
-after it.
-
-**The rows add up to the deck.** A Zotero unit names the *attachment* it
-was printed in and a work declares the *item*, and the two meet only
-through `attachments`, which the import leaves empty to mean "all of
-them". With one work holding a document that is enough, because there is
-one answer to fall back on. With two it is not, and every row read 0 over
-a full deck. A document no declared work answers for now gets a row of
-its own, under the only name anything here knows it by, and naming the
-attachments on the work gives it its title back.
-
-A card is not one unit. `unit:` takes a list, and the units it merges may
-sit under different asks and come out of different books, so both filters
-read `Card.units` rather than the first of them.
-
-`/api/counts` reads the same three filters the page drew with. The mini
-diagram is repainted from it a few seconds after the page settles, so a
-filter the endpoint did not read showed as the numbers moving on their
-own.
-
-### An empty ledger is not a filter
-
-`/units` with no `?project=` steps past a project with no units, and the
-test was whether the ledger *file* was there. `Ledger.save()` writes an
-empty file for zero units, so the guard stepped onto exactly the project
-it was meant to step past: the first one in the config, no units, and
-"nothing here with this filter" over a rail with no filter on. It reads
-the ledger's contents now, walks the configured order rather than the
-glob order, and redirects so the URL says where it landed, because the
-script polls `/api/counts` with `location.search` and was painting one
-project's numbers onto another's rail.
-
-### The setup stage says less
-
-Twenty-eight blocks of explanation came off it. The rule applied: a label
-says what a control does, and an explainer that repeats the label is
-noise. What stayed is what a reader could get wrong and act on, which is
-mostly consequences (what deleting a project takes with it, what the
-extract switch does *not* do) and provenance (set here, or inherited).
-The Jinja comments stayed in full: they are for whoever edits the
-template, and the reasoning is the thing worth keeping.
-
-Two are worth naming because they were not trims. The topic panel's list
-of sources was a row per work reading name, kind, and a checkbox labelled
-"reads it"; the label is a heading over the list now and the rows are
-checkboxes, which is the same fact said once instead of once per row.
-And the boxes are kept in step across panes: one pane per ask means one
-box per ask, each rendered with its own copy of that work's set of asks,
-so ticking a work under two asks in a row posted the copy made before the
-first write and silently unsaid it.
-
-### Opening the file is the whole cost of a crop
-
-A crop renders off an open document in about 4ms, which is the number the
-ledger holds geometry instead of PNGs on. `open` on a 16MB, 312-page book
-is 1.2 *seconds*, and `render_crop` opened the file per call: a deck of
-five units opened one PDF five times and the crops trickled in over seven
-seconds, while the same book's full-page view, which is one request, came
-up at once. Measured on A Tour of C++: 1317ms a crop before, 44ms after,
-and the second visit to a page 50ms.
-
-Documents are pooled now, one lock each because a PyMuPDF document is not
-safe to use from two threads and the app answers from a thread pool. A
-pooled renderer is dropped and never closed: whoever is rendering holds a
-reference, and closing it to save a file handle would pull the document out
-from under a thread mid-render. Invisible on the Cookbook, where the open
-costs 4ms, which is why it stood for so long.
-
-### A zero written in a file is not an answer
-
-`settled` walked its arguments with `is not`, which reads as the careful
-choice and is the wrong one for a number: a `0` parsed out of TOML is a
-different object from the `0.0` the resolver calls empty. So `[cards]
-crop_context = 0`, which `forge.toml`'s own comment calls the default,
-resolved to a real zero. Every crop in the repo was cut tight to its box
-with none of the ninety points of page around it that `TRIAGE_CONTEXT`
-exists to give, and the setup stage printed "0 points of page" beside it.
-
-By value now, with one carve-out: a bool is never the same answer as a
-number, because `False == 0` in Python and they mean different things here.
-
-### The cached text lives with the extraction
-
-`projects/<name>/text-<document>.md`, where `<name>` is the project that
-**extracts** from the document rather than the one that asked. A work is
-authoritative in at most one project, so its text has one home; cached
-under whichever project ran the import, three projects citing one paper
-would have three copies with nothing saying which is current.
-
-A document nothing extracts from has no such project, and then the
-caller's own folder is the only answer there is.
-
-### How much a card writer is handed
-
-Three answers, not two. `context` on the repo or the project:
-
-- **`none`.** This page, the conventions, and nothing else. A closed
-  deck, for when anything read around the source is a way to drift.
-- **`references`.** The default, and what the tool did before there was a
-  name for it: the project's shelf goes over with every unit.
-- **`web`.** The shelf and a search.
-
-`web = true` still says the web and `web = false` still says the shelf
-without it, because that is what it always said: the old key was never
-the strict answer, it was the middle one. A unit still overrides, which
-is the exception the per-unit grant exists for, and a refusal on a unit
-of a project that allows the web keeps the shelf: saying "not the web for
-this one" is not saying "nothing at all".
-
-**And which references, not only whether.** A reference carries `offer`,
-defaulting to the project's, defaulting to `true`. Off, it stays
-declared, cited and findable and stops arriving with every unit: six
-places to look is a reading list nobody works through, and the
-standard's wording belongs on the shelf rather than in front of every
-card about a container.
-
-The writers were told none of this. `card-writer` and `augmenter` now
-say what the three answers are and that **the references are theirs to
-read** when they are handed over: each is a place somebody agreed a card
-here can be checked against, with a line saying what it is for. Where to
-look, never what to write, because the crop is still authoritative for
-what is printed.
-
-### Which ask reads which source
-
-Derived and declared, unioned. The derivation walks what an ask
-produced, which is free and cannot answer for a work nothing has come out
-of yet: a reference, or a book you imported this morning. So a source can
-also say which asks it serves (`topics`).
-
-**A box per source, on the ask, drawn open.** It went to the source's
-panel once, as a fold over the asks, on the reading that a list of
-sources on the ask duplicated the one in the rail. Two things were wrong
-with that: the duplicate the complaint was about turned out to be the
-shelf rendering declared sources as lines, and a closed `<details>`
-labelled "which asks read it 0" reads as a heading with a stray number
-rather than as a control. The relation is set where you would go to set
-it, and the source's panel says it in chips.
-
-What a box cannot do is unsay the derived half. An ask whose units came
-out of a book read that book, and those are shown checked and fixed.
-
-### An import declares the source
-
-`forge zotero import <item> --project <name>` wrote the units and not the
-source. The only thing that ever wrote a `[[sources]]` table was
-`write_source_stub`, which writes a whole `project.toml` and never
-overwrites, so it fired exactly once, for a project that did not exist
-yet. Two holes came out of that, and both look like the command doing
-nothing:
-
-- **Into a project you already have**, the marks landed in the ledger and
-  the work was never declared. The units' `locator.document` then belonged
-  to no source, so the crop settings, the marking scheme and the work's
-  own panel had nothing to resolve against. The same shape as the
-  `/transcribe` bug on a Zotero item: a unit whose work cannot be found.
-- **A book you have not marked up yet** produced no units, and the write
-  was gated on there being some, so nothing at all was written. The
-  command said what it found and recorded none of it.
-
-Both are one rule now: an import declares the work, marks or no marks,
-and says where. A book you own and have not read is a source with no
-units, which is a normal state and the state the setup stage is for.
-`declare_zotero` appends the table, refuses a second project claiming an
-item somebody already extracts from, and writes nothing when the project
-already declares it, so re-running stays safe.
-
-### The app adds references, and nothing else
-
-Adding a work the repo already reads takes it as a **reference**, whatever
-the other project reads it as, and there is no checkbox to say otherwise.
-The item key and the files are what make a work authoritative, and writing
-those from a web page is the wrong shape twice over: the same document
-segmented twice is two ledgers of units and two notes per card in Anki,
-and deciding to segment something carries crop settings and a marking
-scheme with it. That decision is `forge zotero import`, typed where you can see
-it, and the setup stage proposes the command.
-
-It follows that "a work is extracted from by one project" is no longer a
-rule the app has to *refuse*: it has no way to break it. `check_sources`
-still reports a pair somebody wrote by hand.
-
-### A source is extracted from by one project
-
-Read by as many as you like. A paper cited by one deck and segmented by
-another is the case the shelf exists for, and a reference costs nothing
-because nothing is extracted from it.
-
-Authoritative in two is a different thing, and the answer is to forbid it. A
-unit lives in one project's ledger and its id starts with that project's
-name, so the same document imported twice produces two ledgers of units, two
-piles of cards and two Anki notes per equation, with nothing anywhere that
-knows they are the same. Deduplicating them afterwards would mean a unit
-identity that spans projects, which is a much larger change than the problem
-deserves.
-
-So `check` refuses it (`source-extracted-twice`) and the app will not create
-it. An error rather than a warning, because every view here is scoped to one
-project: two copies look like one copy from wherever you are standing, right
-up until they are both in Anki.
-
-### One folder per project, and several sources in it
-
-`projects/<name>/` holds the ledger, the prose files, and whatever documents
-the project reads. It already carries several works, and nothing needs a
-subfolder per work, because a work is not a folder:
-
-- **A file is a path.** `files = ["projects/x/vol1/ch1.pdf"]` already works;
-  the layout under the project is yours, and two works can use subfolders
-  today without the tool knowing. What a unit records is not the path,
-  though: `locator.document` is matched against a file's **name** or the
-  work's key, so two documents in one project that share a basename are one
-  document as far as `ProjectConfig.source` is concerned, and the first
-  declared wins.
-- **A Zotero work has no file here at all.** It is an item key, and the PDF
-  lives in Zotero's `storage/`.
-- **The derived artefacts are keyed by document, not by work**:
-  `text-<document>.md` per attachment, and crops are rendered on demand from
-  geometry rather than written out.
-
-So the shared namespace is the document *name*, in two places: the lookup
-above, and the cached text, where two documents with the same name collide
-on `text-<name>.md`. A Zotero attachment key never collides, and a file you
-placed yourself you can rename; `vol1/ch1.pdf` and `vol2/ch1.pdf` is the
-case that does not work, and naming them `vol1-ch1.pdf` and `vol2-ch1.pdf`
-is the whole fix. Worth teaching the tool about paths only if renaming
-stops being enough.
-
-**Not built, and deliberately.** A chip for choosing among a unit's
-references. It was listed here while the context chip was still offering
-page counts to a unit with no pages; fixing that made the case for it
-disappear. `forge context` hands over every reference a unit names, a unit
-names one or two, and a setting nobody would change is worse than no
-setting. Build it the first time you have a unit with five references and
-want three of them.
-
-### Deleting a project
-
-`forge project delete <name>`, and a folded control on the project's own
-panel. One function behind both (`projects.remove`), for the reason
-`scaffold` gives: two writers of the same thing drift.
-
-**Three places, or none.** A project is a folder under `projects/`, a pile
-of cards under `cards/`, and possibly a table in `forge.toml`. Removing one
-and not the others leaves a project that half exists: a folder with no
-declaration still shows on the shelf, and a declaration with no folder shows
-as a project with nothing in it. The TOML edit is line-wise, like
-`scheme.py`, and for the same reason.
-
-**Cards are the gate, units are not.** A project with no cards is a decision
-you can make again in one command; one with thirty-nine is weeks of review.
-So it refuses when cards are there and `--force` is how you say you mean it.
-Units are derived from a document and `units extract` writes them again, so
-they are reported and not a gate.
-
-**The app never forces.** It offers the delete, refuses the same way, and
-names the flag. The override belongs in a terminal, where you type it.
-
-**Anki is not ours to clean up.** An approved card is already a note there,
-nothing local records a note id, and deleting the file here leaves the note
-behind. The count of approved cards is printed, and that is the whole of
-what can honestly be said.
-
-**A name is a folder, never a path.** The function ends in `rmtree`, and
-`Path` does not normalise `..`, so `projects/..` reads as a child of
-`projects/`: the parent check alone would have deleted the repo. It takes
-both, a plain component and a resolved parent, and a test passes it `..`,
-`../..` and `a/b`.
-
-### Two bugs the delete was needed for
-
-**`c++` became `c`.** `slugify` maps everything outside `[a-z0-9]` to a
-separator, so the pluses went and the folder was `c`, which is a different
-language. Names whose usual spelling is mostly punctuation now have one:
-`c++` is `cpp`, `c#` is `c-sharp`. Whole tokens only, so `a+b` keeps its
-plus, and the title stays what you typed while the folder is the slug.
-
-**A card with no unit haunted every project.** Which project a card belongs
-to is read off its unit id, and a card with no unit answered "all of them"
-rather than "none" so that it would be visible somewhere rather than lost.
-With one book that was right. With a shelf of projects it meant an unfiled
-card appeared in a project created a minute ago with nothing in it.
-
-`model.home_of` is the rule now: what the card declares, and failing that
-the folder it is filed under, which is the only evidence a card with no unit
-has. Filed nowhere and declaring nothing, it still belongs to all of them,
-because that case is what the old rule was written for.
-
-Deliberately **not** the same question as which Anki deck it lands in.
-`anki push` routes by what the card declares, and one that declares nothing
-takes the repo default rather than being moved into a project's deck by a
-rule about where its file happens to sit: a display fix should not move a
-note that is already in Anki. `check` warns (`unit-missing`), and writing
-`unit:` closes the gap in both directions.
-
-### What no property settles
-
-**Ask for less per topic.** "The standard containers" produces forty even,
-shallow proposals that all survive triage because none is clearly wrong. A
-topic you can enumerate does not: "the erase-remove idiom and what replaced
-it", "when a `vector` invalidates". Breadth comes from many small topics.
-Guidance for the skill, not a check, and that goes for every other worry on
-this page: with no crop to check against, each one wants to become a `check`
-rule and none of them is mechanical (invariant 6).
-
-**A unit with no authoritative source costs something, and no rule recovers
-it.** A book gives review a crop, and a wrong card is obvious in one glance.
-Without one there are two weaker nets: the references keep a card from being
-invented, and the loop catches the ones that are plausible and wrong, which
-is the annotation, `/triage`, the settled note that keeps what you asked,
-and `anki pull`. Cost moves from triage to review, the opposite of the
-Cookbook, and the pressure that comes with it is a bulk approve. There is
-not one, and invariant 1 is the reason.
-
-**Trigger:** none needed. The first sourceless project is the test.
-
-## 13. Keeping the suite fast
-
-1546 tests in about two minutes, four workers, and the cap is the point:
-`-n auto` on a machine with sixteen cores is sixteen Chromes, which is a way
-to run out of memory rather than a way to go faster. `--dist loadscope`
-keeps a module's tests on one worker, because the browser modules start a
-uvicorn per module and scattering their tests would start it once per
-worker instead.
-
-What costs time here is not what it looked like:
-
-- **A broken page costs 30 seconds per test, silently.** Deleting a helper
-  that `graph.js` used made every graph page throw on load, and the 22
-  graph tests each sat through a Playwright timeout: eleven minutes of
-  waiting that read as "the suite is slow". The lesson is the assertion, not
-  the speed. `test_the_page_loads_without_the_console_complaining` is the
-  one that would have said so in one line, and it is worth having on every
-  view that runs a script.
-- **No single test is slow.** The worst in the unit suite is 2.4s and the
-  worst in the browser suite is 3.7s, nearly all of it fixture setup. There
-  is nothing to optimise one at a time, which is exactly the shape that
-  parallelises well.
-- **Serial runs vary by 3x** with whatever else the machine is doing, so a
-  single timing is not evidence. The numbers above are the median of three.
+A deck on a subject where no book is canonical, beside the decks that have
+one. The vocabulary is in [STYLE.md](STYLE.md): a **project** is a folder
+with one ledger, one deck, one `conventions.md` and one graph; a **source**
+is one book, paper or website it reads, a `[[sources]]` table; a **topic**
+is a heading in `topics.md` with an ask and an outline under it.
+
+- **Three doors into one ledger.** `units extract` segments a document,
+  `zotero import` reads marks, and `units add` (what `/propose` uses) makes
+  a unit where there is nothing to segment. After the ledger nothing asks
+  which door a unit came in by (invariant 3).
+- **Properties, not kinds.** No stage branches on what kind of source it
+  has. Each decides from what a unit, card or source *has* (a crop, marks,
+  references) and from what was *decided*, a setting that falls back from
+  the unit to the source, the project and the repo.
+- **Where a thing lives.** TOML when Python branches on it; `[conventions]`
+  for a short fact handed to a card writer verbatim, of which only `layout`
+  is acted on; markdown for prose. Anything may be overridden lower down
+  unless two cards in one deck would then mean different things without
+  saying so: a convention is declared where it is true and does not
+  cascade, and reading settings stop at the source.
+- **Extracting is a permission.** A source is authoritative when units are
+  extracted from it (the `extract` switch), and one project extracts from a
+  given document. Adding a source another project reads takes it as a
+  reference. An import declares the source it reads.
+- **The setup stage** is where a project is set up: the project, its
+  inbox, its topics and its sources, with what to run for each. The project
+  picker is a page of its own. References a pass proposes wait in
+  `references.md` until you take one, and one site is one source.
+- **Taking things out.** `project delete` and `sources remove` refuse while
+  cards stand on what they would remove, unless forced.
+- **What no rule recovers.** A unit with no authoritative source has no crop
+  to check a card against, so the cost moves from triage to review. There is
+  no bulk approve, and invariant 1 is why. Ask for less per topic: a topic
+  you can enumerate gives proposals worth triaging.
 
 ## 12. Running a command from the website
 
-**Built.** Every command with no model behind it runs from the page: a
-read on a click, a writer once it has said what it changes and you have
-said yes. `POST /api/run` starts one in a thread and answers with an id;
-the page polls it and draws the result under the row. What follows is the
-thinking that got there, and it survived contact except in two places,
-both noted inline.
+Every command with no model behind it runs from the page, in the
+background (`app/jobs.py`). One that only reads runs on a click; one that
+writes says what it changes and waits to be confirmed, and the server
+refuses it unconfirmed. Which is which comes from the parser, so a row
+cannot describe itself as safer than its command. A slash command is still
+copied: a model in the loop is something you watch.
 
-**What a command changes decides how it is asked for, not whether.** The
-parser declares an `effect` on every subcommand (§15). A `reads` runs on a
-click. A `repo` or an `anki` names what it will change in a dialog that
-says so in words, "changes your Anki collection, which nothing here can
-undo" rather than "are you sure", and the server refuses it unless the
-request says it was confirmed: a dialog is a courtesy to whoever is
-looking, and a tab left open since before a rename is not looking. A
-slash command is still copied. That is invariant 1's bargain, and it is
-the only line drawn.
+A finished run reports in a notification and in the runs window, as a
+result rather than a transcript (`run_views.py`): counts for this run and
+for now, tables of what moved. The window keeps a history and a builder
+(`actions.py`): pick an action, fill its fields, read the command line, run
+or copy it. The line is built from the fields and never parsed from text.
+Each rail lists what to run next, headed by the command in a word or two
+(`anki push test`, `/transcribe`), and opens any row in the builder.
 
-**The effect is the parser's, not the page's.** The app holds no second opinion
-about what a command changes, so a verb that starts writing starts asking first
-on the same commit. It began as an allow-list of the reads and grew into the
-whole map once the writers joined. Arity settles before permission: `forge anki
-push` has to be recognised as two words before anything asks whether it may
-run, or it falls back to `anki`, finds a read, and pushes.
+Adding a source has three routes on the setup stage: a page typed in, a
+source another project reads, and a Zotero item through the builder.
+Cancel is left out on purpose: a half-pushed deck is worse than a finished
+one.
 
-**Always in the background**, which is stronger than "an indicator while
-it runs". `forge anki` is ten seconds against 150 cards, almost all of it
-waiting on AnkiConnect, and it grows with the deck. The page keeps
-answering because every endpoint here is `def` and runs in a thread pool;
-measured, a view stayed at 43ms with a run in flight.
+## 13. Keeping the suite fast
 
-**The button replaced the copy line rather than joining it.** Fourteen
-shell rows would have become twenty-eight controls on the panel that is
-already the heaviest thing on three rails. One control per row, and which
-one it is follows the same `reads` that groups the list.
+Four workers by default, and the cap is the point: `-n auto` on sixteen
+cores is sixteen Chromes. `--dist loadscope` keeps a browser module on one
+worker, so its server starts once. No single test is slow. What costs time
+is a broken page: every browser test on it waits out a 30s timeout, which
+is why a test that the page loads without console errors is worth having on
+every view that runs a script.
 
-**One renderer, not nine.** Every verb here has `--json` and returns a
-structured object, so the panel adds the flag itself and draws whatever
-comes back: a table where it is a list of flat records, lines otherwise.
-A renderer per verb is nine things to keep in step with nine reports.
-
-**A run outlives the page that started it.** The top bar of every page
-carries a count of runs in flight, and opening it lists what this server
-has run, newest first, with each result. `GET /api/runs` is the list.
-
-**A background write does not cost you a reload.** The stale guard on a
-unit compares that unit, by a fingerprint of what it records, rather than
-the mtime of the whole `units.jsonl`. An extract over the rest of the book
-no longer refuses your next keystroke in triage. `zotero import` and
-`anki pull` take the same locks and guards as every other writer.
-
-
-The commands panel gives you a line to copy. Some of those commands need no
-Claude and no watching: `zotero import`, `anki push`, `check`, and
-everything in §10 that is a file edit. A button for them is not the thing
-"Triggering Claude from the website" rejects, which is about pushing a
-prompt into a session. The aim is that every command with no model behind
-it is reachable from the app.
-
-Two kinds. **A file edit** writes a directory or rewrites a line and
-answers immediately. Three are built, all on the setup stage: starting a
-project, recording an ask, and dropping a line from the shelf. Each goes
-through the same function the command does, which is how invariant 2 stays
-true rather than being asserted. Adding a *source* to a project is the one
-left, and it is the awkward one: a `[[sources]]` table has a marking scheme
-and crop settings in it, so a form for it is a form for the whole of
-`SourceConfig`, and editing the TOML is still the better answer until
-somebody has done it twice.
-
-Making those work needed one fix behind them. The app read `forge.toml`
-once at start, so a project created while it was running was one it had
-never heard of, and an edited deck showed the old name until a restart.
-DESIGN.md §6 already promised it re-reads from disk on every request; now
-the project table does too. Only that table, because `create_app` is handed
-a config and must honour it.
-
-**A long run** is `zotero import`, `anki push`, `units extract`. Those want
-a job to start, report and finish, which `app/jobs.py` and
-`POST /api/run` now provide.
-
-### What a long run should look like
-
-Three shapes were on the table. They are not equally good, and the third is
-mostly right for the reason that makes this feature worth building at all.
-
-1. **A console in the corner**: a collapsible panel bottom right with live
-   output and a cancel button.
-2. **A chat view**: an indicator in the header, and clicking it opens a list
-   of runs with their output in the main pane.
-3. **No output at all**: these are wrappers around plain Python, so show the
-   *result* rather than the transcript.
-
-**Three is right, with one piece of one.** The output of `anki push` is not
-a log, it is a table: one row per card, an action, and a reason. `anki pull`
-is a list of comments taken. `zotero import` is a list of items, each with
-how many units it made. Every one of them is already a structured object in
-Python (`SyncReport`, `CardOutcome`) and gets flattened to lines only
-because a terminal has nothing else. `--json` exists on all of them for
-exactly this reason. Rendering a table of outcomes, with the skips explained
-and the errors first, is both easier to read than the console and *less*
-code than streaming: no transport, no buffering, no cancel semantics.
-
-The piece worth keeping from one and two is **progress, not output**. A
-push of 150 cards takes a while and a screen that says nothing looks
-broken. So: a small indicator in the header while a run is in flight, a
-count when the run knows one (`42 of 150`), and the result rendered as a
-table when it finishes. No transcript, no chat.
-
-**Cancel is worth less than it looks.** None of these is long enough to
-abandon, and the two that write outside the repo (`anki push`, `anki pull`)
-are worse to stop halfway than to let finish: a half-pushed deck is a state
-nobody can read off the files. `units extract` is the only one where cancel
-makes sense, and it is also the one you run from a terminal anyway.
-
-**A model-driven pass stays copied.** That line is the whole bargain
-(invariant 1 in spirit): you paste it where you can watch it, so nothing
-writes cards with nobody looking. The commands panel says which end each one
-runs at, and only the plain-Python half is ever a candidate for a button.
-
-**What to build first**, when a button is what you actually miss: `POST
-/api/run/<verb>` for a named, argument-free subset (`check`, `anki`,
-`anki pull --dry-run`), each returning the same structured report its
-`--json` already returns, and one component that renders an outcome table.
-The dry runs first, because a button that changes nothing is the one that
-needs no confirmation. Built as one `POST /api/run` for every verb with no
-model behind it.
-
-## 14. A visual pass, and a theme you can swap
-
-**The colour seam is built.** `static/theme.css` holds every colour
-decision and loads before `app.css`, which holds none outside Zotero's
-palette. `tests/test_theme.py` keeps it that way: no colour literal in
-`app.css` outside `.swatch`, no name read that is not declared, and no
-`var()` fallback outside the layout variables the script sets at runtime.
-Rendered before and after in both themes, four views are pixel-identical.
-
-What it named: twelve literals onto nine new tokens (`--paper`,
-`--on-accent` and its washes, `--on-warn`, two scrims, two shadows), and
-`--hover`, read twelve times and declared nowhere, now declared once.
-The switch is built too: a control in the top bar cycles system, light
-and dark, the choice is kept in `localStorage`, and an inline script in
-`<head>` applies it before the first paint. The canvas redraws when it
-changes.
-
-What it did not do, on purpose, is everything below that moves a pixel.
-The type scale, the radii and the small-caps label are measured and
-waiting; spacing is not a scale at all (see below). Each of those changes
-how something looks, which is the half that needs eyes.
-
-
-The functionality is roughly settled, so the next pass is how it looks. Two
-halves that are easy to confuse: **naming the decisions** so a theme is a
-file, and **making the decisions better** so the thing reads well. The first
-is mechanical and testable; the second is taste and needs eyes. Doing the
-first makes the second cheap, which is the order to take them in.
-
-### What was true before the seam
-
-`app.css` is one file, 3713 lines, 890 rules. It is in better shape than a
-file that size sounds:
-
-- **Nine colour tokens** on `:root`, and 634 uses of `var()` against about
-  forty colour literals. Almost every colour in the app already comes from
-  one of nine names.
-- **Dark mode already works**, under `@media (prefers-color-scheme: dark)`,
-  by redefining eight of the nine. It has no switch, so it follows the
-  operating system and nobody who has not read the CSS knows it is there.
-- **The states derive rather than being listed.** `queued` is
-  `color-mix(in srgb, var(--accent) 45%, var(--line))`, so one accent moves
-  the whole pipeline strip, both bars and the diagram together. That is the
-  pattern the rest should follow.
-
-And where it is not in good shape, the numbers say where:
-
-- **23 distinct font sizes** across 246 declarations: 8.5, 9, 9.5, 10, 10.5,
-  11, 11.5, 12, 12.5, 13, 13.5, 14, 15 and up. The gaps between neighbours
-  are below what anyone can see, so they are not decisions, they are drift.
-  Six steps would cover every one of them.
-- **Eight corner radii** across 90 declarations (2, 3, 4, 5, 6, 8, 99, 999).
-  `--radius` exists and is used in 12 of the 90.
-- **128 distinct padding values and 29 gaps.** Some of that is real: a rail
-  is not a card. Most of it is one rule copied and nudged.
-- **`--hover` is used twelve times and defined nowhere.** Every use is
-  `var(--hover, rgba(127, 127, 127, 0.12))`, so the literal always wins. The
-  grey is half-transparent to survive both themes, which is the workaround
-  for the token that was never declared, and it is the seam leaking in
-  miniature: a theme cannot currently change what a hover looks like.
-
-### Naming the decisions
-
-Sweep the literals and the un-named constants. Each one either becomes a
-token or is written down as **not a theme decision**, and the second list
-matters as much as the first:
-
-- **Zotero's palette is not themeable.** `#ffd400` is what a yellow
-  highlight looks like in the PDF, and a swatch that does not match the
-  document it came from makes you translate. Same for anything else whose
-  job is to match an external thing.
-- **Meaning is not themeable either.** `warn` and `bad` may change hue; what
-  may not change is which state is drawn as which.
-
-What the vocabulary needs beyond the nine: surfaces (ground, panel, raised,
-hover, selected), text (ink, muted, faint, on-accent), lines (hairline,
-strong), the accent and two derived from it, the type scale, a spacing
-scale, radii, and one shadow. Perhaps thirty names. Thirty names is the
-whole of the work, because with them in place a theme is a thirty-line file
-and without them a theme is a rewrite.
-
-### The seam
-
-`static/theme.css`, loaded before `app.css`, holding nothing but tokens.
-`app.css` then contains no colour literal at all outside the external
-palettes, and that is a rule a test can hold: grep the file, allow the named
-exceptions, fail on the rest. A seam nothing checks is a seam that closes
-again in three commits.
-
-### Light, dark, and system
-
-Three positions, not two, because following the operating system is the
-right default and is what happens today:
-
-- `:root` carries light. `@media (prefers-color-scheme: dark) :root` carries
-  dark, as now, so `system` needs no script.
-- `:root[data-theme="dark"]` and `[data-theme="light"]` pin it, overriding
-  the media query.
-- The choice is remembered the way the rail widths already are, in
-  `localStorage`, and applied by a two-line inline script in `<head>` before
-  the first paint. Without that the page paints light and then flips, which
-  is worse than not having the switch.
-- The control goes in the bar beside the settings gear. It is the same kind
-  of thing: a preference about the window rather than about the deck.
-
-Dark is also the one that will find the remaining literals, because every
-one of them was written by looking at the light theme. One it already
-finds: a crop is a picture of a white page, so in dark mode the triage view
-is a bright rectangle on a dark ground. That is the same category as
-Zotero's palette, content rather than chrome, so the answer is how it is
-framed and not what colour it is: a border and a little dimming, or
-nothing, but decided rather than inherited.
-
-### About the Claude look
-
-Worth naming because the palette here is already in that family: a warm
-off-white ground (`#fbfbfa`), near-black ink, one accent, thin lines, very
-little chrome. The differences are the accent, a green rather than a
-terracotta, and the density, since this app is deliberately dense: a rail of
-counts, a diagram, a keymap along the bottom.
-
-So it is **a theme, not a redesign**, which is itself the argument for doing
-the token pass first. Two cautions. A borrowed palette is fine and a
-borrowed name is not, so if this ships it ships as what it is, a warm paper
-theme, not as somebody's trademark. And the fonts are the expensive half of
-that look; the app currently uses the system stack and loads nothing, which
-is a real property worth keeping unless a webfont earns its two requests.
-
-### Clutter, which is a content question
-
-The pass people mean by "make it look nice" is mostly not colour. This app
-explains itself a great deal: every panel has a sentence under it saying
-what it is for. That was right while the shapes were moving and is not free
-now. A line of standing prose earns its place when it says something the
-control cannot: what a command will do to your files, why a pass is
-missing, which of two similar things you are looking at. It does not earn
-its place by naming the control again.
-
-Two notes on the triage rail were removed for exactly this: they said the
-transcription pass does not apply to a marked-up work, and how to
-transcribe one unit anyway. They were written when an absent pass left the
-panel empty. The panel is not empty any more, so they were two lines of
-permanent text about the absence of something nobody was looking for.
-
-The rest of the pass, in the order the evidence supports:
-
-1. **One type scale, one spacing scale, one radius set.** Mechanical, and
-   it is most of the visible inconsistency.
-2. **Density per surface.** A rail, a card and a document are three
-   densities and should be three, stated once rather than per rule.
-3. **Borders.** Almost everything is a 1px hairline, including things that
-   are grouped and would read better with space than with a line.
-4. **The empty states.** Several panels say "nothing yet" in a different
-   voice each.
-
-### What a narrow window does
-
-Checked at 1600, 1366, 1180 and 1024 with the shelf, the setup stage, triage
-and review: **nothing overflows horizontally at any of them.** Three real
-defects came out of it and are fixed: a command breaking mid-token in the
-rail, so `--project "demo"` became `--project "de` and `mo"`; the shelf's
-totals wrapping and making the bar two rows deep; and a rail heading whose
-label and hint became two ragged columns.
-
-What is left is the one thing worth a decision rather than a patch. Both
-rails are a fixed width you can drag, and their widths are remembered, so at
-1024 the deck column is about 290px between them. The rails already fold and
-there is already a `@media (max-width: 1200px)` that hides the guide, but
-only while the guide is in its default state, so anyone who opened it keeps
-it. Folding a rail the reader opened, because the window got smaller, is a
-choice that has to survive the window getting bigger again, and that wants
-deciding rather than guessing: remember a fold done by hand, treat a fold
-done by width as temporary.
-
-**Trigger:** now, for the naming half, because the numbers above only grow.
-The taste half wants the shapes to stop moving first.
-
-## 4. Publishing, what is left
-
-**The demo recording.** `assets/make_assets.py` carries the shot list in its
-docstring. It cannot be scripted, because the interesting part is the pace
-of triage and no script knows how long to pause.
-
-**Half of this does not run without Claude Code**, the flip side of having no
-LLM code in the tool. The committed ledger and the `.apkg` export are the
-mitigation: they show the output without running the half a stranger cannot.
+Measured on 20 cores: the 143 browser tests are 8% of the suite and about
+half its time, and the others take 35 s on eight workers against 67 s on
+four. `scripts/affected.py` runs the tests named for what changed, for the
+loop, and the full run stays the gate before a commit. Pinning only the
+browser modules to a worker (`--dist loadgroup`) hung once and was dropped.
 
 ## 15. One word reads, two words write
 
-**Built**, and [VERBS.md](VERBS.md) is the table. Count the words before you
-press return: `forge units` prints the ledger and `forge units set` writes to
-it, `forge anki` is the dry run and `forge anki push` is the push. The three
-verbs that reach outside this repo sit under `anki`.
-
-The old names gave a reader nothing to count. `sync`, `feedback`, `extract`
-and `classify` share no shape, so which of them wrote was something you
-remembered rather than read. Each subcommand now carries an `effect` in the
-parser, `forge --help` groups by it, and a test refuses a writing parser
-reachable in one word. Every old spelling still runs, hidden from `--help`,
-and prints the new form once on stderr.
-
+[VERBS.md](VERBS.md) is the table. `forge units` prints the ledger and
+`forge units set` writes to it; `forge anki` is the dry run and
+`forge anki push` the push. Each subcommand carries its `effect` in the
+parser, and a test refuses a writer reachable in one word. Old spellings
+still run, hidden from `--help`.
 
 ## 17. Letting an edit reset a card's schedule
 
-**Built.** `relearn: slightly | more | reset` in the frontmatter, set by
-whoever changed a card that is already in Anki: due today with its
-interval kept, back into relearning, or new again. The writer decides; the
-review view shows the call and can change it. `anki push` does it once the
-card is approved again, for studied cards only, and takes the key off the
-file. It is outside `content_hash`. The card-writing skill says when to
-set which, and `/triage` points there.
-
-What follows is the reasoning it was built from.
-
-`anki push` rewrites a note and leaves its scheduling alone. `reposition`
-touches only cards with `type == 0`, so anything you have started keeps its
-interval, and a card whose back was wrong and is now right comes back when it
-was already going to. On a mature card that is months away. This deck has the
-case: the variance-of-a-sum card carried the book's `2Cov[X, Y]` until a
-numeric check showed it false, and the corrected back inherited whatever
-interval the wrong one had earned.
-
-What is wanted is a judgement call rather than a rule. Most triage edits add a
-gloss or name a step, and those should disturb nothing. Some replace the
-answer, and the writer making the edit is the one who knows which just
-happened.
-
-Shape. A frontmatter key set during triage, **outside `content_hash`** and so
-listed in invariant 5 beside `status` and `augmented`. Setting it must not
-un-approve the card, or asking to see a card sooner would cost a re-review.
-`anki push` reads it, calls AnkiConnect (`forgetCards` sends the card back to
-new, `setDueDate` brings it forward while keeping its ease), and clears it.
-Clearing is the part to get right: it is an instruction for one push, not a
-property of the card.
-
-Open, and worth settling before any of it is built: whether a writer sets the
-key or only proposes it. A reset is not new content reaching Anki, so
-invariant 1 does not obviously cover it, but it does change what a human sees
-tomorrow without their having asked.
-
-**Settled:** the writer sets it. The change that prompted it already
-un-approved the card, so a human reads both before either reaches Anki.
+`relearn: slightly | more | reset`, set by whoever changes a card already in
+Anki: due today with its interval kept, back into relearning, or new again.
+`anki push` does it once and takes the key off. Outside `content_hash`.
 
 ## 18. Editing a card in the page
 
-**Built.** `E` on the review view opens front and back in a dialog; `e`
-still hands the file to `$EDITOR`. The text is read from disk when the
-dialog opens and the save is checked against that mtime. One option, off
-by default: a note on the card, prefilled "check my manual edit". An edit
-to an approved card un-approves it through the hash and nothing else
-(invariant 5).
-
-Each box has a KaTeX preview under it, redrawn as you type, because an
-unbalanced `$` is the usual mistake and shows there as a raw `$`.
+`E`, the "edit card" button, or a pencil on a section opens the card's text
+in a dialog at that section; `e` still opens the file in `$EDITOR`. Every
+section the type allows except `## notes`, each with a KaTeX preview, and
+only the sections you changed are sent. An optional note on the card,
+prefilled "check my manual edit", is off by default. An edit to an approved
+card un-approves it through the hash (invariant 5).
 
 ## 19. A unit from nothing, in the page
 
-**Built.** `+` in triage opens a dialog for a subject, a gist, a sample,
-tags and references, and the source where a project reads several. It writes
-through `ledger.add_unit`, the function `forge units add` uses, so the two
-agree on the id and on what asking twice does. A unit, not a card, because
-the unit is the decision (invariant 9).
+`+` in triage adds a unit through `ledger.add_unit`, the function
+`forge units add` uses.
 
 ## 20. Handing a project a pile of notes
 
-Context dumped at a whole project, and a pass that sorts each piece to the
-card it belongs to or proposes a new one. Two modes: write the changes
-directly, or stop at units and `@me` annotations for a human to decide. The
-second matches the rest of the tool, where a pass proposes and a human
-decides, and it is the one to build first.
+The project's inbox, on the setup stage: things you want in the deck
+without knowing where. `/sort-notes` gives each waiting dump to the
+`note-sorter` agent, which writes under the dump where each piece went. A
+dump is placed one of three ways, chosen when you add it:
 
-**The second is built**, as `/sort-notes`: a piece about a card becomes an
-`@me` line on it, a piece about an uncarded unit an `@me` annotation on the
-unit, and anything new a unit through `forge units add` with the note as its
-sample. Nothing is resolved and no card content is touched. The first mode
-waits until the second has been used enough to show what it gets wrong.
+- **propose**, the default: `@me` notes on the cards a piece bears on, new
+  units in triage;
+- **modify existing cards** (` · write`): the cards are edited, with a `resolved: inbox
+  <stamp>: ...` line saying what was asked and done, and anything new is
+  queued and carded by the `card-writer` in the same run;
+- **both** (` · both`, the two boxes ticked): edited where the change can be confirmed
+  and the card still asks the same question, proposed otherwise.
+
+Nothing a dump edits is pushed: an edit takes the approval back, and the
+change record (§21) shows what moved and names the dump.
+
+On the page the inbox is two collapsible lists, unsorted and sorted. A
+sorted dump lists where each piece went, with a link to each card and unit,
+and can be put back to unsorted. There is no third state.
 
 ## 21. What a pass changed, card by card
 
-**Built**, as a record of what changed between review decisions rather
-than per pass. A pass edits files by many routes, an agent's Edit
-included, and no hook sees all of them. A snapshot is taken when
-`cards new` writes a card and at each approve, reject or back to draft;
-the review page compares the file with the last one. It lists the
-frontmatter keys that moved, one line per section whose text moved, and
-the `resolved:` lines added since, which are what the writer said it did.
-Each decision files that difference into a history kept beside it.
+A local record per card in `.forge/changes/`, not in git: a snapshot when a
+card is written, when the review page first draws it, and at each review
+decision. The review page compares the file with the last snapshot and
+shows what moved at the top of the card's aside: the keys, a line per
+section, the `resolved:` lines added, and where it came from when something
+says so (the page's editor, an inbox dump, a settled `@claude` note,
+`/augment`). "changed since decided" in the review rail lists those cards.
 `forge cards --changes` prints the same.
 
-Local, in `.forge/changes/`, and not in git, because `.gitignore` excludes
-`cards/*` except the Cookbook. Losing it loses the history and nothing
-else. `/triage` no longer claims a card's history is in git.
+What moved is a list, one entry per look: each time the record looks at a card
+and finds it changed (the review page drawing it, `forge cards --changes`, the
+editor saving) the difference is filed as an entry with when and from where. Two
+`@claude` passes with a look between them are two entries, each with the
+`resolved:` lines it added; two with none between are one, because nothing sees
+an agent's edit as it happens. A decision files the entries into that round of
+the history and starts again. The newest settled line is shown open.
 
 ## 22. A deck per topic inside a project
 
-**Built.** `[decks.by_topic]` maps an ask in `topics.md`, by slug, to a
-deck. A card goes where the units it was written from stand, so a card
-proposed under "containers" lands in the containers deck without anybody
-tagging it. Most specific first: tag, then topic, then type, then the
-project's deck. `check` warns about a key that names no ask.
-
-Per source was the first idea, and the wrong one. A project reads several
-sources to answer one question, and the question is what a deck is for.
+`[decks.by_topic]` maps an ask to a deck. Most specific first: tag, topic,
+type, then the project's deck.
 
 ## 23. The docs against the style guide
 
-A pass over every document against docs/STYLE.md. The command rename
-changed their command lines; nothing has read them for the prose rules
-since.
+Done: every document checked against [STYLE.md](STYLE.md). The README's prose
+is the author's (§4).
 
-**Done for CLAUDE.md, CONTRACT.md, DESIGN.md and VERBS.md, and for what was
-false in this file.** Stale commands, statements the code no longer bears
-out, em dashes and `--` in prose, colon glue, and the banned words. Left:
-"work" meaning source in about a hundred lines of §10 (the headings are
-fixed), "sync" as a noun in DESIGN.md, and a handful of quantifiers with no
-witness to hand. The README's prose is the author's; its command tables are
-current.
+## 25. Windows the document's outline defines
+
+`context_pages` takes `section`, `chapter` or `part` as well as a number,
+read off the PDF's own outline (`outline.py`) and named by shape rather than
+depth. Every place the size is chosen says the entry and its printed pages.
+
+## 26. A project's name
+
+A project is shown by its `title`, renamed on the setup stage; the folder
+name stays, since it is in every unit id. A Zotero project's deck is pinned
+on the first rename so its cards do not move. The setup stage is two
+columns where there is room, and the top bar is the same on every page.
+
+## 28. A project's settings in the page
+
+The project pane edits what `project.toml` holds that needs no document to
+be right: citation, labels, decks, what a card writer gets, the front cap,
+the study order and `[conventions]`. A source's panel edits its name,
+citation and address beside how it is read. Line by line into the file,
+checked by loading the config back. A project declared in `forge.toml`, the
+repo-wide settings and a source's files stay file edits.
+
+## 29. The review panel and Anki disagree about newlines
+
+`render_body` now applies the rule `to_anki_html` has: a newline outside maths
+and outside fenced code is a `<br>`, and the blank line beside a fence is not.
+Found on `a75c32`, whose back puts the gain and the update on separate lines.
+It was right in Anki and run together in the page, so the card approved was
+not the card read (invariant 1). `test_the_panel_breaks_lines_where_anki_does`
+holds the two renderers to the same count of breaks.
+
+## 32. The review page
+
+The aside beside a card is a head (status, gist, uid, whether `check` is
+clean) and panels: notes, what changed, what you wrote in Zotero, check, the
+source crop, details. Each folds, moves by its grip or Alt and the arrow
+keys, and is remembered in the browser for every card. The list is in
+Anki's study order, the one the "order n/m" badge reports, so `j` walks the
+queue; `j` and `k` both skip a card the filter no longer shows. `/` opens the
+find palette (`finder.js`, shared with the graph's card picker): it narrows as
+you type over every card in the project, Enter jumps to the first, and
+Shift+Enter keeps the query as a filter on the list. Words may be anywhere on
+a card: text, gist, tags, notes. A status or state row clears on a second click, and
+no row means all of them.
+
+## 33. What a card writer sees of your marks
+
+`forge context` hands over this unit's own mark and then every mark inside the
+same pages as the text it prints, any colour, each saying what became of the
+unit it made (`skipped` is the reader's own "not a card"). The window decides:
+a writer given a chapter gets the marks in the chapter. Every mark of a
+document is cached at import beside its text (`marks-<document>.json`), so a
+colour that makes no unit still counts; before a re-import the unit's own
+neighbours stand in. A sticky note's comment is printed whole. The review page
+shows your Zotero comments beside the card, read from the ledger.
+
+## 34. Remarks
+
+`projects/remarks.md` is where a pass says something about the tool or its
+instructions rather than about a card: a brief that arrived cut off, a rule
+that made a card worse. `forge remarks add` writes one, `forge remarks` lists
+them, and each agent's instructions say when. Read it when planning, fold
+what is worth keeping into this file and delete the rest. It sits beside the
+projects and not in `docs/`, so what a pass writes never shows up as a change
+to commit.
 
 ---
 
 # Ideas, not scheduled
-
-## 5. The model page extractor, and why it stopped being the plan
-
-This was "the risky half" everything else was buying time for, and **the
-argument for it has been overtaken by what got built.** The case was that
-`extract/pdf.py` is specialised to one book (§9 measures how), so a second
-source needs a general extractor reading page images and reporting
-`(kind, label, page, bbox)`.
-
-Two things happened. **Zotero brings its own geometry:** an annotation carries
-rects, a page index and a sort index, so a marked-up source is crop-backed
-with no segmenter at all. And **prose stopped being segmented:** a unit from
-free-form text must be triggered by an annotation, which removed both a prose
-segmenter and the triage bottleneck several thousand paragraph-level
-candidates would have created.
-
-What is left is narrow: a second formula-reference-shaped PDF that is not the
-Cookbook and that you do not want to read through Zotero.
-
-Three things constrain whatever is built. The locator generalises by shim:
-`equation: int` becomes `kind` plus `label`, and `pdf.py` keeps emitting what
-it emits, so generalising never means editing a frozen module. **The
-contiguity oracle survives**, because theorems are numbered contiguously
-within a chapter and the same 1..N check runs per label family. And judgement
-stays put: extraction produces units, never cards.
-
-**Trigger:** a source you want to card that is neither the Cookbook nor marked
-up in Zotero.
-
-## 6. Figures, and everything that is not a text block
-
-`page_blocks()` skips every block whose `type != 0` and never consults
-`page.get_drawings()`. So a diagram worth carding never enters the ledger,
-equations set as images return nothing and say so in no way, and vector-drawn
-math is lost the same way, fraction rules included, which TeX draws as thin
-filled rectangles and which are a font-independent "there is math here"
-signal. The Cookbook has neither, which is why this has never bitten.
-
-**All three blockers dissolved for a marked-up source:** Zotero's image and
-area annotations are figure units already, "a figure card needs a `type`
-beyond `identity`" stopped being one when `intuition` landed, and a card
-can now carry a picture (`![...](unit:<id>)`, rendered and uploaded by
-`anki push`).
-What is left is segmenter work (finding a figure in a book nobody marked
-up), and the segmenter is frozen.
-
-Worth doing alone if the fallback segmenter is ever touched: fraction rules
-from the vector layer as a math signal in `score_line`, which would make it
-far less dependent on Computer Modern font names.
-
-## 7. The cross-check between two extractions
-
-An LLM is not mechanical, but **agreement between two independent extractors
-is**, and the equation number is an exact join key. Contiguity is built
-(`forge audit`); transcription is built (`/transcribe`) but is one extractor,
-so it reconciles nothing.
-
-- **Cross-extractor join:** a pass that reads the *page* and reports the
-  equations it finds, joined on equation number. It must read the page, not
-  our crops: fed our own crops it inherits our segmentation errors.
-- **Round-trip render:** the only check that catches a *wrong* transcription
-  rather than a missing equation. Render `tex_auto` with KaTeX, compare
-  against the crop, store the agreement as a number. Without it, transcription
-  trades a detectable failure for an undetectable one.
-- **The coverage oracle:** a text block inside no unit's bbox was dropped, and
-  measuring that is cheap and exact. Narrowed by the decision not to segment
-  prose, since most of a prose page is meant to be outside every box, so what
-  survives is "is every *named statement* inside a unit".
-
-**All of it needs §5.** A second extractor is the whole idea.
 
 ## 8. A "daily proof" challenge
 
@@ -2157,43 +603,6 @@ the wrong grading model. **As a standalone page**: escapes that model, but is
 a second product with its own state. Open first: what the source is, what is
 being reviewed, and whether spaced repetition is the right schedule for
 something you work through.
-
-## 16. Pictures that are not crops
-
-A card gets a picture by naming a unit, and the crop is rendered from the
-source document. That covers every picture a book already prints, and nothing
-else. Three cards in the Krause deck describe in words a picture that would
-say it faster: the Laplace density card, whose prose compares its tail to a
-Gaussian's; the multivariate Gaussian density card, whose sublevel sets are
-ellipsoids along the eigenvectors of $\boldsymbol{\Sigma}$; and the law of
-total variance card, whose intuition is a picture of scores grouped by class.
-
-Two routes, and they differ in what they give up. **Drawn here**, from TikZ or
-an equivalent carried in the card file and compiled on the way to Anki. The
-card keeps source rather than an image, which is the property the crop path
-already has: re-rendering fixes every card that shows it, and nothing binary
-enters `cards/`. The cost is a TeX toolchain wherever `anki push` runs.
-**Fetched**, from a URL in the picture reference. Cheap, and it gives that
-property up, because the far end can change or vanish and the licence belongs
-to somebody else.
-
-Three things to settle either way. Where a drawing lives, since a TikZ figure
-is longer than any section a card carries now. Whether `check` can refuse a
-picture it cannot draw, which it already does for a crop. And what
-`anki push` uploads, because Anki's media folder is one flat namespace and a
-generated picture needs the same `forge-<uid>-<n>` naming a crop gets.
-
-**Trigger:** a card whose `## prose` is describing a picture in words.
-
-## 24. Decks for facts many sources restate
-
-Probability and calculus facts recur across the books and papers here.
-Later: a project per subject holding them, and a pass that moves cards in
-and merges duplicates. Three facts to plan around. A merged card cites
-several sources, which `unit:` already allows as a list. A uid is the
-note's identity in Anki, so the surviving card should keep one of the
-originals' uids to keep its review history. And `anki push` deletes
-nothing, so the note a merge retires stays in Anki until removed there.
 
 ---
 
@@ -2290,6 +699,9 @@ come from the book's own numbering. **Delete it** if it ever costs something
 real: a shared change it cannot absorb behind a shim, or a second book where
 it is chosen and found to mislead.
 
+The path it serves, a PDF nobody marked up, is deprecated as it stands and
+waits for the rework in §27.
+
 ---
 
 # Considered and rejected
@@ -2321,11 +733,8 @@ machines.
 on it answers the same question and adds no dependency. Reconsider when you
 want to drag a box in the browser to create a unit.
 
-**BYOK and LLM calls in the tool.** "No LLM API code in the Python" is why
-there is no torch, no key handling, no cost model, no injection surface and no
-vendor in the dependency tree. That is a position, and it is more interesting
-than the feature. If it happens it belongs in a separate package implementing
-the same contracts the slash commands do.
+**BYOK and LLM calls in the tool.** Was rejected here, and is §30 now: there
+are credits to spend, which was the missing reason.
 
 **A hosted live demo.** The app writes to the local filesystem, so a public
 instance is either read-only, and therefore not the thing, or a vandalism
@@ -2333,11 +742,17 @@ target, and it would need the documents hosted.
 
 **Docling** (and marker, MinerU). Measured on this book: 19.7 s/page against
 0.18, five regions where we find twenty on the packed page, and no LaTeX
-without a second model. Its advantage is generality, and §5 gets that more
-cheaply. It would earn its place on a **scanned** PDF, which is also §6.
+without a second model. Its advantage is generality, which the rework in
+§27 has to find more cheaply. It would earn its place on a **scanned** PDF,
+which is also §27.
 
 **Auto-generating units from free prose.** A prose unit must be triggered by a
 Zotero annotation. This is what demoted §5.
+
+**A model page extractor** (§5). A model reading page images and reporting
+regions was the plan for every book after the Cookbook. Zotero marks carry
+their own geometry and prose stopped being segmented, which left it one
+case: a formula reference nobody marks up. That case is §27.
 
 **A placeholder `conventions.md`.** An empty one is indistinguishable from a
 real one to everything that reads it, and would silence the warning it should

@@ -20,7 +20,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import check, latex, model, notetype, study, topics
+from . import changes, check, latex, model, notetype, study, topics
 from .anki import AnkiConnect, AnkiError
 from .config import Config
 from .model import Card
@@ -831,9 +831,12 @@ def run(
         # right at insertion costs nothing and needs no repositioning later.
         for card in in_study_order(ready, source_positions(config), config.study_order):
             try:
-                report.outcomes.append(
-                    _upsert(client, config, card, dry_run=dry_run, route=route)
-                )
+                outcome = _upsert(client, config, card, dry_run=dry_run, route=route)
+                report.outcomes.append(outcome)
+                # What Anki now holds is a moment worth a snapshot: the next
+                # review shows what changed since this push.
+                if not dry_run and outcome.action in ("add", "update"):
+                    changes.record(config, card, "pushed to Anki")
             except AnkiError as exc:
                 report.outcomes.append(CardOutcome(card.uid, "error", str(exc)))
 

@@ -190,3 +190,52 @@ def test_every_pane_list_comes_from_here() -> None:
     assert "runs([" not in setup, "a list written in the template"
     for pane in runs.PANES:
         assert runs.propose(pane, runs.Ambient(project="p")), f"{pane} offers nothing"
+
+
+def test_the_audit_is_offered_where_it_has_something_to_audit() -> None:
+    """On the project it audits, once it holds a unit. Not on a source's
+    panel, since it takes the whole project, and not before extraction."""
+    from anki_math_forge.app import runs as runs_mod
+
+    def offered(where: str, **ambient: object) -> bool:
+        rows = runs_mod.propose(where, runs_mod.Ambient(project="demo", **ambient))  # type: ignore[arg-type]
+        return any(row["label"] == "audit" for row in rows)
+
+    assert offered("project", counts={"units": 3})
+    assert not offered("project", counts={"units": 0}), "nothing extracted yet"
+    assert not offered("project", counts={"units": 3}, has_document=False)
+    assert not offered("work", counts={"units": 3})
+
+
+def test_a_headline_is_the_command_in_a_word_or_two() -> None:
+    """The sentence is the `why` below it; the headline is what you would
+    say. A note is the exception: it is not a command."""
+    from anki_math_forge.app import runs as runs_mod
+
+    for offer in runs_mod.OFFERS:
+        if offer.kind == "note":
+            continue
+        at = runs_mod.Ambient(project="demo", counts={"units": 1, "new": 1}, inbox=1)
+        label = offer.render(at)["label"]
+        assert len(label.split()) <= 3, label
+
+
+def test_a_run_names_the_action_it_is() -> None:
+    """So the window opened on it starts the builder on the same command."""
+    from anki_math_forge.app.jobs import Run
+
+    argv = ["zotero", "import", "--project", "krause", "--json"]
+    run = Run(id="r1", argv=argv, started=0.0, effect="repo")
+    row = run.row()
+
+    assert row["action"] == "zotero-project"
+    assert row["values"] == {"project": "krause"}
+
+
+def test_stubs_and_augmenting_in_one_run_is_offered_beside_stubs_alone() -> None:
+    from anki_math_forge.app import runs as runs_mod
+
+    rows = runs_mod.propose("units", runs_mod.Ambient(project="demo", counts={"queued": 3}))
+    lines = [row["run"] for row in rows if row["label"] == "/extract-cards"]
+
+    assert lines == ['/extract-cards --project "demo"', '/extract-cards --project "demo" --augment']

@@ -804,7 +804,6 @@ async function undo() {
    something anyone picks from. */
 const picker = {
   open: false,
-  query: "",
   /* Set when the picker was opened by dropping an arrow on empty space:
      `{from, side, at}`. Whatever gets picked lands at `at` and is connected to
      `from` in the same step, which is the gesture finishing rather than being
@@ -812,44 +811,17 @@ const picker = {
   connect: null,
 };
 
-function pickerRows() {
-  const q = picker.query.trim().toLowerCase();
-  return (data.absent || []).filter(
-    (node) =>
-      !q ||
-      node.label.toLowerCase().includes(q) ||
-      node.id.includes(q) ||
-      node.detail.toLowerCase().includes(q),
-  );
-}
-
-function paintPicker() {
-  const list = document.getElementById("add-list");
-  const empty = document.getElementById("add-empty");
-  list.textContent = "";
-  const rows = pickerRows();
-  rows.slice(0, 200).forEach((node, i) => {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = `add-row${i === 0 ? " first" : ""}`;
-    const name = document.createElement("span");
-    name.className = `add-name${node.label ? "" : " unnamed"}`;
-    name.textContent = node.label || "no caption yet";
-    const where = document.createElement("span");
-    where.className = "add-where";
-    where.textContent = node.detail || node.id;
-    row.append(name, where);
-    row.addEventListener("click", () => addToCanvas(node));
-    list.appendChild(row);
-  });
-  empty.hidden = rows.length > 0;
-  empty.textContent = (data.absent || []).length
-    ? "nothing matches that."
-    : "every card in this project is already on the canvas.";
-  const left = (data.absent || []).length;
-  document.getElementById("add-count").textContent = picker.connect
-    ? `connect ${labelOf(picker.connect.from.id)} to one of ${left}`
-    : `${left} not on the canvas`;
+function pickerRows(query) {
+  const q = query.trim().toLowerCase();
+  return (data.absent || [])
+    .filter(
+      (node) =>
+        !q ||
+        node.label.toLowerCase().includes(q) ||
+        node.id.includes(q) ||
+        node.detail.toLowerCase().includes(q),
+    )
+    .map((node) => ({ name: node.label, where: node.detail || node.id, node }));
 }
 
 /* Dropped where you are looking, not at the origin: the canvas pans, and a
@@ -882,41 +854,40 @@ async function addToCanvas(node) {
   if (joining) {
     /* Close first: the arrow appears behind the panel otherwise, and the
        gesture is finished either way. */
-    togglePicker(false);
+    finder.close();
     const { prereq, dependent } = ends(joining.from, joining.side, node);
     await load({ recentre: false });
     await connect(dependent, prereq);
     return;
   }
   await load({ recentre: false });
-  paintPicker();
+  finder.refresh();
   toast(`${node.label || node.id} added · drag a dot to connect it`);
 }
 
 function openPicker(connect = null) {
   picker.connect = connect;
-  togglePicker(true);
-}
-
-function togglePicker(open) {
-  const dialog = document.getElementById("add-card");
-  if (!dialog) return;
-  picker.open = open === undefined ? !dialog.open : open;
-  const search = document.getElementById("add-search");
-  if (picker.open) {
-    dropped = 0;
-    /* Cleared every time it opens. It kept whatever you last typed, so
-       reopening showed a list filtered by a word you had forgotten about and
-       read as most of the deck having vanished. */
-    picker.query = "";
-    search.value = "";
-    paintPicker();
-    if (!dialog.open) dialog.showModal();
-    search.focus();
-  } else {
-    picker.connect = null;
-    dialog.close();
-  }
+  picker.open = true;
+  dropped = 0;
+  finder.open({
+    title: "add a card",
+    placeholder: "caption, uid or section",
+    rows: pickerRows,
+    count: () => {
+      const left = (data.absent || []).length;
+      return picker.connect
+        ? `connect ${labelOf(picker.connect.from.id)} to one of ${left}`
+        : `${left} not on the canvas`;
+    },
+    empty: () =>
+      (data.absent || []).length ? "no match" : "every card is on the canvas",
+    foot: `lands mid-view · ${keymap()["forget-position"] || "x"} takes it off`,
+    pick: (row) => addToCanvas(row.node),
+    onClose: () => {
+      picker.open = false;
+      picker.connect = null;
+    },
+  });
 }
 
 // -- selection --------------------------------------------------------------
@@ -1238,22 +1209,6 @@ document.getElementById("graph-reset").addEventListener("click", async () => {
 });
 
 document.getElementById("graph-add").addEventListener("click", () => openPicker());
-document.getElementById("add-close").addEventListener("click", () => togglePicker(false));
-document.getElementById("add-search").addEventListener("input", (event) => {
-  picker.query = event.target.value;
-  paintPicker();
-});
-
-/* Type a word, press Enter, take the first match. The list is sorted by
-   nothing in particular, so this is only worth having because the search is
-   over captions: two or three words usually leave one row. */
-document.getElementById("add-search").addEventListener("keydown", (event) => {
-  if (event.key !== "Enter") return;
-  event.preventDefault();
-  const first = document.querySelector(".add-row");
-  if (first) first.click();
-});
-
 /* Escape closes the picker, cancels an arrow being drawn, and lets a selection
    go, in that order -- innermost first, which is what the key means. */
 document.addEventListener("keydown", (event) => {
@@ -1276,11 +1231,6 @@ document.addEventListener("keydown", (event) => {
     picked = { nodes: [], edge: null };
     draw();
   }
-});
-
-document.getElementById("add-card").addEventListener("close", () => {
-  picker.open = false;
-  picker.connect = null;
 });
 
 /* Delete acts on the selection, whichever kind it is: an arrow goes out of the

@@ -5,6 +5,71 @@
 
 {% block filters %}{% endblock %}
 
+{# One panel of the aside: a header you click to fold and drag to move, and a
+   body. `count` is a small label beside the title; `state` is the page's
+   guess at whether it starts open, which a choice you made overrides. #}
+{% macro panel(key, title, count='', state='open', moved=false) %}
+<section class="panel" data-panel="{{ key }}" data-default="{{ state }}"{{ ' data-moved' if moved }}>
+  <header class="panel-head">
+    <span class="panel-grip" draggable="true" title="drag to move (Alt+arrows on the title)" aria-hidden="true">&#8942;&#8942;</span>
+    <button type="button" class="panel-toggle" aria-expanded="{{ 'true' if state == 'open' else 'false' }}"
+            title="fold or unfold">
+      <span class="panel-title">{{ title }}</span>
+      <span class="panel-count" data-panel-count>{{ count }}</span>
+    </button>
+  </header>
+  <div class="panel-body">{{ caller() }}</div>
+</section>
+{% endmacro %}
+
+{# One line summing up a change, for the history. #}
+{% macro change_summary(c) -%}
+{%- set parts = [] -%}
+{%- for f in c.fields %}{% set _ = parts.append(f.key ~ ' ' ~ (f.before if f.before is not none else '-') ~ ' → ' ~ (f.after if f.after is not none else '-')) %}{% endfor -%}
+{%- for sec in c.sections %}{% set _ = parts.append(sec.name ~ ' ' ~ sec.summary) %}{% endfor -%}
+{%- for line in c.resolved %}{% set _ = parts.append(line) %}{% endfor -%}
+{{ parts | join('; ') }}
+{%- endmacro %}
+
+{# What moved, one entry per look. Each is a note of its own: when, from where,
+   and the keys, the sections and the `resolved:` lines in it. #}
+{% macro change_entries(entries) %}
+<ol class="change-entries" data-change-pending>
+  {% for e in entries %}
+  <li class="change-entry" data-change-entry>
+    <p class="change-entry-head">{{ e.at or 'just now' }}{% if e['from'] %} &middot; from {{ e['from'] | join(', ') }}{% endif %}</p>
+    <ul class="change-list">
+      {% for line in e.change.resolved %}<li data-change="resolved">{{ line }}</li>{% endfor %}
+      {% for f in e.change.fields %}<li data-change="field"><code>{{ f.key }}</code> {{ f.before if f.before is not none else '-' }} &rarr; {{ f.after if f.after is not none else '-' }}</li>{% endfor %}
+      {% for sec in e.change.sections %}<li data-change="section"><code>{{ sec.name }}</code> {{ sec.summary }}</li>{% endfor %}
+    </ul>
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
+{# Every `resolved:` line on the card: what was asked and what was done,
+   shut until you ask for it. Resolving an annotation deletes the line,
+   which is what stops a settled note holding the card out of sync, and
+   this keeps the question beside the answer. It sits inside the "what
+   changed" box: that box lists the lines added since your last decision,
+   and this one every line the file holds, which the local record may
+   predate. #}
+{% macro settled(lines) %}
+<div class="settled-notes" data-settled>
+  <p class="settled-head" title="what was asked, and what was done">{{ lines | length }} settled</p>
+  {# The newest is open: after a pass the thing to check is whether the edit
+     it made was the one you asked for. #}
+  <p class="settled-latest">{{ lines[-1] }}</p>
+  {% if lines | length > 1 %}
+  <details class="settled-older">
+    <summary>{{ lines | length - 1 }} earlier</summary>
+    <ul>{% for done in lines[:-1] | reverse %}<li>{{ done }}</li>{% endfor %}</ul>
+  </details>
+  {% endif %}
+</div>
+{% endmacro %}
+
 {% block main %}
 {# `data-source` so a write can say which source's counts the rail wants back.
    Empty here is a real answer -- the review view may legitimately be showing
@@ -14,6 +79,12 @@
   {% for card in cards %}
   <article class="card item" data-uid="{{ card.uid }}" data-mtime="{{ card.mtime }}" hidden>
     <div class="card-body">
+      {# The editor, from the card itself: one button for the whole card, and
+         a pencil on each section that opens it at that section. #}
+      <div class="card-tools">
+        <button type="button" class="card-edit-button" data-edit-card
+                title="edit this card's text here (E). e opens the file in $EDITOR">&#9998; edit card</button>
+      </div>
       {# `conditions` sits with the prompt, above the answer rule, because it
          fixes the setting the question is asked in. The same order as the
          Anki template, so what you approve is what you review. #}
@@ -21,6 +92,8 @@
       {% for name in prompt %}
         {% for section in card.sections if section.name == name %}
       <section class="sec sec-{{ section.name }}">
+        <button type="button" class="sec-edit" data-edit-card="{{ section.name }}"
+                title="edit the {{ section.name }}" aria-label="edit the {{ section.name }}">&#9998;</button>
         {% if section.name != 'front' %}<h2>given</h2>{% endif %}
         <div class="math">{{ section.body | body(card.unit) }}</div>
       </section>
@@ -29,6 +102,8 @@
       <hr class="answer-rule">
       {% for section in card.sections if section.name not in prompt %}
       <section class="sec sec-{{ section.name }}">
+        <button type="button" class="sec-edit" data-edit-card="{{ section.name }}"
+                title="edit the {{ section.name }}" aria-label="edit the {{ section.name }}">&#9998;</button>
         {% if section.name != 'back' %}<h2>{{ section.name }}</h2>{% endif %}
         <div class="math">{{ section.body | body(card.unit) }}</div>
       </section>
@@ -38,66 +113,135 @@
     <div class="splitter" data-splitter="card"
          title="drag to resize · double-click to reset"></div>
     <aside class="meta">
-      <div class="row"><span class="badge state-{{ card.status }}">{{ card.status }}</span>
-        <code>{{ card.uid }}</code>
-        {% if card.verify %}<span class="badge verify">verify</span>{% endif %}
-        {# A label rather than a filter: it says what this card is while you
-           are looking at it. The picture itself is in the body beside it, so
-           this is for the list and for knowing that `anki push` has a crop to
-           render and upload before this card can go. #}
-        {% if card.has_image %}<span class="badge image"
-             title="this card carries a picture: `anki push` renders the crop from the source document and uploads it">image</span>{% endif %}
-      </div>
-      {# A few words naming the card. The front beside it is the thing to
-         review; this is the thing to recognise it by in a list, in a link from
-         another card, or on a graph node, where the LaTeX is unreadable.
-         Inherited from the unit when the card has none of its own. #}
-      {% if card.gist %}
-      <p class="gist{{ '' if card.gist_own else ' inherited' }}"
-         title="{{ 'from this card' if card.gist_own else 'from the unit this card was written from' }}. A caption, never part of the card.">{{ card.gist }}</p>
+      {# A head that is always there, then panels. Each panel collapses and can
+         be dragged to a new place; both are remembered in this browser, for
+         every card. Which are open to begin with is the page's guess
+         (`data-default`): what needs a look is open, filing is shut. #}
+      <header class="meta-head">
+        <p class="row"><span class="badge state-{{ card.status }}">{{ card.status }}</span>
+          {% if card.gist %}<span class="gist{{ '' if card.gist_own else ' inherited' }}"
+             title="{{ 'from this card' if card.gist_own else 'from the unit this card was written from' }}. A caption, never part of the card.">{{ card.gist }}</span>{% endif %}
+          {# The editor, as a button as well as a key: a control you cannot
+             see is one you do not know is there. #}
+          <button type="button" class="link-button card-edit-open" data-edit-card
+                  title="edit this card's text here (E). e opens the file in $EDITOR">edit</button></p>
+        <p class="meta-sub"><code>{{ card.uid }}</code>
+          {% if card.findings %}<span class="check-count">check: {{ card.findings | length }}</span>
+          {% else %}<span class="checks-ok" title="`forge check` finds nothing wrong with this card">check ✓</span>{% endif %}
+          {% if card.verify %}<span class="badge verify">verify</span>{% endif %}
+          {# It says what this card is while you look at it: `anki push` has a
+             crop to render and upload before this card can go. #}
+          {% if card.has_image %}<span class="badge image"
+               title="this card carries a picture: `anki push` renders the crop from the source document and uploads it">image</span>{% endif %}</p>
+      </header>
+
+      {# An approval that is not holding. It is not withdrawn -- the file still
+         says `approved`, and resolving the note restores it with no re-review
+         -- so saying "draft" alone would read as work lost. #}
+      {% if card.demotion %}
+      <p class="held">
+        <b>back in the draft pile</b>
+        {% if card.demotion == 'annotated' %}while a note is open. Nothing about
+        the card changed. Resolve the note and it is approved again.{% else %}because it was edited after approval.
+        Re-read it and approve again.{% endif %}
+      </p>
       {% endif %}
-      {# What moved since you last decided on this card, from the record
-         kept on this machine (ROADMAP §21). Open when something did. Markup
-         only, keyed on `data-change`; `review.js` closes it after a
-         decision. #}
-      {% if card.changes %}{% set ch = card.changes %}
-      <details class="changes" data-changes{{ ' open' if ch.pending }}>
-        <summary data-changes-head>{{ 'changed' if ch.pending else 'unchanged' }} since {{ ch.after }} {{ ch.since }}</summary>
-        {% if ch.pending %}
-        <ul class="change-list" data-change-pending>
-          {% for f in ch.pending.fields %}<li data-change="field"><code>{{ f.key }}</code> {{ f.before if f.before is not none else '-' }} &rarr; {{ f.after if f.after is not none else '-' }}</li>{% endfor %}
-          {% for s in ch.pending.sections %}<li data-change="section"><code>{{ s.name }}</code> {{ s.summary }}</li>{% endfor %}
-          {% for line in ch.pending.resolved %}<li data-change="resolved">{{ line }}</li>{% endfor %}
-        </ul>
-        {% endif %}
+
+
+      <div class="panels" data-panels>
+
+      {% call panel('notes', 'notes', card.annotations | length or '') %}
+        {# Truly empty with no notes, so the line under it can say so and the
+           script can fill it when one is written. #}
+        <ul class="annotations">{%- for note in card.annotations %}
+        <li class="annotation {{ note.audience }}">
+          <span class="who">@{{ note.audience }}</span>
+          <span class="what">{{ note.text }}</span>
+          {# Left of resolve, and quieter. Rewording a note is the common thing
+             to want and the reversible one; resolve deletes the line. #}
+          <button type="button" class="edit-note" data-edit-note="{{ loop.index0 }}"
+                  title="edit this note, keeping it open">edit</button>
+          <button type="button" class="resolve" data-resolve="{{ loop.index0 }}"
+                  title="resolve: deletes the line, which is the only thing that unblocks sync">
+            resolve</button>
+        </li>
+        {%- endfor %}</ul>
+        {% if card.plain_notes %}<div class="notes">{{ card.plain_notes }}</div>
+        {% else %}<p class="panel-empty">none</p>{% endif %}
+      {% endcall %}
+
+      {# What moved since you last decided on this card (ROADMAP §21): a list,
+         one entry per look, newest first, then the rounds before it. Open
+         while something moved. #}
+      {% set ch = card.changes %}
+      {% call panel('changes', 'what changed', (ch.entries | length or '') if ch else '', 'open' if ch and ch.pending else 'shut', moved=(true if ch and ch.pending else false)) %}
+        {% if ch %}
+        <p class="change-since" data-changes-head>{{ 'changed' if ch.pending else 'unchanged' }} since {{ ch.after }} {{ ch.since }}</p>
+        {% if ch.pending %}{{ change_entries(ch.entries) }}{% endif %}
         {% if ch.history %}
         <ol class="change-history" data-change-history>
           {% for entry in ch.history %}
-          <li>{{ entry.at }} &middot; {{ entry.decision }}{% if entry.change %}{% set c = entry.change %}{% set moved = (c.fields | map(attribute='key') | list) + (c.sections | map(attribute='name') | list) %}{% if moved %}: {{ moved | join(', ') }}{% endif %}{% if c.resolved %} ({{ c.resolved | length }} resolved){% endif %}{% endif %}</li>
+          <li>{{ entry.at }} &middot; {{ entry.decision }}{% if entry.change %}{% set c = entry.change %}{% set moved = (c.fields | map(attribute='key') | list) + (c.sections | map(attribute='name') | list) %}{% if moved %}: {{ moved | join(', ') }}{% endif %}{% if c.resolved %} ({{ c.resolved | length }} resolved){% endif %}{% endif %}{% if entry['from'] %}, from {{ entry['from'] | join(', ') }}{% endif %}
+            {% if entry.notes %}<ul class="change-notes">{% for n in entry.notes %}<li>{{ n.at }}{% if n['from'] %} &middot; from {{ n['from'] | join(', ') }}{% endif %}: {{ change_summary(n.change) }}</li>{% endfor %}</ul>{% endif %}</li>
           {% endfor %}
         </ol>
         {% endif %}
-      </details>
-      {% endif %}
-      {% if card.source %}<p class="src">{{ card.source }}</p>{% endif %}
-      {% if card.tags %}<p class="tags">{% for tag in card.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</p>{% endif %}
-      <p class="path"><code>{{ card.path }}</code></p>
+        {% endif %}
+        {% if card.resolved %}{{ settled(card.resolved) }}{% endif %}
+        {% if not ch and not card.resolved %}<p class="panel-empty">nothing yet</p>{% endif %}
+      {% endcall %}
 
-      {# Templates are re-read per request but Python is not, so this has to
-         render a bare uid when the running server still returns the old
-         payload of plain strings. Blank entries are what it did before. #}
-      {# What decides when Anki introduces this card. All of it lives in the
-         frontmatter and none of it was visible here, which made `requires` a
-         graph you could only edit blind. `required_by` is the half no file
-         can tell you: a card says what it needs, never what needs it. #}
-      {# Both gradings cycle on click. They decide the order Anki introduces
-         new cards in, they were authorable only by opening the file, and you
-         learn that a result is `common` rather than `core` by *meeting* it --
-         which is to say during review, which is here. Neither is hashed, so a
-         click does not un-approve anything: approving a card is not approving
-         its position in the queue. #}
-      <div class="place">
-        <p class="row">
+      {# Your own words, from Zotero, beside whatever a pass made of them. #}
+      {% if card.reader %}
+      {% call panel('zotero', 'you wrote in Zotero', card.reader | length) %}
+        {% for said in card.reader %}
+        <blockquote>{% if said.passage %}<span class="reader-passage">{{ said.passage }}</span>{% endif %}
+          <span class="reader-comment">{{ said.comment }}</span></blockquote>
+        {% endfor %}
+      {% endcall %}
+      {% endif %}
+
+      {# The linter, only when it says something; a clean card is a tick in
+         the head. #}
+      {% if card.findings %}
+      {% call panel('check', 'check', card.findings | length) %}
+      <ul class="findings">
+        {% for finding in card.findings %}
+        <li class="level-{{ finding.level }}"><b>{{ finding.code }}</b> {{ finding.message }}</li>
+        {% endfor %}
+      </ul>
+      {% endcall %}
+      {% endif %}
+
+      {% if card.unit_image %}
+      {% call panel('source', 'source', '') %}
+      {# A button, not a figure with a handler on it: it opens something, it is
+         reachable by keyboard, and a screen reader is told which of the two it
+         is. The caption stays outside, because the unit id is a label for the
+         card's provenance rather than part of the control. #}
+      <figure class="crop small">
+        {# One picture, shown twice: the crop triage looked at, scaled to the
+           aside here and at full size in the dialog. A crop cut to page width
+           is unreadable in a column this narrow, which is every crop from a
+           marked-up source, and that is what the dialog is for. #}
+        <button type="button" class="crop-open" data-crop="{{ card.unit_image }}"
+                data-unit="{{ card.unit }}"
+                title="the crop this card was written from, full size">
+          <img src="{{ card.unit_image }}" alt="source crop for {{ card.unit }}" loading="lazy">
+        </button>
+        <figcaption>{{ card.unit }}</figcaption>
+      </figure>
+      {% endcall %}
+      {% endif %}
+
+      {# Filing and history: there whenever you want it. The count says the
+         two gradings, which is what you would open it to check most often. #}
+      {% call panel('details', 'details', (card.frequency or 'no frequency') ~ ' · ' ~ (card.derivation or 'no derivation'), 'shut') %}
+        {# Each grading cycles on click. None is hashed, so a click does not
+           un-approve anything: approving a card is not approving its place in
+           the queue. #}
+        <div class="place">
+          <p class="row">
           {% if card.position %}<span class="pos" title="its place in the study order for this source, which does not move when you filter">order {{ card.position }}/{{ card.total }}</span>{% endif %}
           <button type="button" class="grade {{ 'missing' if not card.frequency }}"
                   data-grade="frequency"
@@ -110,7 +254,7 @@
              sections, and it was invisible from here. #}
           {# Whether the augmentation pass has been over this card. The one
              card state no amount of reading the file can answer, because the
-             pass's usual right answer is to add nothing. #}
+             pass may rightly add nothing. #}
           {# How much to learn again once this reaches Anki. Set by whoever
              changed the card; `anki push` carries it out and takes it off. #}
           <button type="button" class="grade {{ 'missing' if not card.relearn }}"
@@ -122,7 +266,7 @@
           <button type="button" class="grade web {{ 'on' if card.web }}{{ ' own' if card.web_own }}"
                   data-card-web
                   title="whether whoever augments this card may look things up on the web. Inherited from the unit, then the source, then the repo; click to cycle allowed / no / inherit.">{{ 'web: allowed' if card.web else 'web: no' }}</button>
-        </p>
+          </p>
         {% if card.requires %}
         <p class="dep needs" title="introduced before this card, whatever their grading">
           needs {% for dep in card.requires %}{% set uid = dep.uid if dep is mapping else dep %}{% if dep is mapping and dep.known %}<a class="goto" data-goto="{{ uid }}" href="{{ dep.href }}" title="{{ dep.gist ~ ' · ' if dep.gist }}go to {{ uid }}"><code>{{ uid }}</code>{% if dep.gist %}<span class="dep-gist">{{ dep.gist }}</span>{% endif %}</a>{% elif dep is mapping %}<code class="dead" title="names no card in this repo; `check` reports it">{{ uid }}</code>{% else %}<code title="restart `forge serve`: this is the pre-restart payload">{{ uid }}</code>{% endif %}{{ ", " if not loop.last }}{% endfor %}</p>
@@ -143,111 +287,31 @@
            title="every card in this source that needs another one, on one canvas. Drag between two boxes to add one.">{%
            if graph_empty %}draw the dependencies{% else %}see the whole graph{% endif %} &rarr;</a></p>
         {% endif %}
-      </div>
+        </div>
+        {% if card.source %}<p class="src">{{ card.source }}</p>{% endif %}
+        {% if card.tags %}<p class="tags">{% for tag in card.tags %}<span class="tag">{{ tag }}</span>{% endfor %}</p>{% endif %}
+        <p class="path"><code>{{ card.path }}</code></p>
+        {% if card.unit and not card.unit_image %}<p class="muted">unit {{ card.unit }} (no crop)</p>{% endif %}
+      {% endcall %}
 
-      {# An approval that is not holding. It is not withdrawn -- the file still
-         says `approved`, and resolving the note restores it with no re-review
-         -- so saying "draft" alone would read as work lost. #}
-      {% if card.demotion %}
-      <p class="held">
-        <b>back in the draft pile</b>
-        {% if card.demotion == 'annotated' %}while a note is open. Nothing about
-        the card changed. Resolve the note and it is approved again.{% else %}because it was edited after approval.
-        Re-read it and approve again.{% endif %}
-      </p>
-      {% endif %}
-
-      {# A div, not a <pre>: KaTeX's auto-render ignores `pre` by default, so
-         maths in a note was the one place on the card that never rendered.
-         `white-space: pre-wrap` keeps the line breaks. #}
-      {% if card.annotations %}
-      <ul class="annotations">
-        {% for note in card.annotations %}
-        <li class="annotation {{ note.audience }}">
-          <span class="who">@{{ note.audience }}</span>
-          <span class="what">{{ note.text }}</span>
-          {# Left of resolve, and quieter. Rewording a note is the common thing
-             to want and the reversible one; resolve deletes the line. #}
-          <button type="button" class="edit-note" data-edit-note="{{ loop.index0 }}"
-                  title="edit this note, keeping it open">edit</button>
-          <button type="button" class="resolve" data-resolve="{{ loop.index0 }}"
-                  title="resolve: deletes the line, which is the only thing that unblocks sync">
-            resolve</button>
-        </li>
-        {% endfor %}
-      </ul>
-      {% endif %}
-      {% if card.plain_notes %}<div class="notes">{{ card.plain_notes }}</div>{% endif %}
-
-      {# What was asked and what was done, shut until you ask for it.
-
-         Resolving an annotation deletes the line, which is what stops a
-         settled note holding the card out of sync. It also used to delete the
-         question, and after two passes over a card the edits are there and
-         the reason for them is not: you cannot tell whether the point you
-         made was taken, because you no longer have the point. The units view
-         has kept both halves since `answer` landed; this is the same record,
-         on the other half of the pipeline. #}
-      {% if card.resolved %}
-      <details class="settled-notes">
-        <summary>{{ card.resolved | length }} settled
-          <span class="settled-hint">what was asked, and what was done</span></summary>
-        <ul>
-          {% for done in card.resolved %}<li>{{ done }}</li>{% endfor %}
-        </ul>
-      </details>
-      {% endif %}
-
-      {# The linter, last and labelled. It is a reading of the card rather
-         than something anybody wrote on it, and unlabelled directly above the
-         `@claude` rows it read as one more note nobody remembered writing. #}
-      {% if card.findings %}
-      <p class="checks-what">check</p>
-      <ul class="findings">
-        {% for finding in card.findings %}
-        <li class="level-{{ finding.level }}"><b>{{ finding.code }}</b> {{ finding.message }}</li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="checks-ok">check: clean</p>
-      {% endif %}
-
-      {% if card.unit_image %}
-      {# A button, not a figure with a handler on it: it opens something, it is
-         reachable by keyboard, and a screen reader is told which of the two it
-         is. The caption stays outside, because the unit id is a label for the
-         card's provenance rather than part of the control. #}
-      <figure class="crop small">
-        {# One picture, shown twice: the crop triage looked at, scaled to the
-           aside here and at full size in the dialog. A crop cut to page width
-           is unreadable in a column this narrow, which is every crop from a
-           marked-up source, and that is what the dialog is for. #}
-        <button type="button" class="crop-open" data-crop="{{ card.unit_image }}"
-                data-unit="{{ card.unit }}"
-                title="the crop this card was written from, full size">
-          <img src="{{ card.unit_image }}" alt="source crop for {{ card.unit }}" loading="lazy">
-        </button>
-        <figcaption>{{ card.unit }}</figcaption>
-      </figure>
-      {% elif card.unit %}
-      <p class="muted">unit {{ card.unit }} (no crop)</p>
-      {% endif %}
+      </div>{# .panels #}
     </aside>
   </article>
   {% endfor %}
 </div>
 <p class="empty-filter" id="empty-filter" hidden>nothing here with this filter.</p>
 
-{# Front and back, edited in place. Markup only: `review.js` fills it from
-   `/api/cards/<uid>/text` when it opens and keys on the `data-` names and
-   the fields' `name`s. The note is off unless you tick it, and its words
-   are yours to change. Ctrl+Enter saves from either text box. #}
+{# A card's text, edited in place. Markup only: `review.js` asks
+   `/api/cards/<uid>/text` which sections this card's type allows, makes one
+   field per section from the template below, and keys on the `data-` names.
+   A section the card does not have yet is a button under the fields; an
+   optional section saved empty is removed. The note is off unless you tick
+   it, and its words are yours to change. Ctrl+Enter saves. #}
 <dialog class="prompt card-edit" data-card-edit-dialog>
   <form method="dialog" data-card-edit-form>
-    <label>front <textarea name="front" rows="5" spellcheck="false"></textarea></label>
-    <div class="card-edit-preview" data-card-edit-preview="front"></div>
-    <label>back <textarea name="back" rows="7" spellcheck="false"></textarea></label>
-    <div class="card-edit-preview" data-card-edit-preview="back"></div>
+    <h2 class="card-edit-head">edit <span data-card-edit-title></span></h2>
+    <div class="card-edit-fields" data-card-edit-fields></div>
+    <p class="card-edit-more" data-card-edit-more hidden>add <span data-card-edit-add></span></p>
     <label class="card-edit-ask"><input type="checkbox" name="ask"> ask claude to look
       <input name="note" value="check my manual edit" autocomplete="off"></label>
     <div class="prompt-actions">
@@ -256,10 +320,19 @@
     </div>
   </form>
 </dialog>
+<template data-card-edit-field>
+  <div class="card-edit-field" data-section="">
+    <label><span class="card-edit-name"></span> <span class="card-edit-hint"></span>
+      <textarea rows="4" spellcheck="false"></textarea></label>
+    <div class="card-edit-preview"></div>
+  </div>
+</template>
+{% include "_finder.html" %}
 {% endblock %}
 
 {% block keys %}
 {% include "_keys.html" %}
 {% endblock %}
 
-{% block scripts %}<script defer src="/static/review.js?b={{ app_build }}"></script>{% endblock %}
+{% block scripts %}<script defer src="/static/finder.js?b={{ app_build }}"></script>
+<script defer src="/static/review.js?b={{ app_build }}"></script>{% endblock %}

@@ -30,7 +30,6 @@ if (panel && detail) {
   const lists = [...document.querySelectorAll("[data-runs]")];
   const KIND = "anki-forge.setup.kind";
   const SYNC = "anki-forge.setup.sync";
-  const RUNS = "anki-forge.setup.runs";
 
   function recall(key, fallback) {
     try {
@@ -187,20 +186,6 @@ if (panel && detail) {
       paintSources();
     });
   }
-  /* The column you stop needing: what to run next is a question you ask
-     twice a session, and the other two are what you are reading. */
-  function foldRuns(away) {
-    document.getElementById("setup").classList.toggle("runs-off", away);
-    const tab = document.getElementById("runs-tab");
-    if (tab) tab.hidden = !away;
-    keep(RUNS, away ? "1" : "0");
-  }
-
-  const fold = document.getElementById("runs-fold");
-  if (fold) fold.addEventListener("click", () => foldRuns(true));
-  const tab = document.getElementById("runs-tab");
-  if (tab) tab.addEventListener("click", () => foldRuns(false));
-  if (recall(RUNS, "0") === "1") foldRuns(true);
 
   /* The picker, from the foot of the panel: starting another project is not
      something this one holds, so the list does not carry a row for it. */
@@ -429,6 +414,146 @@ for (const form of document.querySelectorAll(".source-note")) {
     toast("saved");
   });
 }
+
+
+/* A setting, set from a panel: one key into the project's file or a
+   source's `[[sources]]` table, through the endpoint the row names, saved
+   as soon as you change it. A list saves on change; a box saves on Enter
+   or when you leave it, and only if it moved; the reset takes the key out.
+   The pane reloads after, because every value on it resolves through the
+   config. */
+async function saveReading(row, value) {
+  await post(row.dataset.setUrl, { key: row.dataset.setKey, value });
+  location.hash = row.dataset.setPane || "";
+  location.reload();
+}
+
+/* A new key under a table: a convention, a tag's deck. */
+for (const form of document.querySelectorAll("[data-set-add]")) {
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const key = form.elements.key.value.trim();
+    const value = form.elements.value.value.trim();
+    if (!key || !value) return;
+    await post(form.dataset.setUrl, { key: form.dataset.setPrefix + key, value });
+    location.hash = form.dataset.setPane || "";
+    location.reload();
+  });
+}
+
+for (const row of document.querySelectorAll("[data-set-row][data-set-key]")) {
+  const input = row.querySelector("[data-set-input]");
+  const reset = row.querySelector("[data-set-reset]");
+  if (reset) reset.addEventListener("click", () => saveReading(row, ""));
+  if (!input) continue;
+  if (input.tagName === "SELECT") {
+    input.addEventListener("change", () => saveReading(row, input.value));
+    continue;
+  }
+  const was = input.value;
+  const commit = () => {
+    if (input.value.trim() !== was.trim()) saveReading(row, input.value.trim());
+  };
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit();
+    } else if (event.key === "Escape") {
+      input.value = was;
+      input.blur();
+    }
+  });
+  input.addEventListener("blur", commit);
+}
+
+
+/* The project's name, changed in place: the title in `project.toml`, never
+   the folder. The page reloads, because the name is in the top bar and the
+   list as well. */
+(function wireTitle() {
+  const head = document.querySelector("[data-title-edit]");
+  if (!head) return;
+  const form = head.querySelector("[data-title-form]");
+  const show = head.querySelector(".pane-title");
+  const open = (on) => {
+    form.hidden = !on;
+    show.hidden = on;
+    if (on) form.elements.title.select();
+  };
+  head.querySelector("[data-title-rename]").addEventListener("click", () => open(true));
+  head.querySelector("[data-title-cancel]").addEventListener("click", () => open(false));
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await post(`/api/projects/${encodeURIComponent(head.dataset.project)}/title`, {
+      title: form.elements.title.value,
+    });
+    location.hash = "project";
+    location.reload();
+  });
+  form.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") open(false);
+  });
+})();
+
+
+/* A note dumped at the project. Appended to `inbox.md`; the page reloads
+   so the project's commands offer `/sort-notes` once something waits. */
+(function wireInbox() {
+  const form = document.querySelector("[data-inbox]");
+  if (!form) return;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const text = form.elements.text.value.trim();
+    if (!text) return;
+    const answer = await post(`/api/projects/${encodeURIComponent(project())}/inbox`, {
+      text,
+      mode: modeOf(form.querySelector("[data-mode-boxes]")),
+    });
+    toast(`${answer.waiting} unsorted`);
+    location.hash = "inbox";
+    location.reload();
+  });
+  const project = () => new URL(location.href).searchParams.get("project") || "";
+  /* Two boxes, one result: propose, modify existing cards, or both ticked together, which
+     is the sorter choosing per piece. One is always ticked. */
+  function modeOf(boxes) {
+    const on = (name) => boxes.querySelector(`[data-mode="${name}"]`).checked;
+    return on("propose") && on("write") ? "both" : on("write") ? "write" : "propose";
+  }
+  document.addEventListener("click", async (event) => {
+    const state = event.target.closest("[data-dump-state]");
+    if (!state) return;
+    await post(`/api/projects/${encodeURIComponent(project())}/inbox/state`, {
+      stamp: state.closest("[data-dump]").dataset.dump,
+      state: state.dataset.dumpState,
+    });
+    location.hash = "inbox";
+    location.reload();
+  });
+  document.addEventListener("change", async (event) => {
+    const box = event.target.closest("[data-mode]");
+    const boxes = box && box.closest("[data-mode-boxes]");
+    if (!boxes) return;
+    if (!boxes.querySelector("[data-mode]:checked")) {
+      box.checked = true; // never none: the last one stays
+      return;
+    }
+    const dump = boxes.closest("[data-dump]");
+    if (!dump) return; // the add form reads it on submit
+    await post(`/api/projects/${encodeURIComponent(project())}/inbox/mode`, {
+      stamp: dump.dataset.dump,
+      mode: modeOf(boxes),
+    });
+    location.hash = "inbox";
+    location.reload();
+  });
+  form.elements.text.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+})();
 
 
 /* A page to check cards against, typed in rather than proposed. The same

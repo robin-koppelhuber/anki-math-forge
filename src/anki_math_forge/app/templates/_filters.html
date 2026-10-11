@@ -42,26 +42,43 @@
        as a broken import rather than as a filter still being on. Either the
        number follows the filters or the link drops them, and the number is
        what the rail is for. #}
+    {# Find a card: the palette, over every card in the project. When a query
+       has been kept as a filter (Shift+Enter in it), it is here to clear. #}
+    {% if view == 'review' %}
+    <p class="card-search">
+      <button type="button" class="find-open" data-find title="words anywhere on a card">find a card <kbd>{{ key('search') }}</kbd></button>
+      {% if f.get('q') %}<a class="find-active" href="{{ filter_url(here, f, q=none) }}" title="clear the search">&ldquo;{{ f.get('q') }}&rdquo; &times;</a>{% endif %}
+    </p>
+    {% endif %}
     {% set shared = {'project': src, 'counts_scope': f.get('counts_scope', '')} %}
+    {# A lane is a filter like the rest: the one you are on clears when you
+       click it again, keeping the other filters, and no lane means every
+       lane. An unselected lane used to mean `new` or `draft` without saying
+       so, which is how "@me" could show nothing while the rail lit `draft`
+       that nobody had chosen. #}
     <details class="filter-group" open>
       <summary>units</summary>
       <ul class="filter-list flow">
         {# Written out rather than looped: `data-count="new"` is the contract
            with app.js, and a computed attribute cannot be grepped for. #}
         <li><a class="{{ 'on' if view == 'units' and state == 'new' }}"
-               href="{{ filter_url('/units', shared, state='new') }}">new<b data-count="new">{{ pipeline.new }}</b></a></li>
+               href="{{ filter_url(here, f, state='all') if view == 'units' and state == 'new' else filter_url('/units', shared, state='new') }}"
+               title="{{ 'click to clear: every state' if view == 'units' and state == 'new' }}">{% if view == 'units' and state == 'new' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}new<b data-count="new">{{ pipeline.new }}</b></a></li>
         {# Just the key. `.step.you` is already the accent colour, so "a human
            decision" was the styling written out a second time, and the other
            steps are bare names already. #}
         {# The letters come from the keymap, like the footer and the guide. Spelt out here they were the one panel still teaching the default to somebody who had configured something else -- and it is the panel you are looking at while pressing the key. #}
         <li class="step you" title="{{ key('queue') }} queues it; {{ key('queue-with-brief') }} queues it and records what the card should be about, which is the other half of what this stage decides">{{ key('queue') }} / {{ key('queue-with-brief') }}</li>
         <li><a class="{{ 'on' if view == 'units' and state == 'queued' }}"
-               href="{{ filter_url('/units', shared, state='queued') }}">queued<b data-count="queued">{{ pipeline.queued }}</b></a></li>
+               href="{{ filter_url(here, f, state='all') if view == 'units' and state == 'queued' else filter_url('/units', shared, state='queued') }}"
+               title="{{ 'click to clear: every state' if view == 'units' and state == 'queued' }}">{% if view == 'units' and state == 'queued' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}queued<b data-count="queued">{{ pipeline.queued }}</b></a></li>
         <li class="step">/extract-cards</li>
         <li><a class="{{ 'on' if view == 'units' and state == 'carded' }}"
-               href="{{ filter_url('/units', shared, state='carded') }}">carded<b data-count="carded">{{ pipeline.carded }}</b></a></li>
+               href="{{ filter_url(here, f, state='all') if view == 'units' and state == 'carded' else filter_url('/units', shared, state='carded') }}"
+               title="{{ 'click to clear: every state' if view == 'units' and state == 'carded' }}">{% if view == 'units' and state == 'carded' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}carded<b data-count="carded">{{ pipeline.carded }}</b></a></li>
         <li><a class="out {{ 'on' if view == 'units' and state == 'skipped' }}"
-               href="{{ filter_url('/units', shared, state='skipped') }}">skipped<b data-count="skipped">{{ pipeline.skipped }}</b></a></li>
+               href="{{ filter_url(here, f, state='all') if view == 'units' and state == 'skipped' else filter_url('/units', shared, state='skipped') }}"
+               title="{{ 'click to clear: every state' if view == 'units' and state == 'skipped' }}">{% if view == 'units' and state == 'skipped' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}skipped<b data-count="skipped">{{ pipeline.skipped }}</b></a></li>
       </ul>
     </details>
 
@@ -69,13 +86,16 @@
       <summary>cards</summary>
       <ul class="filter-list flow">
         <li><a class="{{ 'on' if view == 'review' and status == 'draft' }}"
-               href="{{ filter_url('/review', shared, status='draft') }}">draft<b data-count="draft">{{ pipeline.draft }}</b></a></li>
+               href="{{ filter_url(here, f, status='all') if view == 'review' and status == 'draft' else filter_url('/review', shared, status='draft') }}"
+               title="{{ 'click to clear: every status' if view == 'review' and status == 'draft' }}">{% if view == 'review' and status == 'draft' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}draft<b data-count="draft">{{ pipeline.draft }}</b></a></li>
         <li class="step you" title="approve the card; `anki push` sends it to Anki">{{ key('approve') }}</li>
         <li><a class="{{ 'on' if view == 'review' and status == 'approved' }}"
-               href="{{ filter_url('/review', shared, status='approved') }}">approved<b data-count="approved">{{ pipeline.approved }}</b></a></li>
+               href="{{ filter_url(here, f, status='all') if view == 'review' and status == 'approved' else filter_url('/review', shared, status='approved') }}"
+               title="{{ 'click to clear: every status' if view == 'review' and status == 'approved' }}">{% if view == 'review' and status == 'approved' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}approved<b data-count="approved">{{ pipeline.approved }}</b></a></li>
         <li class="step">anki push → Anki</li>
         <li><a class="out {{ 'on' if view == 'review' and status == 'rejected' }}"
-               href="{{ filter_url('/review', shared, status='rejected') }}">rejected<b data-count="rejected">{{ pipeline.rejected }}</b></a></li>
+               href="{{ filter_url(here, f, status='all') if view == 'review' and status == 'rejected' else filter_url('/review', shared, status='rejected') }}"
+               title="{{ 'click to clear: every status' if view == 'review' and status == 'rejected' }}">{% if view == 'review' and status == 'rejected' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}rejected<b data-count="rejected">{{ pipeline.rejected }}</b></a></li>
       </ul>
     </details>
 
@@ -165,6 +185,18 @@
                          else 'cards the pass has been over. Take the flag off a card to ask for it again' }}">
           <span>{% if augmented == 'yes' %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}augmented</span>
           <b data-count="augmented">{{ pipeline.augmented }}</b></a></li>
+        {# What a pass, a manual edit or a push changed since you last
+           approved, rejected or first saw a card. Each one says at the top of
+           its aside what moved. Shown only when there are some: a row is a
+           population you work through. #}
+        {% if changed or changed_count %}
+        <li><a class="{{ 'on' if changed }}" data-filter="changed"
+               href="{{ filter_url(here, f, changed=(none if changed else 'yes')) }}"
+               title="{{ 'click to clear' if changed
+                         else 'cards that changed since you last decided on them; each says what moved' }}">
+          <span>{% if changed %}<i class="clear-mark" aria-hidden="true">&times;</i>{% endif %}changed since decided</span>
+          <b>{{ changed_count | default(0) }}</b></a></li>
+        {% endif %}
         {% endif %}
         <li><a class="{{ 'on' if annotated == 'none' }}"
                href="{{ filter_url(here, f, annotated=(none if annotated == 'none' else 'none')) }}"

@@ -133,6 +133,13 @@ async function setState(state, reason) {
   }
 }
 
+/* The proposal's own buttons, beside the keys. */
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-suggestion]");
+  if (!button) return;
+  oneAtATime(() => decideOnSuggestion(button.dataset.suggestion));
+});
+
 async function decideOnSuggestion(verb) {
   const item = currentOf(deck);
   if (!item) return;
@@ -163,7 +170,10 @@ async function decideOnSuggestion(verb) {
       deck.next();
     }
   } else {
-    toast("suggestion dismissed · ${undoKeyName()} undoes");
+    toast(`rejected · ${undoKeyName()} undoes`);
+    /* The rejection is now a settled line in the notes; the page draws
+       those, so redraw rather than patch. */
+    reloadHere(item);
   }
 }
 
@@ -315,10 +325,16 @@ function paintContext(item, unit) {
     button.textContent = step.label;
     button.classList.toggle("on", Boolean(step.on));
   });
+  const span = item.querySelector("[data-context-span]");
+  if (span && unit.window) {
+    span.textContent = unit.window.short;
+    span.title = unit.window.text;
+    span.classList.toggle("large", Boolean(unit.window.large));
+  }
 }
 
 function contextLabel(pages) {
-  if (pages === "chapter") return "the chapter it is in";
+  if (["section", "chapter", "part"].includes(pages)) return `the ${pages} it is in`;
   const size = Number(pages);
   if (size === 0) return "this page only";
   if (size >= 100) return "the whole document";

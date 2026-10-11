@@ -1,7 +1,4 @@
-# anki-forge — Design Doc (MVP, v4)
-
-**Status:** Draft
-**Changes from v3:** extraction now produces a best-effort math transcription so units are scannable at a glance; units gain a `queued` state so human triage is separate from carding; the review page grows into a local companion app with a units view and a review view, with annotations available in both.
+# anki-math-forge: design
 
 ---
 
@@ -9,9 +6,9 @@
 
 A small toolbox for turning mathematical source material into good Anki cards, with triage and approval steps that aren't painful.
 
-**MVP target:** matrix-calculus cards, sourced from *The Matrix Cookbook*. The card format is generic. Nothing in the schema assumes the Cookbook.
+**First target:** matrix-calculus cards, sourced from *The Matrix Cookbook*. The card format is generic. Nothing in the schema assumes the Cookbook.
 
-**Success criterion:** ~50 reviewed cards in Anki; triaging a hundred extracted units takes a few minutes; a re-run produces zero duplicates; scribbling `@claude this looks wrong` on a card gets it fixed and back into review.
+**Success criterion:** triaging a hundred extracted units takes a few minutes; a re-run produces zero duplicates; scribbling `@claude this looks wrong` on a card gets it fixed and back into review.
 
 ---
 
@@ -39,24 +36,10 @@ locator as far as it has one, something scannable, and `state: new`, and
 nothing past that, because a unit is a decision and a card is the content
 (invariant 9). Everything after the ledger reads a unit without asking which
 door it came in by, which is what lets a deck on a subject with no book
-behind it use the same triage, the same review and the same sync
+behind it use the same triage, the same review and the same push to Anki
 (ROADMAP.md 10).
 
-Python verbs:
-
-| Verb | Does |
-|---|---|
-| `units extract` | Segments a document into units, attempts a first-pass transcription, updates the ledger. Never writes cards. |
-| `zotero import` | The second door: what you marked up in Zotero, as units. Imports rather than segments. |
-| `sources` | Every source in the repo and which project reads it, across projects. |
-| `project new` | Starts a project that reads no document, for a subject rather than a book. |
-| `units add` | The door a proposing pass writes through, where there is nothing to segment. |
-| `serve` | The companion app: units triage + card review + annotations. |
-| `units` | CLI view of the ledger, for scripting and for Claude Code. |
-| `check` | Lints card files. Structural only. |
-| `todo` | Lists open `@claude` and `@me` annotations, on cards and units. |
-| `anki push` | Pushes approved cards to Anki, upserting by `uid`. |
-| `verify` | Opt-in numeric check (§7). |
+Every command, with its flags, is in [COMMANDS.md](COMMANDS.md). One word reads and two words write ([VERBS.md](VERBS.md)).
 
 ---
 
@@ -98,17 +81,19 @@ You need to see the actual mathematics to decide whether a unit is worth carding
 
 ### Producing units
 
-1. **LaTeX source**, if it exists — parse equation environments; the locator falls out of the numbering.
-2. **PDF** — segment pages, locate equation regions, record each region's bbox, capture surrounding text. Assume math in the text layer is mangled and don't rely on it.
+1. **LaTeX source**, if it exists: parse equation environments. The locator falls out of the numbering.
+2. **PDF:** segment pages, locate equation regions, record each region's bbox, capture surrounding text. Assume math in the text layer is mangled and don't rely on it.
+3. **Zotero marks:** each mark you declared worth a card is a unit with its own box (`zotero import`).
+4. **A subject:** `/propose` writes units through `units add`, where there is nothing to segment.
 
 ### The ledger
 
 `state ∈ {new, queued, skipped, carded}`.
 
-- `new` — extracted, not yet looked at
-- `queued` — you decided it's worth a card; this is the work list Claude Code reads
-- `skipped` — decided against, with a reason; **sticky**, never re-offered
-- `carded` — records the `uid`s produced
+- `new`: extracted, not yet looked at
+- `queued`: you decided it's worth a card. This is the work list Claude Code reads.
+- `skipped`: decided against, with a reason. **Sticky**, never re-offered.
+- `carded`: records the `uid`s produced
 
 Splitting `queued` from `carded` keeps human triage separate from generation. Re-running `units extract` preserves all states and only adds genuinely new units, so processing a book is an incrementally resumable queue rather than a one-shot dump.
 
@@ -155,7 +140,7 @@ The matrix analogue of $(\log x)' = 1/x$.
 @claude check the transpose against §2.4 — I think this is numerator layout
 ```
 
-`front` and `back` required; everything else optional and conditionally rendered in Anki (`{{#Proof}}...{{/Proof}}`), so one note type covers cards with and without proofs or prose.
+The frontmatter keys are listed in [CLAUDE.md](../CLAUDE.md). `front` and `back` are required; everything else is optional and conditionally rendered in Anki (`{{#Proof}}...{{/Proof}}`), so one note type covers cards with and without proofs or prose.
 
 `type` reaches Anki as a `type::` tag. One note type carries both `identity` and `intuition`.
 
@@ -163,7 +148,7 @@ The matrix analogue of $(\log x)' = 1/x$.
 
 ## 6. The companion app
 
-`forge serve` — FastAPI, KaTeX, local only. Five views over the same files: two before you triage anything, and three over the deck.
+`forge serve` is FastAPI and KaTeX, local only. Five views over the same files: two before you triage anything, and three over the deck.
 
 ### The shelf (`/projects`)
 
@@ -175,15 +160,16 @@ The one screen that is not about a project, so it carries none of the row that i
 
 What a project is before it has units: what it reads, what you asked for, and which asks have outline entries with nothing behind them yet. Three columns you can drag: the commands to copy, the list of topics and sources, and the panel for whichever one you picked.
 
+The inbox is here too: facts and corrections you type in, in two lists, unsorted and sorted. `/sort-notes` places each one (ROADMAP.md 20).
+
 A source's panel is where the per-document settings live, each with where it was settled, because "40 points" and "40 points, because nobody said otherwise" are different answers. For a source that came from Zotero it is also where the marking scheme is edited: what each colour means, and which marks make units.
 
 ### Units view (`/units`)
 
 Fast triage. One unit at a time: the crop, the rendered transcription beside it, the surrounding context, the locator.
 
-- `q` queue · `s` skip · `n` annotate · `j`/`k` navigate
+- `q` queue · `s` skip · `S` skip with a one-word reason, stored in the ledger · `n` annotate · `j`/`k` navigate
 - filter by state and by section
-- skip prompts for a one-word reason, stored in the ledger
 
 Designed for flipping through a hundred units in a few minutes. Everything is a single keystroke and nothing requires reading raw LaTeX.
 
@@ -191,14 +177,14 @@ Designed for flipping through a hundred units in a few minutes. Everything is a 
 
 Card approval. Rendered exactly as it will appear in Anki (front, back, conditions, proof, prose), plus source ref, link back to the originating unit's crop, and check results.
 
-- `a` approve · `r` reject · `e` open in `$EDITOR` · `E` edit front and back in the page · `n` annotate · `j`/`k` navigate
+- `a` approve · `r` reject · `e` open in `$EDITOR` · `E` edit the card in the page · `/` find a card · `n` annotate · `j`/`k` navigate
 - approve writes `status` and `content_hash` back to the file
 
 The crop link matters: when a card looks off, the fastest resolution is comparing it against the original page image.
 
 ### Graph view (`/graph`)
 
-The `requires` of one project, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all. Reached from the button beside the settings gear, on every view that is about one project.
+The `requires` of one project, on a canvas you arrange by hand. The review view answers what the card in front of you rests on; this answers which results everything rests on, and whether a chapter recorded any dependencies at all. Reached from the button in the top bar, on every view that is about one project.
 
 - every box has a dot on each side. **Drag from a dot to another card** to connect them, and which dot you grabbed decides which card ends up with the `requires` line
 - `click` selects a box or an arrow · `double-click` opens the card · `del` removes what is selected
@@ -206,7 +192,7 @@ The `requires` of one project, on a canvas you arrange by hand. The review view 
 - `+` puts a card with no dependencies on the canvas · `x` puts a box back · `z` undo · `f` every card · `0` recentre
 - the arrangement is written to `projects/<name>/graph.json`, a plain file you can diff
 
-An arrow runs dot to dot, out of the prerequisite's right port and into the dependent's left port, so the line you drew is the line you get. Dropping one on empty space opens the card picker and connects whatever you choose, because the card you meant is usually one of the ones not drawn.
+An arrow runs dot to dot, out of the prerequisite's right port and into the dependent's left port, so the line you drew is the line you get. Dropping one on empty space opens the card picker and connects whatever you choose, because the card you meant may have no arrow yet, and a card with none is not drawn.
 
 Writing an arrow writes `requires` into the card that needs the other, which is a write to a card file and is checked like one: refused before the write for a self-reference, an unknown uid, or a cycle, with the loop named. `requires` sits outside `content_hash`, so linking two approved cards demotes neither.
 
@@ -214,30 +200,36 @@ The default picture is the part of the deck that has edges, and the count it lef
 
 `[app] graph = false` turns the whole view off. `requires` still decides the order Anki introduces cards in.
 
+### Running commands
+
+The rail lists the commands that apply to what is on screen. The ones with no model behind them run from the page, in the background, and the runs window keeps their history in `.forge/`. The ones that need Claude give the line to paste into Claude Code.
+
 ### Annotations
 
 Available from both triage and review via `n`, and **equally available by editing a file directly**. The app is one entry point, not the entry point. An annotation written in the browser lands in the card's `## notes` section, byte-identical to one you'd type by hand.
 
 ### State handling
 
-The app holds no state. Re-read from disk on every request, no caching. On write, compare mtime against load time and refuse if the file changed underneath. You'll have an editor open alongside this, and silent clobbering is worse than an occasional retry.
+The app holds no state about cards or units. A parsed file is kept only until it changes on disk. On write, compare mtime against load time and refuse if the file changed underneath. Run history and the record of what changed on each card live in `.forge/`, which is not in git and which nothing else depends on. You'll have an editor open alongside this, and silent clobbering is worse than an occasional retry.
 
 ---
 
 ## 7. Checks
 
-**`check` — always runs, blocks `anki push`:**
+**`check` always runs and blocks `anki push`:**
 
 - required sections present (`front`, `back`)
 - LaTeX parses (KaTeX, strict)
 - `uid` present, well-formed, unique
 - section whitelist for the declared `type`
 - rendered `front` under a character cap
-- no open `@claude` annotations on cards headed for Anki
+- no open annotations (`@claude` or `@me`) on cards headed for Anki
 - `content_hash` matches when `status: approved`
 - no `uid` collision with the live collection (with `check --anki`)
 
-**`verify` — opt-in per card:**
+Some findings only warn and do not block: prose over the cap, a section that wraps across lines (each wrap is a `<br>` on the card), a numeric `uid`.
+
+**`verify` is opt-in per card:**
 
 Sample random conforming matrices, evaluate both sides (or compare a closed-form gradient against autodiff), assert agreement. Default off. Worth enabling on the gnarly ones (Woodbury, block inverses), where a stray transpose survives proofreading and then gets memorized confidently. Executable forms live in a `## verify` section, out of the way of cards that don't use it.
 
@@ -256,7 +248,7 @@ Not only for fixes: `@claude add a proof sketch`, `@claude split this into two c
 
 ---
 
-## 9. Sync
+## 9. Pushing to Anki
 
 AnkiConnect on localhost. Note type created once via `createModel`, versioned in the repo with a version suffix in the name.
 
@@ -266,45 +258,52 @@ AnkiConnect on localhost. Note type created once via `createModel`, versioned in
 
 ## 10. Claude Code's role
 
-**`CLAUDE.md`** — always loaded, keep it short. Repo invariants, card format, the un-approval rule.
+**`CLAUDE.md`**: always loaded, kept short. Repo invariants, card format, the un-approval rule.
 
-**`.claude/skills/card-writing/SKILL.md`** — loaded on demand. The craft: what makes a cardable unit, how to phrase a `front` so it admits one answer, when a proof section earns its place, length expectations. Worked good/bad examples live here and accumulate as you reject things during review.
+**`.claude/skills/card-writing/SKILL.md`**: loaded on demand. The craft: what makes a cardable unit, how to phrase a `front` so it admits one answer, when a proof section earns its place, length expectations. Worked good/bad examples live here and accumulate as you reject things during review.
 
-**`.claude/commands/`**
-- `/extract-cards` — read `units --state queued`, write stubs, mark `carded`
-- `/augment` — fill conditions/proof/prose/tags on stubs
-- `/triage` — work the `todo` list
+**`.claude/commands/`** and **`.claude/agents/`**: one command per pass. `/transcribe`, `/classify`, `/gist`, `/extract-cards`, `/augment` and `/sort-notes` hand each section or dump to a subagent, so the crops stay out of the main context.
+- `/transcribe`, `/classify`, `/gist`: read the crops of units
+- `/propose`, `/sources`: start from a subject
+- `/extract-cards`: read `units --state queued`, write stubs, mark `carded`
+- `/augment`: fill conditions, proof, prose and tags on stubs
+- `/triage`: work the `todo` list
+- `/sort-notes`: place what is waiting in the inbox
 
 ---
 
 ## 11. Repo and tooling
 
 ```
-anki-forge/
+anki-math-forge/
   CLAUDE.md
-  docs/DESIGN.md
+  docs/
   pyproject.toml
   .claude/
     skills/card-writing/SKILL.md
-    commands/{extract-cards,augment,triage}.md
+    commands/                  # one file per pass
+    agents/                    # the subagents they hand work to
   cards/                       # source of truth
   projects/matrix-cookbook/
     units.jsonl
     project.toml
   src/anki_math_forge/
     model.py                   # frontmatter + section parsing
-    extract/                   # tex/pdf segmenters, transcription, ledger
+    config.py                  # forge.toml and project.toml
+    ledger.py                  # units and their states
+    extract/                   # tex/pdf segmenters, Zotero import, crops
     app/                       # FastAPI, templates, static
     check.py
     sync.py
     verify.py
     cli.py
-  tests/
+  tests/                       # tests/browser drives the app in Chrome
+  scripts/                     # affected.py: the tests a change is likely to touch
 ```
 
 - **uv** for env and deps, lockfile committed
 - **ruff** lint + format · **pytest** · **mypy** on `src/` · **pre-commit**
-- **GitHub Actions**: lint, types, tests, no network
+- **GitHub Actions**: lint, types, tests, no network, and `forge check` on the deck
 
 There is no OCR dependency. Transcription is the `/transcribe` skill reading crops, so the core tool installs fast and CI never pulls in a vision stack.
 
@@ -321,25 +320,16 @@ Config in one TOML: deck name, note type version, character cap, Anki URL, sourc
 - **Annotation gating**: card with an open `@claude` is refused by `anki push`.
 - **Hash gating**: edit an approved card, assert `check` fails and the card counts as a draft.
 - **App writes**: browser-made annotation is byte-identical to a hand-written one; stale-mtime write is refused.
-- **Sync idempotency**: mocked AnkiConnect, run twice, no second add.
+- **`anki push` is idempotent**: mocked AnkiConnect, run twice, no second add.
 - **`verify` corruption suite**: flip a transpose or sign, assert rejection.
-- No network in tests; AnkiConnect and OCR both mocked.
+- **Browser tests** (`tests/browser`, opt in with `uv sync --extra browser`) drive the real pages, because the canvas has no markup to assert against.
+- No network in tests; AnkiConnect is mocked.
 
 ---
 
 ## 13. Build order
 
-| M | Deliverable | Done when |
-|---|---|---|
-| **M0** | Skeleton + card parser + `check` | Hand-written card lints clean; broken fixtures fail correctly |
-| **M1** | `anki push` + note type | 3 hand-written cards land in Anki; re-run adds nothing |
-| **M2** | App: review view + annotations + `todo` | Full manual loop: write, review, annotate, triage, re-review |
-| **M3** | `units extract` + transcription + ledger | Cookbook segmented; units carry readable math |
-| **M4** | App: units view | Triage a hundred units in a few minutes |
-| **M5** | `CLAUDE.md`, skill, commands + first batch | ~50 cards queued, stubbed, augmented, reviewed, synced |
-| **M6** | `verify` (opt-in) | Corrupted identities rejected on cards that opt in |
-
-Keep this order. M0–M2 is testable with hand-written cards, and if the review loop is wrong you want to know before there are three hundred stubs in the repo.
+M0 to M6 are built, and their order is in git. [ROADMAP.md](ROADMAP.md) lists what is left.
 
 ---
 
@@ -349,18 +339,18 @@ Keep this order. M0–M2 is testable with hand-written cards, and if the review 
 - Databases, containers, servers, scheduled runs, remote access.
 - Near-duplicate detection beyond exact `uid` collision.
 - Editing Anki cards this tool didn't create.
-- Two-way sync. Card content goes files → Anki only; `anki pull` brings back review comments and flags, nothing else.
+- Card content coming back from Anki. It goes files → Anki only; `anki pull` brings back review comments and flags, nothing else.
 - Perfect OCR. `tex_auto` is a triage aid; the crop is the authority.
 
 ---
 
-## 15. Open decisions
+## 15. Decisions that were open
 
-1. **Card language** — German or English for prose sections. Set as `[cards] language` in `forge.toml`.
-2. **Layout convention** — denominator or numerator. Declared per project, as `[conventions] layout`; mixing is the failure that quietly poisons the deck.
-3. **Cookbook source form** — whether usable LaTeX exists, or extraction goes down the PDF+OCR path. Determines what M3 costs.
-4. **Tensor backend for `verify`** — numpy with central differences; no torch, no jax.
-5. **Deck placement** — decide before the first sync.
+1. **Card language**, German or English for prose sections. Set as `[cards] language` in `forge.toml`.
+2. **Layout convention**, denominator or numerator. Declared per project, as `[conventions] layout`. Mixing is the failure that quietly poisons the deck.
+3. **Cookbook source form.** There is no usable LaTeX, so it goes down the PDF path: `units extract` segments it and `/transcribe` reads the crops.
+4. **Tensor backend for `verify`:** numpy with central differences; no torch, no jax.
+5. **Deck placement:** `[anki] deck` for the repo, `deck` per project, and `[decks]` to split by type, tag or topic.
 
 ---
 
@@ -370,5 +360,5 @@ Keep this order. M0–M2 is testable with hand-written cards, and if the review 
 - Files are the source of truth. The app is a view; any feature that makes it a store is wrong.
 - Extraction produces units, never cards. If it's tempted to write a `front`, it's overstepping.
 - `tex_auto` is a hint. When writing a stub from a unit, the crop is authoritative.
-- Card content guidelines belong in the skill, not in code. The Python never generates or rewrites card text.
+- Card content guidelines belong in the skill, not in code. The Python never generates or rewrites card text. A model may write it, reading the skill as it stands and going through the same verbs ([CONTRACT.md](CONTRACT.md) §6).
 - When this doc doesn't answer something, make a small call and note it in a comment. Don't block.

@@ -80,7 +80,7 @@
                         if cmd.effect else
                         ('paste into Claude Code' if cmd.kind == 'claude'
                          else 'paste into a shell') }}">
-    <span class="run-label">{{ cmd.label }}
+    <span class="run-label">{{ cmd.label }}{% if cmd.detail %} <span class="run-scope">{{ cmd.detail }}</span>{% endif %}
       {#- Which end it runs at. A shell command is plain Python and does
           exactly what it says; a skill puts a model in the loop, which
           costs tokens, takes minutes and produces something to review. That
@@ -95,12 +95,19 @@
         ('run' if cmd.effect == 'reads' else 'writes') if cmd.effect
         else ('claude' if cmd.kind == 'claude' else 'shell') }}</i>
     </span>
-    {# What it does, in one sentence. The label says which pass and how much
+    {# What it does, in a few words. The label says which pass and how much
        is waiting; it does not say what the pass *is*, and these are commands
        you run rarely enough to have forgotten. #}
     {% if cmd.why %}<span class="run-why">{{ cmd.why }}</span>{% endif %}
-    <code>{{ cmd.run }}</code>
-  </button></li>
+    {# The command itself is in the runs window, where it is built; a slash
+       command keeps it here, because copying it is all there is to do. #}
+    {% if not cmd.effect %}<code>{{ cmd.run }}</code>{% endif %}
+  </button>
+  {% if cmd.action %}
+  <button type="button" class="run-tune" data-tune="{{ cmd.action }}"
+          data-values="{{ cmd['values'] | tojson | forceescape }}"
+          title="open it in the commands window, to change what it runs on">&#8943;</button>
+  {% endif %}</li>
   {% endif %}
   {% endfor %}
 </ul>

@@ -110,28 +110,10 @@
   <p class="order-empty" id="order-empty" hidden></p>
 </aside>
 
-{# Which card to put on the canvas. Listed by caption: a card with no
-   dependency either way is not drawn, and picking one out of ninety rows of
-   six-hex uids is not something anyone would do. #}
-<dialog class="gallery adder" id="add-card" aria-label="add a card to the canvas">
-  <header class="gallery-head">
-    <div class="gallery-title">
-      <h2>add a card</h2>
-      <p class="gallery-totals" id="add-count"></p>
-    </div>
-    <input type="search" class="gallery-search" id="add-search"
-           placeholder="caption, uid or section" autocomplete="off" spellcheck="false">
-    <button type="button" class="gallery-close" id="add-close"
-            title="close (esc)">&times;</button>
-  </header>
-  <div class="add-list" id="add-list"></div>
-  <p class="gallery-empty" id="add-empty" hidden></p>
-  <p class="rail-more settings-foot">
-    A card lands in the middle of the view and stays on the canvas until you
-    point at it and press <b>{{ key('forget-position') }}</b>. Being here is a
-    position in <code>graph.json</code>, not a change to the card.
-  </p>
-</dialog>
+{# Which card to put on the canvas, from the shared find palette. Listed by
+   caption: a card with no dependency either way is not drawn, and picking one
+   out of ninety rows of six-hex uids is not something anyone would do. #}
+{% include "_finder.html" %}
 {% endblock %}
 
 {% block keys %}
@@ -147,4 +129,5 @@
 <span class="muted">an arrow writes <code>requires</code> into the card that needs the other</span>
 {% endblock %}
 
-{% block scripts %}<script defer src="/static/graph.js?b={{ app_build }}"></script>{% endblock %}
+{% block scripts %}<script defer src="/static/finder.js?b={{ app_build }}"></script>
+<script defer src="/static/graph.js?b={{ app_build }}"></script>{% endblock %}

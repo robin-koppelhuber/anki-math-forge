@@ -763,3 +763,87 @@ def test_a_declared_file_that_is_missing_is_still_a_missing_file(tmp_path: Path)
 
     with pytest.raises(ConfigError, match=re.escape("gone.pdf")):
         extract.run(config, "cpp")
+
+
+# -- how a source is read, set from its panel --------------------------------
+
+
+def setting(client: TestClient, key: str, value: str, work: str = "ZOT1") -> object:
+    return client.post(f"/api/sources/cpp/{work}/setting", json={"key": key, "value": value})
+
+
+@pytest.mark.parametrize(
+    "key,value,line",
+    [
+        ("crop_context", "40", "crop_context = 40"),
+        ("crop_width", "page", 'crop_width = "page"'),
+        ("context_pages", "3", "context_pages = 3"),
+        ("context_pages", "chapter", 'context_pages = "chapter"'),
+        ("convention_keyword", "Konvention", 'convention_keyword = "Konvention"'),
+    ],
+)
+def test_a_reading_setting_is_written_into_the_work_table(
+    tmp_path: Path, key: str, value: str, line: str
+) -> None:
+    config = a_repo(tmp_path, MARKED)
+    client = TestClient(create_app(config))
+
+    answer = setting(client, key, value)
+
+    assert answer.status_code == 200, answer.text  # type: ignore[attr-defined]
+    text = (tmp_path / "projects" / "cpp" / "project.toml").read_text(encoding="utf-8")
+    assert line in text
+    assert "# a comment that survives" in text
+    work = config_mod.load(tmp_path).projects["cpp"].sources[0]
+    loaded = getattr(work, key)
+    assert loaded == float(value) if key == "crop_context" else str(loaded) == value
+
+
+def test_empty_inherits_again(tmp_path: Path) -> None:
+    config = a_repo(tmp_path, MARKED + "crop_width = \"box\"\n")
+    client = TestClient(create_app(config))
+
+    setting(client, "crop_width", "")
+
+    assert config_mod.load(tmp_path).projects["cpp"].sources[0].crop_width == ""
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("crop_width", "wide"),
+        ("context_pages", "lots"),
+        ("crop_context", "-3"),
+        ("units_from", "x"),
+    ],
+)
+def test_a_value_the_loader_would_refuse_is_not_written(
+    tmp_path: Path, key: str, value: str
+) -> None:
+    config = a_repo(tmp_path, MARKED)
+    before = (tmp_path / "projects" / "cpp" / "project.toml").read_text(encoding="utf-8")
+
+    answer = setting(TestClient(create_app(config)), key, value)
+
+    assert answer.status_code == 400  # type: ignore[attr-defined]
+    after = (tmp_path / "projects" / "cpp" / "project.toml").read_text(encoding="utf-8")
+    assert after == before
+
+
+def test_the_panel_offers_a_control_per_setting(tmp_path: Path) -> None:
+    config = a_repo(tmp_path, MARKED)
+    page = TestClient(create_app(config)).get("/setup?project=cpp").text
+
+    for key in ("crop_context", "crop_width", "context_pages", "convention_keyword"):
+        assert f'data-set-key="{key}"' in page, key
+    assert 'data-set-key="units_from"' not in page, "the scheme editor below owns it"
+
+
+def test_an_untitled_zotero_work_takes_the_project_title(tmp_path: Path) -> None:
+    """The import that started a project wrote the item's title on the
+    project and none on the work, which then went by its item key."""
+    config = a_repo(tmp_path, '[[sources]]\nzotero = "T7QDISXB"\n')
+
+    assert config.projects["cpp"].sources[0].title == "C++"
+    page = TestClient(create_app(config)).get("/setup?project=cpp").text
+    assert ">C++<" in page.replace("\n", "").replace("  ", "")

@@ -6,7 +6,7 @@ argument-hint: [--project NAME]
 Add the optional sections to stubs that are still bare.
 
 Arguments: `$ARGUMENTS` — **`--project NAME`** narrows to one project's drafts.
-Worth asking for when the repo has several: conventions are per source, and a
+Worth asking for when the repo has several: conventions are per project, and a
 pass that hops between two books is one that has to reload the setting between
 every card.
 
@@ -30,19 +30,20 @@ a queue was. **One `augmenter` agent per batch, dispatched in parallel.**
    this session:
 
    ```
-   grep -l "^status: draft" cards/<SOURCE>/*.md | xargs grep -L "^augmented: true"
+   grep -l "^status: draft" cards/<PROJECT>/*.md | xargs grep -L "^augmented: true"
    ```
 
    Then the ones somebody has asked about since, whatever their flag says:
 
    ```
-   grep -l "^status: draft" cards/<SOURCE>/*.md | xargs grep -l "^@claude"
+   grep -l "^status: draft" cards/<PROJECT>/*.md | xargs grep -l "^@claude"
    ```
 
    Take the union. A note written on a card *after* the pass has been over it
-   is a request for the pass to go again, which is exactly what withdrawing
-   the flag would have said and is one fewer thing to remember. Answering it
-   is part of augmenting: make the edit and delete the line, in the same pass.
+   is a request for the pass to go again, which is exactly what withdrawing the
+   flag would have said and is one fewer thing to remember. Answering it is
+   part of augmenting: make the edit and replace the line with a `resolved:`
+   line, in the same pass.
 
    **A card is in by default.** The flag records that the pass has been
    over it, so a card that has never seen it carries nothing and is picked up
@@ -62,7 +63,7 @@ a queue was. **One `augmenter` agent per batch, dispatched in parallel.**
    just something an agent writes.
 
    Group them into batches of roughly twenty. Where the ids carry a section
-   (`<source>:<section>:<n>` in each card's `unit:`), group by that instead:
+   (`<project>:<section>:<n>` in each card's `unit:`), group by that instead:
    cards from one section share a page and a run of results on one theme, and
    an agent that sees them together writes fewer near-duplicate `## prose`
    lines than one that meets them scattered.
@@ -70,9 +71,9 @@ a queue was. **One `augmenter` agent per batch, dispatched in parallel.**
 2. Dispatch one `augmenter` per batch, in parallel — several `Agent` calls in
    one message, each naming the card files it owns:
 
-   > Augment these draft cards in `<SOURCE>`: `<paths>`. Follow your
+   > Augment these draft cards in `<PROJECT>`: `<paths>`. Follow your
    > instructions exactly — read the page each one came from, check the
-   > mathematics yourself, add only what earns its place, and record as `@me`
+   > mathematics yourself, add only what earns its place, and record in `## notes`
    > any condition the source does not state. Drafts only; approve nothing.
 
    **A card belongs to exactly one agent.** Nothing serialises two writers of
@@ -83,8 +84,8 @@ a queue was. **One `augmenter` agent per batch, dispatched in parallel.**
    summaries:
 
    ```
-   uv run forge verify --project <PROJECT>
-   uv run forge check
+   uv run --no-sync forge verify --project <PROJECT>
+   uv run --no-sync forge check
    ```
 
    Then count what is left: every card an agent touched should carry

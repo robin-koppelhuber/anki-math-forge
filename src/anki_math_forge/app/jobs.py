@@ -35,12 +35,20 @@ import shlex
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
 
-#: How many finished runs to remember. A run is read once, just after it
-#: finishes, and the only reason to keep any is a page reloaded mid-run.
-KEEP = 20
+from . import run_views
+
+#: How many runs to remember. The runs window lists them, and a list of
+#: the last fifty is a morning's work without being a log nobody reads.
+KEEP = 50
+
+#: A raw result bigger than this is not kept across a restart: one
+#: `units --json` is the whole ledger. The rendered view is kept, which is
+#: what the window shows first.
+KEPT_DATA = 100_000
 
 
 @dataclass
@@ -64,16 +72,43 @@ class Run:
     #: Anything on stderr, which is where every command puts the reason it
     #: could not do the thing: Anki closed, Zotero closed, no ledger yet.
     said: str = ""
+    #: The command by the words typed (`anki push`), which is what decides
+    #: how its result is described.
+    verb: str = ""
+    #: `run_views.describe` over the result: a summary line, a tone and
+    #: the blocks worth looking at. Set once, when the run finishes.
+    view: dict[str, Any] | None = None
 
-    def payload(self) -> dict[str, Any]:
+    def row(self) -> dict[str, Any]:
+        """What a list of runs needs: no output, which can be the whole
+        ledger and is read one run at a time."""
+        view = self.view or {}
+        from . import actions
+
+        # The action this run is, with its fields, so the window opened on
+        # it starts the builder on the same command rather than on whatever
+        # action happens to come first.
+        found = actions.match([a for a in self.argv if a != "--json"])
         return {
             "id": self.id,
+            "action": found[0].key if found else "",
+            "values": found[1] if found else {},
             "run": "forge " + " ".join(a for a in self.argv if a != "--json"),
+            "verb": self.verb,
             "effect": self.effect,
             "at": round(self.at),
             "done": self.done,
             "ok": self.ok,
             "seconds": round(self.seconds, 2),
+            "summary": view.get("summary", ""),
+            "tone": view.get("tone", ""),
+        }
+
+    def payload(self) -> dict[str, Any]:
+        view = self.view or {}
+        return {
+            **self.row(),
+            "blocks": view.get("blocks", []),
             "data": self.data,
             "said": self.said,
         }
@@ -81,29 +116,87 @@ class Run:
 
 @dataclass
 class Runner:
-    """Every run this server has been asked for, newest last."""
+    """Every run this server has been asked for, newest last.
+
+    With a `store`, the finished ones are written there after each run and
+    read back when the server starts, so the history outlives a restart.
+    Local and disposable, like the change records: losing the file loses
+    the list and nothing else. A run still going when the server stopped
+    is not in it; it never finished.
+    """
 
     runs: dict[str, Run] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
+    store: Path | None = None
 
-    def start(self, argv: list[str], root: Any, effect: str = "reads") -> Run:
+    def load(self) -> None:
+        if self.store is None or not self.store.exists():
+            return
+        try:
+            saved = json.loads(self.store.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        with self.lock:
+            for raw in saved if isinstance(saved, list) else ():
+                try:
+                    run = Run(**{**raw, "started": 0.0})
+                except TypeError:
+                    continue
+                self.runs[run.id] = run
+
+    def _save(self) -> None:
+        """Every finished run, to the store. Called with the lock held."""
+        if self.store is None:
+            return
+        kept = []
+        for run in self.runs.values():
+            if not run.done:
+                continue
+            raw = asdict(run)
+            if len(json.dumps(raw.get("data"), default=str)) > KEPT_DATA:
+                raw["data"] = None
+            kept.append(raw)
+        try:
+            self.store.parent.mkdir(parents=True, exist_ok=True)
+            self.store.write_text(json.dumps(kept, default=str), encoding="utf-8")
+        except OSError:
+            return
+
+    def start(
+        self, argv: list[str], root: Any, effect: str = "reads", verb: str = ""
+    ) -> Run:
         run = Run(
             id=uuid.uuid4().hex[:12],
             argv=list(argv),
             started=time.monotonic(),
             effect=effect,
+            verb=verb or (argv[0] if argv else ""),
         )
         with self.lock:
             self.runs[run.id] = run
-            # Oldest first, so the trim takes the ones nobody is watching.
+            # Oldest finished first, so the trim never takes a run that is
+            # still going.
             while len(self.runs) > KEEP:
-                self.runs.pop(next(iter(self.runs)))
+                oldest = next((k for k, r in self.runs.items() if r.done), None)
+                if oldest is None:
+                    break
+                self.runs.pop(oldest)
         threading.Thread(target=self._work, args=(run, root), daemon=True).start()
         return run
 
     def get(self, run_id: str) -> Run | None:
         with self.lock:
             return self.runs.get(run_id)
+
+    def forget_finished(self) -> int:
+        """Drop every finished run, and say how many. Runs in flight stay:
+        their result has nowhere else to land."""
+        with self.lock:
+            gone = [k for k, r in self.runs.items() if r.done]
+            for key in gone:
+                self.runs.pop(key)
+            self._save()
+        return len(gone)
 
     def listed(self) -> list[Run]:
         """Every run this server remembers, newest first.
@@ -145,12 +238,16 @@ class Runner:
                 # Not every verb prints JSON for every shape of run. The
                 # text is still the answer, so hand it over as one.
                 data = {"text": printed}
+        said = err.getvalue().strip()
+        view = run_views.describe(run.verb, data, code == 0, said)
         with self.lock:
             run.seconds = time.monotonic() - run.started
             run.ok = code == 0
             run.data = data
-            run.said = err.getvalue().strip()
+            run.said = said
+            run.view = view
             run.done = True
+            self._save()
 
 
 class Refused(ValueError):

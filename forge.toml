@@ -32,7 +32,7 @@ web = false              # may a card writer look things up? A card should say
 # Which criterion outranks which when Anki decides what new card you meet next.
 # `requires` comes before all of them and the uid settles a tie. The panel
 # beside the canvas at `/graph` writes this line.
-study_order = ["frequency", "derivation", "printed"]
+study_order = ["frequency", "printed", "derivation"]
 
 # No `layout` key here, and no conventions section: a convention is a fact
 # about one book, so it lives in that book's `projects/<name>/project.toml`. A

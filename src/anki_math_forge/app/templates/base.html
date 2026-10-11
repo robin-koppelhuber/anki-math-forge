@@ -73,16 +73,28 @@ try {
    counts you can click -- `new 16`, `approved 108` -- and those say where the
    work is as well as where to go, which two bare words never did. #}
 <header class="bar{{ ' shelf-bar' if shelf_page }}" id="topbar">
+  {# Commands, top left: the runs window holds the command builder and every
+     run's result. On the shelf the bar is a grid whose first cell is the
+     rail's, so there it sits with the other global control at the end. #}
+  {% macro runs_button() %}
+  <button type="button" class="icon-button runs-open" data-runs-open
+          title="build and run a command, and read what each run said" aria-label="runs">
+    <span data-runs-count>runs</span></button>
+  {% endmacro %}
   {% if projects is defined and projects and not shelf_page %}
   {# A link, and no caret: a caret promises a list dropping down from here,
      and what opens is the shelf, which is a page. Every project at once,
      with where each came from and how far along it is. A dropdown answers
      "which one am I on" and nothing else. #}
+  {# By its title, which is yours to change on the setup stage. The folder
+     name is in every unit id and stays; it is the tooltip. #}
+  {% set spec = config.projects.get(src) if config is defined and src else none %}
   <a class="project-pick" id="project-pick" href="/projects"
-     title="every project, with its counts (g)">
+     title="{{ src }}: every project, with its counts (g)">
     <span class="pick-icon" aria-hidden="true">▦</span>
-    <span class="project-pick-name">{{ src or 'no project' }}</span>
+    <span class="project-pick-name">{{ (spec.title.split() | join(' ')) if spec and spec.title else (src or 'no project') }}</span>
   </a>
+  <span class="bar-sep" aria-hidden="true"></span>
   {# The stage before triage, from anywhere. A project with no document
      spends all of its pre-unit work here, and one with a book still has
      settings worth reading without opening the TOML. Points back from the
@@ -90,20 +102,27 @@ try {
   {# Named, not an icon. It is a stage of the pipeline, the one where you
      decide what the deck is even for, and three grey lines beside two other
      three-grey-line buttons said "some settings, probably". #}
-  {% if view | default('') == 'setup' %}
-  <a class="chip-button" href="{{ filter_url('/units', {}, project=src, state='new') }}"
-     title="back to triage" aria-label="units">&larr; triage</a>
-  {% else %}
+  {# The same item on every page, marked when it is the page you are on;
+     the setup stage links on to triage and the cards from its own pane. #}
   <a class="chip-button" href="{{ filter_url('/setup', {}, project=src) }}"
      title="the stage before triage: what this project reads, what you asked
 for, and how much of each ask has units yet"
-     aria-label="setup">
+     aria-label="setup"{{ ' aria-current="page"' | safe if view | default('') == 'setup' }}>
     <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
       <path d="M2 4h12M2 8h12M2 12h7" fill="none" stroke="currentColor"
             stroke-width="1.6" stroke-linecap="round"/>
     </svg>
     project setup</a>
-  {% endif %}
+  {# The two stages after setup, by name. The deck views carry them as
+     counts in their rails, but the setup stage and the canvas have no rail,
+     and without these the way back from them was the browser's. #}
+  <a class="chip-button" href="{{ filter_url('/units', {}, project=src, state='new') }}"
+     title="the units, to decide which are worth a card" aria-label="triage"{{
+     ' aria-current="page"' | safe if view | default('') == 'units' }}>triage</a>
+  <a class="chip-button" href="{{ filter_url('/review', {}, project=src) }}"
+     title="the cards, to review" aria-label="cards"{{
+     ' aria-current="page"' | safe if view | default('') == 'review' }}>cards</a>
+  {{ runs_button() }}
   {# The dependency canvas, from anywhere. It was reachable only from the
      `needs` block of a card in the review view, which is the right place to
      *notice* you want it and a poor place to be the only one -- the units view
@@ -111,12 +130,9 @@ for, and how much of each ask has units yet"
      had not scrolled to. Off entirely when `[app] graph = false`, and on the
      canvas itself it points back rather than at the page you are on. #}
   {% if config.graph %}
-  {% if view | default('') == 'graph' %}
-  <a class="icon-button" href="{{ filter_url('/review', {}, project=src, status='all') }}"
-     title="back to the cards" aria-label="review">&larr;</a>
-  {% else %}
   <a class="icon-button" href="{{ filter_url('/graph', {}, project=src) }}"
-     title="the dependency canvas: what each card rests on" aria-label="graph">
+     title="the dependency canvas: what each card rests on" aria-label="graph"{{
+     ' aria-current="page"' | safe if view | default('') == 'graph' }}>
     <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
       <circle cx="3" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>
       <circle cx="13" cy="3.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.4"/>
@@ -125,32 +141,30 @@ for, and how much of each ask has units yet"
             fill="none" stroke-linecap="round"/>
     </svg>
   </a>
+  {# The canvas has no rail to leave by, so it says where back is. #}
+  {% if view | default('') == 'graph' %}
+  <a class="chip-button" href="{{ filter_url('/review', {}, project=src, status='all') }}"
+     title="back to the cards" aria-label="review">&larr; cards</a>
   {% endif %}
   {% endif %}
-  <button type="button" class="icon-button" id="config-open"
-          title="what every setting resolved to, and where it came from"
-          aria-label="settings">⚙</button>
   {% endif %}
-  {# Commands run from the page, on every page, because a run outlives the
-     page that started it. Hidden until this server has run something.
-     Markup only: `app.js` fills both from `/api/runs` and keys on the
-     `data-` names, so the look is free to change. #}
-  <button type="button" class="icon-button" data-runs-open hidden
-          title="commands run from the page" aria-label="runs">
-    <span data-runs-count></span></button>
-  <dialog class="runs-dialog" data-runs-dialog>
-    <form method="dialog"><button aria-label="close">&times;</button></form>
-    <ol class="runs-list" data-runs-list></ol>
-  </dialog>
-  {# system, light, dark, round again. `app.js` keys on the attribute and
-     sets `data-theme-now` to what is in force. #}
-  <button type="button" class="icon-button" data-theme-cycle
-          title="theme" aria-label="theme">&#9680;</button>
   {# A page with nothing to say about a project says its own thing here
      rather than leaving the row empty above a rail that starts under it. #}
   {% block topbar %}{% endblock %}
   {% block filters %}{% endblock %}
   <span class="position" id="position"></span>
+  {# The controls every page has, last in the bar and in one box, so a page
+     that lays its bar out as a grid (the shelf) gives them one cell rather
+     than having them take its first ones.
+
+     Theme: system,
+     light, dark, round again; `app.js` sets `data-theme-now`. Both are
+     keyed on `data-` names, so the look is free to change. #}
+  <span class="bar-global">
+    {% if shelf_page or not (projects is defined and projects) %}{{ runs_button() }}{% endif %}
+    <button type="button" class="icon-button" data-theme-cycle
+            title="theme" aria-label="theme">&#9680;</button>
+  </span>
 </header>
 
 
@@ -179,6 +193,63 @@ for, and how much of each ask has units yet"
 <script id="keymap" type="application/json">{{ keymap_json | default('{}', true) }}</script>
 
 <div class="toast" id="toast" hidden></div>
+
+{# A command run from the page reports here, bottom right, and never under
+   the row that started it: running, then a summary, with a way into the
+   runs window. `app.js` fills it. #}
+<div class="run-notices" data-run-notices aria-live="polite"></div>
+
+{# Commands, built and run. Down the left, every run this server remembers,
+   with filters and a way to clear the finished ones. On the right, the
+   builder over the run you picked: choose an action, fill in its fields,
+   read the command it comes to, and run it here or copy it. Both dividers
+   drag. Markup only, keyed on `data-` names; `app.js` fills it from
+   `/api/actions` and `/api/runs`. #}
+<dialog class="gallery runs-dialog" data-runs-dialog aria-label="runs">
+  <header class="gallery-head">
+    <div class="gallery-title"><h2>commands</h2></div>
+    <button type="button" class="gallery-close" data-runs-close
+            title="close (esc)">&times;</button>
+  </header>
+  <div class="runs-shell">
+    <aside class="runs-side">
+      <h3 class="runs-cap">history</h3>
+      <div class="runs-filter" data-runs-filter role="group" aria-label="show">
+        <button type="button" data-runs-show="all" aria-pressed="true">all</button>
+        <button type="button" data-runs-show="running">running</button>
+        <button type="button" data-runs-show="failed">failed</button>
+        <button type="button" data-runs-show="writes">writes</button>
+      </div>
+      <input type="search" class="runs-search" data-runs-search
+             placeholder="filter by command" autocomplete="off" spellcheck="false">
+      <ol class="runs-list" data-runs-list></ol>
+      <button type="button" class="runs-clear" data-runs-clear>clear finished</button>
+    </aside>
+    <div class="splitter" data-splitter="runsSide"
+         title="drag to resize · double-click to reset"></div>
+    <div class="runs-main">
+      <section class="runs-builder" data-runs-builder>
+        {# A caption like the history's, so the two columns start on one line. #}
+        <p class="runs-cap">run a command</p>
+        <div class="builder-head">
+          <select class="builder-pick" data-builder-pick aria-label="action"></select>
+          <span class="builder-what" data-builder-what></span>
+        </div>
+        <form class="builder-form" data-builder-form autocomplete="off"></form>
+        <div class="builder-run">
+          <code class="builder-line" data-builder-line></code>
+          <button type="button" class="builder-copy" data-builder-copy>copy</button>
+          <button type="button" class="builder-go" data-builder-go>run</button>
+        </div>
+      </section>
+      <div class="splitter y" data-splitter="runsBuilder"
+           title="drag to resize · double-click to reset"></div>
+      <section class="runs-detail" data-runs-detail>
+        <p class="runs-empty">nothing run from the page yet</p>
+      </section>
+    </div>
+  </div>
+</dialog>
 <dialog class="prompt" id="prompt">
   <form method="dialog">
     <label id="prompt-label">annotation</label>
@@ -200,40 +271,6 @@ for, and how much of each ask has units yet"
    one of its documents, the machine its units move through. The shelf has
    no project in force, so it carries none of them. #}
 {% if projects is defined and projects and not shelf_page %}
-{# The effective configuration, over the view you were on. It answers a
-   question you have *while deciding something else* -- which layout did this
-   card resolve to -- and a navigation away and back is a poor way to look
-   something up mid-decision.
-
-   Read-only. The config is read at startup, so an edit here would take effect
-   at some unrelated later moment, and half these keys change the meaning of
-   content that already exists. #}
-<dialog class="gallery settings" id="settings" aria-label="configuration">
-  <header class="gallery-head">
-    <div class="gallery-title">
-      <h2>settings</h2>
-      <p class="gallery-totals" id="settings-note">
-        what every setting resolved to, and where the value came from
-      </p>
-    </div>
-    <button type="button" class="gallery-close" id="settings-close"
-            title="close (esc)">&times;</button>
-  </header>
-  <div class="settings-body" id="settings-body"></div>
-  {# Two panels, two questions. This one is every resolved value in one flat
-     table, over whatever you were doing, because "which layout did this card
-     resolve to" is asked mid-decision and a navigation away and back is a
-     poor way to look it up. The setup stage is the other question (what this
-     project holds, and what each work is read as) and is where the
-     per-source settings live, because a crop width belongs to a document. #}
-  <p class="rail-more settings-foot">
-    Read-only: the config is read at startup, and half these keys change what
-    content that already exists <em>means</em>. Edit
-    <code>forge.toml</code> or <code>projects/&lt;name&gt;/project.toml</code>.
-    What a project <em>holds</em>, and how each source is read, is on
-    <a href="{{ filter_url('/setup', {}, project=src) }}">the setup stage</a>.
-  </p>
-</dialog>
 
 {# The crop, at the size it was rendered. In the aside it is 240px wide and a
    crop cut to page width is unreadable there, which is every crop from a

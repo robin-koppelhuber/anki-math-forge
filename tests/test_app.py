@@ -394,8 +394,9 @@ def test_check_findings_are_shown_next_to_the_card(client: TestClient, card_path
     assert "section-wrapped" in body
     # And it says whose opinion it is. Stacked unlabelled in the same column
     # as the lines somebody wrote on the card, a lint about a wrapped section
-    # reads as one more note nobody remembers writing.
-    assert body.index("check</p>") < body.index("section-wrapped")
+    # reads as one more note nobody remembers writing: it is a panel titled
+    # check.
+    assert body.index('data-panel="check"') < body.index("section-wrapped")
 
 
 def test_the_linter_does_not_print_the_note_it_just_read(
@@ -634,7 +635,11 @@ def test_an_answered_note_keeps_the_question(config: Config, units: Ledger) -> N
     client.post(f"/api/units/demo/{first}/answer", json={"index": 0, "answer": "no"})
 
     notes = Ledger.load(config.units_path("demo")).get(first).notes
-    assert notes == ["same as 2.4? — no"]
+    assert notes == ["resolved: same as 2.4? — no"]
+
+    from anki_math_forge import todo
+
+    assert not [i for i in todo.collect(config) if i.ref == first], "a record, not work"
 
 
 def test_an_empty_answer_just_deletes(config: Config, units: Ledger) -> None:
@@ -1216,6 +1221,23 @@ def test_code_fences_render_as_code_not_as_backticks() -> None:
     assert "<pre class='code'>" in out
     assert "a &lt; b" in out, "code must still be escaped"
     assert out.startswith("before")
+
+
+def test_the_panel_breaks_lines_where_anki_does() -> None:
+    """ROADMAP §29. `to_anki_html` turns a newline outside maths into a
+    `<br>`, so a `## back` with the gain on one line and the update on the
+    next has a break on the card. The panel collapsed it to a space, and the
+    reviewer approved a card laid out differently from the one they read."""
+    from anki_math_forge import sync
+    from anki_math_forge.app import render_body
+
+    body = "gain $K = P H^\\top\nS^{-1}$\nupdate $x$\n\n```python\na = 1\nb = 2\n```\nafter"
+    panel = str(render_body(body))
+    assert "gain $K = P H^\\top\nS^{-1}$<br>update $x$<pre" in panel
+    assert "$K = P H^\\top\nS^{-1}$" in panel, "a formula stays one text node"
+    assert "<br>" not in panel.split("<pre", 1)[1], "code keeps its newlines"
+    assert panel.endswith("</pre>after"), "no break beside a fence"
+    assert panel.count("<br>") == sync.to_anki_html(body).count("<br>")
 
 
 def test_the_filter_returns_markup_not_a_string(config: Config) -> None:
@@ -1893,6 +1915,41 @@ def test_api_counts_answers_for_the_active_filters(pdf_source: Config) -> None:
     assert scoped["fsm"]["draft"] == 1
 
 
+def test_the_filtered_diagram_follows_every_filter_the_views_have(pdf_source: Config) -> None:
+    """The page draws the diagram over the query it was asked for and the
+    script polls `/api/counts` with the same one. A filter the views gained
+    (augmented, changed, a search, a chapter) that these two did not
+    read left the diagram counting cards the list no longer showed."""
+    first = write_card(pdf_source, "aaa111", "demo:2.4:61")
+    second = write_card(pdf_source, "bbb222", "demo:1.1:2")
+    first.write_text(
+        first.read_text(encoding="utf-8").replace("$X$", "$X$ kalman"), encoding="utf-8"
+    )
+    second.write_text(
+        second.read_text(encoding="utf-8").replace("tags: []", "tags: []\naugmented: true"),
+        encoding="utf-8",
+    )
+    client = TestClient(create_app(pdf_source))
+    client.get("/review?status=draft")  # a card is first seen, and so can move
+    first.write_text(first.read_text(encoding="utf-8").replace("$Y$", "$Z$"), encoding="utf-8")
+
+    def drafts(query: str) -> int:
+        counted = client.get(f"/api/counts?counts_scope=filtered&{query}").json()["fsm"]["draft"]
+        page = client.get(f"/review?status=draft&counts_scope=filtered&{query}").text
+        shown = re.search(r'data-fsm-count="draft"[^>]*>(\d+)<', page)
+        assert shown and int(shown.group(1)) == counted, f"{query}: page and poll disagree"
+        return int(counted)
+
+    assert drafts("") == 2
+    assert drafts("q=kalman") == 1
+    assert drafts("q=kalman+absent") == 0
+    assert drafts("augmented=yes") == 1
+    assert drafts("augmented=no") == 1
+    assert drafts("changed=yes") == 1
+    assert drafts("chapter=2") == 1
+    assert drafts("chapter=1") == 1
+
+
 def test_the_scope_toggle_offers_both_ways(pdf_source: Config) -> None:
     write_card(pdf_source, "aaa111", "demo:2.4:61")
     client = TestClient(create_app(pdf_source))
@@ -2356,21 +2413,24 @@ def test_the_card_separates_the_three_kinds_of_note(pdf_source: Config) -> None:
     ]
 
 
-def test_the_settled_list_is_shut_until_it_is_asked_for(pdf_source: Config) -> None:
-    """It answers "why is this not what I remember", which is a question you
-    ask sometimes. The open notes above it are the ones to act on."""
+def test_the_newest_settled_line_is_shown_and_the_rest_folded(pdf_source: Config) -> None:
+    """After a pass the thing to check is whether the edit it made was the one
+    you asked for, so the newest is shown; the older ones are history."""
     path = write_card(pdf_source, "aaa111", "demo:2.4:61")
     card = model.load(path)
     card.add_annotation("@claude too thin")
     card.resolve_annotation(0, "added the derivation")
+    card.add_annotation("@claude and the sign?")
+    card.resolve_annotation(0, "the sign was right")
     card.save()
 
     body = TestClient(create_app(pdf_source)).get("/review?status=draft").text
 
-    assert 'class="settled-notes"' in body
-    assert "too thin" in body
-    # A `<details>` with no `open`, so it renders shut.
-    assert '<details class="settled-notes">' in body
+    latest = body[body.index('class="settled-latest"') :][:300]
+    assert "the sign was right" in latest, "the newest is out in the open"
+    older = body[body.index('class="settled-older"') :][:400]
+    assert "too thin" in older and "<details" in body[body.index("settled-older") - 20 :]
+    assert 'class="settled-older" open' not in body, "the earlier ones start folded"
 
 
 # -- the shelf, as a page ---------------------------------------------------
@@ -2506,3 +2566,76 @@ def test_the_shelf_commands_are_split_by_what_they_do(pdf_source: Config) -> Non
     assert page.index("forge zotero import --tag anki") < page.index("forge check")
     # And each half folds on its own.
     assert page.count('class="runs-half"') == 2
+
+
+def test_a_proposal_waits_among_the_me_items(config: Config, units: Ledger) -> None:
+    """Shown where parked decisions are, answered there, and found by the
+    `@me` filter."""
+    from anki_math_forge.ledger import Suggestion
+
+    target = units.units[0]
+    target.suggestion = Suggestion(
+        state="skipped", reason="fragment", detail="half a display", by="classify"
+    )
+    units.save()
+    client = TestClient(create_app(config))
+
+    page = client.get("/units?project=demo&state=all&annotated=me").text
+
+    assert 'data-suggestion="accept"' in page and 'data-suggestion="dismiss"' in page
+    assert "half a display" in page
+    assert f'data-id="{target.id}"' in page or target.id in page
+
+
+def test_the_review_list_is_in_the_order_anki_will_introduce_the_cards(pdf_source: Config) -> None:
+    """Reading the list is reading the queue: core before rare, and the
+    "order n/m" badge counts up as you go."""
+    for uid, frequency in (("aaa111", "rare"), ("bbb222", "core"), ("ccc333", "common")):
+        card = model.load(write_card(pdf_source, uid, "demo:2.4:61"))
+        card.frontmatter["frequency"] = frequency
+        card.save()
+
+    body = TestClient(create_app(pdf_source)).get("/review?status=draft").text
+
+    shown = re.findall(r'<article class="card item" data-uid="(\w+)"', body)
+    assert shown == ["bbb222", "ccc333", "aaa111"]
+    assert [int(n) for n in re.findall(r"order (\d+)/3", body)] == [1, 2, 3]
+
+
+def test_a_search_finds_words_anywhere_on_a_card(pdf_source: Config) -> None:
+    """The text, the gist, the tags and the notes; every word has to be there.
+    The palette asks `/api/cards/find`, which looks at every card in the
+    project whatever the filters leave, and the same words filter the list."""
+    one = model.load(write_card(pdf_source, "aaa111", "demo:2.4:61"))
+    one.set_section("prose", "Jensen's inequality for the exponential")
+    one.frontmatter["tags"] = ["convexity"]
+    one.save()
+    two = model.load(write_card(pdf_source, "bbb222", "demo:2.4:61"))
+    two.set_section("notes", "the Jensen card above is the general one")
+    two.approve()
+    two.save()
+    client = TestClient(create_app(pdf_source))
+
+    def found(query: str) -> list[str]:
+        rows = client.get("/api/cards/find", params={"project": "demo", "q": query}).json()["rows"]
+        return [row["uid"] for row in rows]
+
+    assert sorted(found("jensen")) == ["aaa111", "bbb222"], "prose and notes both count"
+    assert found("jensen exponential") == ["aaa111"], "every word, anywhere"
+    assert found("convexity") == ["aaa111"], "tags too"
+    assert found('"inequality for the"') == ["aaa111"], "a phrase in double quotes"
+    assert found("nothing of the sort") == []
+    everything = client.get("/api/cards/find", params={"project": "demo"}).json()
+    assert (everything["total"], everything["matched"]) == (2, 2), "no query lists them all"
+    assert {r["status"] for r in everything["rows"]} == {"draft", "approved"}, (
+        "whatever the status: you look for the card you cannot see"
+    )
+    assert everything["rows"][0]["href"].endswith("#" + everything["rows"][0]["uid"])
+
+    def listed(query: str) -> list[str]:
+        body = client.get(f"/review?status=all&{query}").text
+        return re.findall(r'<article class="card item" data-uid="(\w+)"', body)
+
+    assert listed("q=convexity") == ["aaa111"], "and the words filter the list as well"
+    page = client.get("/review?status=all&q=jensen").text
+    assert "data-find" in page and "&ldquo;jensen&rdquo;" in page, "the way in, and the way out"

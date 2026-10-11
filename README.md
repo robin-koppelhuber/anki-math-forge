@@ -6,7 +6,6 @@
 [![anki 26.8.1](https://img.shields.io/badge/anki-26.8.1-blue.svg)](https://apps.ankiweb.net/)
 [![zotero 9.0.6](https://img.shields.io/badge/zotero-9.0.6-blue.svg)](https://www.zotero.org/)
 
-
 Turn math-heavy texts into Anki cards with a human in the loop.
 
 1. Import standalone PDFs, entries from your Zotero collection or just start from an idea.
@@ -15,9 +14,8 @@ Turn math-heavy texts into Anki cards with a human in the loop.
 
 ## Features
 - Local website to build cards and iterate together with AI.
-- Import standalone PDFs, entries from your Zotero collection or just start from an idea.
-- Use Zotero annotations as the starting point for your cards, and map
-  annotation types to different meanings for the agent.
+- Create anki decks from standalone PDFs, entries from your Zotero collection or start from an idea.
+- Import Zotero annotations and images as starting points for your cards.
 - Augment equations with proof outlines, intuition and use cases.
 - Optimized study order: let AI classify the usefulness, hardness and dependency between cards and explore them in a graph view, for the optimal initial study order in Anki.
 - Sync cards to Anki and update safely if something changes.
@@ -28,34 +26,25 @@ Turn math-heavy texts into Anki cards with a human in the loop.
   API key needed. The website gives you Claude skill commands to run instead
   of triggering API calls from code.
 
-
 ## Quickstart
 
 ```
 git clone https://github.com/robin-koppelhuber/anki-math-forge
 cd anki-math-forge
-uv sync --extra pdf      # PyMuPDF (AGPL), needed to read PDFs
+uv sync --extra pdf      # PyMuPDF (AGPL), reads and renders the PDFs
 npm install              # optional: gives `check` the real KaTeX parser
 ```
 
-```toml
-# projects/<name>/project.toml, for a PDF source
-title = "The Matrix Cookbook"
-citation = "Matrix Cookbook"
-deck = "Mathematics::Matrix Calculus"   # optional; falls back to [anki] deck
-
-[[sources]]                             # one table per work the project reads
-files = ["projects/<name>/the-file.pdf"]
-```
-
-For a Zotero source instead: run Zotero (version 7+) with its local API enabled
-(*Settings > Advanced*), tag the item `anki`, and skip the `project.toml`. Its
-cards go to `Zotero::<title>` unless the generated `project.toml` names a deck.
+1. Run Zotero (version 7+) with its local API enabled (*Settings > Advanced*).
+2. Mark up the paper or book in Zotero's reader and tag the item `anki`.
+3. Start the website and import the tagged items from its first page.
 
 ```
-uv run forge units extract <name>      # or: uv run forge zotero import --tag anki
-uv run forge serve                     # http://127.0.0.1:8000, press ? for the guide
+uv run forge serve       # http://127.0.0.1:8000, press ? for the guide
 ```
+
+- Each item becomes a project.
+- Its cards go to `Zotero::<title>` unless the generated `project.toml` names a deck.
 
 Anki, once:
 
@@ -66,121 +55,84 @@ Anki, once:
 3. The deck and the note type are created on the first sync.
 
 ## Workflow
-Creating cards is a two stage process
-1. Create and select **Units**: These are candidate parts of a page in a source for becoming a card. They are cheap to create and change
-2. Create and refine **Cards**: Once you've selected which units should become cards, a thorough agent can create a card draft for you to iterate on
-```
-extract / import  ->  units  ->  triage  ->  cards  ->  review  ->  sync
-                                 (you)       (Claude)   (you)
-```
 
+1. **Units.** Each mark you made becomes a unit, a candidate for a card. You triage them: queue the ones worth a card, skip the rest.
+2. **Cards.** Claude drafts a card from each queued unit. You review it, edit it and approve it.
 
 ```
-# route 1: a PDF
-uv run forge units extract <project>    # PDF -> units. Never reads the maths
-/transcribe --project <project>         # crops -> LaTeX, via subagents
-/classify --project <project>           # propose skips; applies nothing
-
-# route 2: a marked-up paper in Zotero (needs Zotero running, local API on)
-uv run forge zotero                     # what Zotero has, and what is already a source
-uv run forge zotero import --tag anki   # every item tagged `anki` -> units
-
-# route 3: a subject, with no document to segment
-uv run forge project new <project>      # start one
-uv run forge topic add 'a subject' --project <project> --ask '...'
-/sources --project <project>            # what its cards can be checked against
-/propose --project <project> 'a subject'  # the ask -> units
-
-# every route
-/gist --project <project>               # one line per unit: what its card would be about
-uv run forge serve                      # triage units, then review cards
-/extract-cards --project <project>      # queued units -> draft cards
-/augment --project <project>            # conditions, proof, prose, tags
-uv run forge anki                       # what would be pushed; then `anki push`
+import  ->  units  ->  triage  ->  cards  ->  review  ->  sync
+                       (you)       (Claude)   (you)
 ```
-
-
 
 ![the state machine](assets/states.png)
 
+Triage, review and the push to Anki happen on the website. The passes that need a model are Claude Code slash commands, and the website shows the line to paste beside what is waiting:
+
+- `/gist`: one line per unit on what its card would be about
+- `/extract-cards`: a draft card from each queued unit
+- `/augment`: conditions, proof and prose on the drafts
+- `/triage claude`: works your `@claude` annotations
+- `/sort-notes`: places what you put in the inbox
+
+Flags and the `forge` commands: [docs/COMMANDS.md](docs/COMMANDS.md).
+
+## The website
+
 ![project setup](assets/setup.png)
+
+Project setup
 
 ![triage](assets/triage.png)
 
+Triage
+
 ![zotero](assets/zotero.png)
+
+A marked-up paper
 
 ![review](assets/review.png)
 
+Review
+
 ![the dependency canvas](assets/graph.png)
 
-## Commands
+The dependency canvas
 
-Every session:
+## Starting from an idea
 
-| `forge` | |
-|---|---|
-| `serve` | the web app: project setup, triage, review, dependency canvas. `--port` |
-| `check` | lint; blocks `anki push` on error. `--anki` also checks uids against the live collection |
-| `anki` | what `anki push` would do, pushing nothing |
-| `anki push` | approved cards -> Anki, upsert by uid. `--project`, `--templates`, `--reposition`, `--move-decks` |
-| `anki pull` | Anki comments and flags -> notes on the card. `--dry-run` |
-| `todo` | open annotations, `@claude` and `@me` |
+- Start a project on the website and say what you want cards for.
+- `/sources` proposes reference material to check cards against.
+- `/propose` turns what you asked for into units.
 
-Once per project or source:
+## Legacy: PDFs without Zotero
 
-| `forge` | |
-|---|---|
-| `project new <name>` | start one with no document. `--title`, `--deck`, `--citation`; `project delete <name>` takes it and its cards out, `--force` if it holds any |
-| `topic add '<subject>' --project NAME` | what you want cards for; `--ask` what you want from it |
-| `units extract [project]` | PDF -> units; never writes cards. `--pages` |
-| `zotero` | what Zotero holds, and what is already a source; `zotero import [item]` turns its marks into units. `--tag`, `--project`, `--dry-run` |
-| `sources` | every work in the repo, and which project reads it; `sources remove KEY --project NAME` takes one out. `--force`, `--dry-run` |
-| `anki export [project]` | a deck as `.apkg`; `--deck`, `--out`, `--scheduling` includes review history |
-| `audit` | is the ledger trustworthy: 1..N, no gaps |
+- Declare the PDF in `projects/<name>/project.toml`.
+- Run `forge units extract <name>`, or the same command from the website.
+- Then `/transcribe` and `/classify`.
+- It only finds numbered statements. It was fitted to one textbook.
+- Reading the marks inside a PDF is on the [roadmap](docs/ROADMAP.md).
 
-In the order the pipeline runs them:
+```toml
+title = "The Matrix Cookbook"
+citation = "Matrix Cookbook"
+deck = "Mathematics::Matrix Calculus"   # optional; falls back to [anki] deck
 
-| Claude Code | |
-|---|---|
-| `/propose --project NAME '<subject>'` | a subject -> units, where there is no document to segment |
-| `/sources --project NAME` | reference material to check a card against; every line stays pending until you take it |
-| `/transcribe --project NAME` | crops -> LaTeX, via subagents |
-| `/classify --project NAME` | propose which units are not worth a card |
-| `/gist --project NAME` | one line per unit on what its card would be about |
-| `/extract-cards --project NAME` | queued units -> draft cards |
-| `/augment --project NAME` | conditions, proof, prose, tags on drafts. Run before approving |
-| `/triage claude [--project NAME]` | work the open `@claude` annotations |
+[[sources]]
+files = ["projects/<name>/the-file.pdf"]
+```
 
-Mostly called by the skills, or from a script:
+## Documentation
 
-| `forge` | |
-|---|---|
-| `units` | the ledger, filtered; `units set <id>` writes state, gist, notes, transcription or web lookups, and `units add SLUG` writes one where there was nothing to segment |
-| `context <unit-id>` | the page a unit was printed on, plus the source's conventions. `--pages N` either side, or `--pages chapter` |
-| `source-text [project]` | the document's cached text layer |
-| `crops` | render unit crops to a directory. `--out`, `--untranscribed`, `--ungisted` |
-| `units classify` | propose skips; applies nothing. `--dry-run` records nothing either |
-| `cards new --unit <id>` | scaffold a draft card from a queued unit; repeat `--unit` to build one card from several |
-| `verify` | opt-in numeric check of identities. `--uid`, `--project`, `--trials` |
+- [docs/COMMANDS.md](docs/COMMANDS.md): every command, and the Anki and deck settings.
+- [CLAUDE.md](CLAUDE.md): the invariants and the card format.
+- [docs/DESIGN.md](docs/DESIGN.md): the design.
+- [docs/CONTRACT.md](docs/CONTRACT.md): the reasoning behind each invariant.
+- [docs/VERBS.md](docs/VERBS.md): how commands are named, and why one word never writes.
+- [docs/STYLE.md](docs/STYLE.md): how prose is written here, and what each object is called.
+- [docs/ROADMAP.md](docs/ROADMAP.md): what is left to build.
 
-| Keys | units | review | graph |
-|---|---|---|---|
-| decide | `q` queue, `Q` queue + brief, `s` skip, `S` skip + reason, `a` accept a suggestion, `d` dismiss it | `a` approve, `r` reject | `+` add a card, `Delete` remove selection, `Enter` open card |
-| repair | `u` back to new, `z` undo, `n` note for claude, `N` note for me, `c` context size, `w` web lookups, `p` crop/page/doc | `u` back to draft, `z` undo, `e` `$EDITOR`, `n`, `N`, `x` resolve first note | `z` undo, `x` put boxes back, `A` select all |
-| move | `j` `k` next/prev, `f` filters, `g` projects, `?` guide | same | `.` `,` zoom, `0` fit, `f` every card, `o` study order, `g` projects |
+## Contributing and license
 
-## Debugging
-- "cannot reach AnkiConnect" means Anki is closed.
-- `anki push` does not push the card template; `anki push --templates` does.
-- Changing a source's deck sends new notes there. `anki push` names the cards
-  left behind, and `anki push --move-decks` moves them.
-- `[decks]` in `project.toml` splits `identity` and `intuition` into subdecks, so each gets its own new-card limit.
-- Study order: `frequency`, then `derivation`, then printed order;
- `requires` overrides. `anki push --reposition` moves cards you have not
- studied yet.
-- Feedback: `E` in Anki writes the `Feedback` field, `Ctrl+1..7` sets a flag.
-
-## Contributing & License
-Happy for any contributions, open a PR.
+Contributions are welcome. Open a pull request.
 
 License: MIT. `--extra pdf` pulls PyMuPDF, which is AGPL.

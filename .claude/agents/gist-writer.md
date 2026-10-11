@@ -28,7 +28,7 @@ a card exists costs a rewrite.
 1. Render the crops you need, with the manifest:
 
    ```
-   uv run --no-sync forge crops --project <name> --section <s> --ungisted --out <a temp dir> --json
+   uv run --no-sync forge crops --project <name> --section <s> --ungisted  --json
    ```
 
    Each manifest entry carries the PNG, plus `marked` and `comment` — the
@@ -93,3 +93,17 @@ Rules, in order of how often they are broken:
 
 How many you gisted, and every unit whose gist says you could not read it —
 those are the ones a human should look at first.
+
+## Remarks
+
+If the tool or these instructions got in your way, say so once, where the
+person planning the work will read it, and not only in your report:
+
+```
+uv run --no-sync forge remarks add '<what got in the way, and what you would change>' --by gist-writer --project <name>
+```
+
+A brief that arrived cut off, a rule that made a card worse, a command that
+refused without saying why. About the tool and these instructions, not about
+a card: a fault in one card is a note on that card. One remark each, with the
+evidence (the unit id, the line), and nothing when nothing got in your way.

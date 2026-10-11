@@ -7,6 +7,7 @@ Design doc: [docs/DESIGN.md](docs/DESIGN.md) (cited as DESIGN.md in code
 comments). What is left to build: [docs/ROADMAP.md](docs/ROADMAP.md).
 How the commands are named, and why one word never writes:
 [docs/VERBS.md](docs/VERBS.md).
+Every command with its flags, for people: [docs/COMMANDS.md](docs/COMMANDS.md).
 How prose here is written, and what each object is called:
 [docs/STYLE.md](docs/STYLE.md). Read it before writing docs, template text or
 anything in `.claude/`.
@@ -33,7 +34,8 @@ Tests cite these by number. Each links to the reasoning.
    Nothing rewrites a file to enforce this; `Card.demotion` reports it, and
    fixing the cause restores the approval with no re-review.
 6. **Card content guidelines live in the skill, not in code.** The Python never
-   generates or rewrites card text.
+   generates or rewrites card text. A model may write it, reading the skill as
+   it stands and going through the same verbs.
 7. **A crop is authoritative for what is printed and silent about the rest.**
    Whether an identity needs a condition is mathematics, and it belongs to
    whoever writes the card. Note in `## notes` any condition you add that the
@@ -58,7 +60,7 @@ Frontmatter: `uid` (6 hex), `type` (`identity | intuition`), `status`
 `derivation` (`definitional | short | long`), `web`, `gist` (a few words
 naming the card, for a list or a graph node; never reaches Anki) and
 `augmented` (whether `/augment` has been over it: the one card state that
-cannot be read off the content, since that pass's usual right answer is to add
+cannot be read off the content, since that pass may rightly add
 nothing) and `relearn` (`slightly | more | reset`: how much of a changed card
 to learn again; `anki push` does it in Anki once and takes the key off). An
 unrecognised `frequency`, `derivation` or `relearn` is a `check` error.
@@ -115,6 +117,7 @@ uv run forge units add 'a subject' --project <p> --gist '...' --preview '...'
                                         #   the third door in, for `/propose`: a unit
                                         #   where there was nothing to segment
 uv run forge sources                    # every source in the repo, and which project reads it
+uv run forge sources update --project <p>  # re-read its Zotero items and its files
 uv run forge sources remove <key> --project <p>
                                         #   take one out: its table and the units it
                                         #   owns. Refused while cards stand on it
@@ -126,7 +129,8 @@ uv run forge audit                      # is the ledger trustworthy? 1..N, no ga
 uv run forge crops --section 2.4 --untranscribed --out DIR --json
 uv run forge context <unit-id>          # the page it was printed on (--pages N for more,
                                         #   counted *either side*: 3 hands over seven;
-                                        #   --pages chapter for the chapter it is in),
+                                        #   --pages section|chapter|part for that span
+                                        #   of the PDF's outline),
                                         #   plus whether web lookups are allowed here
 uv run forge units set <id> --web yes|no|inherit   # grant or refuse them
                                         #   how much a writer is handed is
@@ -143,6 +147,9 @@ uv run forge cards new --unit <id> --front '$...$' --back '$...$' --gist 'what i
 uv run forge cards --changes            # what moved on each card since the last
                                         #   review decision; kept in .forge/, not git
 uv run forge todo                       # open annotations, @claude and @me
+uv run forge remarks                    # what the passes said about the tool, from
+                                        #   projects/remarks.md; `remarks add` is how a
+                                        #   pass says one
 uv run forge serve                      # project setup, units triage, card review, the
                                         #   dependency canvas (`[app] graph = false`
                                         #   turns the canvas off). `/setup` is the stage
@@ -164,6 +171,13 @@ The suite runs on four workers by default (`pyproject.toml` explains the
 cap). `-n0` puts it back on one, which is what you want with `-x` or a
 `breakpoint()`.
 
+While working, `uv run python scripts/affected.py` runs the tests named for
+what you changed (`--list` says which). It cannot see one module breaking
+another, so `uv run pytest` still comes before a commit. The four workers are
+a limit for Chrome, and the tests that do not drive a browser take 35 s on 20
+cores with `uv run pytest --ignore=tests/browser -n 8 --maxprocesses=8 --dist
+load`, against 67 s on four.
+
 `tests/browser/` drives the app in a real browser (the canvas has no markup
 to assert against). Opt in with `uv sync --extra browser`; it skips without.
 
@@ -176,14 +190,16 @@ specialised to one book, so extending it means teaching that book's habits to
 the next one.
 
 Do not extend it and do not fix its heuristics. When a shared type changes
-under it, give it a shim rather than editing it. `extract/render.py` (crops) is
+under it, give it a shim rather than editing it. The path it serves, a PDF
+nobody marked up, is deprecated and due a rework (ROADMAP §27). `extract/render.py` (crops) is
 deliberately separate and is not frozen.
 
 ## Working here
 
 - Boring implementations. This has to stay legible in six months.
 - Annotations are a scratchpad: lines in `## notes` starting `@claude` are open
-  requests. Resolve one by deleting the line and making the edit. The edit no
+  requests. Resolve one by replacing the line with `resolved: <what was asked>
+  — <what you did>` and making the edit. The edit no
   longer matches `content_hash`, so the card counts as a draft again
   automatically.
 - When the design doc does not answer something, make a small call and note it

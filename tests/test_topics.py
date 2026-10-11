@@ -845,10 +845,10 @@ def test_the_narrow_command_comes_before_the_repo_wide_one(repo: Path) -> None:
     rest = page[page.index('data-runs="project"') + 1 :]
     pane = rest[: rest.find("data-runs=")]
 
-    mine = pane.index("forge anki --project")
-    # The repo-wide one is a *prefix* of the narrow one now, so `index`
-    # finds the narrow one twice. Anchor on the end of the element.
-    every = pane.index("uv run forge anki<")
+    # On the button's `data-run`, which a runnable row carries in place of
+    # the printed line.
+    mine = pane.index('data-run="uv run forge anki --project')
+    every = pane.index('data-run="uv run forge anki"')
     assert mine < every, "this project first"
 
 
@@ -1036,8 +1036,9 @@ def test_a_deck_with_no_sections_is_offered_no_section_filter(repo: Path) -> Non
     assert ">sections<" not in page
 
 
-def test_unplaced_units_keep_their_bucket_beside_real_sections() -> None:
-    """Those are the ones most worth finding."""
+def test_no_section_is_not_a_row() -> None:
+    """Selecting no section already shows everything; a row called "no
+    section" beside the real ones read as the way to clear them."""
     from anki_math_forge.app import section_rows
 
     class Item:
@@ -1054,7 +1055,30 @@ def test_unplaced_units_keep_their_bucket_beside_real_sections() -> None:
     )
     labels = [row["label"] for group in rows for row in group["sections"]]
 
-    assert "no section" in labels
+    assert labels == ["2.4"]
+
+
+def test_named_sections_come_in_reading_order() -> None:
+    """By where each first appears in the document, not by when its first
+    unit entered the ledger: a re-import appends."""
+    from anki_math_forge.app import section_rows
+
+    class Item:
+        def __init__(self, section: str, uid: str, page: int) -> None:
+            self.section, self.uid, self.page = section, uid, page
+
+    rows = section_rows(
+        [Item("Smoothing", "a", 70), Item("Filtering", "b", 60), Item("Smoothing", "c", 65)],
+        {"a", "b", "c"},
+        lambda i: i.section,
+        lambda i: "new",
+        lambda i: i.uid,
+        ("new",),
+        lambda i: (i.page, 0.0),
+    )
+    labels = [row["label"] for group in rows for row in group["sections"]]
+
+    assert labels == ["Filtering", "Smoothing"]
 
 
 def test_two_works_select_the_union(repo: Path) -> None:
@@ -1312,3 +1336,34 @@ def test_a_topic_deck_naming_no_ask_is_a_warning(repo: Path) -> None:
     assert [f.code for f in found] == ["deck-topic-unknown"]
     assert found[0].level == check.WARN
     assert "containers" in found[0].message
+
+
+def test_a_colour_switched_on_after_the_import_says_it_is_waiting(repo: Path) -> None:
+    """Saving the scheme changes no unit; only an import reads the marks
+    again. A colour switched on since is still inside other units, so the
+    panel counts it and offers the import."""
+    import json as json_mod
+
+    folder = a_zotero_project(repo)
+    # The blue unit carries a pink highlight beside it, from an import made
+    # while pink made no units.
+    lines = (folder / "units.jsonl").read_text(encoding="utf-8").splitlines()
+    first = json_mod.loads(lines[0])
+    first["marks"].append(
+        {"kind": "highlight", "colour": "magenta", "bbox": [0, 0, 1, 1], "key": "pink1"}
+    )
+    lines[0] = json_mod.dumps(first)
+    (folder / "units.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    quiet = client(repo).get("/setup?project=cpp").text
+    assert "scheme-waiting" not in quiet, "pink makes no units yet"
+
+    toml = (folder / "project.toml").read_text(encoding="utf-8")
+    (folder / "project.toml").write_text(
+        toml.replace('["highlight/blue"]', '["highlight/blue", "highlight/magenta"]'),
+        encoding="utf-8",
+    )
+    page = client(repo).get("/setup?project=cpp").text
+
+    assert "1 mark\n" in page or "1 mark" in page
+    assert 'data-run="uv run forge zotero import ITEM1 --project cpp"' in page

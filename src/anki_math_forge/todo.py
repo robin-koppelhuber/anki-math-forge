@@ -65,6 +65,9 @@ def collect(config: Config) -> list[TodoItem]:
         where = str(_relative(ledger.path, config.root))
         for unit in ledger:
             for note in unit.notes:
+                # A settled note is a record of what was decided, not work.
+                if model.is_resolved(note):
+                    continue
                 items.append(
                     TodoItem(
                         "unit", unit.id, note, where, unit.state,

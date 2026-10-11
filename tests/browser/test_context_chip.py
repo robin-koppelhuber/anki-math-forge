@@ -38,10 +38,21 @@ CHOSEN = {
     1: "1 page either side",
     3: "3 pages either side",
     10: "10 pages either side",
+    "section": "the section it is in",
     "chapter": "the chapter it is in",
+    "part": "the part it is in",
     999: "the whole document",
 }
-BARE = {0: "0", 1: "1", 3: "3", 10: "10", "chapter": "chapter", 999: "all"}
+BARE = {
+    0: "0",
+    1: "1",
+    3: "3",
+    10: "10",
+    "section": "section",
+    "chapter": "chapter",
+    "part": "part",
+    999: "all",
+}
 
 
 def size_of(repo: Path, unit_id: str) -> int | str:
@@ -144,9 +155,9 @@ def test_the_c_key_walks_every_size(page, live, served) -> None:  # type: ignore
     open_triage(page, live)
     assert size_of(repo, FIRST) == INHERIT, "the fixture's units carry no size"
 
-    # From the source default of 1, so the walk is 3, 10, chapter, 999, 0 and
-    # back to 1. Six presses, one full lap.
-    expected = [3, 10, "chapter", 999, 0, 1]
+    # From the source default of 1, so the walk is 3, 10, the three spans of
+    # the outline, 999, 0 and back to 1. Eight presses, one full lap.
+    expected: list[int | str] = [3, 10, "section", "chapter", "part", 999, 0, 1]
     for step in expected:
         page.keyboard.press("c")
         assert written(page, repo, FIRST, step) == step, f"cycling to {step!r}"
@@ -170,7 +181,9 @@ def test_the_chip_repaints_from_what_the_server_sent(page, live, served) -> None
         BARE[1],
         BARE[3],
         BARE[10],
+        BARE["section"],
         CHOSEN["chapter"],
+        BARE["part"],
         BARE[999],
     ]
     assert whose(page, FIRST) == "this unit"
@@ -184,7 +197,9 @@ def test_the_chip_repaints_from_what_the_server_sent(page, live, served) -> None
         BARE[1],
         BARE[3],
         BARE[10],
+        BARE["section"],
         BARE["chapter"],
+        BARE["part"],
         CHOSEN[999],
     ]
 
@@ -238,7 +253,7 @@ def test_the_size_survives_a_reload(page, live, served) -> None:  # type: ignore
 
     open_triage(page, live, SECOND)
 
-    assert chip_labels(page, SECOND)[4] == CHOSEN["chapter"]
+    assert chip_labels(page, SECOND)[5] == CHOSEN["chapter"]
     assert chip_labels(page, SECOND)[3] == BARE[10]
     assert whose(page, SECOND) == "this unit"
     assert whose(page, FIRST) == "project", "the neighbour still inherits"

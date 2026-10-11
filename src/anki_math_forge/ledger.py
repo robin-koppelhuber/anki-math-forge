@@ -49,7 +49,14 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .model import ANNOTATION_PREFIX, annotation_audience, note_body, slugify, write_atomic
+from .model import (
+    ANNOTATION_PREFIX,
+    annotation_audience,
+    note_body,
+    resolved_line,
+    slugify,
+    write_atomic,
+)
 
 STATES = ("new", "queued", "skipped", "carded")
 
@@ -397,15 +404,6 @@ class Unit:
         )
 
 
-def _note_body(note: str) -> str:
-    """An annotation without its `@claude` / `@me` prefix.
-
-    The card side settles its own annotations the same way and needs the same
-    stripping, so there is one of these rather than two that agree today.
-    """
-    return note_body(note)
-
-
 class Ledger:
     """A units.jsonl file. Insertion order is document order; keep it."""
 
@@ -613,8 +611,10 @@ class Ledger:
         if unit.suggestion is None or not unit.suggestion.state:
             raise ValueError(f"{unit_id} has nothing suggested")
         proposed = unit.suggestion
+        # Settled first: setting the state clears any suggestion, which is how
+        # deciding directly overrules one.
+        self._settle(unit, f"accepted: {proposed.state}")
         self.set_state(unit_id, proposed.state, reason=proposed.reason)
-        unit.suggestion = None
         return unit
 
     def dismiss(self, unit_id: str) -> Unit:
@@ -622,8 +622,32 @@ class Ledger:
         unit = self.get(unit_id)
         if unit is None:
             raise KeyError(f"no unit {unit_id!r} in {self.path}")
-        unit.suggestion = None
+        if unit.suggestion is not None:
+            self._settle(unit, "rejected")
         return unit
+
+    def _settle(self, unit: Unit, decided: str) -> None:
+        """Clear a suggestion, keeping what was proposed and what you decided.
+
+        A proposal is a parked decision like an `@me` note, and deciding it is
+        answering it: the question and the answer stay as a `resolved:` line.
+        A pass that also wrote the reason as an `@me not carded: ...` note
+        asked one question twice, so that note is settled with it rather than
+        left for a second click.
+        """
+        proposed = unit.suggestion
+        if proposed is None:
+            return
+        why = proposed.detail or proposed.reason
+        by = f" by {proposed.by}" if proposed.by else ""
+        asked = f"proposed {proposed.state}{by}: {why}" if why else f"proposed {proposed.state}{by}"
+        unit.notes = [
+            note for note in unit.notes
+            if not note_body(note).lower().startswith("not carded:")
+            or annotation_audience(note) != "me"
+        ]
+        unit.notes.append(resolved_line(asked, decided))
+        unit.suggestion = None
 
     def set_state(self, unit_id: str, state: str, *, reason: str = "") -> Unit:
         if state not in STATES:
@@ -738,9 +762,10 @@ class Ledger:
         """Settle one annotation, keeping what you settled it with.
 
         A `@me` note is a question you parked for yourself, and the way out was
-        to delete the line -- which throws away both the question and the
-        answer. So a reply is recorded in its place, unaddressed: it is a
-        record, not new work, and an `@claude` line would queue it as work.
+        to delete the line, which throws away both the question and the
+        answer. So a reply is recorded in its place as a `resolved:` line, the
+        form a card's settled notes take: a record, not new work. Written
+        bare, it read as unaddressed, which `todo` counts as `@claude` work.
 
         An empty reply deletes the line outright, which is right when the note
         was a reminder rather than a question.
@@ -750,10 +775,10 @@ class Ledger:
             raise KeyError(f"no unit {unit_id!r} in {self.path}")
         if not 0 <= index < len(unit.notes):
             raise ValueError(f"{unit_id} has no annotation {index}")
-        asked = _note_body(unit.notes.pop(index))
-        reply = " ".join(reply.split())
-        if reply:
-            unit.notes.append(f"{asked} — {reply}")
+        asked = unit.notes.pop(index)
+        line = resolved_line(asked, reply)
+        if line:
+            unit.notes.append(line)
         return unit
 
     def annotate(self, unit_id: str, text: str) -> Unit:

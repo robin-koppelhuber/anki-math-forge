@@ -17,9 +17,9 @@ the context you need and iterate; a draft is not a commitment.
 
 **A note on the examples.** The rules here are meant to survive a change of
 source: each is stated without reference to any particular subject. The worked
-examples are matrix calculus because that is what this deck currently holds,
-and they are illustrations, not part of the rule. If an example stops making
-sense because the deck moved on, replace the example — the rule above it
+examples are matrix calculus because the Matrix Cookbook was this tool's first
+project, and they are illustrations, not part of the rule. If an example stops
+making sense because the deck moved on, replace the example — the rule above it
 should still stand.
 
 ## Two kinds of card
@@ -112,14 +112,14 @@ do not write the card.
 
 **Every object on the front is defined before the front uses it**, either
 ambiently or on the card itself. **Ambient means whatever the source declares**
-— `forge context <unit>` prints it, and it is per source, because
+— `forge context <unit>` prints it, and it is per project, because
 "entries are real" and "denominator layout" are facts about one book rather
 than about this tool. Read it rather than assuming. Everything it does not
 cover is the card's job.
 
 If `context` says no conventions are recorded for a source, that is not
-permission to invent them: write them down first, or every card after this one
-is guessing at the same things independently.
+permission to invent them: ask for them first, with an `@me` note, or every
+card after this one is guessing at the same things independently.
 
 A front reading `$\frac{\partial}{\partial \mathbf{X}}\text{Tr}(\mathbf{A}\mathbf{X}\mathbf{B})$`
 is unanswerable as it stands: nothing says what `A` and `B` are, and the answer
@@ -184,7 +184,7 @@ Use the set-membership form as the single spelling, everywhere:
 - it is mathematics rather than an English word, which is the rule above;
 - it names `n`, which the answer and the later clauses usually refer to;
 - it is the same shape of clause as the rectangular cases (`$\mathbf{X} \in \mathbb{R}^{m \times n}$`), where
-  giving the dimensions is not optional -- one form covers both, so the reader
+  giving the dimensions is not optional: one form covers both, so the reader
   never has to notice which kind of card this is.
 
 Stating `\mathbb{R}` is mildly redundant against the ambient "entries are real", and
@@ -220,8 +220,7 @@ answer, not in a condition where they inform nothing.
 
 **When the real condition is existence, ask about existence.** For a
 derivative identity there is usually a genuine question hiding in the
-conditions: *where does this hold?* If the answer is the generic one --
-wherever the expression is defined -- it is not a card and barely a condition.
+conditions: *where does this hold?* If the answer is the generic one (wherever the expression is defined), it is not a card and barely a condition.
 If the answer is specific, it is often the more valuable card of the two:
 
 | identity | the interesting question |
@@ -233,7 +232,7 @@ If the answer is specific, it is often the more valuable card of the two:
 So: **do not** add "when does this exist?" as a second card by reflex. Across
 a table of derivative identities the answer is the same generic sentence, and
 a hundred cards with one answer teach nothing. **Do** make it a card when the
-answer is specific enough to be got wrong -- and then it is a real card, not a
+answer is specific enough to be got wrong, and then it is a real card, not a
 restatement, because its front asks something the identity card does not.
 
 The check either way: read the condition and ask what a reader would do
@@ -250,7 +249,7 @@ which question you are being asked; "invertibility is needed here because the
 right-hand side would otherwise be undefined" is an answer to a different one.
 
 And a condition must not give the answer away. If stating it would make the
-front trivial, it is not a condition -- it is part of the answer, and belongs
+front trivial, it is not a condition. It is part of the answer, and belongs
 in `## back` or `## prose`.
 
 ### Where a notation gloss goes
@@ -259,9 +258,9 @@ A symbol the deck declares no ambient meaning for has to be explained
 somewhere. Which section depends on **where the symbol appears**, not on where
 it is convenient:
 
-- **In the front** -- the gloss belongs in `## conditions`. You cannot answer a
+- **In the front**: the gloss belongs in `## conditions`. You cannot answer a
   question posed in notation you do not have.
-- **Only in the back** -- the gloss belongs in `## prose`. Conditions are the
+- **Only in the back**: the gloss belongs in `## prose`. Conditions are the
   setting of the question, and a symbol that is not in the question is not
   part of its setting. Putting it there also leaks: naming the Hadamard
   product before the answer tells the reader the answer contains one.
@@ -385,7 +384,7 @@ exists elsewhere.
 
 **An `intuition` card still has to explain.** Naming the class is the anchor,
 not the answer: a back that says "because it is sub-Gaussian" has answered
-"what is this called". Say what the property buys, and name it while you do.
+"what is this called". Say what the property gives you, and name it while you do.
 
 ### How far down to go
 
@@ -410,7 +409,7 @@ Three tiers, and only the middle one belongs on a card.
    in both fields but is the squared norm only over $\mathbb{R}$.
 3. **Out of scope, not stated.** Infinite dimensions, trace-class operators,
    Fredholm determinants. The source is about matrices. Saying "finite
-   dimensional" on every card buys nothing, because nothing in the deck is
+   dimensional" on every card adds nothing, because nothing in the deck is
    not.
 
 The interesting cases are the ones where tier 3 is where a reader's intuition
@@ -522,8 +521,8 @@ A card can show a figure, a diagram or a table:
 The bare form means the unit the card was written from, which is the usual
 case. There is no image file anywhere: the reference names a unit, and the
 crop is rendered from the source document and uploaded when `anki push`
-runs. So the unit has to be one with geometry -- an image or area
-annotation, or any mark on a PDF -- and `check` refuses the card if the
+runs. So the unit has to be one with geometry (an image or area
+annotation, or any mark on a PDF), and `check` refuses the card if the
 picture cannot be drawn.
 
 **Which section it goes in is yours to decide, and it is the whole decision.**
@@ -636,11 +635,19 @@ It is not `## prose`. Prose says what the result *means*; uses says where it
 
 ## Prose
 
-One sentence of intuition, ideally connecting to something scalar you already
-know: *"the matrix analogue of (log x)' = 1/x"*. Optional. Cut it if it is
-just the formula in words, and apply the punchline test in **Language**: if
-the halves of its one sentence already live in other sections, it is a
-restatement.
+One sentence of intuition, ideally connecting to something you already know:
+*"the matrix analogue of (log x)' = 1/x"*, *"a sharper curve means a smaller
+variance"*. Optional. Cut it if it is just the formula in words, and apply the
+punchline test in **Language**: if the halves of its one sentence already live
+in other sections, it is a restatement.
+
+**A ceiling, because the target drifts.** One sentence is the target. Three
+short sentences, about 60 words and no sentence over 25, is the most. This
+deck's Krause cards had a median of 52 words and a longest sentence of 56,
+against 20 and 40 for the Cookbook's, and `check` now warns past the ceiling
+(`prose-long`). Past it, what you are writing is one of three other things:
+a derivation (`## proof`), a use (`## uses`), or a second card. A brief that
+asks you to explain a term, or two things, is asking for another card.
 
 Written in the language `[cards] language` declares.
 
@@ -668,14 +675,15 @@ A note is read by a human, blocks `anki push` until resolved, and is the
 only part of a card nobody can skim past. Three things earn one:
 
 - the **source is wrong**, or its stated conditions are insufficient;
-- this card stands in a **relation to another card** -- it duplicates one,
+- this card stands in a **relation to another card**: it duplicates one,
   overlaps one, or was kept despite being a special case of one;
 - something is **undecided** and you are handing the decision over.
 
 Nothing else. In particular, **"the source did not state this condition, so I
-added it" is not a note**: the condition is sitting on the card, and if adding
-conditions is the normal case for a source, that belongs in its
-the source's own file, once.
+added it" is not a `@me` note.** CLAUDE.md invariant 7 still wants it recorded,
+as one unaddressed line in `## notes`, which blocks nothing. If adding
+conditions is the normal case for a source, that belongs in the project's
+`conventions.md`, once.
 
 The first pass over this deck wrote 151 notes across 87 of 98 cards, 3,769
 words, most of them that one sentence. Every card was blocked from syncing by
@@ -726,6 +734,30 @@ kept only where a flashcard makes the case stronger than a paper does.
 11. **No em-dashes.** Use a colon to introduce, commas or parentheses for an
     aside, or two sentences. An em-dash aside inside a sentence that already
     carries a formula gives the reader two suspensions to hold at once.
+12. **Say what the quantity does, in the verbs of the mathematics.** *Maps,
+    scales, adds, equals, is bounded by, is zero when.* Idioms of commerce,
+    effort and place stand in for a relation without stating it, and a card
+    read cold has nothing to unpack them against: *buys*, *costs you*, *pays
+    for*, *reach for*, *lives in*, *drags*, *pinned down*, *forced*, *carries*,
+    *turns X into Y*. "A sharper curve buys a smaller variance" says less than
+    "a sharper curve means a smaller variance". A word the field itself uses
+    (curvature, bottleneck, mixing, flow) is not an idiom: it is the name.
+13. **An image is welcome when it is the intuition, and it says what it
+    stands for.** In `## prose` and on `intuition` cards, a concrete and
+    familiar picture often does what a formula cannot: *"like a ball rolling
+    downhill, each step lowers the loss"*. Three conditions. It is familiar
+    (a ball on a slope, a mixing tank, a sliding window), not invented for the
+    card. The same sentence says what it corresponds to in the mathematics, so
+    the reader can unpack it from this card alone. And there is one, not a
+    string of them. This is the other side of rule 12, not an exception to it:
+    an idiom hides the relation and an image shows it.
+14. **Plain before dense.** A sentence that packs three facts behind commas
+    ("invertibility gives X a meaning, and symmetry makes Y, which is what
+    turns both cross terms into Z") is three sentences. If a sentence needs
+    two readings to parse, split it. Prefer the active verb and the concrete
+    noun to the nominalisation: not "the transformation of an error measured
+    in observation space into a correction in state space" but "maps the
+    residual in $\mathbb{R}^m$ to a shift in $\mathbb{R}^d$".
 
 **Not adopted, deliberately.** That document bans "display" for mathematics.
 Here the display/inline distinction is load-bearing: the segmenter keys on
@@ -746,12 +778,12 @@ thread from.
 
 | Section | Target |
 |---|---|
-| `front` | one formula; `check` caps the rendered length at 160 chars |
+| `front` | one formula; `check` caps the rendered length at 160 chars unless the project sets `front_char_cap` |
 | `back` | one line |
 | `conditions` | one line |
 | `uses` | one clause, ~120 chars, and usually absent |
 | `proof` | 2–4 lines |
-| `prose` | one sentence |
+| `prose` | one sentence; at most three short ones, about 60 words (`check` warns past it) |
 
 ## Verify
 
@@ -808,8 +840,10 @@ subject rather than the identity.
 - `short` — a couple of lines from something you already know.
 - `long` — you would want the proof in front of you.
 
-Leave both off when you are unsure. An absent judgement costs nothing; a
-confidently wrong one gets filtered on later and shapes what you drill.
+Leave both off at the stub stage when you are unsure; `/augment` sets both,
+because a card missing either sorts last in study order. An absent judgement
+costs nothing; a confidently wrong one gets filtered on later and shapes what
+you drill.
 
 Three values each, deliberately. A 1–10 scale would be invented precision that
 no two sessions would apply the same way.
@@ -850,12 +884,13 @@ apart, split when one card would have two answers.
 
 
 **Read the book's notation section before you write anything.**
-`forge source-text <source>` prints the cached text layer; the Notation
-and Nomenclature table near the front defines every symbol the book uses. A
-card that says `$A^+$` without knowing it means the pseudo-inverse is a card
-that teaches you the wrong thing. Read the surrounding section too — it tells
-you which conditions are load-bearing and which neighbouring identities you
-would be duplicating.
+`forge source-text <project>` prints the cached text layer; a book usually
+defines its symbols near the front (the Matrix Cookbook's Notation and
+Nomenclature table, for one). A card that says `$A^+$` without knowing it means
+the pseudo-inverse is a card that teaches you the wrong thing. Read the
+surrounding section too (`forge context <unit> --pages section`): it tells you
+which conditions are load-bearing and which neighbouring identities you would
+be duplicating.
 
 The **crop is authoritative**. `tex_auto` is a transcription written by
 `/transcribe` to help you triage; never copy it into a card without reading the
@@ -879,7 +914,7 @@ $\frac{\partial}{\partial X} \log \det X$
 $X^{-\top}$
 
 ## conditions
-$X$ invertible. Denominator layout.
+$X \in \mathbb{R}^{n \times n}$; $\det(X) > 0$. Denominator layout.
 
 ## proof
 Jacobi's formula: $d(\log\det X) = \operatorname{tr}(X^{-1}\,dX)$; reading the

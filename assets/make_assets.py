@@ -15,7 +15,8 @@ display:
                  drawn on the page, the transcription beside it, the brief
     zotero.png   a unit from a marked-up paper: the mark on the page it was
                  made on, and every other mark around it, with what each says
-    review.png   an approved card, with the notes that decided it
+    review.png   an approved card with its conditions, proof and the note that
+                 records a condition the source does not state
     graph.png    the dependency canvas: what each card rests on, arranged,
                  beside the study order the two of them produce
     setup.png    the stage before triage: what a project reads, what you asked
@@ -348,6 +349,24 @@ def marked_unit() -> str:
     return "#" + urllib.parse.quote(named) if named else ""
 
 
+def chosen_card() -> str:
+    """A fragment naming the card the review shot opens on, or nothing.
+
+    The same aesthetic call as `interesting`: the deck opens on its first card
+    in study order, which says nothing in particular, and a picture of review
+    is of a card with something to read in it. Which one is a human's call.
+    The committed `review.png` was taken with
+
+        FORGE_ASSET_CARD=8179d7 uv run python assets/make_assets.py review
+
+    a card with conditions, a proof and a `## notes` line, and no `check`
+    warning, since a lint finding on the one card in the README reads as the
+    tool complaining about its own demo.
+    """
+    named = os.environ.get("FORGE_ASSET_CARD", "")
+    return "#" + urllib.parse.quote(named) if named else ""
+
+
 def urls() -> dict[str, str]:
     """One URL per screenshot, resolved against whatever sources exist.
 
@@ -393,8 +412,12 @@ def urls() -> dict[str, str]:
             "status: approved" in c.read_text(encoding="utf-8")
             for c in (config.cards_dir / segmented).glob("*.md")
         )
-        out["review"] = "/review?" + urllib.parse.urlencode(
-            {"project": segmented, "status": "approved" if approved else "all"}
+        out["review"] = (
+            "/review?"
+            + urllib.parse.urlencode(
+                {"project": segmented, "status": "approved" if approved else "all"}
+            )
+            + chosen_card()
         )
         # The canvas draws `requires`, so a source with none is a blank window
         # with a line of explanation in the middle of it. That is the correct

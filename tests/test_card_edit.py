@@ -133,7 +133,85 @@ def test_the_review_page_carries_the_editor_and_its_key(
     page = client.get("/review").text
 
     assert "data-card-edit-dialog" in page
-    for name in ("front", "back", "ask", "note"):
+    assert "data-card-edit-field" in page, "the shape each section's field is made from"
+    for name in ("ask", "note"):
         assert f'name="{name}"' in page, name
     assert 'value="check my manual edit"' in page, "the default words"
     assert '"edit-card"' in page
+
+
+def test_the_card_itself_offers_the_editor(client: TestClient, card_path: Path) -> None:
+    """Not only a small link in the aside: a button above the card, and a
+    pencil on each section that opens the editor at that section."""
+    page = client.get("/review").text
+
+    assert 'class="card-edit-button" data-edit-card' in page
+    for name in ("front", "back", "conditions", "prose"):
+        assert f'data-edit-card="{name}"' in page, name
+
+
+def test_the_editor_offers_what_the_type_allows(client: TestClient, card_path: Path) -> None:
+    sections = {s["name"]: s for s in opened(client)["sections"]}
+
+    assert list(sections) == ["front", "back", "conditions", "prose", "uses", "proof", "verify"]
+    assert sections["conditions"]["body"] == "$X$ invertible. Denominator layout."
+    assert sections["front"]["required"] and not sections["proof"]["required"]
+    assert "notes" not in sections, "notes are edited a line at a time from the aside"
+
+
+def test_an_intuition_is_offered_no_conditions_or_verify(
+    client: TestClient, card_path: Path
+) -> None:
+    text = card_path.read_text(encoding="utf-8")
+    card_path.write_text(
+        text.replace("type: identity", "type: intuition").split("## conditions")[0],
+        encoding="utf-8",
+    )
+
+    names = [s["name"] for s in opened(client)["sections"]]
+
+    assert "conditions" not in names and "verify" not in names
+    out = client.post(
+        "/api/cards/7f3a2b/text",
+        json={"mtime": opened(client)["mtime"], "sections": {"conditions": "$X$ square"}},
+    )
+    assert out.status_code == 400
+    assert model.load(card_path).section("conditions") is None
+
+
+def test_only_the_sections_sent_are_touched(client: TestClient, card_path: Path) -> None:
+    before = model.load(card_path)
+    out = client.post(
+        "/api/cards/7f3a2b/text",
+        json={"mtime": opened(client)["mtime"], "sections": {"proof": "Differentiate $\\det$."}},
+    )
+
+    assert out.status_code == 200, out.text
+    card = model.load(card_path)
+    assert card.section("proof") == "Differentiate $\\det$."
+    for name in ("front", "back", "conditions", "prose"):
+        assert card.section(name) == before.section(name), name
+
+
+def test_an_optional_section_saved_empty_is_removed(
+    client: TestClient, card_path: Path
+) -> None:
+    out = client.post(
+        "/api/cards/7f3a2b/text",
+        json={"mtime": opened(client)["mtime"], "sections": {"prose": "  "}},
+    )
+
+    assert out.status_code == 200, out.text
+    assert model.load(card_path).section("prose") is None
+
+
+@pytest.mark.parametrize("name", ["notes", "status", "nonsense"])
+def test_the_editor_writes_sections_and_nothing_else(
+    client: TestClient, card_path: Path, name: str
+) -> None:
+    out = client.post(
+        "/api/cards/7f3a2b/text",
+        json={"mtime": opened(client)["mtime"], "sections": {name: "x"}},
+    )
+
+    assert out.status_code == 400

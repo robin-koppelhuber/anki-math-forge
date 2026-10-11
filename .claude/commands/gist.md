@@ -8,9 +8,9 @@ Fill in the one-line subject for units that have none, by dispatching
 
 Arguments: `$ARGUMENTS`
 
-- **`--project NAME`** — which source. **Ask if it is not given and the repo
+- **`--project NAME`** — which project. **Ask if it is not given and the repo
   has more than one.**
-- **`--section SECTION`**, or **`--all`** for the whole source. Default: ask.
+- **`--section SECTION`**, or **`--all`** for the whole project. Default: ask.
 
 ## Why
 
@@ -34,7 +34,7 @@ not a wire.
 1. See what needs doing:
 
    ```
-   uv run forge units --project <name> --ungisted --json
+   uv run --no-sync forge units --project <name> --ungisted --json
    ```
 
 2. Group by `locator.section`. A section of 30–40 units is one subagent; split
@@ -42,10 +42,10 @@ not a wire.
    all — do it inline.
 
 3. Dispatch one `gist-writer` per section, **in parallel** — several `Agent`
-   calls in one message, each with its own temp directory:
+   calls in one message, each on its own section:
 
    > Gist section <section> of <source>. Render with
-   > `uv run --no-sync forge crops --project <project> --section <section> --ungisted --out <temp dir> --json`,
+   > `uv run --no-sync forge crops --project <project> --section <section> --ungisted  --json`,
    > read each crop and the `marked`/`comment` fields, and record with
    > `uv run --no-sync forge units set <id> --gist '<one line>'`.
    > Follow your instructions exactly: a subject, not a summary; no maths; say
@@ -54,8 +54,8 @@ not a wire.
 4. Verify mechanically rather than trusting the summaries:
 
    ```
-   uv run forge units --project <name> --ungisted --json     # should be near empty
-   uv run forge units --project <name> --state new           # gists print under each id
+   uv run --no-sync forge units --project <name> --ungisted --json     # should be near empty
+   uv run --no-sync forge units --project <name> --state new           # gists print under each id
    ```
 
 5. Report: how many per section, and **every gist that says the unit is
@@ -71,5 +71,5 @@ is cheap and visible by construction** — the human is looking at the same crop
 when they read it. Reach for `sonnet` only if a section comes back with gists
 that are obviously not about the right region.
 
-Crops written under `--out` are **working files**. Delete them when the pass
-is done.
+Crops land under `.forge/crops/<section>/`, which is gitignored; nothing needs
+deleting by hand.

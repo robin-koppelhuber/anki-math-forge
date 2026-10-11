@@ -43,6 +43,17 @@
       {# The id is what you paste into a command. Small and selectable rather
          than a line of its own under everything. #}
       <code class="unit-id" title="{{ unit.id }}">{{ unit.id.split(':')[1:] | join(':') or unit.id }}</code>
+      {# Whether whoever writes this card may look anything up. Same shape as
+         the context chip below and for the same reason: it is a decision you take
+         *here*, looking at a unit that cites a theorem the paper never states.
+         Off everywhere by default, so the chip is normally the quiet one. #}
+      <span class="badge context-chip web-chip{{ ' own' if unit.web_own }}" data-web-chip
+            title="whether whoever writes this card may look things up on the web. A card should say what this source says; grant it where you can see this one needs more. `w` cycles allow / no / inherit.">
+        <i class="chip-what">web</i>
+        <button type="button" class="ctx-step{{ ' on' if unit.web }}" data-web-set="1">allowed</button>
+        <button type="button" class="ctx-step{{ ' on' if not unit.web }}" data-web-set="0">no</button>
+        <i class="chip-whose">{{ 'this unit' if unit.web_own else 'project' }}</i>
+      </span>
       {# How much of the document a card writer gets. Every size on screen with
          the one in force written out, because a row of bare numbers is five
          things to decode and this way the chip reads as a sentence with the
@@ -66,19 +77,13 @@
         {% endfor %}
         <i class="chip-whose">{{ 'this unit' if unit.context_own else 'project' }}</i>
       </span>
+      {# What the size comes to for this unit: which section or chapter, and
+         its pages as printed. Said, because "chapter" is a different number
+         of pages in every book and in every part of one. #}
+      <span class="ctx-span{{ ' large' if unit.window.large }}" data-context-span
+            title="{{ unit.window.text }}">{{ unit.window.short }}</span>
       {% endif %}
 
-      {# Whether whoever writes this card may look anything up. Same shape as
-         the context chip and for the same reason: it is a decision you take
-         *here*, looking at a unit that cites a theorem the paper never states.
-         Off everywhere by default, so the chip is normally the quiet one. #}
-      <span class="badge context-chip web-chip{{ ' own' if unit.web_own }}" data-web-chip
-            title="whether whoever writes this card may look things up on the web. A card should say what this source says; grant it where you can see this one needs more. `w` cycles allow / no / inherit.">
-        <i class="chip-what">web</i>
-        <button type="button" class="ctx-step{{ ' on' if unit.web }}" data-web-set="1">allowed</button>
-        <button type="button" class="ctx-step{{ ' on' if not unit.web }}" data-web-set="0">no</button>
-        <i class="chip-whose">{{ 'this unit' if unit.web_own else 'project' }}</i>
-      </span>
     </div>
 
     {# Document on one side, what was written about it on the other, with the
@@ -166,8 +171,11 @@
          been round a few times and neither should push the other off the
          screen. Open by default -- a shut panel is how the brief got ignored
          the last time it was collapsible. #}
-      {% set for_claude = unit.annotations | selectattr('audience', 'ne', 'me') | list %}
+      {% set for_claude = unit.annotations | selectattr('audience', 'eq', 'claude') | list %}
       {% set for_me = unit.annotations | selectattr('audience', 'eq', 'me') | list %}
+      {# Settled notes are a record, not work: they were listed under the
+         brief, with a delete button, as if still open. #}
+      {% set settled = unit.annotations | selectattr('audience', 'eq', 'resolved') | list %}
       <section class="notes-pane">
         {# The explanation is on hover, not on screen. It is four lines long
            and it is only ever read once, so on a unit with no notes -- which
@@ -194,6 +202,25 @@
         <details class="note-section" open>
         <summary title="A decision that cannot be taken yet. Answering one leaves the question and the answer behind, so the reasoning survives."><h3>parked for a decision <span class="at me">@me</span>
           <button type="button" class="note-add" data-annotate="me">add</button></h3></summary>
+        {# A decision a pass proposed is one more thing parked for you, and
+           answering it is deciding it: accept applies it, reject leaves the
+           unit as it is, and either way what was proposed and what you said
+           stay behind as a settled line. #}
+        {% if unit.suggestion %}
+        <ul class="note-list mine">
+          <li class="suggestion">
+            <span class="note-text"><b>proposed: {{ unit.suggestion.state }}</b>
+              &middot; {{ unit.suggestion.detail or unit.suggestion.reason }}
+              <span class="by">by {{ unit.suggestion.by }}</span></span>
+            <span class="note-answers">
+              <button type="button" data-suggestion="accept"
+                      title="{{ unit.suggestion.state }} it ({{ key('accept-suggestion') }})">accept</button>
+              <button type="button" data-suggestion="dismiss"
+                      title="leave it as it is ({{ key('dismiss-suggestion') }})">reject</button>
+            </span>
+          </li>
+        </ul>
+        {% endif %}
         {% if for_me %}
         <ul class="note-list mine">
           {% for note in for_me %}
@@ -213,6 +240,20 @@
         </ul>
         {% endif %}
         </details>
+        {% if settled %}
+        <div class="settled-notes">
+          <p class="settled-head" title="what was asked, and what was decided">{{ settled | length }} settled</p>
+          {# The newest in the open: after a pass the thing to check is whether
+             its edit was the one you asked for. #}
+          <p class="settled-latest">{{ settled[-1].text }}</p>
+          {% if settled | length > 1 %}
+          <details class="settled-older">
+            <summary>{{ settled | length - 1 }} earlier</summary>
+            <ul>{% for note in settled[:-1] | reverse %}<li>{{ note.text }}</li>{% endfor %}</ul>
+          </details>
+          {% endif %}
+        </div>
+        {% endif %}
       </section>
 
       </div>
@@ -306,13 +347,6 @@
        needed. It is a badge in the head now: still visible, because silence
        here is a result rather than a gap, but no longer the largest thing on
        a unit nobody has proposed anything about. #}
-    {% if unit.suggestion %}
-    <p class="suggestion">
-      <b>suggested: {{ unit.suggestion.state }}</b> &middot; {{ unit.suggestion.detail or unit.suggestion.reason }}
-      <span class="by">proposed by {{ unit.suggestion.by }}; nothing has been applied</span>
-      <span class="how"><b>a</b> accept &middot; <b>d</b> dismiss &middot; or decide directly</span>
-    </p>
-    {% endif %}
     {% if unit.context %}<p class="context">{{ unit.context }}</p>{% endif %}
     {# Only while it is skipped. The word is "skipped:", so on a unit in any
        other state it is a caption for a decision that has been taken back. #}

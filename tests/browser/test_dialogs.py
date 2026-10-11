@@ -104,3 +104,41 @@ def test_the_editor_previews_what_it_will_render(page, live) -> None:  # type: i
     assert page.locator('[data-card-edit-preview="back"] .katex').count() == 1
     assert "$y" in shown, "an unclosed dollar stays visible"
     assert not page.complaints, page.complaints
+
+
+def test_the_shelf_bar_keeps_its_search_beside_the_rail(page, live) -> None:  # type: ignore[no-untyped-def]
+    """The theme and runs buttons took the bar's first grid cells once, which
+    pushed the search box onto a second row as a squeezed oval."""
+    page.goto(f"{live}/projects")
+    search = page.locator("#shelf-search").bounding_box()
+    mark = page.locator(".shelf-mark").bounding_box()
+    theme = page.locator("[data-theme-cycle]").bounding_box()
+
+    assert search and mark and theme
+    assert abs(search["y"] + search["height"] / 2 - (mark["y"] + mark["height"] / 2)) < 12
+    assert theme["x"] > search["x"] + search["width"], "the global buttons come last"
+    assert search["width"] > 200
+
+
+def test_the_shelf_rail_drags_and_the_bar_follows(page, live) -> None:  # type: ignore[no-untyped-def]
+    page.goto(f"{live}/projects")
+    rail = page.locator(".shelf-rail")
+    before = rail.bounding_box()
+    handle = page.locator("[data-splitter=shelfRail]").bounding_box()
+    assert before and handle
+
+    x, y = handle["x"] + handle["width"] / 2, handle["y"] + 200
+    page.mouse.move(x, y)
+    page.mouse.down()
+    page.mouse.move(x + 120, y, steps=5)
+    page.mouse.up()
+
+    after = rail.bounding_box()
+    mark = page.locator(".shelf-mark").bounding_box()
+    assert after and mark
+    assert after["width"] > before["width"] + 80
+    assert abs(mark["width"] - after["width"]) < 3, "the bar's first column moved with it"
+    page.reload()
+    kept = page.locator(".shelf-rail").bounding_box()
+    assert kept and abs(kept["width"] - after["width"]) < 3, "remembered"
+    page.evaluate("localStorage.removeItem('anki-forge.split.shelf-rail')")

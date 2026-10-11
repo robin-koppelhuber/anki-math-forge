@@ -28,6 +28,7 @@ nothing checks closes again in three commits.
 | `forge sources` | every source, and which project reads it |
 | `forge project` | the projects this repo holds |
 | `forge topic` | what a project has been asked for |
+| `forge remarks` | what the passes said about the tool |
 | `forge zotero` | what Zotero holds, and what is already a source |
 | `forge context <unit>` | the page a unit was printed on |
 | `forge source-text` | the cached text layer |
@@ -52,10 +53,12 @@ itself; what it opens is the app, and the app writes.
 | `forge units accept <id>` · `forge units dismiss <id>` | `units --id --accept` / `--dismiss` |
 | `forge zotero import [item]` | `zotero <item>` |
 | `forge sources remove <key> --project P` | `sources --remove` |
+| `forge sources update [--project P]` | new: the Zotero import and the segmenter in one run |
 | `forge project new <name>` | `project <name>` |
 | `forge project delete <name>` | `project <name> --delete` |
 | `forge topic add <name> --project P` | `topic <name>` |
 | `forge cards new --unit <id>` | `new` |
+| `forge remarks add <text> --by <pass>` | new: a pass says what got in its way |
 
 ## Writes, outside
 

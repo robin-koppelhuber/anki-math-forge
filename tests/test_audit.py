@@ -385,3 +385,41 @@ def test_an_untranscribed_number_says_nothing(tmp_path: Path) -> None:
     unread.transcription = "none"
     report = audit.audit(ledger_of(tmp_path, [unread]), "src")
     assert "numbered-no-relation" not in codes(report, unread.id)
+
+
+def test_deciding_a_proposal_answers_it(tmp_path: Path) -> None:
+    """A proposal is a parked decision, and deciding it is answering it:
+    what was proposed and what you said stay as a settled line, and the
+    card writer's `@me not carded:` note, the same question asked twice,
+    is settled with it."""
+    from anki_math_forge.ledger import Suggestion
+    from anki_math_forge.model import is_resolved
+
+    unit = unnumbered("src:eq:p2", page=2)
+    unit.suggestion = Suggestion(
+        state="skipped", reason="not-cardable", detail="a special case of (102)", by="card-writer"
+    )
+    unit.notes = ["@me not carded: a special case of (102)", "@me is the sign right"]
+    led = Ledger(tmp_path / "units.jsonl", [unit])
+
+    decided = led.accept("src:eq:p2")
+
+    assert decided.state == "skipped" and decided.suggestion is None
+    assert "@me is the sign right" in decided.notes, "another question stays open"
+    assert not any("not carded" in n and not is_resolved(n) for n in decided.notes)
+    (settled,) = [n for n in decided.notes if is_resolved(n)]
+    assert "proposed skipped by card-writer: a special case of (102)" in settled
+    assert settled.endswith("accepted: skipped")
+
+
+def test_rejecting_a_proposal_records_it_too(tmp_path: Path) -> None:
+    from anki_math_forge.ledger import Suggestion
+
+    unit = unnumbered("src:eq:p2", page=2)
+    unit.suggestion = Suggestion(state="skipped", reason="fragment", by="classify")
+    led = Ledger(tmp_path / "units.jsonl", [unit])
+
+    decided = led.dismiss("src:eq:p2")
+
+    assert decided.state == "new"
+    assert decided.notes == ["resolved: proposed skipped by classify: fragment — rejected"]

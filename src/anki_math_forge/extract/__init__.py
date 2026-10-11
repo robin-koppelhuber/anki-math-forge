@@ -24,14 +24,15 @@ snippets.
 
 from __future__ import annotations
 
+import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .. import latex
 from ..config import Config, ConfigError
-from ..ledger import Ledger, Unit
+from ..ledger import Ledger, Mark, Unit
 from ..model import write_atomic
 from . import pdf, render, tex, transcribe
 
@@ -58,6 +59,8 @@ class ExtractReport:
     refreshed: int = 0
     transcription: dict[str, int] = field(default_factory=dict)
     text_chars: int = 0
+    #: Units in the project's ledger after this run.
+    total: int = 0
     warnings: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
@@ -142,6 +145,9 @@ def run(
     ledger_path = config.units_path(project_name)
     with Ledger.edit(ledger_path) as ledger:
         report.added, report.refreshed = ledger.upsert(units)
+        # The state after, beside the change: how many units the project
+        # holds now, whatever this run added.
+        report.total = len(ledger.units)
     return report
 
 
@@ -265,6 +271,41 @@ def source_text_path(config: Config, project_name: str, document: str = "") -> P
     home = config.extracting(document) or project_name
     folder = config.projects_dir / home
     return folder / (f"text-{document}.md" if document else "text.md")
+
+
+def source_marks_path(config: Config, project_name: str, document: str) -> Path:
+    """Where every mark made in a document is cached, beside its text layer."""
+    home = config.extracting(document) or project_name
+    return config.projects_dir / home / f"marks-{document}.json"
+
+
+def cache_document_marks(
+    config: Config, project_name: str, document: str, marks: list[Mark]
+) -> int:
+    """Every mark in a document, whatever its colour and whether or not a
+    unit came of it, and how many.
+
+    A unit carries the marks one page either side of it, fixed at import.
+    A card writer may be handed a chapter, and the marks inside it are what
+    the reader thought while reading it: a highlight in a colour that makes
+    no unit, or one whose unit was skipped, says what mattered all the same.
+    So they are kept whole, and `forge context` takes the ones inside the
+    window it hands over.
+    """
+    path = source_marks_path(config, project_name, document)
+    write_atomic(path, json.dumps([asdict(m) for m in marks], ensure_ascii=False))
+    return len(marks)
+
+
+def document_marks(config: Config, project_name: str, document: str) -> list[Mark]:
+    """The cached marks of a document, or none where nothing was cached."""
+    path = source_marks_path(config, project_name, document)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    known = {name for name in Mark.__dataclass_fields__}
+    return [Mark(**{k: v for k, v in row.items() if k in known}) for row in raw]
 
 
 def cache_source_text(config: Config, project_name: str) -> int:

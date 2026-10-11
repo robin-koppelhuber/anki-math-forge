@@ -411,3 +411,20 @@ def test_a_project_may_set_its_own_front_cap(repo: Path) -> None:
     assert config.front_char_cap_for("demo") == 400
     assert config.front_char_cap_for("elsewhere") == config.front_char_cap
     assert "front-too-long" not in codes(lint(repo, config))
+
+
+def test_prose_past_the_ceiling_is_warned_about(repo: Path, config: Config) -> None:
+    """One sentence is the target and three short ones the ceiling. Maths does
+    not count towards it: a formula is long and says one thing."""
+    short = "The matrix analogue of $(\log x)' = 1/x$, with $X^{-\top}$ for the slope."
+    write(repo, f"\n## front\n$a$\n\n## back\n$b$\n\n## prose\n{short}\n")
+    assert "prose-long" not in codes(lint(repo, config))
+
+    long_prose = " ".join(f"This is plain sentence number {n} saying one thing." for n in range(9))
+    write(repo, f"\n## front\n$a$\n\n## back\n$b$\n\n## prose\n{long_prose}\n")
+    found = [f for f in lint(repo, config) if f.code == "prose-long"]
+    assert found and found[0].level == check.WARN, "a warning: it never blocks a push"
+
+    run_on = "This " + "very " * 35 + "long sentence says one thing."
+    write(repo, f"\n## front\n$a$\n\n## back\n$b$\n\n## prose\n{run_on}\n")
+    assert "prose-long" in codes(lint(repo, config)), "one sentence can be too long alone"

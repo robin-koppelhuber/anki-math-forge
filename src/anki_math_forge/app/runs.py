@@ -37,7 +37,7 @@ from typing import Any
 #: `project`, `topic` and `work` the three kinds of selection on the setup
 #: stage, and `shelf` the project picker, which is the one screen that is
 #: not about a project at all.
-WHERE = ("shelf", "units", "review", "project", "topic", "work")
+WHERE = ("shelf", "units", "review", "project", "topic", "work", "inbox")
 
 #: The setup stage's smaller panes, each with a short list of its own. They
 #: were dict literals in `setup.html`, which is the drift this module was
@@ -117,6 +117,8 @@ class Ambient:
     #: The ask you have selected, and how much of its outline has no unit.
     subject: str = ""
     open_entries: int = 0
+    #: Notes dumped at the project and not yet sorted.
+    inbox: int = 0
 
     @property
     def src(self) -> str:
@@ -151,10 +153,14 @@ def _always(at: Ambient) -> bool:
 class Offer:
     """One command, and the only ambient facts it depends on.
 
-    `label` says which pass and how much is waiting; `why` says what the
-    pass *is*, in a sentence, because these are commands you run rarely
-    enough to have forgotten between times and this panel is the only place
-    they are described anywhere near where you press them.
+    `label` is the headline: the command, in one or two words, the way you
+    would say it (`anki push test`, `/transcribe`). `detail` is what tells
+    two rows with one headline apart, or how much is waiting (`this
+    project`, `3 queued`). `why` says what the pass *is*, in a sentence,
+    because these are commands you run rarely enough to have forgotten
+    between times and this panel is the only place they are described
+    anywhere near where you press them. A note has no headline: its label
+    is the sentence.
 
     `kind` is `shell`, `claude` or `note`. A shell command is plain Python
     and does exactly what it says; a slash command puts a model in the loop,
@@ -170,6 +176,7 @@ class Offer:
     where: tuple[str, ...]
     label: Text
     run: Text = ""
+    detail: Text = ""
     why: str = ""
     kind: str = "shell"
     scope: str = "project"
@@ -183,6 +190,9 @@ class Offer:
             "run": line,
             "kind": self.kind,
         }
+        detail = _say(self.detail, at)
+        if detail:
+            row["detail"] = detail
         if self.why:
             row["why"] = self.why
         if self.reads:
@@ -198,7 +208,28 @@ class Offer:
         # exists. Those stay copied, which is what they were always for.
         if self.kind == "shell" and "<" not in line:
             row["effect"] = effect_of(line)
+        # The action this line is, with its fields filled in, so the row can
+        # open in the runs window to be changed before it runs. A line with
+        # a slot to fill (`<citekey>`) opens there with that field empty,
+        # which is how it becomes runnable at all.
+        if self.kind == "shell":
+            found = action_of(line)
+            if found is not None:
+                row["action"], row["values"] = found
         return row
+
+
+def action_of(line: str) -> tuple[str, dict[str, Any]] | None:
+    """`(action key, field values)` for an offered command line, or `None`."""
+    import shlex
+
+    from . import actions
+
+    words = shlex.split(line.replace("uv run ", "", 1))
+    if not words or words[0] != "forge":
+        return None
+    found = actions.match(words[1:])
+    return (found[0].key, found[1]) if found else None
 
 
 def effect_of(line: str) -> str:
@@ -231,6 +262,14 @@ def extracted(at: Ambient) -> bool:
     nothing to run over them.
     """
     return at.authoritative and at.has_document
+
+
+def units_in(at: Ambient) -> int:
+    """How many units there are to look at: the work's own where a work is
+    selected, the project's by state everywhere else."""
+    return at.count("units") or sum(
+        at.count(state) for state in ("new", "queued", "carded", "skipped")
+    )
 
 
 def readable(at: Ambient) -> bool:
@@ -285,12 +324,10 @@ OFFERS: tuple[Offer, ...] = (
         where=("work",),
         when=lambda at: extracted(at) and at.origin == "zotero" and bool(at.zotero_key),
         scope="work",
-        label="re-read the marks on this work",
+        label="zotero import",
+        detail="this item",
         run=lambda at: f"uv run forge zotero import {quoted(at.zotero_key)}{at.src}".rstrip(),
-        why="an item you marked up is imported rather than segmented: this"
-        " re-reads the annotations and turns the ones your scheme names into"
-        " units. Re-running is safe, and a unit already in the ledger keeps"
-        " its id and its state.",
+        why="re-reads the marks and imports them as units",
     ),
     # -- the ask you have selected -----------------------------------------
     Offer(
@@ -298,36 +335,41 @@ OFFERS: tuple[Offer, ...] = (
         when=lambda at: bool(at.subject),
         kind="claude",
         scope="topic",
-        label=lambda at: (
-            f"write units for {at.open_entries} open entries"
-            if at.open_entries
-            else "propose more for this ask"
+        label="/propose",
+        detail=lambda at: (
+            f"{at.open_entries} open entries" if at.open_entries else "more for this ask"
         ),
         run=lambda at: f"/propose{at.src} {quoted(at.subject)}",
-        why="reads the ask and its outline, and writes a unit per entry that"
-        " has none. Subjects, never drafts: triage still decides.",
+        why="a unit per outline entry that has none",
     ),
     Offer(
         where=("topic",),
         when=lambda at: bool(at.subject),
         kind="claude",
         scope="topic",
-        label="propose references for it",
+        label="/sources",
+        detail="for this ask",
         run=lambda at: f"/sources{at.src} {quoted(at.subject)}",
-        why="places a card on this subject can be checked against. Proposed,"
-        " never accepted: each line waits for you on the project's panel.",
+        why="places to check this subject's cards against",
     ),
     # -- the project -------------------------------------------------------
+    Offer(
+        where=("inbox",),
+        when=lambda at: at.inbox > 0,
+        kind="claude",
+        label="/sort-notes",
+        detail=lambda at: f"{at.inbox} unsorted",
+        run=lambda at: f"/sort-notes{at.src}",
+        why="places each dump the way it asks",
+    ),
     Offer(
         where=("units", "project"),
         when=lambda at: not at.has_document,
         kind="claude",
-        label="propose units for a subject",
+        label="/propose",
+        detail="a subject",
         run=lambda at: f"/propose{at.src} '<what you want cards for>'",
-        why="there is no document to segment here, so a pass writes the units"
-        " instead: a subject, a line on what a card from it would be about,"
-        " and the page it read. Subjects, never drafts. Record the ask first"
-        " and the pass has an outline to work down.",
+        why="units for a subject with no document",
     ),
     Offer(
         where=("project",),
@@ -335,22 +377,18 @@ OFFERS: tuple[Offer, ...] = (
         # doors are open: this one re-reads the items, and `extract` below
         # segments the files.
         when=lambda at: at.origin in ("zotero", "mixed"),
-        label="re-read this project's items",
+        label="zotero import",
+        detail="this project",
         run=lambda at: f"uv run forge zotero import{at.src}",
-        why="its works came from Zotero, which imports rather than segments."
-        " With no item named, --project re-reads the ones this project"
-        " already declares. Run it with Zotero open.",
+        why="re-reads this project's Zotero items",
     ),
     Offer(
         where=("work", "project"),
         when=lambda at: extracted(at) and at.origin != "zotero",
-        label="segment this project into units",
+        label="units extract",
+        detail="this project",
         run=lambda at: f"uv run forge units extract {quoted(at.project)}",
-        why="geometry only, and it never reads the maths. It takes a project"
-        " rather than one work: every document the project declares as files"
-        " is segmented, and anything that came from Zotero is left alone."
-        " Re-running is safe, and a unit already in the ledger keeps its id"
-        " and its state.",
+        why="segments the project's files; Zotero items are left alone",
     ),
     # Gated on what the pass would actually work on, not on the triage
     # state: a deck of sixteen new units that have all been read offered
@@ -361,159 +399,158 @@ OFFERS: tuple[Offer, ...] = (
             readable(at) and not at.from_marks and bool(at.count("untranscribed"))
         ),
         kind="claude",
-        label=lambda at: f"read the crops — {at.count('untranscribed')} still untranscribed",
+        label="/transcribe",
+        detail=lambda at: f"{at.count('untranscribed')} untranscribed",
         run=lambda at: f"/transcribe{at.src}{at.scope}",
-        why="so triage shows the maths written out instead of a picture to"
-        " squint at. A hint only: the crop stays the authority"
-        " (invariant 4).",
+        why="the maths as text beside the crop; a hint",
     ),
     Offer(
         where=("units", "work"),
         when=lambda at: readable(at) and not at.from_marks and bool(at.count("new")),
         kind="claude",
-        label="propose which of them to skip",
+        label="/classify",
+        detail=lambda at: f"{at.count('new')} new",
         run=lambda at: f"/classify{at.src}{at.scope}",
-        why="fragments, headings, notation-table rows. It only proposes:"
-        " every suggestion waits for you, and nothing may propose skipping"
-        " a numbered equation.",
+        why="proposes skips; applies nothing",
     ),
     Offer(
         where=("units",),
         when=lambda at: bool(at.count("ungisted")),
         kind="claude",
-        label=lambda at: f"name {at.count('ungisted')} queued units in a line each",
-        run=lambda at: f"/gist{at.src}{at.sec}",
-        why="one line saying what a card from each would be about, so the"
-        " list, the graph and every link to a card read as something rather"
-        " than as a uid. Cheap, and it makes the stub-writing pass easier to"
-        " check.",
+        label="/gist",
+        detail=lambda at: f"{at.count('ungisted')} without a gist",
+        run=lambda at: f"/gist{at.src}{at.scope}",
+        why="one line per unit saying what a card would be about",
     ),
     Offer(
         where=("units", "topic"),
         when=lambda at: bool(at.count("queued")),
         kind="claude",
-        label=lambda at: f"write stubs for {at.count('queued')} queued",
+        label="/extract-cards",
+        detail=lambda at: f"{at.count('queued')} queued",
         run=lambda at: f"/extract-cards{at.src}{at.sec}",
-        why="reads the page each unit came from and your @claude brief, and"
-        " writes a draft. Approving is still yours. The whole project's"
-        " queue rather than one ask's: stub writing reads a unit and its"
-        " page, and neither knows which ask it came from.",
+        why="a draft per queued unit; approving stays yours",
+    ),
+    Offer(
+        where=("units", "topic"),
+        when=lambda at: bool(at.count("queued")),
+        kind="claude",
+        label="/extract-cards",
+        detail=lambda at: f"{at.count('queued')} queued, then augmented",
+        run=lambda at: f"/extract-cards{at.src}{at.sec} --augment",
+        why="drafts, then conditions, proof and gradings in one run",
     ),
     Offer(
         where=("review",),
         when=lambda at: bool(at.count("unaugmented")),
         kind="claude",
-        label=lambda at: f"augment {at.count('unaugmented')} drafts nobody has been over",
+        label="/augment",
+        detail=lambda at: f"{at.count('unaugmented')} not augmented",
         run=lambda at: f"/augment{at.src}",
-        why="adds conditions, a proof where it earns its place, the gradings."
-        " Run it before approving, not after: augmenting an approved card"
-        " sends it back to draft.",
+        why="conditions, proof and gradings; run before approving",
     ),
     Offer(
         where=("review",),
         when=lambda at: bool(at.count("annotated_claude_card")),
         kind="claude",
-        label=lambda at: f"{at.count('annotated_claude_card')} open requests",
+        label="/triage",
+        detail=lambda at: f"{at.count('annotated_claude_card')} open @claude",
         run=lambda at: f"/triage claude{at.src}",
-        why="works the @claude notes and deletes each line it has acted on."
-        " Every one of them is holding a card out of sync until it goes.",
+        why="works each @claude note and removes the line",
     ),
     # -- what to check afterwards ------------------------------------------
     Offer(
         where=("units",),
         reads=True,
-        label="this list, as JSON",
+        label="units",
+        detail="this list, as JSON",
         run=lambda at: (
             f"uv run forge units{at.src}"
             f" --state {at.state or 'all'}{at.sec} --json"
         ),
-        why="the same units this filter is showing, for a script or a"
-        " subagent. Read from this rather than from the printed output.",
+        why="this list as JSON, for a script or an agent",
     ),
+    # On the project it audits, once there is a unit to audit. Not on a
+    # work's panel, since it takes the whole project; and not on the triage
+    # rail, where every command carries the section on screen and this one
+    # cannot. Over the ledger, so it has an answer for a work that has
+    # stopped producing units as much as for one that has not.
     Offer(
-        where=("work", "project"),
-        # Over the ledger, so it has an answer for a work that has stopped
-        # producing units as much as for one that has not.
-        when=readable,
+        where=("project",),
+        when=lambda at: at.has_document and units_in(at) > 0,
         reads=True,
-        label="is the index trustworthy",
+        label="audit",
         run=lambda at: f"uv run forge audit{at.src}",
-        why="1..N with no gaps. It answers whether anything was dropped,"
-        " which no amount of reading the list can.",
+        why="dropped content, gaps in 1..N, overlapping crops",
     ),
     Offer(
         where=("review",),
         when=lambda at: bool(at.count("approved")),
         reads=True,
-        label="check the maths numerically",
+        label="verify",
         run=lambda at: f"uv run forge verify{at.src}",
-        why="runs the `## verify` snippets. Opt-in, and it caught three"
-        " errors in the source. Never reaches Anki.",
+        why="runs the ## verify snippets; never reaches Anki",
     ),
     Offer(
         where=("review", "project"),
         reads=True,
-        label="what would reach Anki, from this project",
+        label="anki push test",
+        detail="this project",
         run=lambda at: f"uv run forge anki{at.src}",
-        why="a rehearsal: approved cards only, nothing written, and it names"
-        " every card it would skip and why. The lint behind it is repo-wide"
-        " either way, because a duplicate uid is.",
+        why="approved cards only; writes nothing; names skips",
     ),
     # -- the repo ----------------------------------------------------------
     Offer(
         where=("shelf",),
         scope="repo",
         reads=True,
-        label="every work this repo reads",
+        label="sources",
+        detail="all projects",
         run="uv run forge sources",
-        why="across every project, with which one reads it. The answer to"
-        ' "have I got this already" without opening five TOMLs.',
+        why="every source in the repo, and which project reads it",
     ),
     Offer(
         where=("shelf",),
         scope="repo",
         reads=True,
-        label="what is on the Zotero shelf",
+        label="zotero",
         run="uv run forge zotero",
-        why="and which of them are already here. Reads Zotero and writes"
-        " nothing.",
+        why="what Zotero has, and what is already here",
     ),
     Offer(
         where=("shelf", "project"),
         scope="repo",
         reads=True,
-        label="lint every card in the repo",
+        label="check",
+        detail="every card",
         run="uv run forge check",
-        why="always safe, and it is what blocks sync. It says which LaTeX"
-        " parser ran.",
+        why="always safe; blocks sync; names the parser",
     ),
     Offer(
         where=("shelf", "review", "project"),
         scope="repo",
         reads=True,
-        label="what would reach Anki, from everything",
+        label="anki push test",
+        detail="all projects",
         run="uv run forge anki",
-        why="the same rehearsal over every project in the repo: approved"
-        " cards only, nothing written, and it names every card it would"
-        " skip.",
+        why="the same dry run over every project",
     ),
     Offer(
         where=("shelf", "work", "project"),
         when=lambda at: extracted(at) and at.origin in ("", "zotero", "mixed"),
         scope="repo",
-        label="import every Zotero item you tagged",
+        label="zotero import",
+        detail="tag anki",
         run="uv run forge zotero import --tag anki",
-        why="each one into a project of its own where it is new, and a"
-        " re-read where it is not: a unit already in the ledger keeps its id"
-        " and its state. Run it with Zotero open.",
+        why="one project per item; re-reads known ones",
     ),
     Offer(
         where=("shelf",),
         scope="repo",
-        label="import one item",
+        label="zotero import",
+        detail="one item",
         run="uv run forge zotero import <citekey>",
-        why="add --project to file it under a project that already exists,"
-        " rather than making one named after the cite key.",
+        why="add --project to file it under an existing project",
     ),
     # The one flow *back*. Offered without a count, because nothing here can
     # know you left a comment in Anki last night, and until this runs that
@@ -523,52 +560,47 @@ OFFERS: tuple[Offer, ...] = (
     Offer(
         where=("shelf", "review"),
         scope="repo",
-        label="pull what you wrote in Anki",
+        label="anki pull",
         run="uv run forge anki pull",
-        why="a comment or a flag you left while reviewing becomes an @claude"
-        " note on the card, and is erased in Anki as it is taken: after this"
-        " the line here is the only copy. Repo-wide, like the sync it"
-        " mirrors.",
+        why="comments and flags from Anki become @claude notes; erased there",
     ),
     # -- the setup stage's smaller panes ----------------------------------
     Offer(
         where=("references",),
         kind="claude",
-        label="propose some references",
+        label="/sources",
         run=lambda at: f"/sources{at.src}",
-        why="reads what this project is for and proposes places to check a"
-        " card against. Nothing is accepted: each line waits for you.",
+        why="proposes places to check this project's cards against",
     ),
     Offer(
         where=("bookless",),
-        label="put it in Zotero and import it",
+        label="zotero import",
+        detail="once it is marked up",
         run=lambda at: f"uv run forge zotero import <citekey>{at.src}",
-        why="mark up what is worth carding in Zotero, then run this. It writes"
-        " the item key, the attachments and the marks into a source here.",
+        why="mark up in Zotero first, then run this",
     ),
     Offer(
         where=("add-source",),
         reads=True,
-        label="what is on the shelf, and what is already a source",
+        label="zotero",
+        detail="what is not imported yet",
         run="uv run forge zotero",
-        why='reads Zotero and writes nothing. It is the answer to "which of'
-        ' these have I not imported yet".',
+        why="what Zotero has; writes nothing",
     ),
     Offer(
         where=("add-source",),
-        label="import one into this project",
+        label="zotero import",
+        detail="one item, here",
         run=lambda at: f"uv run forge zotero import <citekey>{at.src}",
-        why="turns the marks you declared into units, and files them under"
-        " this project rather than under the cite key.",
+        why="imports the marks under this project",
     ),
     Offer(
         where=("new-topic",),
         kind="claude",
-        label="outline it and write the units",
+        label="/propose",
+        detail="outline it",
         run=lambda at: f'/propose{at.src} "<the subject>"',
-        why="reads what you wrote, outlines what the subject covers, and"
-        " writes a unit per entry. Subjects, never drafts: triage still"
-        " decides.",
+        why="outlines the subject, a unit per entry",
     ),
 )
 

@@ -168,7 +168,7 @@ def test_a_dot_dropped_on_its_own_card_refuses(page, live) -> None:  # type: ign
     page.mouse.move(middle["x"], middle["y"], steps=6)
     page.mouse.up()
     page.wait_for_timeout(400)
-    assert not page.is_visible("#add-card")
+    assert not page.is_visible("#finder")
     assert "itself" in page.inner_text("#toast")
 
 
@@ -179,11 +179,11 @@ def test_one_escape_closes_a_dialog_you_have_typed_in(page, live) -> None:  # ty
     canvas(page, live)
     page.keyboard.press("+")
     page.wait_for_timeout(250)
-    page.fill("#add-search", "trace")
+    page.fill("#finder-search", "trace")
     page.wait_for_timeout(200)
     page.keyboard.press("Escape")
     page.wait_for_timeout(300)
-    assert not page.is_visible("#add-card")
+    assert not page.is_visible("#finder")
 
 
 def test_the_warning_colour_is_actually_read(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -205,7 +205,7 @@ def test_a_key_pressed_mid_gesture_waits(page, live) -> None:  # type: ignore[no
     page.mouse.move(start["x"] + 120, start["y"] + 80, steps=5)
     page.keyboard.press("+")
     page.wait_for_timeout(300)
-    assert not page.is_visible("#add-card")
+    assert not page.is_visible("#finder")
     page.keyboard.press("Escape")
     page.mouse.up()
     page.wait_for_timeout(300)

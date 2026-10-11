@@ -56,6 +56,22 @@ def test_a_unit_is_matched_on_its_own_mark() -> None:
     assert unit_mark(unit) == "highlight/green"
 
 
+def test_the_filtered_diagram_counts_only_the_marks_chosen(repo: Path) -> None:
+    """The diagram counts what the filters leave, and the grid is one of them."""
+    from anki_math_forge.app import scoped_counts
+    from anki_math_forge.ledger import Ledger
+
+    config = declared(repo)
+    Ledger(
+        config.units_path("demo"),
+        [a_unit("a", ("highlight", "green")), a_unit("b", ("note", "yellow"))],
+    ).save()
+
+    assert scoped_counts(config, "demo", {})["new"] == 2
+    assert scoped_counts(config, "demo", {"mark": "highlight/green"})["new"] == 1
+    assert scoped_counts(config, "demo", {"mark": "none"})["new"] == 0
+
+
 def test_a_unit_with_no_marks_matches_nothing() -> None:
     """Which is every unit the Cookbook has."""
     assert unit_mark(Unit(id="demo:2.4:61")) == ""

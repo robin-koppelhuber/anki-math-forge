@@ -7,6 +7,7 @@ human at the review view.
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,13 @@ USES_CHAR_CAP = 150
 # terms of the inverse". Long enough to name a card, short enough to fit in a
 # box on a graph without being cut.
 GIST_CAP = 60
+
+# `## prose` is one sentence of intuition, and the target drifts: this deck's
+# Krause cards had a median of 52 words and a longest sentence of 56 against
+# the Cookbook's 20 and 40. Three short sentences is the ceiling the skill
+# sets, about this many words with the maths taken out and none over this long.
+PROSE_WORD_CAP = 60
+PROSE_SENTENCE_CAP = 30
 
 
 @dataclass(frozen=True)
@@ -143,10 +151,7 @@ def check_card(
         add(
             WARN,
             "uid-numeric",
-            f"uid {card.uid!r} reads as a number to Anki, which sorts it oddly in "
-            "the browser and can break `export`. Set the note type to sort by "
-            "`Front` instead of `uid` (Manage Note Types > Fields). New uids "
-            "avoid this shape.",
+            f"uid {card.uid!r} reads as a number to Anki",
         )
 
     if card.type not in model.SECTIONS_BY_TYPE:
@@ -172,9 +177,7 @@ def check_card(
         add(
             WARN,
             "unit-missing",
-            "no `unit`: nothing says which project this card belongs to, so it "
-            "takes the repo's default deck and conventions rather than a "
-            "project's",
+            "no `unit`: filed under the repo defaults",
         )
 
     # -- sections ---------------------------------------------------------
@@ -214,8 +217,7 @@ def check_card(
         add(
             ERROR,
             "front-too-long",
-            f"rendered front is ~{length} chars, cap is {cap} "
-            "-- a prompt this long is usually two cards",
+            f"front ~{length} chars, cap {cap}",
         )
 
     # A gist is a caption, not a sentence: it labels the card in a list or on a
@@ -226,8 +228,7 @@ def check_card(
         add(
             WARN,
             "gist-too-long",
-            f"`gist` is {len(card.gist)} chars, and it is a label rather than a "
-            f"sentence -- past about {GIST_CAP} it is cut off wherever it is shown",
+            f"gist {len(card.gist)} chars, cap {GIST_CAP}",
         )
 
     # A `uses` line is meant to be glanceable: one clause naming where the
@@ -245,18 +246,29 @@ def check_card(
             add(
                 WARN,
                 "section-wrapped",
-                f"`## {section.name}`: prose is wrapped across lines, and "
-                "each newline outside maths becomes a <br> on the card. Write "
-                "the sentence as one line unless the break is deliberate",
+                f"`## {section.name}` wraps across lines, each a <br>",
             )
+
+    # Words, not characters: a formula is long and says one thing, and what
+    # makes prose hard to read cold is how much of it there is to hold.
+    said = re.sub(r"\$\$.*?\$\$|\$[^$]*\$", " X ", card.section("prose") or "", flags=re.S)
+    sentences = [s.split() for s in re.split(r"(?<=[.!?])\s+", said) if s.strip()]
+    words = sum(len(s) for s in sentences)
+    longest = max((len(s) for s in sentences), default=0)
+    if words > PROSE_WORD_CAP or longest > PROSE_SENTENCE_CAP:
+        add(
+            WARN,
+            "prose-long",
+            f"prose {words} words (max {PROSE_WORD_CAP}), "
+            f"longest sentence {longest} (max {PROSE_SENTENCE_CAP})",
+        )
 
     uses = latex.rendered_length(card.section("uses") or "")
     if uses > USES_CHAR_CAP:
         add(
             WARN,
             "uses-too-long",
-            f"`## uses` is ~{uses} chars, cap is {USES_CHAR_CAP}: name the "
-            "setting in plain words, do not explain it",
+            f"uses ~{uses} chars, cap {USES_CHAR_CAP}",
         )
 
     # -- approval (DESIGN.md §3.5) ----------------------------------------
@@ -267,8 +279,7 @@ def check_card(
             add(
                 ERROR,
                 "hash-stale",
-                "content changed since approval -- set `status: draft` and review it again "
-                f"(stored {card.stored_hash}, actual {card.content_hash()})",
+                f"edited since approval (stored {card.stored_hash}, actual {card.content_hash()})",
             )
 
     # -- annotations (DESIGN.md §8) ---------------------------------------
@@ -292,9 +303,7 @@ def check_card(
         add(
             WARN,
             "verify-fixed",
-            "`## verify` draws nothing random, so it checks one fixed case. "
-            f"Sample with {', '.join(sorted(VERIFY_DRAWS)[:3])} or `rng` unless the "
-            "claim really is about one point",
+            f"verify draws nothing random ({', '.join(sorted(VERIFY_DRAWS)[:3])}, `rng`)",
         )
 
     return findings
@@ -355,9 +364,7 @@ def check_requires(cards: list[Card]) -> list[Finding]:
                     Finding(
                         ERROR,
                         "requires-unknown",
-                        f"`requires` names {need}, which is not a card here -- "
-                        "the ordering ignores what it cannot resolve, so this "
-                        "would quietly do nothing",
+                        f"`requires` names {need}, no such card",
                         card.path,
                         card.uid,
                     )
@@ -370,8 +377,7 @@ def check_requires(cards: list[Card]) -> list[Finding]:
                     Finding(
                         WARN,
                         "requires-unapproved",
-                        f"needs {need}, which is {by_uid[need].effective_status}; "
-                        "sync would introduce this card without it",
+                        f"needs {need} ({by_uid[need].effective_status})",
                         card.path,
                         card.uid,
                     )
@@ -524,11 +530,7 @@ def check_sources(config: Config) -> list[Finding]:
                 Finding(
                     ERROR,
                     "source-extracted-twice",
-                    f"{key!r} has units in {', '.join(sorted(projects))}. "
-                    "A work is extracted from by at most one project: two make two "
-                    "ledgers of units and two notes per card in Anki, with nothing "
-                    "that knows they are the same. Keep it in one and cite it from "
-                    "the other with `url`",
+                    f"{key!r} has units in {', '.join(sorted(projects))}: keep one",
                 )
             )
     return findings
@@ -554,8 +556,7 @@ def check_topic_decks(config: Config) -> list[Finding]:
                     Finding(
                         WARN,
                         "deck-topic-unknown",
-                        f"[decks.by_topic] in {name} names {slug!r}, which no "
-                        "heading in topics.md slugifies to; no card will go there",
+                        f"[decks.by_topic] in {name}: no topic {slug!r}",
                     )
                 )
     return findings

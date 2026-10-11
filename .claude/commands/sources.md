@@ -60,14 +60,15 @@ heading it sat under becomes the ask that source serves.
    `projects/<name>/topics.md` for what it means to cover, and
    `projects/<name>/references.md` for what is already there.
 
-2. **Check what the repo already reads**: `uv run forge sources --json`. A
+2. **Check what the repo already reads**: `uv run --no-sync forge sources --json`. A
    work another project already has is one to reuse rather than propose
    again, and the setup stage can add it in a click. Name it in your summary
    instead of writing a shelf line for it.
 
 3. **Look them up** if the project allows it. `forge context <unit> --json`
-   reports `web`; with no unit to hand, `[projects.<name>] web` in
-   `forge.toml` is the same answer. **With lookups off, propose only what you
+   reports `web`; with no unit to hand, the project's `context` setting is the
+   same answer (`web` allows lookups): `projects/<name>/project.toml`, else
+   `[cards] context` in `forge.toml`. **With lookups off, propose only what you
    can name without checking**, and say which ones you were unsure of.
 
 4. **Append them** to `projects/<name>/references.md`, one per line, each

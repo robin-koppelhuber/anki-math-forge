@@ -60,6 +60,11 @@ def test_the_edit_button_survives_a_repaint(page, live, served) -> None:  # type
     uid = with_a_note(repo, "@me decide whether this is two cards")
     page.goto(f"{live}/review?project=demo&status=draft#{uid}")
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
+    # The gradings are in the card's details panel, folded until opened.
+    page.evaluate(
+        "() => { const p = document.querySelector('.item:not([hidden]) [data-panel=details]');"
+        " if (p && p.classList.contains('folded')) p.querySelector('.panel-toggle').click(); }"
+    )
 
     # Any write that comes back with a card payload repaints the rows.
     page.locator(f'[data-uid="{uid}"] [data-grade="frequency"]').first.click()

@@ -191,14 +191,11 @@ def test_folding_the_commands_panel_sticks() -> None:
 def test_what_a_person_wrote_comes_before_what_the_linter_made_of_it() -> None:
     """Two blocks in one column: the notes, and a machine's reading of the
     card they are about. The reading went first and was labelled as nothing,
-    so `section-wrapped` above a row of `@claude` lines read as a third note."""
+    so `section-wrapped` above a row of `@claude` lines read as a third note.
+    Now each is a panel with its own title, and the notes come first."""
     review = (APP / "templates" / "review.html").read_text(encoding="utf-8")
-    review_js = (APP / "static" / "review.js").read_text(encoding="utf-8")
-    assert review.index('class="annotations"') < review.index('class="findings"')
-    assert review.index('class="checks-what"') < review.index('class="findings"')
-    # And a note written now lands where a note read from the file would.
-    block = review_js[review_js.index("function paintAnnotations") :][:900]
-    assert ".checks-what, .findings" in block
+    assert review.index("panel('notes'") < review.index("panel('check'")
+    assert review.index("panel('check'") < review.index('class="findings"')
 
 
 def test_a_note_can_be_reworded_before_it_is_resolved() -> None:
@@ -226,7 +223,7 @@ def test_the_resolved_settings_are_reachable_without_leaving_the_view() -> None:
     """Which layout a card resolved to decides what every derivative on it
     means, and there was no way to see it but to read Python."""
     assert "source-facts" in GUIDE
-    assert "data-settings" in GUIDE, "and the full table opens over the view, not away from it"
+    assert "/setup" in GUIDE, "and the full list is one link away, on the setup stage"
 
 
 # -- the picker -------------------------------------------------------------
@@ -237,7 +234,8 @@ def test_the_picker_goes_to_the_shelf_rather_than_a_dropdown() -> None:
     with a shelf of papers is which to work on next, and that is a
     comparison, so it is a page with counts on it."""
     assert 'href="/projects"' in BASE
-    assert "<select" not in BASE, "a dropdown cannot compare fifty papers"
+    picker = BASE[BASE.index('id="project-pick"') - 200 : BASE.index('id="project-pick"')]
+    assert "<select" not in picker and "<a " in picker, "a dropdown cannot compare fifty papers"
     assert "/projects" in (APP / "static" / "units.js").read_text(encoding="utf-8")
 
 
@@ -267,16 +265,20 @@ def test_a_modal_over_the_deck_owns_the_keyboard() -> None:
     assert match and 'querySelectorAll("dialog")' in match.group(0)
 
 
-def test_both_panels_are_on_every_view(pdf_source: Config) -> None:
-    """The settings are a question you have mid-decision, so they open over
-    whatever you were doing rather than navigating away. The picker is the
-    other kind: choosing what to work on is the work, not an aside."""
+def test_the_picker_is_on_every_view_and_the_settings_live_on_the_setup_stage(
+    pdf_source: Config,
+) -> None:
+    """The gear panel was a second place for what the setup stage already
+    showed, so it went. The project pane lists the project's settings and,
+    folded, the repo-wide ones its "inherited" chips refer to."""
     client = TestClient(create_app(pdf_source))
     for url in ("/units", "/review"):
         body = client.get(url).text
         assert 'id="project-pick"' in body, url
-        assert 'id="settings"' in body, url
-        assert 'id="config-open"' in body, url
+        assert 'id="config-open"' not in body, url
+    setup = client.get("/setup?project=book").text
+    assert "data-repo-settings" in setup
+    assert "front length cap" in setup and "pages handed over" in setup
 
 
 def test_the_header_does_not_repeat_the_rail(pdf_source: Config) -> None:
@@ -419,7 +421,7 @@ def test_the_permission_to_look_things_up_is_visible_on_the_unit() -> None:
     says nothing -- and loud when it does. It is the one setting here that
     changes what may reach a card from somewhere other than the page."""
     units = (APP / "templates" / "units.html").read_text(encoding="utf-8")
-    chip = units[units.index("data-web-chip") - 500 : units.index("data-web-chip") + 500]
+    chip = units[units.index("data-web-chip") : units.index("data-web-chip") + 900]
     assert 'data-web-set="1"' in chip and 'data-web-set="0"' in chip
     assert "this unit" in chip and "source" in chip, "whose answer it is"
     assert "--warn" in rule(".badge.web-chip.own"), "not the accent the others use"
@@ -667,13 +669,15 @@ def test_undo_repaints_everything_it_put_back() -> None:
         assert painter in block, painter
 
 
-def test_the_chip_offers_the_chapter_between_ten_pages_and_the_book() -> None:
+def test_the_chip_offers_the_outline_between_ten_pages_and_the_book() -> None:
     """The size you want between "ten pages either side" and "all of it" is
-    usually the chapter, and where a chapter starts is a fact about the book
-    rather than a number you can guess from a unit's page."""
+    usually a span the book states, and where a section, a chapter or a part
+    starts is a fact about the book rather than a number you can guess from
+    a unit's page. Smallest first."""
     from anki_math_forge.app import CONTEXT_STEPS, context_label
 
-    assert list(CONTEXT_STEPS).index("chapter") == list(CONTEXT_STEPS).index(10) + 1
+    steps = list(CONTEXT_STEPS)
+    assert steps[steps.index(10) + 1 : steps.index(10) + 4] == ["section", "chapter", "part"]
     assert list(CONTEXT_STEPS)[-1] >= 100, "and the whole document is still last"
     assert context_label("chapter", chosen=True) == "the chapter it is in"
     assert context_label("chapter") == "chapter"

@@ -452,12 +452,12 @@ def test_the_page_carries_every_element_the_canvas_reaches_for(config: Config) -
         "graph-all",
         "graph-add",
         "graph-reset",
-        "add-card",
-        "add-list",
-        "add-empty",
-        "add-count",
-        "add-search",
-        "add-close",
+        "finder",
+        "finder-list",
+        "finder-empty",
+        "finder-count",
+        "finder-search",
+        "finder-close",
     ):
         assert f'id="{element}"' in body, f"graph.js reaches for #{element}"
 

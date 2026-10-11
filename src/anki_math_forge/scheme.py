@@ -291,6 +291,16 @@ def set_key(config: Config, project: str, work_key: str, key: str, value: str) -
     _write_key(config, project, work_key, key, _quote(value) if value else None)
 
 
+def set_number(
+    config: Config, project: str, work_key: str, key: str, value: float | None
+) -> None:
+    """Set a number key in a work's table, or remove it with `None`."""
+    if value is None:
+        _write_key(config, project, work_key, key, None)
+        return
+    _write_key(config, project, work_key, key, f"{value:g}")
+
+
 def set_list(config: Config, project: str, work_key: str, key: str, values: list[str]) -> None:
     """Set a list-of-strings key in a work's table, or remove it when empty."""
     if not values:

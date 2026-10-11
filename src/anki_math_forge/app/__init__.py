@@ -26,7 +26,7 @@ import time
 import tomllib
 from collections.abc import Mapping
 from dataclasses import replace
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlencode
@@ -40,13 +40,19 @@ from markupsafe import Markup
 
 from .. import changes, check, latex, model, study
 from .. import graph as graph_mod
+from .. import inbox as inbox_mod
 from .. import projects as projects_mod
 from .. import topics as topics_mod
 from ..config import (
     CHAPTER,
+    CONTEXT_LEVELS,
+    CONVENTIONS_ACTED_ON,
     DECLARED,
     DEFAULT_MEANINGS,
+    PART,
     PROJECT_TOML,
+    SECTION,
+    WINDOW_WORDS,
     Config,
     ConfigError,
     ProjectConfig,
@@ -56,6 +62,7 @@ from ..config import (
     load,
     save_study_order,
 )
+from ..context import window_for
 from ..ledger import Ledger, LockTimeout, Unit, open_ledgers
 from ..ledger import add_unit as add_unit_to
 from ..model import Card, StaleFileError
@@ -66,7 +73,8 @@ from ..sync import (
     study_key,
     study_values,
 )
-from . import jobs, prose, runs
+from . import actions as actions_mod
+from . import jobs, prose, run_views, runs
 from . import keys as keymod
 
 HERE = Path(__file__).parent
@@ -125,9 +133,17 @@ def render_body(body: str, unit: str = "") -> Markup:
     a second rendering of it.
     """
     out: list[str] = []
-    for i, chunk in enumerate(body.split("```")):
+    chunks = body.split("```")
+    for i, chunk in enumerate(chunks):
         if i % 2 == 0:
-            out.append(_with_images(escape(chunk), unit))
+            # What `sync.to_anki_html` does, so the panel shows the card that
+            # will be pushed (ROADMAP §29): the blank line beside a fence is
+            # markdown punctuation, and a newline in prose is a break.
+            if i > 0:
+                chunk = chunk.lstrip("\n")
+            if i + 1 < len(chunks):
+                chunk = chunk.rstrip("\n")
+            out.append(_breaks_outside_math(_with_images(escape(chunk), unit)))
             continue
         # a fence may name its language on the first line
         first, _, rest = chunk.partition("\n")
@@ -136,6 +152,41 @@ def render_body(body: str, unit: str = "") -> Markup:
     # Markup, not str: the filter escapes its own input, so returning a plain
     # string would have Jinja escape the tags too and show them as text.
     return Markup("".join(out))
+
+
+_BRIEF_CARD = re.compile(r"<code>([0-9a-f]{6})</code>")
+_BRIEF_UNIT = re.compile(r"<code>([\w.-]+:[^<\s]+)</code>")
+
+
+def dump_line(text: str, project: str) -> Markup:
+    """One line of a dump's brief, with the card and the unit it names as
+    links to them. The sorter writes each in backticks, so a brief that
+    touched forty cards is forty places to go and not a row of chips."""
+    cards = filter_url("/review", {}, project=project, status="all")
+    units = filter_url("/units", {}, project=project, state="all")
+    html = str(prose.line(text))
+    html = _BRIEF_CARD.sub(lambda m: f'<a href="{cards}#{m.group(1)}">{m.group(0)}</a>', html)
+    html = _BRIEF_UNIT.sub(
+        lambda m: f'<a href="{units}#{quote(unescape(m.group(1)), safe="")}">{m.group(0)}</a>',
+        html,
+    )
+    return Markup(html)
+
+
+def _breaks_outside_math(escaped: str) -> str:
+    """A newline outside `$...$` becomes `<br>`; inside, it stays a newline.
+
+    The rule `sync._escape_prose` applies on the way to Anki. A `<br>` inside a
+    formula would split the text node KaTeX reads, here as in Anki.
+    """
+    out: list[str] = []
+    cursor = 0
+    for span in latex.math_spans(escaped):
+        out.append(escaped[cursor : span.start].replace("\n", "<br>"))
+        out.append(escaped[span.start : span.end])
+        cursor = span.end
+    out.append(escaped[cursor:].replace("\n", "<br>"))
+    return "".join(out)
 
 
 def _with_images(chunk: str, unit: str) -> str:
@@ -222,7 +273,8 @@ def create_app(config: Config) -> FastAPI:
     app = FastAPI(title="forge", docs_url=None, redoc_url=None)
     # One per server, so a run survives the page that asked for it being
     # reloaded, and two tabs see the same list.
-    runner = jobs.Runner()
+    runner = jobs.Runner(store=config.work_dir / "runs.json")
+    runner.load()
 
     def reread() -> Config:
         """The config as it is on disk right now.
@@ -262,6 +314,7 @@ def create_app(config: Config) -> FastAPI:
     # the app saying it has not read the file you are looking at.
     templates.env.filters["prose"] = prose.render
     templates.env.filters["inline"] = prose.line
+    templates.env.filters["dump_line"] = dump_line
     # `counts | in_map(key)` read the other way round, so a list of state
     # names can be mapped over one counts dict. Jinja's `map` passes the item
     # first, and the item here is the key.
@@ -378,14 +431,13 @@ def create_app(config: Config) -> FastAPI:
     def config_api(project: str = "") -> Any:
         """Every resolved setting, and where it came from. Read-only.
 
-        A panel over the view you were on rather than a page of its own: it
-        answers a question you have *while deciding something else* -- which
-        layout did this card resolve to -- and a navigation away and back is a
-        poor way to look something up mid-decision.
+        The JSON form of what the setup stage shows: the project's rows, its
+        sources', and the repo-wide ones. No page reads it since the gear
+        panel went; it stays as the interface a script reads.
 
-        The project in force comes first, then the works it reads, then what
-        is ambient. With fifty projects, landing at the top of an alphabetical
-        list and scrolling is not an answer.
+        The project in force comes first, then the sources it reads, then
+        what is ambient. With fifty projects, landing at the top of an
+        alphabetical list and scrolling is not an answer.
         """
         name = resolve_project(config, project)
         focus = f"project: {name}"
@@ -506,7 +558,7 @@ def create_app(config: Config) -> FastAPI:
         if suggested:
             unsectioned = [u for u in unsectioned if u.suggestion is not None]
         if annotated:
-            unsectioned = [u for u in unsectioned if has_annotation(u.notes, annotated)]
+            unsectioned = [u for u in unsectioned if has_annotation(unit_notes(u), annotated)]
         if transcribed or readable:
             unsectioned = [u for u in unsectioned if u.transcription == "ok"]
         # `mark` is a *set*, comma-separated in the URL. One value at a time
@@ -519,7 +571,7 @@ def create_app(config: Config) -> FastAPI:
         if suggested:
             units = [u for u in units if u.suggestion is not None]
         if annotated:
-            units = [u for u in units if has_annotation(u.notes, annotated)]
+            units = [u for u in units if has_annotation(unit_notes(u), annotated)]
         if wanted is not None:
             units = [u for u in units if unit_mark(u) in wanted]
         transcribed = transcribed or readable
@@ -605,7 +657,7 @@ def create_app(config: Config) -> FastAPI:
                 **key_context(config, "units"),
                 "config": config,
                 **shared,
-                "units": [_unit_payload(u, config, known) for u in units],
+                "units": [_unit_payload(u, config, known, ledger) for u in units],
                 "counts": ledger.counts(),
                 "sections": ledger.sections(),
                 "section_tree": section_rows(
@@ -615,6 +667,7 @@ def create_app(config: Config) -> FastAPI:
                     lambda u: u.state,
                     lambda u: u.id,
                     UNIT_STATES,
+                    lambda u: unit_position(u),
                 ),
                 "transcribed_by_section": {
                     name: sum(
@@ -682,6 +735,8 @@ def create_app(config: Config) -> FastAPI:
         document: str = "",
         topic: str = "",
         counts_scope: str = "",
+        changed: str = "",
+        q: str = "",
     ) -> Any:
         config = reread()
         name = resolve_project(config, project)
@@ -706,6 +761,12 @@ def create_app(config: Config) -> FastAPI:
                 },
             )
         in_project = [c for c in cards if card_in_source(config, c, name)]
+        # Every card in the project has a change record from the first time
+        # this view is drawn, so an edit made after it shows on the next one,
+        # and the rail can count the cards that moved since you decided.
+        for card in in_project:
+            changes.ensure(config, card)
+        moved = {c.uid for c in in_project if changes.pending(config, c)}
         cards = in_project
         if section:
             cards = [c for c in cards if card_section(c, config) == section]
@@ -719,6 +780,15 @@ def create_app(config: Config) -> FastAPI:
         # card this app cannot answer from the content.
         if augmented in ("yes", "no"):
             cards = [c for c in cards if c.augmented == (augmented == "yes")]
+        # The cards a pass or an edit changed under you: what moved since you
+        # last approved, rejected or first saw them.
+        if changed == "yes":
+            cards = [c for c in cards if c.uid in moved]
+        # Words anywhere on the card: its uid, gist, tags, source and every
+        # section, `## notes` too. All of them have to be there.
+        terms = search_terms(q)
+        if terms:
+            cards = [c for c in cards if card_matches(c, config, terms)]
         # What a card is *about* and how it is graded, in one selection. A tag
         # crosses subjects by design, so this is a plain membership test and
         # not a tree; the two scales decide when you meet the card. Several
@@ -767,6 +837,10 @@ def create_app(config: Config) -> FastAPI:
             unsectioned = [c for c in unsectioned if has_annotation(c.annotations(), annotated)]
         if augmented in ("yes", "no"):
             unsectioned = [c for c in unsectioned if c.augmented == (augmented == "yes")]
+        if changed == "yes":
+            unsectioned = [c for c in unsectioned if c.uid in moved]
+        if terms:
+            unsectioned = [c for c in unsectioned if card_matches(c, config, terms)]
         if status not in ("all", ""):
             unsectioned = [c for c in unsectioned if c.effective_status == status]
         # A dependency may name a card in another source: `check` validates
@@ -825,6 +899,10 @@ def create_app(config: Config) -> FastAPI:
         any_edges = any(p["required_by"] or p["requires"] for p in places.values())
 
         selected = [c for c in cards if status in ("all", "") or c.effective_status == status]
+        # In the order Anki will introduce them: the same ordering the
+        # "order n/m" badge reports, so reading the list is reading the queue,
+        # and the badge counts up as you go. `j` and `k` follow it.
+        selected.sort(key=lambda c: places.get(c.uid, {}).get("position", 10**9))
         filters = {
             "project": name,
             "has": has,
@@ -835,6 +913,8 @@ def create_app(config: Config) -> FastAPI:
             "chapter": chapter,
             "annotated": annotated,
             "augmented": augmented,
+            "changed": changed,
+            "q": q,
             "counts_scope": counts_scope,
         }
         counts = {s: sum(1 for c in cards if c.effective_status == s) for s in model.STATUSES}
@@ -871,6 +951,7 @@ def create_app(config: Config) -> FastAPI:
                 "annotated": annotated,
                 "section": section,
                 "filters": filters,
+                "changed_count": len(moved),
                 "commands": commands_for(
                     "review", filters, pipeline, from_marks=from_marks,
                     has_document=shared["has_document"],
@@ -892,6 +973,7 @@ def create_app(config: Config) -> FastAPI:
                     lambda c: c.effective_status,
                     lambda c: c.uid,
                     CARD_STATES,
+                    lambda c: card_position(c, config),
                 ),
                 "counts_scope": counts_scope,
                 "graph_href": filter_url("/graph", {}, project=name) if linked else "",
@@ -990,6 +1072,12 @@ def create_app(config: Config) -> FastAPI:
                 "project_facts": project_facts(
                     config, name, from_marks=any(u.marks for u in units)
                 ),
+                # Editable where the project has a file of its own to write.
+                "project_settings": (
+                    project_settings(config, name, [(t.slug, t.name) for t in cover.topics])
+                    if spec is not None and (config.projects_dir / name / PROJECT_TOML).exists()
+                    else []
+                ),
                 "sources": works_here,
                 "topic_stats": stats,
                 # Works the repo already knows and this project does not. A
@@ -1006,6 +1094,17 @@ def create_app(config: Config) -> FastAPI:
                 # page stays a plain document with the script doing nothing.
                 # The smaller panes' lists, from the same registry as the
                 # rest, so they run from the page like everything else.
+                # What every inherited value above is inherited from:
+                # `forge.toml`, grouped as the file is. The project pane is
+                # where an "inherited" chip sends you looking.
+                "repo_settings": repo_settings(config),
+                # Notes dumped at the project, and where each went once
+                # sorted: the inbox's own pane.
+                "inbox_modes": INBOX_MODES,
+                "inbox": {
+                    "waiting": inbox_mod.waiting(config, name),
+                    "dumps": [d.as_dict() for d in inbox_mod.dumps(config, name)],
+                },
                 "pane_offers": lambda pane: runs.propose(
                     pane, runs.Ambient(project=name)
                 ),
@@ -1026,6 +1125,13 @@ def create_app(config: Config) -> FastAPI:
                         pane="project",
                         has_document=segmentable,
                         origin=project_origin(config, name),
+                        counts={"units": len(units)},
+                    ),
+                    "inbox": setup_commands(
+                        name,
+                        pane="inbox",
+                        has_document=segmentable,
+                        inbox=inbox_mod.waiting(config, name),
                     ),
                     **{
                         f"topic:{t.slug}": setup_commands(
@@ -1089,6 +1195,16 @@ def create_app(config: Config) -> FastAPI:
                 ],
             },
         )
+
+    @app.post("/api/projects/{name}/title")
+    def rename_project(name: str, body: dict[str, Any] = Body(...)) -> Any:
+        """What a project is called on screen. The folder keeps its name,
+        which is in every unit id; this is `title` in its `project.toml`."""
+        try:
+            shown = projects_mod.set_title(reread(), name, str(body.get("title", "")))
+        except ConfigError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True, "title": shown}
 
     @app.post("/api/projects")
     def add_project(body: dict[str, Any] = Body(...)) -> Any:
@@ -1351,6 +1467,105 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True, "offer": wanted}
 
+    @app.post("/api/sources/{project}/{work}/setting")
+    def set_reading(project: str, work: str, body: dict[str, Any] = Body(...)) -> Any:
+        """One "how it is read" value, from the source's panel.
+
+        Written into the work's own `[[sources]]` table, line by line, the
+        way you would type it. An empty value takes the key out, so the work
+        inherits again. Checked by loading the config back: a value the
+        loader refuses is put back as it was and said, rather than left for
+        the next request to trip over.
+        """
+        from .. import scheme as scheme_mod
+        from ..config import load as load_config
+
+        config = reread()
+        spec = config.projects.get(project)
+        found = next((w for w in spec.sources if w.key == work), None) if spec else None
+        if found is None:
+            raise HTTPException(404, f"{project} does not read {work!r}")
+        key = str(body.get("key", ""))
+        raw = str(body.get("value", "")).strip()
+        path = scheme_mod.path_for(config, project)
+        before = path.read_text(encoding="utf-8") if path.exists() else None
+        try:
+            if key == "crop_context":
+                number = float(raw) if raw else None
+                if number is not None and not 0 <= number <= 400:
+                    raise HTTPException(400, "crop_context is points of page, 0 to 400")
+                scheme_mod.set_number(config, project, work, key, number or None)
+            elif key == "crop_width":
+                if raw not in ("", "box", "page"):
+                    raise HTTPException(400, "crop_width is box, page, or empty to inherit")
+                scheme_mod.set_key(config, project, work, key, raw)
+            elif key == "context_pages":
+                if raw in WINDOW_WORDS:
+                    scheme_mod.set_key(config, project, work, key, raw)
+                elif raw.isdigit():
+                    scheme_mod.set_number(config, project, work, key, int(raw))
+                elif not raw:
+                    scheme_mod.set_number(config, project, work, key, None)
+                else:
+                    raise HTTPException(
+                        400, "context_pages is a number of pages, or section, chapter or part"
+                    )
+            elif key in ("convention_keyword", "title", "citation", "url"):
+                scheme_mod.set_key(config, project, work, key, raw)
+            elif key == "offer":
+                if raw not in ("", "true", "false"):
+                    raise HTTPException(400, "offer is true, false, or empty to inherit")
+                scheme_mod.set_flag(config, project, work, key, None if not raw else raw == "true")
+            else:
+                raise HTTPException(400, f"{key!r} is not set from here")
+        except (ConfigError, ValueError) as exc:
+            raise HTTPException(400, str(exc)) from exc
+        try:
+            load_config(config.root)
+        except ConfigError as exc:
+            if before is not None:
+                model.write_atomic(path, before)
+            raise HTTPException(400, f"not saved: {exc}") from exc
+        return {"ok": True, "key": key, "value": raw}
+
+    @app.post("/api/projects/{project}/setting")
+    def set_project_setting(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """One project setting, from the project's panel on the setup stage.
+
+        Written into the project's own `project.toml`, line by line, at the
+        top or in its table (`[conventions]`, `[decks.by_tag]`). An empty
+        value takes the key out, so the project inherits again. Checked by
+        loading the config back, and put back as it was when the loader
+        refuses it, like a source's settings.
+        """
+        from ..config import load as load_config
+
+        config = reread()
+        spec = config.projects.get(project)
+        if spec is None:
+            raise HTTPException(404, f"no project {project!r}")
+        key = str(body.get("key", ""))
+        raw = str(body.get("value", "")).strip()
+        path = config.projects_dir / project / PROJECT_TOML
+        before = path.read_text(encoding="utf-8") if path.exists() else None
+        try:
+            table, name, literal = project_setting(key, raw, before or "")
+            projects_mod.set_setting(config, project, name, literal, table=table)
+            if key == "context":
+                # `web` is the older spelling of the same question. Left in
+                # the file it would answer it differently from the new key
+                # wherever the new one is taken out.
+                projects_mod.set_setting(reread(), project, "web", None)
+        except ConfigError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        try:
+            load_config(config.root)
+        except ConfigError as exc:
+            if before is not None:
+                model.write_atomic(path, before)
+            raise HTTPException(400, f"not saved: {exc}") from exc
+        return {"ok": True, "key": key, "value": raw}
+
     @app.post("/api/sources/{project}/{work}/note")
     def edit_note(project: str, work: str, body: dict[str, Any] = Body(...)) -> Any:
         """What this work is for, in one line.
@@ -1485,6 +1700,49 @@ def create_app(config: Config) -> FastAPI:
         except ConfigError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return {"ok": True, "key": key}
+
+    @app.post("/api/projects/{project}/inbox")
+    def add_to_inbox(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """A note dumped at the project, for `/sort-notes` to place later.
+
+        Appended to `inbox.md`, which is a file you could type into just as
+        well (invariant 2). Nothing here reads it: the sorting is a model's
+        judgement, so it is a slash command you run where you can watch it.
+        `mode` says how it is placed: `propose`, `write` or `both`.
+        """
+        try:
+            waiting = inbox_mod.add(
+                config,
+                project,
+                str(body.get("text", "")),
+                mode=str(body.get("mode") or inbox_mod.PROPOSE),
+            )
+        except ConfigError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True, "waiting": waiting}
+
+    @app.post("/api/projects/{project}/inbox/mode")
+    def set_dump_mode(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Change how a waiting dump is placed."""
+        try:
+            inbox_mod.set_mode(
+                config, project, str(body.get("stamp", "")), str(body.get("mode", ""))
+            )
+        except ConfigError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True}
+
+    @app.post("/api/projects/{project}/inbox/state")
+    def set_dump_state(project: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Mark one dump `done` once you have read where it went, or put it
+        back to `sorted` or `waiting`. The text and the brief stay."""
+        try:
+            inbox_mod.mark(
+                config, project, str(body.get("stamp", "")), str(body.get("state", ""))
+            )
+        except ConfigError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True}
 
     @app.post("/api/topics/{project}")
     def add_topic(project: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -1643,8 +1901,9 @@ def create_app(config: Config) -> FastAPI:
         that stops for that is a page you stop using.
         """
         line = str(body.get("run", "")).strip()
+        effects = command_effects()
         try:
-            argv, effect = jobs.argv_for(line, command_effects())
+            argv, effect = jobs.argv_for(line, effects)
         except jobs.Refused as exc:
             raise HTTPException(400, str(exc)) from exc
         if effect != "reads" and not body.get("confirmed"):
@@ -1652,15 +1911,80 @@ def create_app(config: Config) -> FastAPI:
                 409,
                 f"`{line}` {jobs.WARNINGS[effect]} Ask again with `confirmed`.",
             )
-        return runner.start(argv, config.root, effect).payload()
+        verb = run_views.verb_of(argv, effects)
+        return runner.start(argv, config.root, effect, verb).payload()
+
+    @app.get("/api/actions")
+    def list_actions(project: str = "") -> Any:
+        """Every action the runs window can build, with its fields, and the
+        project the page is on so a project field starts there."""
+        cfg = reread()
+        names = sorted(cfg.projects)
+        effects = command_effects()
+        return {
+            "project": project if project in names else "",
+            "projects": names,
+            "actions": [a.as_dict(names, effects) for a in actions_mod.ACTIONS],
+        }
+
+    def _action_argv(key: str, body: dict[str, Any]) -> tuple[Any, list[str]]:
+        action = actions_mod.BY_KEY.get(key)
+        if action is None:
+            raise HTTPException(404, f"no action {key!r}")
+        values = body.get("values") or {}
+        if not isinstance(values, dict):
+            raise HTTPException(400, "values is a map of field to value")
+        try:
+            return action, action.argv(values, sorted(reread().projects))
+        except actions_mod.Invalid as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/api/actions/{key}/line")
+    def action_line(key: str, body: dict[str, Any] = Body(...)) -> Any:
+        """The command an action comes to with these fields, to read or copy.
+
+        A form not yet filled in is an answer, not a failure: `refused` says
+        what is missing, with no line, and the window shows it where the
+        line would be. Only an action that does not exist is an error.
+        """
+        try:
+            action, argv = _action_argv(key, body)
+        except HTTPException as exc:
+            if exc.status_code != 400:
+                raise
+            return {"line": "", "effect": "", "refused": str(exc.detail)}
+        return {
+            "line": actions_mod.line(argv),
+            "effect": actions_mod.effect_for(action.verb, argv, command_effects()),
+        }
+
+    @app.post("/api/actions/{key}/run")
+    def run_action(key: str, body: dict[str, Any] = Body(...)) -> Any:
+        """Run an action from its fields. The same rule as `/api/run`: what
+        writes has to say it was confirmed, and the server holds it."""
+        action, argv = _action_argv(key, body)
+        effect = actions_mod.effect_for(action.verb, argv, command_effects())
+        if effect != "reads" and not body.get("confirmed"):
+            raise HTTPException(
+                409,
+                f"`{actions_mod.line(argv)}` {jobs.WARNINGS[effect]} Ask again with `confirmed`.",
+            )
+        return runner.start([*argv, "--json"], config.root, effect, action.verb).payload()
 
     @app.get("/api/runs")
     def list_runs() -> Any:
         """Every run this server remembers, newest first, and how many are
         still going. One request answers both the indicator and the list,
         so the two cannot disagree about what is in flight."""
-        runs = [run.payload() for run in runner.listed()]
+        runs = [run.row() for run in runner.listed()]
         return {"running": sum(1 for r in runs if not r["done"]), "runs": runs}
+
+    @app.delete("/api/runs")
+    def clear_runs() -> Any:
+        """Forget the finished runs. Nothing on disk: the list is this
+        server's memory of what it ran, and clearing it is tidying the
+        window, not undoing anything."""
+        return {"forgotten": runner.forget_finished()}
 
     @app.get("/api/run/{run_id}")
     def read_run(run_id: str) -> Any:
@@ -1690,6 +2014,13 @@ def create_app(config: Config) -> FastAPI:
         has: str = "",
         document: str = "",
         topic: str = "",
+        # And the five the views gained after it: the page draws the diagram
+        # over them and this poll has to answer for the same query.
+        chapter: str = "",
+        mark: str = "",
+        augmented: str = "",
+        changed: str = "",
+        q: str = "",
     ) -> Any:
         """The pipeline counts, so the rail can follow a decision.
 
@@ -1727,6 +2058,11 @@ def create_app(config: Config) -> FastAPI:
                     "has": has,
                     "document": document,
                     "topic": topic,
+                    "chapter": chapter,
+                    "mark": mark,
+                    "augmented": augmented,
+                    "changed": changed,
+                    "q": q,
                 },
             ),
         }
@@ -2075,27 +2411,79 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(400, "empty annotation")
         return _mutate_card(config, uid, body, lambda card: card.edit_annotation(index, text))
 
+    @app.get("/api/cards/find")
+    def find_cards(project: str = "", q: str = "", limit: int = 50) -> Any:
+        """The cards of a project that have every word of `q` somewhere on
+        them, in the order Anki introduces them, for the review page's find
+        palette. Every card in the project, not the ones the filters leave:
+        you search for the one you cannot see.
+        """
+        config = reread()
+        name = resolve_project(config, project)
+        cards, _ = _checked(config)
+        here = [c for c in cards if card_in_source(config, c, name)]
+        terms = search_terms(q)
+        found = [c for c in here if not terms or card_matches(c, config, terms)]
+        order = {
+            c.uid: i
+            for i, c in enumerate(
+                in_study_order(here, source_positions(config), study_order(config))
+            )
+        }
+        found.sort(key=lambda c: order.get(c.uid, 10**9))
+        return {
+            "total": len(here),
+            "matched": len(found),
+            "rows": [
+                {
+                    "uid": c.uid,
+                    "gist": card_gist(c, config),
+                    "status": c.effective_status,
+                    "href": filter_url("/review", {}, project=name, status="all") + f"#{c.uid}",
+                }
+                for c in found[: max(1, min(limit, 200))]
+            ],
+        }
+
     @app.get("/api/cards/{uid}/text")
     def card_text(uid: str) -> Any:
-        """Front and back as the file has them, for the editor to start from.
+        """Every section the editor offers, as the file has it.
 
         Read when the editor opens rather than carried on the page, so what
         you edit is what is on disk now, and the mtime that comes with it is
-        what the save is checked against.
+        what the save is checked against. The sections are the ones this
+        card's type allows, in file order, plus any it has that the type does
+        not, so a section `check` complains about can be emptied here.
         """
         card = _find_card(config, uid)
         if card is None or card.path is None:
             raise HTTPException(404, f"no card {uid}")
+        allowed = model.SECTIONS_BY_TYPE.get(card.type, frozenset(model.SECTION_ORDER))
         return {
             "uid": card.uid,
+            "type": card.type,
             "front": card.section("front") or "",
             "back": card.section("back") or "",
+            "sections": [
+                {
+                    "name": name,
+                    "body": card.section(name) or "",
+                    "required": name in model.REQUIRED_SECTIONS,
+                    "allowed": name in allowed,
+                }
+                for name in EDITABLE_SECTIONS
+                if name in allowed or card.section(name) is not None
+            ],
             "mtime": str(card.mtime_ns or 0),
         }
 
     @app.post("/api/cards/{uid}/text")
     def edit_card_text(uid: str, body: dict[str, Any] = Body(...)) -> Any:
-        """Front and back, edited in place (ROADMAP §18).
+        """A card's sections, edited in place (ROADMAP §18).
+
+        `sections` maps a section to its new text. Only the sections sent are
+        touched; an optional one sent empty is removed. `front` and `back`
+        at the top level are the older form and still accepted.
 
         Nothing here enforces invariant 5: an edit changes `content_hash`,
         and that alone puts an approved card back in the draft pile. With
@@ -2105,19 +2493,48 @@ def create_app(config: Config) -> FastAPI:
         Not in the undo stack, like rewording an annotation: `restore` puts a
         status back, and the way to take back a wording is to edit it again.
         """
-        front = str(body.get("front", "")).strip()
-        back = str(body.get("back", "")).strip()
-        if not front or not back:
+        sent = body.get("sections") or {}
+        if not isinstance(sent, dict):
+            raise HTTPException(400, "`sections` maps a section name to its text")
+        texts = {str(name): str(text).strip() for name, text in sent.items()}
+        for name in model.REQUIRED_SECTIONS:
+            if name in body:
+                texts.setdefault(name, str(body[name]).strip())
+        unknown = sorted(set(texts) - set(EDITABLE_SECTIONS))
+        if unknown:
+            raise HTTPException(400, f"not a section the editor writes: {', '.join(unknown)}")
+        if any(name in texts and not texts[name] for name in model.REQUIRED_SECTIONS):
             raise HTTPException(400, "a card needs a front and a back")
         note = str(body.get("note", "")).strip()
 
         def act(card: Card) -> None:
-            card.set_section("front", front)
-            card.set_section("back", back)
+            allowed = model.SECTIONS_BY_TYPE.get(card.type, frozenset(model.SECTION_ORDER))
+            refused = sorted(n for n, text in texts.items() if text and n not in allowed)
+            if refused:
+                raise HTTPException(
+                    400, f"a `{card.type}` card has no {', '.join(refused)} section"
+                )
+            for name, text in texts.items():
+                if text:
+                    card.set_section(name, text)
+                else:
+                    card.remove_section(name)
             if note:
                 card.add_annotation(note)
 
-        return _mutate_card(config, uid, body, act)
+        # The record is brought up to date before the edit, so anything an
+        # agent did earlier is its own entry and not folded into this one,
+        # and then the edit is filed as one more, saying who made it.
+        before = _find_card(config, uid)
+        if before is not None:
+            changes.ensure(config, before)
+        result = _mutate_card(config, uid, body, act)
+        if isinstance(result, dict):
+            after = _find_card(config, uid)
+            if after is not None:
+                changes.note_edit(config, after, "edited in the page")
+                result["card"]["changes"] = changes.view(config, after)
+        return result
 
     @app.post("/api/cards/{uid}/annotate")
     def annotate_card(uid: str, body: dict[str, Any] = Body(...)) -> Any:
@@ -2386,6 +2803,22 @@ def filter_url(path: str, filters: dict[str, Any], **changes: Any) -> str:
 UNIT_STATES = ("new", "queued", "carded", "skipped")
 CARD_STATES = ("draft", "approved", "rejected")
 
+#: How a dump in the inbox is placed, as the setup stage offers it. Propose
+#: first: it is the default, and the one that changes no card until you act.
+INBOX_MODES = (
+    {"value": "propose", "label": "propose", "what": "@me notes and units for you"},
+    {
+        "value": "write",
+        "label": "modify existing cards",
+        "what": "edits the cards, cards anything new",
+    },
+    {"value": "both", "label": "both", "what": "it chooses per piece"},
+)
+
+#: What the card editor offers, in file order. `## notes` is not among them:
+#: a note is written, edited and resolved one line at a time from the aside.
+EDITABLE_SECTIONS = tuple(name for name in model.SECTION_ORDER if name != "notes")
+
 
 def section_rows(
     everything: list[Any],
@@ -2394,6 +2827,7 @@ def section_rows(
     state_of: Any,
     id_of: Any,
     states: tuple[str, ...],
+    position_of: Any = None,
 ) -> list[dict[str, Any]]:
     """Sections grouped by chapter, with what is in each.
 
@@ -2411,29 +2845,30 @@ def section_rows(
     for item in everything:
         by_section.setdefault(section_of(item) or "", []).append(item)
 
-    # Nothing here has a section: a project proposed into rather than
-    # segmented, and every unit lands in the same bucket. The group then
-    # reads as one filter called "no section" that selects everything, which
-    # is a control that does nothing and looks like a workaround for one.
-    #
-    # The bucket itself stays wherever there are real sections beside it. It
-    # is where the units the segmenter could not place go, and those are the
-    # ones most worth finding.
-    if not any(by_section.keys()):
+    # No row for what has no section. Selecting no section already shows
+    # everything, and a row called "no section" beside the sections read as
+    # the way to clear them. With no sections at all there is no group.
+    by_section.pop("", None)
+    if not by_section:
         return []
 
-    # Numbered sections sort numerically -- `2.10` after `2.9` -- and named
-    # ones sort in the order the document introduced them. A paper's own
-    # sections are titles, not numbers ("Introduction", "A uniform learning
-    # bound"), and alphabetising those puts the conclusion in the middle.
-    # Insertion order is document order: every ledger is written by a pass that
-    # walks pages forwards.
+    # Reading order. Numbered sections sort numerically -- `2.10` after
+    # `2.9` -- and named ones by where their first item sits in the document:
+    # a paper's sections are titles ("Introduction", "A uniform learning
+    # bound"), and alphabetising them puts the conclusion in the middle. Not
+    # by when a unit entered the ledger, which a re-import that appends
+    # takes out of page order.
     first_seen = {name: n for n, name in enumerate(by_section)}
+
+    def where(name: str) -> tuple[Any, ...]:
+        if position_of is None:
+            return (first_seen[name],)
+        return min(position_of(item) for item in by_section[name])
 
     def order(name: str) -> tuple[Any, ...]:
         if name[:1].isdigit():
             return (0, *_section_key(name))
-        return (1, first_seen[name]) if name else (2, 0)
+        return (1, *where(name))
 
     chapters: dict[str, dict[str, Any]] = {}
     for name in sorted(by_section, key=order):
@@ -2577,11 +3012,11 @@ def pipeline_counts(
             counts["ungisted"] += unit.state == "queued" and not unit.gist
             counts["untranscribed"] += not unit.tex and unit.state != "skipped"
             counts["annotated"] += bool(unit.notes)
-            counts["annotated_me"] += has_annotation(unit.notes, "me")
-            counts["annotated_claude"] += has_annotation(unit.notes, "claude")
-            counts["unannotated_unit"] += has_annotation(unit.notes, "none")
-            counts["annotated_me_unit"] += has_annotation(unit.notes, "me")
-            counts["annotated_claude_unit"] += has_annotation(unit.notes, "claude")
+            counts["annotated_me"] += has_annotation(unit_notes(unit), "me")
+            counts["annotated_claude"] += has_annotation(unit_notes(unit), "claude")
+            counts["unannotated_unit"] += has_annotation(unit_notes(unit), "none")
+            counts["annotated_me_unit"] += has_annotation(unit_notes(unit), "me")
+            counts["annotated_claude_unit"] += has_annotation(unit_notes(unit), "claude")
     for card in _cards(config):
         if not card_in_source(config, card, project):
             continue
@@ -2859,9 +3294,16 @@ def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict
     would show up as the numbers changing when you press a key.
     """
     section = str(filters.get("section") or "")
+    chapter = str(filters.get("chapter") or "")
     annotated = str(filters.get("annotated") or "")
     status = str(filters.get("status") or "")
     state = str(filters.get("state") or "")
+    augmented = str(filters.get("augmented") or "")
+    marks = marks_wanted(str(filters.get("mark") or ""))
+    # Read only when asked for, like `under`: this runs on every poll, and the
+    # change record and the card text are a file read per card.
+    terms = search_terms(str(filters.get("q") or ""))
+    changed = filters.get("changed") == "yes"
     chosen = picked(str(filters.get("has") or ""))
     works = picked(str(filters.get("document") or ""))
     asks = picked(str(filters.get("topic") or ""))
@@ -2882,13 +3324,17 @@ def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict
             return False
         if section and unit.locator.section != section:
             return False
+        if chapter and _chapter_of(unit.locator.section) != chapter:
+            return False
+        if marks is not None and unit_mark(unit) not in marks:
+            return False
         if state and state != "all" and unit.state != state:
             return False
         if filters.get("suggested") and unit.suggestion is None:
             return False
         if filters.get("transcribed") and unit.transcription != "ok":
             return False
-        return not annotated or has_annotation(unit.notes, annotated)
+        return not annotated or has_annotation(unit_notes(unit), annotated)
 
     def keep_card(card: Card) -> bool:
         if not pick_matches(chosen, card.tags, card_grades(card)):
@@ -2902,11 +3348,28 @@ def scoped_counts(config: Config, project: str, filters: dict[str, Any]) -> dict
             return False
         if section and card_section(card, config) != section:
             return False
+        if chapter and _chapter_of(card_section(card, config)) != chapter:
+            return False
         if status and status != "all" and card.effective_status != status:
+            return False
+        if augmented in ("yes", "no") and card.augmented != (augmented == "yes"):
+            return False
+        if changed and not changes.pending(config, card):
+            return False
+        if terms and not card_matches(card, config, terms):
             return False
         return not annotated or has_annotation(card.annotations(), annotated)
 
     return pipeline_counts(config, project, keep_unit=keep_unit, keep_card=keep_card)
+
+
+def unit_notes(unit: Unit) -> list[str]:
+    """A unit's notes, with an open proposal counted as a parked `@me`.
+
+    A decision a pass proposed is waiting on you exactly as a question you
+    parked is, and the `@me` filter is where you go to find those.
+    """
+    return [*unit.notes, "@me proposed"] if unit.suggestion is not None else list(unit.notes)
 
 
 def has_annotation(notes: list[str], audience: str) -> bool:
@@ -3025,7 +3488,7 @@ def mark_payloads(
 # is the one step that is not a count: between ten pages and the whole book the
 # size you want is usually the chapter, and where it starts is a fact about the
 # book rather than a number you can guess from here.
-CONTEXT_STEPS: tuple[int | str, ...] = (0, 1, 3, 10, CHAPTER, 999)
+CONTEXT_STEPS: tuple[int | str, ...] = (0, 1, 3, 10, SECTION, CHAPTER, PART, 999)
 
 
 def context_label(pages: int | str, *, chosen: bool = False) -> str:
@@ -3042,8 +3505,8 @@ def context_label(pages: int | str, *, chosen: bool = False) -> str:
     have the whole story when they have more of it than they expected, so the
     chosen label spells it out and the tooltip repeats it.
     """
-    if pages == CHAPTER:
-        return "the chapter it is in" if chosen else "chapter"
+    if pages in WINDOW_WORDS:
+        return f"the {pages} it is in" if chosen else str(pages)
     pages = int(pages)
     if pages >= 100:
         return "the whole document" if chosen else "all"
@@ -3642,10 +4105,14 @@ def topic_works(
 
 
 def window(pages: int | str) -> str:
-    """A page window in words. `chapter` is a different kind of answer from a
+    """A page window in words. A word is a different kind of answer from a
     number and reads as one; one page either side is not "1 pages"."""
-    if pages == CHAPTER:
-        return "the chapter it is in"
+    if pages in WINDOW_WORDS:
+        return f"the {pages} it is in"
+    if isinstance(pages, int) and pages >= 100:
+        return "the whole document"
+    if pages == 0:
+        return "the page it is on"
     return f"{pages} page{'' if pages == 1 else 's'} either side"
 
 
@@ -3658,7 +4125,8 @@ def work_name(work: SourceConfig) -> str:
     """
     named = work.title or work.key or work.url
     if named:
-        return named
+        # A title as Zotero stores it can carry a doubled space.
+        return " ".join(named.split())
     return (
         next((f.name for f in work.files), "")
         or (work.tex.name if work.tex else "")
@@ -3911,6 +4379,31 @@ def holding(units: list[Unit], cards: list[Card]) -> dict[str, Any]:
     }
 
 
+def waiting_marks(
+    config: Config, project: str, work: SourceConfig, units: list[Unit]
+) -> int:
+    """Marks of a colour that now makes units, in the ledger only as part of
+    another unit.
+
+    Saving the scheme changes no unit: the marks are read again only by an
+    import. A colour switched on after the last import is in the ledger as
+    the neighbour of other units, and stays there until one runs, so the
+    panel says how many and offers the import.
+    """
+    if not work.zotero_key:
+        return 0
+    pairs = config.zotero_for(project, work.key).unit_pairs
+    mine = [u for u in units if work_of(config, project, u.locator.document) == work.key]
+    starts = {u.marks[0].key for u in mine if u.marks}
+    waiting = {
+        mark.key
+        for unit in mine
+        for mark in unit.marks
+        if mark.key not in starts and f"{mark.kind}/{mark.colour}" in pairs
+    }
+    return len(waiting)
+
+
 def scheme_editor(
     config: Config, project: str, work: SourceConfig, units: list[Unit]
 ) -> list[dict[str, Any]]:
@@ -4010,62 +4503,457 @@ def source_facts(
         "units": len(mine),
         "holding": holding(mine, written),
         "from_marks": from_marks,
-        # What the pane is actually for: the resolved value, and whether this
-        # work said it or inherited it.
-        "settings": [
-            {
-                "key": "crop_context",
-                "value": f"{config.crop_context_for(project, work.key):g} points of page",
-                "own": bool(work.crop_context),
-                "what": "how much page is shown around a crop from this work",
-            },
-            {
-                "key": "crop_width",
-                "value": config.crop_width_for(project, from_marks, work.key),
-                "own": bool(work.crop_width),
-                "what": "how wide a crop is cut: the box a segmenter found, or "
-                "the page a mark sits on (invariant 8)",
-            },
-            {
-                "key": "context_pages",
-                "value": window(config.context_pages_for(project, document=work.key)),
-                "own": context_asked(work.context_pages),
-                "what": "how much of this work a card writer is handed. A unit "
-                "may still ask for more",
-            },
-            *(
-                [
-                    {
-                        "key": "units_from",
-                        # Said out loud when it is empty. A blank row
-                        # after "which marks start a unit here" reads as a
-                        # value that failed to render, and the answer
-                        # "none of them" is one somebody chose.
-                        "value": ", ".join(sorted(scheme.unit_pairs)) or "none",
-                        "own": work.units_from is not None,
-                        "what": "which marks start a unit here",
-                    }
-                ]
-                # Only where marks are the machinery. A segmented book has no
-                # scheme and never will, and a row reading "nothing declared"
-                # describes something that is not running.
-                if work.zotero_key or work.units_from is not None
-                else []
-            ),
-            {
-                "key": "convention_keyword",
-                "value": scheme.convention_keyword,
-                "own": bool(work.convention_keyword),
-                "what": "the word that asks for a convention, for a work read in "
-                "another language",
-            },
-        ],
+        # What the pane is actually for: the resolved value, whether this work
+        # said it or inherited it, and a control to say it here.
+        "settings": reading_rows(config, project, work, from_marks=from_marks, scheme=scheme),
+        # Its name, citation and address, editable beside how it is read.
+        "about": source_about_rows(work),
+        # The document's own table of contents, chapter by chapter, with each
+        # one's pages as printed: what `section`, `chapter` and `part` hand
+        # over, said before you choose one.
+        "outline": outline_rows(config, project, work, mine),
         # Only where this work reads them differently. The repo-wide scheme is
-        # on the settings panel; a source's own is the thing worth reading
-        # beside the work it belongs to.
+        # with the repo-wide settings on the project pane; a source's own is
+        # the thing worth reading beside the work it belongs to.
         "meanings": sorted(work.meanings.items()),
         "scheme": scheme_editor(config, project, work, units),
+        "waiting_marks": waiting_marks(config, project, work, units),
     }
+
+
+#: The context sizes a source's panel offers, as `(value, words)`. A number
+#: is pages either side; a word is a span of the document's outline. Any
+#: other number still works, typed into the TOML, and is shown as itself.
+CONTEXT_CHOICES: tuple[tuple[str, str], ...] = (
+    ("0", "the page the unit is on"),
+    ("1", "1 page either side"),
+    ("2", "2 pages either side"),
+    ("3", "3 pages either side"),
+    ("5", "5 pages either side"),
+    ("10", "10 pages either side"),
+    (SECTION, "the section it is in"),
+    (CHAPTER, "the chapter it is in"),
+    (PART, "the part it is in"),
+    ("999", "the whole document"),
+)
+
+
+#: The card types a project can send to a deck of their own.
+CARD_TYPES = ("identity", "intuition")
+
+
+def project_setting(key: str, raw: str, text: str) -> tuple[str, str, str | None]:
+    """`(table, key, TOML literal)` for one setting from the project's panel.
+
+    `None` as the literal removes the key. Raises `ConfigError` for a value
+    the key cannot hold; the loader checks the rest once it is written.
+    `text` is the file as it stands, which decides where a type's deck
+    goes: an older file writes them flat under `[decks]`.
+    """
+    quoted = model.toml_string(raw) if raw else None
+    if key in ("citation", "deck"):
+        return "", key, quoted
+    if key == "tags":
+        tags = [t.strip() for t in raw.split(",") if t.strip()]
+        inside = ", ".join(model.toml_string(t) for t in tags)
+        return "", key, f"[{inside}]" if tags else None
+    if key == "order":
+        if raw not in ("", "printed", "none"):
+            raise ConfigError("order is printed or none")
+        return "", key, None if raw in ("", "printed") else quoted
+    if key == "context":
+        if raw and raw not in CONTEXT_LEVELS:
+            raise ConfigError(f"context is one of {', '.join(CONTEXT_LEVELS)}, or empty")
+        return "", key, quoted
+    if key == "offer":
+        if raw not in ("", "true", "false"):
+            raise ConfigError("offer is true, false, or empty to inherit")
+        return "", key, raw or None
+    if key == "context_pages":
+        if raw in WINDOW_WORDS:
+            return "", key, quoted
+        if raw and not raw.isdigit():
+            raise ConfigError("context_pages is a number of pages, or section, chapter or part")
+        return "", key, raw or None
+    if key == "front_char_cap":
+        if raw and not (raw.isdigit() and int(raw) > 0):
+            raise ConfigError("front_char_cap is a number of characters")
+        return "", key, raw or None
+    kind, _, name = key.partition(":")
+    if not name:
+        raise ConfigError(f"{key!r} is not set from here")
+    if kind == "convention":
+        return "conventions", name, quoted
+    if kind == "deck.tag":
+        return "decks.by_tag", name, quoted
+    if kind == "deck.topic":
+        return "decks.by_topic", name, quoted
+    if kind == "deck.type":
+        if name not in CARD_TYPES:
+            raise ConfigError(f"a card type is one of {', '.join(CARD_TYPES)}")
+        # The flat `[decks]` is read as the type map only while there is no
+        # `[decks.by_type]`, so a file written that way keeps that way.
+        flat = "[decks]" in text and "[decks.by_type]" not in text and any(
+            line.split("=", 1)[0].strip() in CARD_TYPES
+            for line in text.split("[decks]", 1)[1].split("\n[", 1)[0].splitlines()
+        )
+        return ("decks" if flat else "decks.by_type"), name, quoted
+    raise ConfigError(f"{key!r} is not set from here")
+
+
+def project_settings(
+    config: Config, project: str, topics: list[tuple[str, str]]
+) -> list[dict[str, Any]]:
+    """The project's own settings, in groups, each row with a control.
+
+    The same rows as a source's "how it is read": what it resolves to,
+    whether this project set it, and what it would be without that. A row
+    under `[conventions]` or a deck map has nothing to inherit, so its
+    reset removes it. `topics` is `(slug, name)` for every ask, each of
+    which may have a deck of its own.
+    """
+    import dataclasses
+
+    spec = config.projects[project]
+    unset = dataclasses.replace(
+        config,
+        projects={**config.projects, project: dataclasses.replace(spec, deck="")},
+    )
+    deck_inherited = unset.deck_for(project)
+    level_words = {
+        "none": "the source only",
+        "references": "the source and its references",
+        "web": "references, and the web",
+    }
+
+    def row(
+        key: str, label: str, what: str, edit: dict[str, Any], *, own: bool, removes: bool = False
+    ) -> dict[str, Any]:
+        return {
+            "key": key,
+            "label": label,
+            "what": what,
+            "edit": edit,
+            "own": own,
+            "reset": "remove" if removes else "use inherited",
+        }
+
+    def text(current: str, placeholder: str) -> dict[str, Any]:
+        return {"kind": "text", "current": current, "placeholder": placeholder}
+
+    filed = [
+        row(
+            "deck",
+            "deck",
+            "where its cards go in Anki. A card already there moves with "
+            "`anki push --move-decks`",
+            text(spec.deck, f"{deck_inherited} (inherited)"),
+            own=bool(spec.deck),
+        ),
+        *(
+            row(
+                f"deck.type:{card_type}",
+                f"deck for {card_type} cards",
+                "a deck of its own for one kind of card, so each gets its own new-card rate",
+                text(spec.decks.get(card_type, ""), "the project's deck"),
+                own=card_type in spec.decks,
+                removes=True,
+            )
+            for card_type in CARD_TYPES
+        ),
+        *(
+            row(
+                f"deck.topic:{slug}",
+                f"deck for {name}",
+                "cards written from units under this ask",
+                text(spec.topic_decks.get(slug, ""), "by type, or the project's deck"),
+                own=slug in spec.topic_decks,
+                removes=True,
+            )
+            for slug, name in topics
+        ),
+        *(
+            row(
+                f"deck.tag:{tag}",
+                f"deck for tag {tag}",
+                "cards carrying this tag. The first that matches wins",
+                text(deck, ""),
+                own=True,
+                removes=True,
+            )
+            for tag, deck in spec.tag_decks.items()
+        ),
+    ]
+    level_choices = [["", f"inherit: {level_words.get(config.context, config.context)}"]]
+    level_choices += [[value, words] for value, words in level_words.items()]
+    page_choices = [["", f"inherit: {window(config.context_pages)}"], *map(list, CONTEXT_CHOICES)]
+    own_pages = str(spec.context_pages) if context_asked(spec.context_pages) else ""
+    if own_pages and own_pages not in {value for value, _ in CONTEXT_CHOICES}:
+        page_choices.append([own_pages, window(spec.context_pages)])
+    own_level = spec.context or (
+        ("web" if spec.web else "references") if spec.web is not None else ""
+    )
+    writing = [
+        row(
+            "context",
+            "a card writer gets",
+            "beyond the page the unit is on: nothing, the references this "
+            "project reads, or those and the web. A unit can be granted or "
+            "refused the web on its own",
+            {"kind": "choice", "current": own_level, "choices": level_choices},
+            own=bool(own_level),
+        ),
+        row(
+            "context_pages",
+            "pages handed over",
+            "how much of the source beside the unit. A source, and a unit in "
+            "triage, can ask for a different size",
+            {"kind": "choice", "current": own_pages, "choices": page_choices},
+            own=bool(own_pages),
+        ),
+        row(
+            "offer",
+            "references handed over",
+            "whether a reference goes to every card writer here, unless it "
+            "says otherwise on its own panel",
+            {
+                "kind": "choice",
+                "current": "" if spec.offer is None else str(spec.offer).lower(),
+                "choices": [
+                    ["", f"inherit: {'yes' if config.offer else 'no'}"],
+                    ["true", "yes"],
+                    ["false", "no, only when asked"],
+                ],
+            },
+            own=spec.offer is not None,
+        ),
+        row(
+            "front_char_cap",
+            "front length cap",
+            "the longest front `check` accepts, in rendered characters",
+            {
+                "kind": "number",
+                "current": str(spec.front_char_cap) if spec.front_char_cap > 0 else "",
+                "placeholder": f"{config.front_char_cap} (inherited)",
+                "unit": "characters",
+            },
+            own=spec.front_char_cap > 0,
+        ),
+        row(
+            "order",
+            "study order",
+            "printed follows the source, so a result comes after what it uses; "
+            "none for a source whose order means nothing, such as a table",
+            {
+                "kind": "choice",
+                "current": spec.order if spec.order != "printed" else "",
+                "choices": [["", "printed"], ["none", "none"]],
+            },
+            own=spec.order != "printed",
+        ),
+    ]
+    about = [
+        row(
+            "citation",
+            "cited as",
+            "what a card from it names as its source",
+            text(spec.citation if spec.citation != spec.title else "", f"{spec.title} (its name)"),
+            own=bool(spec.citation and spec.citation != spec.title),
+        ),
+        row(
+            "tags",
+            "labels",
+            "words to narrow the project picker by, separated by commas. Yours "
+            "to invent; nothing writes one for you",
+            text(", ".join(spec.tags), "none"),
+            own=bool(spec.tags),
+        ),
+    ]
+    conventions = [
+        row(
+            f"convention:{key}",
+            key,
+            CONVENTIONS_ACTED_ON.get(key, "handed to whoever writes a card here"),
+            text(value, ""),
+            own=True,
+            removes=True,
+        )
+        for key, value in spec.conventions.items()
+    ]
+    return [
+        {"title": "about it", "rows": about},
+        {
+            "title": "filed in Anki",
+            "rows": filed,
+            "add": {"prefix": "deck.tag:", "key": "a tag", "value": "its deck"},
+        },
+        {"title": "what a card writer gets", "rows": writing},
+        {
+            "title": "conventions, as keys",
+            "rows": conventions,
+            "add": {"prefix": "convention:", "key": "a key, e.g. layout", "value": "its value"},
+        },
+    ]
+
+
+def source_about_rows(work: SourceConfig) -> list[dict[str, Any]]:
+    """A source's name, citation and address."""
+
+    def row(key: str, label: str, what: str, current: str, placeholder: str) -> dict[str, Any]:
+        return {
+            "key": key,
+            "label": label,
+            "what": what,
+            "own": bool(current),
+            "reset": "remove",
+            "edit": {"kind": "text", "current": current, "placeholder": placeholder},
+        }
+
+    rows = [
+        row("title", "name", "what this source is called on the page", work.title, work.key),
+        row("citation", "cited as", "what a card from it names as its source", work.citation,
+            "the project's citation"),
+    ]
+    if not work.authoritative:
+        # The switch above the shelf says whether it is handed over; this is
+        # only where it is.
+        rows.append(row("url", "address", "where it is read", work.url, "none"))
+    return rows
+
+
+def reading_rows(
+    config: Config,
+    project: str,
+    work: SourceConfig,
+    *,
+    from_marks: bool,
+    scheme: Any,
+) -> list[dict[str, Any]]:
+    """How one source is read: each setting, in words, with a control.
+
+    Every row says what it resolves to now, whether this source set it, and
+    what it would be without that, because "inherit" in a list is a promise
+    nobody can check without knowing what it inherits. An empty value
+    removes the key and the source inherits again.
+    """
+    from ..extract.render import TRIAGE_CONTEXT
+
+    spec = config.projects.get(project)
+    crop_inherited = float(config.crop_context or TRIAGE_CONTEXT)
+    width_inherited = config.crop_width or ("page" if from_marks else "box")
+    pages_inherited: int | str = (
+        spec.context_pages if spec and context_asked(spec.context_pages) else config.context_pages
+    )
+    keyword_inherited = config.zotero.convention_keyword
+    own_pages = str(work.context_pages) if context_asked(work.context_pages) else ""
+    choices = [["", f"inherit: {window(pages_inherited)}"], *map(list, CONTEXT_CHOICES)]
+    if own_pages and own_pages not in {value for value, _ in CONTEXT_CHOICES}:
+        choices.append([own_pages, window(work.context_pages)])
+    rows: list[dict[str, Any]] = [
+        {
+            "key": "crop_context",
+            "label": "page around a crop",
+            "value": f"{config.crop_context_for(project, work.key):g} points",
+            "own": bool(work.crop_context),
+            "what": "how much of the page is shown around a crop from this source",
+            "edit": {
+                "kind": "number",
+                "current": f"{work.crop_context:g}" if work.crop_context else "",
+                "placeholder": f"{crop_inherited:g} (inherited)",
+                "unit": "points",
+            },
+        },
+        {
+            "key": "crop_width",
+            "label": "crop width",
+            "value": config.crop_width_for(project, from_marks, work.key),
+            "own": bool(work.crop_width),
+            "what": "the box a segmenter found, or the full width of the page a "
+            "mark sits on, since a mark's edges are wherever a sentence happened "
+            "to start (invariant 8)",
+            "edit": {
+                "kind": "choice",
+                "current": work.crop_width,
+                "choices": [
+                    ["", f"inherit: {width_inherited}"],
+                    ["box", "the box the segmenter found"],
+                    ["page", "the full width of the page"],
+                ],
+            },
+        },
+        {
+            "key": "context_pages",
+            "label": "handed to a card writer",
+            "value": window(config.context_pages_for(project, document=work.key)),
+            "own": context_asked(work.context_pages),
+            "what": "how much of this source whoever writes a card gets beside the "
+            "unit. A unit can ask for a different size in triage (c)",
+            "edit": {"kind": "choice", "current": own_pages, "choices": choices},
+        },
+    ]
+    if work.zotero_key or work.units_from is not None:
+        rows.append(
+            {
+                "key": "units_from",
+                "label": "marks that start a unit",
+                # Said out loud when it is empty. A blank after "which marks
+                # start a unit" reads as a value that failed to render, and
+                # "none" is an answer somebody chose.
+                "value": ", ".join(sorted(scheme.unit_pairs)) or "none",
+                "own": work.units_from is not None,
+                "what": "set in the marking scheme below, beside the marks",
+            }
+        )
+    rows.append(
+        {
+            "key": "convention_keyword",
+            "label": "word that asks for a convention",
+            "value": scheme.convention_keyword,
+            "own": bool(work.convention_keyword),
+            "what": "a comment on a mark opening with this word proposes a "
+            "convention rather than a card; for a source read in another language",
+            "edit": {
+                "kind": "text",
+                "current": work.convention_keyword,
+                "placeholder": f"{keyword_inherited} (inherited)",
+            },
+        }
+    )
+    return rows
+
+
+def outline_rows(
+    config: Config, project: str, work: SourceConfig, units: list[Unit]
+) -> list[dict[str, Any]]:
+    """The chapters of a source's document, with the part each is in and its
+    pages as printed. Empty where the document has no outline to read."""
+    from .. import outline as outline_mod
+
+    found = outline_mod.of_document(config, project, work.key)
+    if found is None:
+        # A Zotero work is keyed by its item, and the file is an attachment
+        # the units name.
+        named = next((u.locator.document for u in units if u.locator.document), "")
+        found = outline_mod.of_document(config, project, named) if named else None
+    if found is None:
+        return []
+    rows = []
+    for part, chapter in found.chapters():
+        span = found.span(chapter.page, CHAPTER)
+        if span is None:
+            continue
+        rows.append(
+            {
+                "part": part.title if part else "",
+                "title": chapter.title,
+                "printed": span.printed or f"pages {span.first}-{span.last}",
+                "first": span.first,
+                "last": span.last,
+                "count": span.count,
+                "large": span.large,
+            }
+        )
+    return rows
 
 
 def project_facts(config: Config, project: str, *, from_marks: bool = False) -> dict[str, Any]:
@@ -4093,6 +4981,9 @@ def project_facts(config: Config, project: str, *, from_marks: bool = False) -> 
         else [],
         "name": project,
         "configured": spec is not None,
+        # Whether it has a `project.toml`, which is what a rename writes. A
+        # project declared in `forge.toml` is renamed there.
+        "own_file": (config.projects_dir / project / PROJECT_TOML).exists(),
         "title": spec.title if spec else project,
         "citation": spec.citation if spec else "",
         "tags": list(spec.tags) if spec else [],
@@ -4102,6 +4993,12 @@ def project_facts(config: Config, project: str, *, from_marks: bool = False) -> 
         else "",
         "deck": config.deck_for(project),
         "decks": sorted(spec.decks.items()) if spec else [],
+        # In file order, which is the order they are tried in.
+        "tag_decks": list(spec.tag_decks.items()) if spec else [],
+        "topic_decks": list(spec.topic_decks.items()) if spec else [],
+        "front_char_cap": config.front_char_cap_for(project),
+        "front_char_cap_own": bool(spec and spec.front_char_cap > 0),
+        "context_pages_own": bool(spec and context_asked(spec.context_pages)),
         # Whether one work answers for the whole project. The three rows
         # below it (how wide a crop is cut, how much page frames it, how many
         # pages a card writer gets) are facts about a *document*, and a
@@ -4252,6 +5149,42 @@ def source_gallery(config: Config) -> dict[str, Any]:
         # button that matches nothing.
         "origins": sorted({str(r["origin"]) for r in rows if r["origin"]}),
     }
+
+
+def search_terms(q: str) -> list[str]:
+    """The words of a search, lower case. A phrase in double quotes is one."""
+    return [
+        (quoted or word).lower()
+        for quoted, word in re.findall(r'"([^"]+)"|(\S+)', q)
+    ]
+
+
+def card_matches(card: Card, config: Config, terms: list[str]) -> bool:
+    """Whether every word is somewhere on the card: uid, gist, tags, source,
+    and the text of each section, notes included."""
+    haystack = " ".join(
+        [
+            card.uid,
+            card_gist(card, config),
+            " ".join(card.tags),
+            card.source,
+            *(f"{s.name} {s.body}" for s in card.sections),
+        ]
+    ).lower()
+    return all(term in haystack for term in terms)
+
+
+def unit_position(unit: Unit) -> tuple[int, float]:
+    """Where a unit sits in its document: page, then height on the page."""
+    bbox = unit.locator.bbox or (0.0, 0.0, 0.0, 0.0)
+    return (unit.locator.page or 0, float(bbox[1]))
+
+
+def card_position(card: Card, config: Config) -> tuple[int, float]:
+    """Where the unit a card was written from sits; the end for one with none."""
+    ledger = _ledgers(config).get(card.project_name)
+    unit = ledger.get(card.units[0]) if ledger and card.units else None
+    return unit_position(unit) if unit else (10**9, 0.0)
 
 
 def card_section(card: Card, config: Config) -> str:
@@ -4722,6 +5655,17 @@ def effective_config(config: Config) -> list[dict[str, Any]]:
     return rows
 
 
+def repo_settings(config: Config) -> list[tuple[str, list[dict[str, Any]]]]:
+    """The rows of `effective_config` no project owns, by group, in the
+    order they are listed."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in effective_config(config):
+        if row.get("owner"):
+            continue
+        groups.setdefault(str(row["where"]), []).append(row)
+    return list(groups.items())
+
+
 def commands_for(
     view: str,
     filters: dict[str, Any],
@@ -4770,6 +5714,7 @@ def setup_commands(
     zotero_key: str = "",
     subject: str = "",
     open_entries: int = 0,
+    inbox: int = 0,
     counts: Mapping[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """What to run next for the thing you have selected on the setup stage.
@@ -4787,7 +5732,7 @@ def setup_commands(
     """
     kind, _, _ = pane.partition(":")
     return runs.propose(
-        {"topic": "topic", "source": "work"}.get(kind, "project"),
+        {"topic": "topic", "source": "work", "inbox": "inbox"}.get(kind, "project"),
         runs.Ambient(
             project=project,
             counts=counts or {},
@@ -4801,6 +5746,7 @@ def setup_commands(
             zotero_key=zotero_key,
             subject=subject,
             open_entries=open_entries,
+            inbox=inbox,
         ),
     )
 
@@ -5045,7 +5991,7 @@ def crop_url(unit: Unit, *, context: float = 0.0) -> str:
 
 
 def _unit_payload(
-    unit: Unit, config: Config, known: set[str] | None = None
+    unit: Unit, config: Config, known: set[str] | None = None, ledger: Ledger | None = None
 ) -> dict[str, Any]:
     image = crop_url(unit, context=pdf_context(config, unit.project))
     sample, lang = unit.scannable
@@ -5061,7 +6007,9 @@ def _unit_payload(
         "annotations": [
             {
                 "index": index,
-                "audience": model.annotation_audience(note) or "claude",
+                "audience": "resolved"
+                if model.is_resolved(note)
+                else model.annotation_audience(note) or "claude",
                 "text": _note_text(note),
             }
             for index, note in enumerate(unit.notes)
@@ -5100,11 +6048,38 @@ def _unit_payload(
             config.context_pages_for(unit.project, unit.context_pages, unit.locator.document)
         ),
         "context_own": unit.context_pages is not None,
+        # The pages that size comes to for this unit, from the document's
+        # outline where it has one: what the chip's word actually hands over.
+        "window": window_for(config, unit, ledger=ledger).as_dict(),
         # Whether whoever writes this card may look things up, resolved the
         # same way and shown the same way: the answer, and whose answer it is.
         "web": config.web_for(unit.project, unit.web),
         "web_own": unit.web is not None,
     }
+
+
+def reader_comments(card: Card, config: Config) -> list[dict[str, str]]:
+    """What you wrote in Zotero on the marks this card was made from, as you
+    wrote it.
+
+    Read from the ledger, never copied into the card, so no pass can restate
+    it: a pass that acted on a comment wrote what it did, in its own words,
+    and those words were the only trace of yours on the card. Only each
+    unit's own mark, the one it was made from; the marks around it belong to
+    the units they made.
+    """
+    ledgers = _ledgers(config)
+    out: list[dict[str, str]] = []
+    for unit_id in card.units:
+        ledger = ledgers.get(unit_id.split(":", 1)[0])
+        unit = ledger.get(unit_id) if ledger else None
+        for mark in unit.marks if unit else ():
+            if mark.comment and mark.key in unit_id:
+                out.append({
+                    "passage": " ".join(mark.text.split())[:120] if mark.kind != "note" else "",
+                    "comment": mark.comment.strip(),
+                })
+    return out
 
 
 def _card_payload(
@@ -5119,7 +6094,9 @@ def _card_payload(
     # above them and in the linter's voice, which reads as a note nobody
     # remembers writing -- and the banner above already says what an open note
     # costs. It stays in `forge check`, where nothing else shows the line.
-    shown = [f for f in mine if f["code"] != "annotation-open"]
+    # Nor `hash-stale`: the "back in the draft pile" banner above says the
+    # same thing in words, so the two read as two problems.
+    shown = [f for f in mine if f["code"] not in ("annotation-open", "hash-stale")]
     return {
         "uid": card.uid,
         "status": card.effective_status,
@@ -5197,6 +6174,7 @@ def _card_payload(
         # through the pile of cards that have one.
         "has_image": card.has_image,
         "unit_image": _unit_image(card, config),
+        "reader": reader_comments(card, config),
         "front_length": latex.rendered_length(card.section("front") or ""),
     }
 

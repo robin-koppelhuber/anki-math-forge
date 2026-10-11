@@ -206,5 +206,6 @@ def test_every_command_says_what_it_does() -> None:
                 continue
             why = cmd.get("why", "")
             assert why, f"{cmd['run']} has no explainer"
-            assert len(why.split()) >= 8, f"{cmd['run']}: {why!r} is not a sentence"
+            words = len(why.split())
+            assert 3 <= words <= 12, f"{cmd['run']}: {why!r} is {words} words, not a short phrase"
             assert why != cmd["label"], "an explainer that repeats the label explains nothing"

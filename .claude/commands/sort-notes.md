@@ -1,93 +1,103 @@
 ---
-description: Sort a pile of notes into a project, as new units and parked decisions
-argument-hint: --project NAME <file, or the notes pasted after it>
+description: Place what is waiting in a project's inbox, one note-sorter agent per dump
+argument-hint: --project NAME [--write | --both] [notes to add first]
 ---
 
-Take notes written at a whole project and put each piece where it belongs.
+Place the notes waiting in a project's inbox.
 
 Arguments: `$ARGUMENTS`
 
 - **`--project NAME`**: which project. **Ask if it is not given.**
-- **the notes**: a file path, or text pasted after the arguments. Anything:
-  a list, a paragraph, half sentences, things you meant to look up.
+- **`--write`** or **`--both`**: how the notes given after it are
+  placed. Modifying existing cards, or both piece by piece; without either,
+  proposed.
+  It applies to those notes only; every dump already in the inbox says on
+  its own heading how it is placed.
+- **notes after it**, optionally: text to add to the inbox before sorting,
+  the same as typing it into the inbox on the setup stage.
 
-## What this pass does, and what it does not
+## What this is
 
-Each piece of the pile becomes one of three things:
+The inbox is `projects/<name>/inbox.md`: things the human learned about the
+project's subject and wants in the deck without knowing where. Each dump is
+a `## <stamp>` heading with text under it. The words after the stamp, each
+after a ` · `, say what it is:
 
-- **a new unit**, when it is about something the project has no card or
-  unit for;
-- **an `@me` note on a card**, when it is about a card that exists;
-- **an `@me` note on a unit**, when it is about a unit not yet carded.
+- No mode word: proposed. `@me` notes on cards and new units waiting in
+  triage, for the human to act on.
+- ` · write`: modify existing cards. The cards a piece bears on are edited, and a unit
+  is queued for anything new.
+- ` · both`: the agent chooses for each piece, editing what it can
+  confirm and what leaves a card asking the same question, proposing the
+  rest.
+- ` · sorted`: an agent placed it and wrote where each piece went.
+  Neither: waiting. The page shows them as two lists, unsorted and sorted;
+  an older ` · done` is read as sorted.
 
-It proposes and a human decides, like every other pass here. **It does not
-edit a card's content, and it does not write cards.** A note saying a card
-is wrong becomes a parked decision on that card, which you read in review
-and turn into an `@claude` brief, an edit, or nothing. A mode that writes
-the changes directly is not built.
+Each waiting dump goes to a **note-sorter** agent, which places each piece
+by the dump's mode and writes the brief under it. Dumps are independent, so
+dispatch them **in parallel**: several `Agent` calls in one message.
+
+No mode reaches Anki. An edited card is a draft again until the human
+approves it on the review page.
 
 ## Steps
 
-1. **Read the project.** `projects/<name>/conventions.md`,
-   `projects/<name>/topics.md`, and what it already holds:
+1. If notes were given after the project, append them as a new dump at the
+   end of `inbox.md`: a `## <YYYY-MM-DD HH:MM>` heading, with ` · write` or
+   ` · both` after the stamp when `--write` or `--both` was given, then
+   the text. Create the file with
+   an `# Inbox` heading if it is not there.
+
+2. Read `projects/<name>/inbox.md` and list the waiting dumps: headings with
+   no ` · sorted`. Note which say ` · write` or ` · both`.
+
+3. Dispatch one `note-sorter` per waiting dump. A dump that modifies
+   cards can edit cards, so give its agent `model: "opus"`; a proposed one
+   keeps the agent's own model.
+
+   > Place the dump headed `## <the heading as it stands>` in
+   > `projects/<name>/inbox.md`, for project `<name>`. Its heading says how:
+   > follow your instructions for that mode, then write the brief under the
+   > dump and add ` · sorted` to its heading. Report the ids of any units you
+   > queued.
+
+4. **Card the units the modifying and both dumps queued.** Collect the ids the
+   agents reported, and check each against its brief line, the one reading
+   "new unit ..., queued for a card". Dispatch one `card-writer` for all of
+   them:
+
+   > Write a stub card for each of these queued units of project `<name>`,
+   > and no others: `<ids>`. Each came from the project's inbox and carries
+   > an `@claude` brief saying what was asked; read it before anything
+   > else. Their entries are in
+   > `uv run --no-sync forge units --project <name> --state queued --json`.
+   > Follow your instructions exactly: check the mathematics yourself,
+   > write stubs only, approve nothing.
+
+   When it reports, add the card it wrote to the end of that unit's brief
+   line, so the page links both:
 
    ```
-   uv run forge cards --project <name> --json
-   uv run forge units --project <name> --state all --json
+   - new unit `stats:conditional-jensen`, queued for a card: Jensen for conditional expectations → card `7d1e02`
    ```
 
-   A card is found by its `gist`, its front and its tags; read the file
-   when the gist is not enough to tell.
+   A unit it declined to card keeps its line, with the reason after it.
 
-2. **Split the pile into pieces, one idea each.** Keep the words they were
-   written in: they are the evidence for whatever you do with them, and the
-   person reading the result wants to recognise their own note.
+5. Check the file: every dispatched dump now has ` · sorted` and a
+   `### where it went` list. Then check nothing broke:
 
-3. **Place each piece.**
+   ```
+   uv run --no-sync forge check
+   uv run --no-sync forge todo --audience me --project <name>
+   uv run --no-sync forge cards --project <name> --changes
+   ```
 
-   - **About a card that exists**: append one line to the card's
-     `## notes`, opening `@me`, quoting the note and naming what it would
-     change: `@me your note: "the bound needs independence, not just
-     zero mean"; the conditions say only zero mean`. Leave everything else
-     in the file as it is. An `@me` line is outside `content_hash`, so the
-     card keeps its approval; it is held out of `anki push` until the note
-     is settled, which is the point.
-   - **About a unit not yet carded**:
+   The last lists what moved on each card since its last review decision,
+   which for a dump that modifies cards is what the agent changed.
 
-     ```
-     uv run forge units note <unit-id> '<the note, and what it bears on>' --audience me
-     ```
-
-   - **About something new**: a unit, through the same door `/propose`
-     uses, with the note itself as the sample:
-
-     ```
-     uv run forge units add '<a few words: the id comes from this>' --project <name> \
-       --gist '<what a card from it would be about>' \
-       --preview '<the note, in its own words>' --tag notes
-     ```
-
-     It arrives `new` and waits in triage like any other unit
-     (invariant 3). Check the listing from step 1 first: a subject already
-     there is a note on that unit, not a second unit.
-   - **Not about the deck at all** (a reminder, a to-do, a thought about the
-     tool): leave it out, and list it in the report.
-
-   When one piece is about two cards, it is two notes. When you cannot tell
-   which card a piece is about, put the `@me` note on the likeliest one and
-   say in it which others it might mean.
-
-4. **Report** a table: each piece, in a few words, and where it went (card
-   by gist, unit by id, new unit by id, or left out and why). Then the
-   counts. `uv run forge todo --audience me --project <name>` lists the
-   notes this pass parked.
-
-## What not to do
-
-- **Do not resolve anything.** A note that says a card is wrong may be
-  right or may be a misreading; the human decides, in review.
-- **Do not use `@claude`.** That addresses the next pass, which would act
-  on it without a human having read the note.
-- **Do not rewrite the notes into card language.** Paraphrase loses the
-  part the person meant, and the unit's sample is read again when the card
-  is written.
+6. **Report** per dump: how it was placed, where each piece went, the cards
+   written for queued units, and anything an agent was unsure of. Say that
+   the briefs are in the **inbox** on the setup stage, where each dump is
+   in the sorted list, and that every card a dump changed is listed under
+   "changed since decided" in review, which names the dump it came from.

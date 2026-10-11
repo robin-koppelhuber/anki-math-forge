@@ -52,7 +52,7 @@ rather than deciding (see **What not to card**).
    matters. A missing condition on a page you could read is a condition the
    source did not state, which is a fact about the source. A missing condition
    on a page you could not read is a page you could not read. Write the card
-   from the crop and record in `## notes` as `@me` that you had nothing else,
+   from the crop and record in `## notes` that you had nothing else,
    so a reviewer knows which of the two they are looking at.
 
    **That page came with a window, and the window is a setting.** `context`
@@ -65,11 +65,13 @@ rather than deciding (see **What not to card**).
    uv run --no-sync forge context <unit-id> --pages chapter
    ```
 
-   `chapter` is the size that is not a count: the whole chapter this unit is
-   printed in, start to finish. Reach for it when what you are missing is a
-   standing assumption rather than a sentence, since a book states those once,
-   where the chapter opens, and no number of pages either side knows how far
-   back that was.
+   `section`, `chapter` and `part` are sizes that are not a count: the span of
+   the document's own outline this unit is printed in, start to finish, and
+   the heading says which entry and its pages as printed. Reach for `chapter`
+   when what you are missing is a standing assumption rather than a sentence,
+   since a book states those once, where the chapter opens, and no number of
+   pages either side knows how far back that was. The heading says when a
+   window is large; a part is a hundred pages or more.
 
    Then **say so in your report**: a unit whose hypotheses are two pages back
    wants that recorded on the unit (`forge units set <id> --pages 3`, or
@@ -80,7 +82,7 @@ rather than deciding (see **What not to card**).
    **A unit that is a picture is a card that carries one.** An image or area
    annotation has geometry and no text: nothing to transcribe, and the figure
    is the point. Write `![what it shows](unit)` in whichever section the
-   figure belongs to -- see **Pictures** in the card-writing skill, which is
+   figure belongs to; see **Pictures** in the card-writing skill, which is
    where that judgement is set out. No file is produced: `anki push` renders
    the crop from the source document, so the unit only has to exist and
    have a box.
@@ -88,7 +90,7 @@ rather than deciding (see **What not to card**).
    **When the page is not enough, read the book's front matter**:
 
    ```
-   uv run --no-sync forge source-text <source>
+   uv run --no-sync forge source-text <project>
    ```
 
    That is the whole text layer, and it is where a source defines its symbols.
@@ -109,7 +111,9 @@ rather than deciding (see **What not to card**).
 
    All of them are marked carded and point at the same card. The reverse
    happens too: one unit stating two independent facts is two cards, each
-   citing that unit. Most units are one card.
+   citing that unit. Most units are one card. Pass `--type intuition` for a
+   card that explains rather than states (see **Two kinds of card** in the
+   skill); the default is `identity`.
 
 3. **Check the mathematics yourself.** Work out whether the result is true as
    stated. Sources routinely omit a hypothesis that the surrounding text made
@@ -117,7 +121,7 @@ rather than deciding (see **What not to card**).
    on part of its apparent domain, a step needs a structural property nobody
    wrote down, a formula holds only in the dimension being discussed.
 
-   *In this deck's current source:* a derivative of an inverse needs the
+   *In the Matrix Cookbook, for example:* a derivative of an inverse needs the
    matrix invertible whether or not the page says so, and a trace identity may
    need a conformability the equation does not show.
 
@@ -126,7 +130,8 @@ rather than deciding (see **What not to card**).
    have makes a card that disagrees with the book being learned. Prefer the
    source's wording where it gives one. Where it is silent and the mathematics
    still needs a condition, state it **and record the addition** in `## notes`
-   as `@me ...` so the human sees what you added and can disagree.
+   as a plain line, not `@me`, so the human sees what you added without it
+   blocking `anki push`.
 
 4. **Read what the reader wrote, not only what the page says.** `forge
    context <unit>` prints each mark and, under it, a `>` line carrying the
@@ -137,18 +142,37 @@ rather than deciding (see **What not to card**).
    anything a card takes from it that the page does not say belongs in
    `## notes`.
 
+   A comment on a sticky note is printed whole under its `>`, however long:
+   it is where the longest instructions are, often asking for more than one
+   card. Read it to the end before deciding how many cards the unit makes.
+
+   **The marks listed are every one inside the pages `context` hands you**,
+   whatever their colour, not only the ones that made units: the window that
+   decides how much of the book you read decides how much of the reader's
+   marking you see. A mark that made a unit says where it stands, and
+   `(skipped)` is a unit the reader decided not to card. That is still
+   something they noticed, so read it as context, and do not card it.
+
+   **Quote the reader, never restate them.** The review page shows each
+   comment beside the card, word for word, read from the ledger. Do not copy
+   it onto the card in your own words: a paraphrase in `## notes` reads as
+   what the reader said and is not. Where the card has to mention a comment,
+   quote it exactly, in quotation marks; otherwise write only what you did
+   about it.
+
    **A convention the reader proposed is not yours to adopt.** Where a comment
    opens with the convention keyword, `context` lists it under *conventions
-   this unit proposes*. Record each one as an `@me` annotation on the unit,
-   verbatim, and write nothing into `conventions.md`. A convention decides how
-   every card written here afterwards is read, and unlike a card it passes
-   through no review: a card you get wrong is caught at approval, and a
-   convention you get wrong is inherited silently by everything after it.
+   this unit proposes*. Record each one as an `@me` annotation on the unit
+   (`forge units note <id> '<it>' --audience me`), verbatim, and write nothing
+   into `conventions.md`. A convention decides how every card written here
+   afterwards is read, and unlike a card it passes through no review: a card
+   you get wrong is caught at approval, and a convention you get wrong is
+   inherited silently by everything after it.
 
 5. **Make the card stand alone.** Every object on the front is defined before
    the front uses it: by the conventions the *source* declares, which
    `forge context <unit>` prints at the top of its output, or on the card
-   itself. Read them rather than assuming — they are per source, so what was
+   itself. Read them rather than assuming — they are per project, so what was
    ambient in the last deck you worked on may not be here. Ask whether someone
    who has never opened this source could answer the front with those
    conventions and nothing else.
@@ -209,8 +233,8 @@ result on these pages, and a cleaner statement substituted for the printed one
 produces a card that looks *better* than a correct one right up until the
 condition the paper had — and the general version does not — turns out to be
 the point. When the source is silent and the mathematics still needs something,
-the instruction is the same as always: state it and record the addition as
-`@me` in `## notes`. That is a question for the human, not for a search.
+the instruction is the same as always: state it and record the addition in
+`## notes`. That is for the human to judge, not for a search.
 
 A reference is **where to look, never what to write**. It settles nothing
 on its own: the crop is authoritative for what is printed (CLAUDE.md
@@ -233,7 +257,7 @@ The queue is not a promise that a unit is cardable. Some units were queued in
 bulk. **Do not card:**
 
 - a unit whose transcription is missing because a previous pass read the crop
-  and refused it -- read its `@claude` note, it says why (debris, a clipped
+  and refused it. Read its `@claude` note, it says why (debris, a clipped
   bbox, a prose bullet)
 - a fragment that is meaningless alone and whose siblings are not on the page
 - anything you cannot read
@@ -242,14 +266,12 @@ For each, **propose the skip and say why**:
 
 ```
 uv run --no-sync forge units suggest <unit-id> skipped not-cardable --detail '<why, in one sentence>' --by card-writer
-uv run --no-sync forge units note <unit-id> '@me not carded: <why>'
 ```
 
-The suggestion is what the human can act on: it shows up under the
-**suggested** filter and answers to `a` (accept) or `d` (dismiss). The
-annotation is the reasoning behind it. An annotation alone is invisible to
-that filter, so a decision recorded only that way waits for someone to read
-every unit again.
+That one line is the whole proposal. It waits among the unit's `@me` items
+with your reason beside it, and accepting or rejecting it is the decision;
+either way the reason stays as a settled line. Do not also write an `@me`
+note saying the same thing: that asks one question twice.
 
 Leave the unit `queued`. Proposing is not deciding: changing its state is the
 human's call, not yours.
@@ -263,9 +285,10 @@ is one command if the human disagrees.
 
 Anything you write for yourself goes under **`.forge/scratch/`**, in your own
 subdirectory: `.forge/scratch/<a name unique to your scope>/`. That path is
-the configured `work_dir`, it is gitignored, and it is safe to delete whole.
+under the configured `work_dir` (`.forge/`), it is gitignored, and it is safe
+to delete whole.
 
-Never a bare `.forge/scratch/audit.py`, and never anywhere else in the repo --
+Never a bare `.forge/scratch/audit.py`, and never anywhere else in the repo:
 a script left outside `.forge/` is linted with the project and shows up in
 `git status` as though it were part of it.
 
@@ -274,7 +297,7 @@ appended to the other's file mid-run and it failed with a `NameError` for a
 name it had never written. Both noticed, which is luck: a clobbered edit
 script that still parses would have written the wrong cards.
 
-Prefer editing cards through a script over hand-editing markdown -- use
+Prefer editing cards through a script over hand-editing markdown: use
 `model.load(path)`, mutate `card.sections`, `card.save(path)`, so the
 canonical section order and formatting are preserved. Reload the file
 immediately before writing it; do not act on a copy you read minutes ago.
@@ -284,8 +307,10 @@ immediately before writing it; do not act on a copy you read minutes ago.
 - `--no-sync` on every `uv run`: the dev server holds the executable.
 - Work only `status: draft`. You approve nothing; the human does that.
 - If a unit's `@claude` note tells you how to card it, do what it says, then
-  clear only your own side: `units clear-notes <id> --audience claude`.
-  Never clear an `@me` note.
+  clear only your own side: `units clear-notes <id> --audience claude`. If part
+  of the brief is for a later pass (a proof, a `## uses` line), first copy that
+  part onto the card as an `@claude` line in `## notes`: `/augment` picks up
+  any draft carrying one. Never clear an `@me` note.
 - If a note is ambiguous, leave it open, skip the unit, say why in your report.
 
 ## Reporting back
@@ -293,3 +318,17 @@ immediately before writing it; do not act on a copy you read minutes ago.
 How many cards you wrote, how many units they cover, every unit you did not
 card and why, every condition you added that the source does not state, and
 anything about the section that a human should decide rather than you.
+
+## Remarks
+
+If the tool or these instructions got in your way, say so once, where the
+person planning the work will read it, and not only in your report:
+
+```
+uv run --no-sync forge remarks add '<what got in the way, and what you would change>' --by card-writer --project <name>
+```
+
+A brief that arrived cut off, a rule that made a card worse, a command that
+refused without saying why. About the tool and these instructions, not about
+a card: a fault in one card is a note on that card. One remark each, with the
+evidence (the unit id, the line), and nothing when nothing got in your way.

@@ -309,3 +309,31 @@ def test_every_page_carries_the_way_to_the_list(repo: Path) -> None:
         page = at.get(url).text
         assert "data-runs-open" in page, url
         assert "data-runs-list" in page, url
+
+
+def test_finished_runs_outlive_the_server(config: config_mod.Config) -> None:
+    """The history is written beside the change records and read back when
+    the server starts."""
+    import time as time_mod
+
+    from anki_math_forge.app import jobs as jobs_mod
+
+    store = config.work_dir / "runs.json"
+    first = jobs_mod.Runner(store=store)
+    run = first.start(["check", "--json"], config.root, "reads", "check")
+    for _ in range(200):
+        if first.get(run.id) and first.get(run.id).done:  # type: ignore[union-attr]
+            break
+        time_mod.sleep(0.05)
+
+    second = jobs_mod.Runner(store=store)
+    second.load()
+
+    (kept,) = second.listed()
+    assert (kept.id, kept.verb, kept.done) == (run.id, "check", True)
+    assert kept.view and kept.view.get("summary")
+
+    second.forget_finished()
+    third = jobs_mod.Runner(store=store)
+    third.load()
+    assert third.listed() == [], "clearing the window clears the file"

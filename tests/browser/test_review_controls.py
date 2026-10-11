@@ -51,6 +51,11 @@ def open_card(page, live, uid: str) -> None:  # type: ignore[no-untyped-def]
     else:
         page.goto(url)
     page.wait_for_selector(f'[data-uid="{uid}"]:not([hidden])')
+    # The gradings are in the card's details panel, folded until opened.
+    page.evaluate(
+        "() => { const p = document.querySelector('.item:not([hidden]) [data-panel=details]');"
+        " if (p && p.classList.contains('folded')) p.querySelector('.panel-toggle').click(); }"
+    )
 
 
 def read(repo: Path, uid: str) -> str:
@@ -305,12 +310,38 @@ def test_undo_after_a_resolve_puts_the_line_back(page, live, served) -> None:  #
     uid = a_card(repo, "fee006", "@me decide whether this is two cards")
     open_card(page, live, uid)
 
+    from playwright.sync_api import expect
+
+    note = page.locator(f'[data-uid="{uid}"] .annotation')
     page.locator(f'[data-uid="{uid}"] [data-resolve]').click()
     assert "@me" not in lands(page, repo, uid, lambda text: "@me" not in text)
-    assert page.locator(f'[data-uid="{uid}"] .annotation').count() == 0
+    # The file is written before the server answers and the page repaints after
+    # it, so the line is gone from the file a moment before it is from the page.
+    expect(note).to_have_count(0)
 
     page.keyboard.press("z")
-    page.wait_for_timeout(1000)
+    back = lands(page, repo, uid, lambda text: "@me decide whether this is two cards" in text)
+    assert "@me decide whether this is two cards" in back
+    expect(note).to_have_count(1)
 
-    assert "@me decide whether this is two cards" in read(repo, uid)
-    assert page.locator(f'[data-uid="{uid}"] .annotation').count() == 1
+
+def test_the_diagram_shows_its_numbers_and_follows_a_decision(page, live, served) -> None:  # type: ignore[no-untyped-def]
+    """The guide's machine is read on its own, with the rail folded, so its
+    numbers show counting the whole project as well as counting a filter. They
+    were hidden in the first, and the whole view read as broken."""
+    from playwright.sync_api import expect
+
+    _, repo = served
+    uid = a_card(repo, "fee007")
+    open_card(page, live, uid)
+
+    draft = page.locator('.fsm.mini [data-fsm-count="draft"]')
+    approved = page.locator('.fsm.mini [data-fsm-count="approved"]')
+    expect(draft).to_be_visible()
+    expect(approved).to_be_visible()
+    drafts, approvals = int(draft.text_content()), int(approved.text_content())
+
+    page.keyboard.press("a")
+
+    expect(approved).to_have_text(str(approvals + 1))
+    expect(draft).to_have_text(str(drafts - 1))

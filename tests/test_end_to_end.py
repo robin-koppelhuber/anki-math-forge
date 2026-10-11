@@ -267,7 +267,9 @@ def test_a_window_set_at_triage_is_the_window_the_writer_reads_in(
         # reader of the same field. Through the units view rather than an API:
         # the chip is what a person actually reads the setting off.
         body = TestClient(create_app(pdf_source)).get("/units?project=book&state=all").text
-        chip = body[body.index("data-context-chip") : body.index("data-web-chip")]
+        # The chip runs up to the line under it that spells out its pages.
+        start = body.index("data-context-chip")
+        chip = body[start : body.index("data-context-span", start)]
         whose = chip[chip.index('class="chip-whose"') :][:60]
         if expect == CHAPTER:
             assert "the chapter it is in" in chip

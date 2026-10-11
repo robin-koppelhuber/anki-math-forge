@@ -204,10 +204,9 @@ class Deck {
     this.show(this.index + 1);
   }
 
-  /* Forward means "the next thing still needing a decision". Walking back
-     over settled items is deliberate -- that is how you reach something you
-     just acted on -- but walking *forward* over them is only ever re-treading
-     work, which reads as the navigation being stuck. */
+  /* Forward means "the next thing still needing a decision". Walking over
+     settled items in either direction is only ever re-treading work, which
+     reads as the navigation being stuck. */
   nextPending() {
     for (let i = this.index + 1; i < this.items.length; i += 1) {
       if (!this.items[i].dataset.settled) {
@@ -226,8 +225,20 @@ class Deck {
     toast("end of the list");
   }
 
+  /* Back means "the previous thing still needing a decision", like forward.
+     Settled items stay in the list so that the file and the view agree until
+     the next reload, but walking back onto a card the filter no longer
+     matches is the filter leaking: on the draft list, `k` landed on cards you
+     had just approved. Reaching one on purpose is what undo is for, which
+     finds its item by id. */
   prev() {
-    this.show(this.index - 1);
+    for (let i = this.index - 1; i >= 0; i -= 1) {
+      if (!this.items[i].dataset.settled) {
+        this.show(i);
+        return;
+      }
+    }
+    toast("start of the list");
   }
 
   /* Mark the current item as no longer matching the active filter, and move
@@ -566,14 +577,6 @@ const SPLITS = {
      so a drag decides one edge and leaves the other where it was. Both
      measure from the left edge of the pane in front of the handle, which is
      the only thing the markup promises. */
-  setupRuns: {
-    key: "anki-forge.split.setup-runs",
-    left: "--split-setup-runs",
-    fallback: 232,
-    axis: "x-px",
-    min: 150,
-    max: 560,
-  },
   setupPanel: {
     key: "anki-forge.split.setup-panel",
     left: "--split-setup-panel",
@@ -581,6 +584,34 @@ const SPLITS = {
     axis: "x-px",
     min: 170,
     max: 640,
+  },
+  /* The shelf's rail: the filters, the form and the commands, beside the
+     grid of projects. The top bar's first column follows it, so the two stay
+     one frame. */
+  shelfRail: {
+    key: "anki-forge.split.shelf-rail",
+    left: "--split-shelf-rail",
+    fallback: 272,
+    axis: "x-px",
+    min: 180,
+    max: 560,
+  },
+  /* The commands window: the history list's width, and how much of the
+     right-hand side the builder takes above the run you picked. */
+  runsSide: {
+    key: "anki-forge.split.runs-side",
+    left: "--split-runs-side",
+    fallback: 300,
+    axis: "x-px",
+    min: 200,
+    max: 640,
+  },
+  runsBuilder: {
+    key: "anki-forge.split.runs-builder",
+    left: "--split-runs-builder",
+    right: "--split-runs-builder-bottom",
+    fallback: 260,
+    axis: "y",
   },
   /* The setup panel's two lists: what you asked for on top, what the project
      reads underneath. Which of the two is long depends entirely on the
@@ -1062,60 +1093,6 @@ function wireOnePick(box) {
   if (picked) open(true);
 }
 
-/* The effective configuration, over whatever you were doing. It answers a
-   question you have *mid-decision* -- which layout did this card resolve to --
-   and a navigation away and back is a poor way to look something up. Read-only
-   for the reason the panel says: the config is read at startup, and half these
-   keys change what existing content means. */
-async function openSettings() {
-  const dialog = document.getElementById("settings");
-  if (!dialog) return;
-  dialog.showModal();
-  const body = document.getElementById("settings-body");
-  body.textContent = "reading…";
-  const project = new URL(location.href).searchParams.get("project") || "";
-  let data;
-  try {
-    const response = await fetch(`/api/config?project=${encodeURIComponent(project)}`);
-    data = await response.json();
-  } catch {
-    body.textContent = "could not read the configuration";
-    return;
-  }
-  body.textContent = "";
-  data.groups.forEach((group) => {
-    const section = el("section", "config-group" + (group.focused ? " focus" : ""));
-    section.appendChild(el("h2", "", group.where));
-    const table = el("table", "config-table");
-    const tbody = document.createElement("tbody");
-    group.rows.forEach((row) => {
-      const tr = document.createElement("tr");
-      tr.appendChild(el("th", "", row.key));
-      const value = document.createElement("td");
-      // An empty value is an answer -- a project that declares no layout gets
-      // no layout -- but a blank cell reads as a rendering failure, so say it.
-      const text = String(row.value);
-      /* A value with maths in it is prose, not a literal. `[conventions]` is
-         open, so what a source states there is a sentence somebody wrote:
-         "the derivative is $\partial f/\partial x$". KaTeX skips `code` by
-         default, which is exactly right for `box` or `denominator` and
-         exactly wrong for that. */
-      const maths = /\$[^$]+\$/.test(text);
-      value.appendChild(
-        text ? el(maths ? "span" : "code", maths ? "config-prose" : "", text)
-             : el("span", "muted", "unset"),
-      );
-      tr.appendChild(value);
-      tr.appendChild(el("td", "origin" + (row.from === "inherited" ? " inherited" : ""), row.from));
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    section.appendChild(table);
-    body.appendChild(section);
-  });
-  renderMath(body);
-}
-
 /* The state machine, full width. It is static markup already on the page, so
    unlike the settings table there is nothing to fetch: the diagram is drawn at
    about 50rem and the guide rail stops at 38, which is the whole reason it is
@@ -1144,7 +1121,6 @@ function openCrop(button) {
      down with it, which is the kind of coupling that only shows up on the one
      page that lacks it. */
   const closes = {
-    settings: "settings-close",
     machine: "machine-close",
     "crop-view": "crop-close",
   };
@@ -1154,7 +1130,6 @@ function openCrop(button) {
     if (dialog && close) close.addEventListener("click", () => dialog.close());
   });
   document.addEventListener("click", (event) => {
-    if (event.target.closest("#config-open, [data-settings]")) openSettings();
     if (event.target.closest("[data-machine]")) openMachine();
     /* A value, not just the attribute. The units view marks its crop with a
        bare `data-crop` so a missing PDF can be caught by the error handler
@@ -1269,45 +1244,288 @@ const RUN_WARNINGS = {
   anki: "changes your Anki collection, which nothing here can undo.",
 };
 
+/* Start a command line, after asking where it writes. Answers the run as
+   the server first reports it, or null if you said no. */
+async function startRun(line, effect) {
+  const warning = RUN_WARNINGS[effect];
+  if (warning && !window.confirm(`${line}\n\n${warning} Run it?`)) return null;
+  const run = await post("/api/run", { run: line, confirmed: Boolean(warning) });
+  notifyRun(run);
+  watchRunsNow();
+  return run;
+}
+
+/* A run button. It says it is busy while its command runs and nothing
+   else: the result goes to a notification and the runs window, never under
+   the row, which is a list of commands and not a place to read output. */
 document.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-run]");
   if (!button || button.dataset.busy) return;
-  const warning = RUN_WARNINGS[button.dataset.effect];
-  if (warning && !window.confirm(`${button.dataset.run}\n\n${warning} Run it?`)) return;
   button.dataset.busy = "1";
   button.classList.add("running");
-  const panel = resultPanel(button);
-  panel.textContent = "running…";
   try {
-    const started = await post("/api/run", {
-      run: button.dataset.run,
-      confirmed: Boolean(warning),
-    });
-    const done = await untilDone(started.id);
-    panel.replaceChildren(renderRun(done));
-    button.classList.toggle("run-failed", !done.ok);
+    const run = await startRun(button.dataset.run, button.dataset.effect);
+    if (run) await untilDone(run.id);
   } catch (e) {
-    panel.textContent = String(e.message || e);
-    button.classList.add("run-failed");
+    /* `post` has already said why, in a toast. */
   } finally {
     button.classList.remove("running");
     delete button.dataset.busy;
   }
 });
 
-/* Every run this server remembers, so a result outlives the page that
-   asked for it. The button says how many are still going, or just that
-   there are runs to read; the dialog lists them, newest first.
+async function untilDone(id) {
+  /* Its own poll rather than the four second counts tick: a run is
+     usually over in well under a second, and waiting four to be told so
+     reads as the button not having worked. */
+  for (;;) {
+    const response = await fetch(`/api/run/${id}`);
+    if (!response.ok) throw new Error(`run ${id}: ${response.status}`);
+    const run = await response.json();
+    if (run.done) return run;
+    await new Promise((wake) => setTimeout(wake, 300));
+  }
+}
 
-   Its own poll, fast while something is in flight and slow otherwise:
-   the endpoint is a dictionary read, and the four-second counts tick is
-   too slow to say "done" for a run that took half a second. */
+/* -- the notification, bottom right ---------------------------------------
+   One per run started from this page: "running", then the summary the
+   server wrote for it. A run that went well leaves on its own; one that
+   did not stays until you close it, because it is the one you need to
+   read. Either opens the runs window at that run. */
+const NOTE_LINGER_MS = 8000;
+
+function notifyRun(run) {
+  const stack = document.querySelector("[data-run-notices]");
+  if (!stack) return;
+  const note = el("div", "run-notice");
+  note.dataset.runNote = run.id;
+  note.dataset.state = "running";
+  const what = el("code", "run-notice-what", run.run);
+  const said = el("span", "run-notice-said", "running…");
+  const open = el("button", "run-notice-open", "open");
+  open.type = "button";
+  open.addEventListener("click", () => openRuns(run.id));
+  const close = el("button", "run-notice-close", "×");
+  close.type = "button";
+  close.setAttribute("aria-label", "dismiss");
+  close.addEventListener("click", () => note.remove());
+  note.append(what, said, open, close);
+  stack.prepend(note);
+  untilDone(run.id)
+    .then((done) => {
+      note.dataset.state = done.ok ? "ok" : "failed";
+      note.dataset.tone = done.tone || (done.ok ? "ok" : "bad");
+      said.textContent = done.summary || (done.ok ? "done" : "failed");
+      if (done.ok && done.tone !== "bad") {
+        setTimeout(() => {
+          if (!note.matches(":hover")) note.remove();
+          else note.addEventListener("mouseleave", () => note.remove(), { once: true });
+        }, NOTE_LINGER_MS);
+      }
+    })
+    .catch((e) => {
+      note.dataset.state = "failed";
+      said.textContent = String(e.message || e);
+    });
+}
+
+/* -- the runs window ------------------------------------------------------
+   A list on the left, newest first, with four filters, a text filter and a
+   way to forget what has finished; the run you picked in the middle. The
+   list is the light form of every run (`/api/runs`), and a run's output is
+   fetched when you pick it, because one `units --state all` is the whole
+   ledger. */
+const runsState = { show: "all", search: "", picked: "", rows: [], shown: "" };
+let watchRunsNow = () => {};
+
+/* Open the window, on a run when `id` names one. However it opens, from the
+   top bar, a notification or a quick pick, the builder above the history
+   shows an action: it used to be filled only by the top bar's button, so a
+   window opened from a notification had an empty list to pick from.
+   `startOn` is the action a quick pick is about to show, which then fills
+   it instead. */
+function openRuns(id, startOn = "") {
+  const dialog = document.querySelector("[data-runs-dialog]");
+  if (!dialog) return;
+  if (id) runsState.picked = id;
+  if (!dialog.open) dialog.showModal();
+  if (!builder.current && !startOn) {
+    // Opened on a run: start on that run's own command, fields and all.
+    const row = runsState.rows.find((r) => r.id === id);
+    showAction(row && row.action ? row.action : "", row && row.action ? row.values : {});
+  }
+  watchRunsNow();
+}
+
+function runVisible(row) {
+  if (runsState.show === "running" && row.done) return false;
+  if (runsState.show === "failed" && (!row.done || (row.ok && row.tone !== "bad"))) return false;
+  if (runsState.show === "writes" && row.effect === "reads") return false;
+  const needle = runsState.search.trim().toLowerCase();
+  return !needle || row.run.toLowerCase().includes(needle);
+}
+
+function runState(row) {
+  if (!row.done) return "running";
+  return row.ok ? "ok" : "failed";
+}
+
+function sideRow(row) {
+  const item = el("li");
+  item.dataset.runRow = row.id;
+  item.dataset.state = runState(row);
+  item.dataset.effect = row.effect;
+  if (row.tone) item.dataset.tone = row.tone;
+  if (row.id === runsState.picked) item.setAttribute("aria-current", "true");
+  const pick = el("button", "runs-pick");
+  pick.type = "button";
+  const when = new Date(row.at * 1000);
+  pick.append(
+    el("span", "runs-when", when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })),
+    el("code", "runs-what", row.run.replace(/^forge /, "")),
+    el("span", "runs-said", row.done ? row.summary || (row.ok ? "done" : "failed") : "running…"),
+  );
+  pick.addEventListener("click", () => {
+    runsState.picked = row.id;
+    paintRunsList();
+    showRun(row.id);
+  });
+  item.appendChild(pick);
+  return item;
+}
+
+function paintRunsList() {
+  const list = document.querySelector("[data-runs-list]");
+  if (!list) return;
+  const rows = runsState.rows.filter(runVisible);
+  list.replaceChildren(...rows.map(sideRow));
+  if (!rows.length) list.appendChild(el("li", "runs-none", "no runs match"));
+}
+
+async function showRun(id) {
+  const box = document.querySelector("[data-runs-detail]");
+  if (!box) return;
+  if (!id) {
+    box.replaceChildren(el("p", "runs-empty", "nothing run from the page yet"));
+    runsState.shown = "";
+    return;
+  }
+  let run;
+  try {
+    const response = await fetch(`/api/run/${id}`);
+    if (!response.ok) throw new Error("this run is no longer remembered");
+    run = await response.json();
+  } catch (e) {
+    box.replaceChildren(el("p", "runs-empty", String(e.message || e)));
+    return;
+  }
+  if (runsState.picked !== id) return; // another pick landed first
+  runsState.shown = `${id}:${run.done}`;
+  box.replaceChildren(renderRunDetail(run));
+}
+
+function renderRunDetail(run) {
+  const box = el("div", "run-detail");
+  box.dataset.runDetail = run.id;
+  box.dataset.state = runState(run);
+  if (run.tone) box.dataset.tone = run.tone;
+
+  const head = el("header", "run-detail-head");
+  head.appendChild(el("code", "run-detail-what", run.run));
+  const facts = [
+    run.done ? (run.ok ? "finished" : "failed") : "running",
+    new Date(run.at * 1000).toLocaleString(),
+    run.done ? `${run.seconds}s` : "",
+    run.effect === "reads" ? "reads" : run.effect === "anki" ? "writes to Anki" : "writes files",
+  ];
+  head.appendChild(el("p", "run-detail-facts", facts.filter(Boolean).join(" · ")));
+  const again = el("button", "run-again", "run again");
+  again.type = "button";
+  again.dataset.runAgain = run.run;
+  again.addEventListener("click", async () => {
+    const started = await startRun(run.run, run.effect);
+    if (started) {
+      runsState.picked = started.id;
+      watchRunsNow();
+    }
+  });
+  const copy = el("button", "run-copy", "copy");
+  copy.type = "button";
+  copy.addEventListener("click", () => {
+    navigator.clipboard.writeText(`uv run ${run.run}`).then(() => toast("copied"));
+  });
+  const actions = el("div", "run-detail-actions");
+  actions.append(again, copy);
+  head.appendChild(actions);
+  box.appendChild(head);
+
+  if (!run.done) {
+    box.appendChild(el("p", "run-summary", "running…"));
+    return box;
+  }
+  box.appendChild(el("p", "run-summary", run.summary || (run.ok ? "done" : "failed")));
+  if (run.said) {
+    const said = el("pre", "run-said");
+    said.textContent = run.said;
+    box.appendChild(said);
+  }
+  for (const block of run.blocks || []) {
+    const drawn = renderBlock(block);
+    if (drawn) box.appendChild(drawn);
+  }
+  if (run.data !== null && run.data !== undefined) {
+    const raw = el("details", "run-raw");
+    raw.appendChild(el("summary", "", "raw output"));
+    const pre = el("pre");
+    pre.textContent = JSON.stringify(run.data, null, 2);
+    raw.appendChild(pre);
+    box.appendChild(raw);
+  }
+  return box;
+}
+
+/* The four block kinds `run_views.py` writes. The page knows nothing about
+   commands: what to show for `anki push` is decided in Python, once. */
+function renderBlock(block) {
+  const box = el("section", "run-block");
+  box.dataset.block = block.kind;
+  if (block.tone) box.dataset.tone = block.tone;
+  if (block.title) box.appendChild(el("h3", "run-block-title", block.title));
+  if (block.kind === "stats") {
+    const row = el("div", "run-stats");
+    for (const item of block.items || []) {
+      const stat = el("div", "run-stat");
+      if (item.tone) stat.dataset.tone = item.tone;
+      stat.append(el("b", "", String(item.value)), el("span", "", item.label));
+      row.appendChild(stat);
+    }
+    box.appendChild(row);
+  } else if (block.kind === "table") {
+    const grid = el("table", "run-table");
+    const head = grid.createTHead().insertRow();
+    for (const [, label] of block.columns) head.appendChild(el("th", "", label));
+    const body = grid.createTBody();
+    for (const row of block.rows || []) {
+      const line = body.insertRow();
+      for (const [key] of block.columns) line.insertCell().textContent = cell(row[key]);
+    }
+    box.appendChild(grid);
+    if (block.more) box.appendChild(el("p", "run-more", `and ${block.more} more in the raw output`));
+  } else if (block.kind === "lines") {
+    box.appendChild(lines(block.items || []));
+  } else {
+    const drawn = table(block.data);
+    if (drawn) box.appendChild(drawn);
+  }
+  return box;
+}
+
 (function watchRuns() {
   const open = document.querySelector("[data-runs-open]");
   const dialog = document.querySelector("[data-runs-dialog]");
-  const list = document.querySelector("[data-runs-list]");
-  if (!open || !dialog || !list) return;
-  let last = "";
+  if (!open || !dialog) return;
+  let signature = "";
+  let timer = 0;
 
   async function refresh() {
     let answer;
@@ -1316,88 +1534,247 @@ document.addEventListener("click", async (event) => {
     } catch {
       return 5000;
     }
-    open.hidden = !answer.runs.length;
+    runsState.rows = answer.runs;
     open.dataset.running = String(answer.running);
     open.querySelector("[data-runs-count]").textContent = answer.running
       ? `${answer.running} running`
       : "runs";
-    /* Redrawn only when something changed, or an open <details> would
-       snap shut under the reader every second. */
-    const signature = JSON.stringify(answer.runs.map((r) => [r.id, r.done]));
-    if (signature !== last) {
-      last = signature;
-      list.replaceChildren(...answer.runs.map(runRow));
+    if (dialog.open) {
+      if (!runsState.picked && answer.runs.length) runsState.picked = answer.runs[0].id;
+      const now = JSON.stringify(answer.runs.map((r) => [r.id, r.done, r.summary]));
+      if (now !== signature) {
+        signature = now;
+        paintRunsList();
+      }
+      const picked = answer.runs.find((r) => r.id === runsState.picked);
+      if (picked && runsState.shown !== `${picked.id}:${picked.done}`) showRun(picked.id);
+      if (!picked && runsState.shown) showRun("");
     }
     return answer.running ? 800 : 5000;
   }
 
-  function runRow(run) {
-    const row = document.createElement("li");
-    row.dataset.run = run.id;
-    row.dataset.state = run.done ? (run.ok ? "ok" : "failed") : "running";
-    row.dataset.effect = run.effect;
-    const fold = document.createElement("details");
-    const head = document.createElement("summary");
-    const when = new Date(run.at * 1000).toLocaleTimeString();
-    head.textContent = `${when}  ${run.run}  ${run.done ? (run.ok ? "ok" : "failed") : "running…"}`;
-    fold.appendChild(head);
-    if (run.done) fold.appendChild(renderRun(run));
-    row.appendChild(fold);
-    return row;
-  }
-
-  open.addEventListener("click", () => dialog.showModal());
-  (async function loop() {
+  async function loop() {
+    clearTimeout(timer);
     const wait = document.visibilityState === "visible" ? await refresh() : 5000;
-    setTimeout(loop, wait);
-  })();
+    timer = setTimeout(loop, wait);
+  }
+  watchRunsNow = () => {
+    signature = "";
+    loop();
+  };
+
+  open.addEventListener("click", () => openRuns(""));
+  dialog.querySelector("[data-runs-close]").addEventListener("click", () => dialog.close());
+  dialog.querySelectorAll("[data-runs-show]").forEach((button) =>
+    button.addEventListener("click", () => {
+      runsState.show = button.dataset.runsShow;
+      dialog
+        .querySelectorAll("[data-runs-show]")
+        .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+      paintRunsList();
+    }),
+  );
+  dialog.querySelector("[data-runs-search]").addEventListener("input", (event) => {
+    runsState.search = event.target.value;
+    paintRunsList();
+  });
+  dialog.querySelector("[data-runs-clear]").addEventListener("click", async () => {
+    const response = await fetch("/api/runs", { method: "DELETE" });
+    const answer = await response.json();
+    toast(`forgot ${answer.forgotten} finished run${answer.forgotten === 1 ? "" : "s"}`);
+    if (!runsState.rows.some((r) => r.id === runsState.picked && !r.done)) runsState.picked = "";
+    watchRunsNow();
+  });
+  loop();
 })();
 
-async function untilDone(id) {
-  /* Its own poll rather than the four second counts tick: a run is
-     usually over in well under a second, and waiting four to be told so
-     reads as the button not having worked. */
-  for (;;) {
-    const response = await fetch(`/api/run/${id}`);
-    const run = await response.json();
-    if (run.done) return run;
-    await new Promise((wake) => setTimeout(wake, 300));
-  }
+/* -- the command builder ------------------------------------------------
+   Pick an action, fill in its fields, read the command it comes to, run it
+   or copy it. The fields are the server's (`/api/actions`), and so is the
+   command line: the page never assembles one, so what you read is what
+   runs. A quick pick on a rail opens here with its fields filled in. */
+const GROUPS = { sources: "sources and units", anki: "Anki", checks: "checks", looking: "looking" };
+const builder = { actions: [], projects: [], current: null, loaded: null, timer: 0 };
+
+function pageProject() {
+  return new URL(location.href).searchParams.get("project") || "";
 }
 
-function resultPanel(button) {
-  const row = button.closest("li");
-  let panel = row.querySelector(".run-result");
-  if (!panel) {
-    panel = document.createElement("div");
-    panel.className = "run-result";
-    row.appendChild(panel);
-  }
-  return panel;
+async function loadActions() {
+  if (builder.loaded) return builder.loaded;
+  builder.loaded = fetch(`/api/actions?project=${encodeURIComponent(pageProject())}`)
+    .then((r) => r.json())
+    .then((answer) => {
+      builder.actions = answer.actions;
+      builder.projects = answer.projects;
+      builder.project = answer.project;
+      const pick = document.querySelector("[data-builder-pick]");
+      if (!pick) return answer;
+      pick.replaceChildren();
+      for (const [group, label] of Object.entries(GROUPS)) {
+        const set = el("optgroup");
+        set.label = label;
+        for (const action of answer.actions.filter((a) => a.group === group)) {
+          const option = el(
+            "option",
+            "",
+            action.variant ? `${action.label} · ${action.variant}` : action.label,
+          );
+          option.value = action.key;
+          set.appendChild(option);
+        }
+        if (set.children.length) pick.appendChild(set);
+      }
+      return answer;
+    });
+  return builder.loaded;
 }
 
-/* A result, not a transcript (ROADMAP.md §12). Every one of these verbs
-   returns a structured object and `--json` prints it, so what arrives is
-   rows rather than a log: a table where the shape is a list of flat
-   records, and a line each otherwise. One renderer, because a renderer
-   per verb is nine of them to keep in step. */
-function renderRun(run) {
-  const box = document.createElement("div");
-  const head = document.createElement("p");
-  head.className = "run-head";
-  head.textContent = `${run.ok ? "ok" : "failed"} · ${run.seconds}s`;
-  box.appendChild(head);
-  if (run.said) {
-    const said = document.createElement("p");
-    said.className = "run-said";
-    said.textContent = run.said;
-    box.appendChild(said);
+/* Show an action's fields, filled from `values`, else from the page: a
+   project field starts on the project you are looking at. */
+async function showAction(key, values = {}) {
+  await loadActions();
+  const action = builder.actions.find((a) => a.key === key) || builder.actions[0];
+  if (!action) return;
+  builder.current = action;
+  const pick = document.querySelector("[data-builder-pick]");
+  const what = document.querySelector("[data-builder-what]");
+  const form = document.querySelector("[data-builder-form]");
+  if (pick) pick.value = action.key;
+  if (what) what.textContent = action.what;
+  form.replaceChildren();
+  for (const field of action.fields) {
+    const row = el("label", "builder-field");
+    row.dataset.field = field.name;
+    let input;
+    if (field.kind === "flag") {
+      input = el("input");
+      input.type = "checkbox";
+      input.checked = Boolean(values[field.name]);
+      row.classList.add("flag");
+      row.append(input, el("span", "", field.label));
+      if (field.placeholder) row.title = field.placeholder;
+    } else {
+      row.appendChild(el("span", "builder-label", field.label));
+      if (field.choices.length) {
+        input = el("select");
+        for (const [value, label] of field.choices) {
+          const option = el("option", "", label);
+          option.value = value;
+          input.appendChild(option);
+        }
+        const start =
+          field.name in values
+            ? values[field.name]
+            : field.kind === "project" && builder.project
+              ? builder.project
+              : field.choices[0][0];
+        input.value = start;
+      } else {
+        input = el("input");
+        input.type = "text";
+        input.placeholder = field.placeholder || "";
+        input.value = values[field.name] || "";
+        if (field.kind === "number") input.inputMode = "numeric";
+      }
+      row.appendChild(input);
+    }
+    input.name = field.name;
+    input.addEventListener("input", refreshLine);
+    input.addEventListener("change", refreshLine);
+    form.appendChild(row);
   }
-  const body = table(run.data);
-  if (body) box.appendChild(body);
-  return box;
+  refreshLine();
 }
 
+function builderValues() {
+  const values = {};
+  const form = document.querySelector("[data-builder-form]");
+  for (const input of form.querySelectorAll("[name]")) {
+    values[input.name] = input.type === "checkbox" ? input.checked : input.value;
+  }
+  return values;
+}
+
+/* The command line, from the server, a moment after the last keystroke. A
+   field the action cannot run with says why in the same place. */
+function refreshLine() {
+  clearTimeout(builder.timer);
+  builder.timer = setTimeout(async () => {
+    const shown = document.querySelector("[data-builder-line]");
+    const go = document.querySelector("[data-builder-go]");
+    if (!builder.current || !shown) return;
+    const response = await fetch(`/api/actions/${builder.current.key}/line`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ values: builderValues() }),
+    });
+    const answer = await response.json();
+    const ok = response.ok && !answer.refused;
+    // A field nobody has filled in yet is a prompt, not a failure: quiet
+    // until something typed is wrong.
+    const missing = !ok && / is needed$/.test(answer.refused || "");
+    shown.classList.toggle("refused", !ok && !missing);
+    shown.classList.toggle("missing", missing);
+    shown.textContent = ok ? answer.line : answer.refused || answer.detail || "cannot run this";
+    builder.line = ok ? answer.line : "";
+    builder.effect = ok ? answer.effect : "";
+    if (go) {
+      go.disabled = !ok;
+      go.dataset.effect = builder.effect;
+      go.textContent = builder.effect && builder.effect !== "reads" ? "run (writes)" : "run";
+    }
+  }, 120);
+}
+
+async function runBuilt() {
+  if (!builder.current || !builder.line) return;
+  const warning = RUN_WARNINGS[builder.effect];
+  if (warning && !window.confirm(`${builder.line}\n\n${warning} Run it?`)) return;
+  const run = await post(`/api/actions/${builder.current.key}/run`, {
+    values: builderValues(),
+    confirmed: Boolean(warning),
+  });
+  notifyRun(run);
+  runsState.picked = run.id;
+  watchRunsNow();
+}
+
+/* Open the window on an action, from a quick pick or from nowhere. */
+async function openBuilder(key, values) {
+  openRuns("", key || "first");
+  await showAction(key, values || {});
+}
+
+(function wireBuilder() {
+  const pick = document.querySelector("[data-builder-pick]");
+  if (!pick) return;
+  pick.addEventListener("change", () => showAction(pick.value));
+  document.querySelector("[data-builder-go]").addEventListener("click", runBuilt);
+  document.querySelector("[data-builder-copy]").addEventListener("click", () => {
+    if (builder.line) navigator.clipboard.writeText(builder.line).then(() => toast("copied"));
+  });
+  document.querySelector("[data-builder-form]").addEventListener("submit", (event) => {
+    event.preventDefault();
+    runBuilt();
+  });
+  document.addEventListener("click", (event) => {
+    const tune = event.target.closest("[data-tune]");
+    if (!tune) return;
+    let values = {};
+    try {
+      values = JSON.parse(tune.dataset.values || "{}");
+    } catch {
+      /* an unreadable prefill is an empty one */
+    }
+    openBuilder(tune.dataset.tune, values);
+  });
+})();
+
+/* A result, not a transcript (ROADMAP.md §12): the generic renderer, for
+   the `data` block and for a command `run_views.py` has no view for. A
+   table where the shape is a list of flat records, and a line each
+   otherwise. */
 function table(data) {
   if (data === null || data === undefined) return null;
   if (Array.isArray(data)) {

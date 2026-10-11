@@ -261,14 +261,21 @@ def test_a_setting_a_work_declares_says_so(page, live) -> None:  # type: ignore[
     """How much page a crop carries is a fact about a document, and this
     project reads three. Each panel answers for its own."""
     setup(page, live)
+
+    def control(work: str, key: str):  # type: ignore[no-untyped-def]
+        return page.locator(
+            f'[data-pane="source:{work}"].setup-pane [data-set-key="{key}"] [data-set-input]'
+        )
+
     page.click('#source-list [data-pane="source:book"]')
-    book = page.locator('[data-pane="source:book"].setup-pane').inner_text()
-    assert "2 pages either side" in book, "the book asked for two"
+    assert control("book", "context_pages").input_value() == "2", "the book asked for two"
 
     page.click('#source-list [data-pane="source:paper"]')
-    paper = page.locator('[data-pane="source:paper"].setup-pane').inner_text()
-    assert "40 points of page" in paper
-    assert "1 page either side" in paper, "the paper inherits the repo's"
+    assert control("paper", "crop_context").input_value() == "40"
+    pages = control("paper", "context_pages")
+    assert pages.input_value() == "", "the paper sets none of its own"
+    chosen = pages.locator("option:checked").inner_text()
+    assert chosen == "inherit: 1 page either side", "and says what it inherits"
 
 
 def test_the_ambient_file_is_rendered_and_not_quoted(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -287,7 +294,8 @@ def test_what_to_run_follows_what_is_selected(page, live) -> None:  # type: igno
     which ask you are working through."""
     setup(page, live)
     runs = page.locator("#setup-runs")
-    assert "forge units extract" in runs.inner_text()
+    # A shell command carries its line on the button, and runs from it.
+    assert runs.locator('[data-run*="forge units extract"]:visible').count() == 1
 
     page.click('#setup-panel [data-pane="topic:conjugate-priors"]')
     assert "/propose" in runs.inner_text()
@@ -297,28 +305,26 @@ def test_what_to_run_follows_what_is_selected(page, live) -> None:  # type: igno
     assert "nothing to run" in runs.inner_text(), "a reference has no page to cut"
 
 
-def test_the_commands_column_folds_away(page, live) -> None:  # type: ignore[no-untyped-def]
-    """The one you stop needing: what to run next is a question you ask
-    twice a session, and the other two are what you are reading."""
+def test_what_to_run_sits_at_the_top_of_the_pane(page, live) -> None:  # type: ignore[no-untyped-def]
+    """Not a column of its own: two sidebars side by side was the page
+    looking like two pages."""
     setup(page, live)
-    assert page.locator("#setup-runs").is_visible()
+    runs = page.locator("#setup-runs").bounding_box()
+    detail = page.locator("#setup-detail").bounding_box()
+    panel = page.locator("#setup-panel").bounding_box()
 
-    page.click("#runs-fold")
-    assert page.locator("#setup-runs").is_visible() is False
-    assert page.locator("#runs-tab").is_visible()
-
-    page.click("#runs-tab")
-    assert page.locator("#setup-runs").is_visible()
+    assert runs and detail and panel
+    assert runs["x"] >= detail["x"] - 1, "inside the detail column"
+    assert panel["x"] < 40, "and the list is the first column"
 
 
 def test_the_columns_drag(page, live) -> None:  # type: ignore[no-untyped-def]
-    """Three columns and two handles, and neither handle moves the other's
-    edge: the two left ones are widths and the panel takes the slack."""
+    """The list is a width you drag; the detail takes the slack."""
     setup(page, live)
     panel = page.locator("#setup-panel")
     before = panel.bounding_box()
 
-    handle = page.locator('[data-splitter="setupRuns"]')
+    handle = page.locator('[data-splitter="setupPanel"]')
     box = handle.bounding_box()
     page.mouse.move(box["x"] + 5, box["y"] + 200)
     page.mouse.down()
@@ -326,8 +332,7 @@ def test_the_columns_drag(page, live) -> None:  # type: ignore[no-untyped-def]
     page.mouse.up()
 
     after = panel.bounding_box()
-    assert after["x"] > before["x"] + 50, "the commands column got wider"
-    assert abs(after["width"] - before["width"]) < 2, "and the panel kept its own"
+    assert after["width"] > before["width"] + 50, "the list got wider"
 
 
 def test_a_count_carries_the_selection_into_triage(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -359,18 +364,6 @@ def test_the_works_the_repo_knows_can_be_searched(page, live) -> None:  # type: 
 
     page.fill("#known-search", "")
     assert page.locator("#known-list > li:visible").count() == before
-
-
-def test_the_folded_column_leaves_its_way_back_at_the_top(page, live) -> None:  # type: ignore[no-untyped-def]
-    """Beside the panel it opens, not floating at the middle of the window:
-    a centred tab reads as a control belonging to nothing."""
-    setup(page, live)
-    page.click("#runs-fold")
-    tab = page.locator("#runs-tab").bounding_box()
-    panel = page.locator("#setup-panel").bounding_box()
-
-    assert tab["y"] < panel["y"] + 80, "near the top of the column, not the window"
-    assert tab["x"] < panel["x"] + 40, "against the edge it folded into"
 
 
 def test_a_work_from_another_project_can_be_added(page, live, served) -> None:  # type: ignore[no-untyped-def]

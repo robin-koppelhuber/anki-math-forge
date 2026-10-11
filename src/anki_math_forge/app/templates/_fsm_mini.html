@@ -1,21 +1,13 @@
 {# The machine at a glance: where everything currently is, and the single
    keystroke that moves it on. Counts come from `fsm_counts`, which the header
-   toggle switches between the whole source and what the filters leave. No overlays, no cycles, no annotations -- those
-   are in the full legend one size up. Counts come from `pipeline`, the same
-   numbers the filters use, so the two cannot disagree. #}
+   toggle switches between the whole source (`pipeline`, the numbers the rail
+   uses) and what the filters leave. They show in both: the diagram is read
+   on its own, and the rail may be folded. No overlays, no cycles, no
+   annotations: those are in the full legend one size up. #}
 {# Falls back to the rail's numbers: the empty views render this without
    a scope of their own, and a missing count must not blank the page. #}
 {% set fsm_counts = fsm_counts | default(pipeline, true) %}
-{# Numbers only where they say something the rail beside it does not.
-
-   Counting everything, they are the rail's seven numbers a second time,
-   on screen at once: the `units` and `cards` groups print the same counts
-   as links, and those are the ones that filter. Counting what the filters
-   leave, they are the only place that number appears, so they stay. The
-   shape of the machine, which is what the picture is for, is there
-   either way. #}
-{% set counted = counts_scope | default('', true) == 'filtered' %}
-<figure class="fsm mini{{ ' counted' if counted }}">
+<figure class="fsm mini">
 <svg viewBox="0 0 220 430" role="img" aria-labelledby="mini-title">
   <title id="mini-title">How many units and cards are in each state</title>
   <defs>

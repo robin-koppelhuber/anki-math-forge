@@ -68,11 +68,11 @@ routed by tag without re-tagging demoting the card.
 `augmented` is the odd one, and the reason it is stored at all. Every other
 state of a card is read off the card: a stub has no optional sections, an
 unjudged one has no gradings, a held approval has a digest that no longer
-matches. Augmentation cannot be, because its usual right answer is to add
-nothing (most cards should come out of it with no conditions and no proof),
-so a card the pass finished and a card it never opened are the same file. It
-records that the work happened, which is why hashing it would mean the pass
-un-approving every card it decided to leave alone.
+matches. Augmentation cannot be, because its right answer can be to add
+nothing (18 of the 40 cards it has been over here have neither conditions
+nor proof), so a card the pass finished and a card it never opened are the
+same file. It records that the work happened, which is why hashing it would
+mean the pass un-approving every card it decided to leave alone.
 
 Nothing rewrites a file to enforce this. An approval that no longer holds is
 reported by `Card.demotion` and counts as a draft everywhere it matters, so
@@ -82,9 +82,22 @@ fixing whatever broke it restores the approval with no re-review.
 
 The Python never generates or rewrites card text.
 
+The rules for a good card are in `.claude/skills/card-writing/SKILL.md`, and
+no code in this repo composes, templates or edits a card's text itself. That
+is the whole of the rule. It does not say that no process here may call a
+model. A runner that loads the skill and agent files as they stand, and
+writes only through the verbs the slash commands use (`forge cards new`,
+`forge units note`), keeps it: the text is still a model's, written under the
+same guidelines, and it arrives through the same door as a draft nobody has
+approved (invariant 1).
+
+What would break it is guidelines copied into Python (a prompt of its own, a
+template that fills in a card), or code that tidies a model's text after it
+is written.
+
 ### 7. A crop is authoritative for what is printed and silent about the rest
 
-Conditions are usually printed around an identity rather than inside it.
+A condition can be printed around an identity rather than inside its crop.
 `forge context <unit>` prints the page it came from, and that is all it does.
 
 Whether an identity needs a condition is mathematics, and it belongs to whoever

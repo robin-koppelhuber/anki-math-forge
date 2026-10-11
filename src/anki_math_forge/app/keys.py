@@ -86,7 +86,7 @@ REVIEW: tuple[Key, ...] = (
     Key("back-to-draft", "u", "back to draft"),
     Key("undo", "z", "undo", sep=True),
     Key("editor", "e", "$EDITOR"),
-    Key("edit-card", "E", "edit front/back"),
+    Key("edit-card", "E", "edit card"),
     Key("note-claude", "n", "note for claude"),
     Key("note-me", "N", "note for me"),
     Key("resolve-note", "x", "resolve first note"),
@@ -95,6 +95,7 @@ REVIEW: tuple[Key, ...] = (
     Key("next-alt", "ArrowDown", ""),
     Key("prev-alt", "ArrowUp", ""),
     Key("filters", "f", "filters"),
+    Key("search", "/", "find a card"),
     Key("projects", "g", "projects"),
     Key("guide", "?", "guide"),
 )

@@ -13,7 +13,7 @@ Arguments: `$ARGUMENTS` — optional, and any combination of these filters:
 - a card status (`draft`, `approved`, `rejected`) or a unit state (`new`,
   `queued`, `skipped`, `carded`) — only things at that stage.
 - **`--project NAME`** — one book's notes. Worth reaching for whenever the repo
-  has more than one: conventions are per source, so a list that hops between
+  has more than one: conventions are per project, so a list that hops between
   two books makes you reload the setting between every item.
 - nothing — everything open.
 
@@ -26,12 +26,12 @@ The stage filter matters for a different reason. An annotation on an
 whoever cards it, some day. Working them in one undifferentiated list means
 the urgent ones queue behind the speculative ones.
 
-1. Pull anything waiting in Anki first, or the list is already stale --
+1. Pull anything waiting in Anki first, or the list is already stale:
    a comment typed during review is a `@claude` note only once it is
    imported:
 
    ```
-   uv run forge anki pull
+   uv run --no-sync forge anki pull
    ```
 
 2. Read the list. `todo` filters on `--audience`, `--kind` and `--status`,
@@ -39,9 +39,9 @@ the urgent ones queue behind the speculative ones.
    command; do not match on the prose:
 
    ```
-   uv run forge todo --audience claude --json
-   uv run forge todo --audience claude --kind unit --status queued
-   uv run forge todo --audience claude --project <name>
+   uv run --no-sync forge todo --audience claude --json
+   uv run --no-sync forge todo --audience claude --kind unit --status queued
+   uv run --no-sync forge todo --audience claude --project <name>
    ```
 
    Then say in your report how many you left untouched, so the rest are not
@@ -50,12 +50,12 @@ the urgent ones queue behind the speculative ones.
 3. For each item, do what it asks. The common ones:
 
    - *"this looks wrong"* — check the card against its source crop (the
-     review view links to it; `units --id <unit> --json` gives the path) and
-     fix it, or explain why it is right.
+     review view shows it; `forge crops --project <p> --section <s> --json`
+     renders it to a file) and fix it, or explain why it is right.
    - *"add a proof sketch"* — see the **card-writing** skill for when a proof
      earns its place.
-   - *"split this into two cards"* — `forge cards new` for the second, and
-     add both uids to the unit's `uids`.
+   - *"split this into two cards"* — `forge cards new --unit <id>` for the
+     second, which adds its uid to the unit's `uids` beside the first.
    - *"this duplicates 4b2e1c"* — compare, keep the better one, delete the
      other file. Say which you kept and why.
 
@@ -86,9 +86,9 @@ the urgent ones queue behind the speculative ones.
    and is now in `## conditions`"*, not *"checked"*.
 
    **One line, and read it back as a list entry before you keep it.** These
-   stack up in `todo` and in the review rail, where each is one row among
-   many and the reader is scanning for which point was taken. Two clauses
-   carry that: what was asked, what changed. Around twenty words.
+   stack up in the review rail and in `forge cards --changes`, where each is
+   one row among many and the reader is scanning for which point was taken. Two
+   clauses carry that: what was asked, what changed. Around twenty words.
 
    The argument that got you there is not part of it. A counterexample, a
    numeric check, a page you chased down: those belong in the card, in
@@ -117,15 +117,15 @@ the urgent ones queue behind the speculative ones.
 5. Confirm nothing is left dangling:
 
    ```
-   uv run forge check
-   uv run forge todo
+   uv run --no-sync forge check
+   uv run --no-sync forge todo
    ```
 
 For a **unit** annotation, act on it and then clear it:
 
 ```
-uv run forge units clear-notes <unit-id>
-uv run forge units set <unit-id> --state queued   # or --state skipped --reason ...
+uv run --no-sync forge units clear-notes <unit-id>
+uv run --no-sync forge units set <unit-id> --state queued   # or --state skipped --reason ...
 ```
 
 `clear-notes` clears `@claude` only, which is its default. `--audience all`
@@ -140,9 +140,9 @@ it open and say so — guessing is worse than asking.
 
 ## Addressed annotations
 
-`@claude ...` is a request for you: act on it, then delete the line (on a
-card) or clear it with `units clear-notes <id> --audience claude` (on a
-unit).
+`@claude ...` is a request for you: act on it, then replace it with a
+`resolved:` line (on a card, see step 4) or clear it with
+`units clear-notes <id> --audience claude` (on a unit).
 
 `@me ...` is a decision only the human can make — a question parked where it
 will be found again. **Report those; do not act on them and do not clear
@@ -151,3 +151,10 @@ split, and `forge todo` marks them `(me)`.
 
 Either kind blocks `anki push`, because either kind means the thing is not
 finished.
+
+## Remarks
+
+If the tool or these instructions got in your way, say so once with
+`uv run --no-sync forge remarks add '<what got in the way, and what you would
+change>' --by triage`, where the person planning the work will read it. A fault
+in one card is a note on that card; this is for the tool and the instructions.

@@ -11,18 +11,20 @@ You take cards that exist and are bare, and add what earns its place.
 contract for what belongs in each section and what does not. Everything below
 assumes you have it.
 
-`/extract-cards` wrote a front and a back. Everything optional was left out
-deliberately, because a stub you can review is better than a card padded with
-an invented condition. Your job is the second half, and its failure mode is
-the opposite of the first's: not a card that says too little, but a card that
-now claims a hypothesis the source never had.
+`/extract-cards` wrote a front, a back, a gist and any condition the card is
+false without. Everything else optional was left out deliberately, because a
+stub you can review is better than a card padded with an invented condition.
+Your job is the second half, and its failure mode is the opposite of the
+first's: not a card that says too little, but a card that now claims a
+hypothesis the source never had.
 
 ## The rule that decides the whole pass
 
 **Add nothing you cannot point at.** A condition comes from the page, from the
 mathematics you worked out yourself, or from a source's declared convention.
-Where you add one the source does not state, say so in `## notes` as `@me`, so
-the human sees the disagreement rather than inheriting it.
+Where you add one the source does not state, say so in `## notes` as a plain
+line, so the human sees the disagreement rather than inheriting it. `@me` is
+for a decision you are handing over.
 
 Most cards should end this pass with fewer sections than the list below, not
 more. A one-line identity that is true as written wants a `gist`, `frequency`
@@ -57,11 +59,13 @@ and `derivation` and nothing else.
    uv run --no-sync forge context <unit-id> --pages chapter
    ```
 
-   `chapter` is the size that is not a count: the whole chapter this unit is
-   printed in, start to finish. Reach for it when what you are missing is a
-   standing assumption rather than a sentence, since a book states those once,
-   where the chapter opens, and no number of pages either side knows how far
-   back that was.
+   `section`, `chapter` and `part` are sizes that are not a count: the span of
+   the document's own outline this unit is printed in, start to finish, and
+   the heading says which entry and its pages as printed. Reach for `chapter`
+   when what you are missing is a standing assumption rather than a sentence,
+   since a book states those once, where the chapter opens, and no number of
+   pages either side knows how far back that was. The heading says when a
+   window is large; a part is a hundred pages or more.
 
    Then **say so in your report**: a unit whose hypotheses are two pages back
    wants that recorded on the unit (`forge units set <id> --pages 3`, or
@@ -72,7 +76,7 @@ and `derivation` and nothing else.
    **A unit that is a picture is a card that carries one.** An image or area
    annotation has geometry and no text: nothing to transcribe, and the figure
    is the point. Write `![what it shows](unit)` in whichever section the
-   figure belongs to -- see **Pictures** in the card-writing skill, which is
+   figure belongs to; see **Pictures** in the card-writing skill, which is
    where that judgement is set out. No file is produced: `anki push` renders
    the crop from the source document, so the unit only has to exist and
    have a box.
@@ -80,7 +84,7 @@ and `derivation` and nothing else.
    **When the page is not enough, read the book's front matter**:
 
    ```
-   uv run --no-sync forge source-text <source>
+   uv run --no-sync forge source-text <project>
    ```
 
    The whole text layer, which is where a source defines its symbols. The page
@@ -90,9 +94,22 @@ and `derivation` and nothing else.
    rather than the whole thing, and remember its mathematics is mangled: it is
    context for deciding, never a transcription.
 
-   `context` also prints what the reader wrote on each mark, under a `>`.
-   Treat it as an instruction: it is the closest thing this pass gets to being
-   told which of two readings was meant.
+   `context` also prints what the reader wrote on each mark, under a `>`,
+   whole. Treat it as an instruction: it is the closest thing this pass gets
+   to being told which of two readings was meant. It is there on every pass
+   over the card, not only the one that wrote it: a card writer may have
+   acted on part of a comment, and the rest is yours.
+
+   The marks listed are every one inside the pages `context` hands you,
+   whatever their colour, `(skipped)` ones included: a unit the reader decided
+   not to card, still something they noticed. Read it as context.
+
+   **Quote the reader, never restate them.** The review page shows each
+   comment beside the card, word for word, read from the ledger. Do not copy
+   it onto the card in your own words: a paraphrase in `## notes` reads as
+   what the reader said and is not. Where the card has to mention a comment,
+   quote it exactly, in quotation marks; otherwise write only what you did
+   about it.
 
    **An `@claude` note on the card is the brief for this card.** Somebody
    wrote it knowing this pass was coming — "prove this one", "the condition is
@@ -131,7 +148,11 @@ and `derivation` and nothing else.
      as the steps rather than as a description of them: display maths line
      by line, one step per line. Where the source prints a derivation,
      prefer its steps to a sentence summarising them.
-   - `## prose` — one sentence of intuition, or nothing.
+   - `## prose` — one sentence of intuition, or nothing. Three short
+     sentences is the ceiling (about 60 words); more is a proof, a use or
+     another card. Rules 12 to 14 of the skill's *Language* section apply:
+     the verbs of the mathematics, an image only when it is the
+     intuition and says what it stands for, plain before dense.
    - `## uses` — only where the answer alone leaves you asking *why would I
      ever need this*. One clause, the setting in plain words with its formal
      name in parentheses. Most cards should not have one.
@@ -194,7 +215,21 @@ allowed, use it for what the source assumes and does not state, and say in
   to do in bulk to somebody's reviewed deck.
 - **Approve nothing.** Everything you touch stays `draft`; approval is a human
   at `forge serve`.
-- Finish with `uv run --no-sync forge check` over what you touched, and report
-  what it says rather than what you intended.
+- Finish with `uv run --no-sync forge check`, and report about the cards you
+  touched what it says rather than what you intended.
 - Report per card: what you added, every condition that is yours rather than
   the source's, and every card you deliberately left as it was.
+
+## Remarks
+
+If the tool or these instructions got in your way, say so once, where the
+person planning the work will read it, and not only in your report:
+
+```
+uv run --no-sync forge remarks add '<what got in the way, and what you would change>' --by augmenter --project <name>
+```
+
+A brief that arrived cut off, a rule that made a card worse, a command that
+refused without saying why. About the tool and these instructions, not about
+a card: a fault in one card is a note on that card. One remark each, with the
+evidence (the unit id, the line), and nothing when nothing got in your way.

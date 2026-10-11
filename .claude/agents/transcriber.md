@@ -22,7 +22,7 @@ transcriber.
 1. Render the crops you have been asked for:
 
    ```
-   uv run forge crops --section <SECTION> --untranscribed --json
+   uv run --no-sync forge crops --project <PROJECT> --section <SECTION> --untranscribed --json
    ```
 
    That prints a manifest: one entry per unit with `unit`, `file`, `equation`,
@@ -34,7 +34,7 @@ transcriber.
 3. Record what you read:
 
    ```
-   uv run forge units set <UNIT-ID> --tex '<latex>'
+   uv run --no-sync forge units set <UNIT-ID> --tex '<latex>'
    ```
 
    Quote the LaTeX in **single** quotes so the shell leaves backslashes alone.
@@ -48,7 +48,7 @@ transcriber.
   wrong to you, transcribe it as shown and *annotate* it:
 
   ```
-  uv run forge units note <UNIT-ID> 'eq (N) looks wrong: <why>'
+  uv run --no-sync forge units note <UNIT-ID> 'eq (N) looks wrong: <why>'
   ```
 
 - **Bare math only.** No `$` delimiters, no `\begin{equation}`, no equation
@@ -67,7 +67,7 @@ transcriber.
   and KaTeX refuses unbalanced `\left[` / `\right]` even when the
   transcription is faithful. Use `\bigl[` / `\bigr]`, which carry no
   pairing requirement. Reach for that only when the crop genuinely splits a
-  bracket -- everywhere else `\left` / `\right` is right.
+  bracket; everywhere else `\left` / `\right` is right.
 
 - **The tool layer halves runs of backslashes, and KaTeX will not save you.**
   Any run of two or more backslashes is halved before the shell sees it, so a
@@ -76,36 +76,37 @@ transcriber.
   gate passes it. A wrong matrix that looks right is the worst thing you can
   put in this ledger.
 
-  **Type twice the backslashes you mean in any run** -- `\\\\` for a row
+  **Type twice the backslashes you mean in any run**: `\\\\` for a row
   separator. Single backslashes (`\alpha`, `\begin`) are unaffected.
 
-  Two further traps, both found the hard way. **Single**-quoted arguments
-  carry `\\\\` through reliably. A **double**-quoted argument spanning
-  several lines does not: the shell's own line continuation eats the last
-  backslash of a run sitting before a newline. For any long or multi-row
-  transcription, sidestep quoting entirely -- write the LaTeX to a scratch
-  file with an unquoted-expansion heredoc and pass the file:
+  Two further traps, both found the hard way. **Single**-quoted arguments carry
+  `\\\\` through reliably. A **double**-quoted argument spanning several lines
+  does not: the shell's own line continuation eats the last backslash of a run
+  sitting before a newline. For any long or multi-row transcription, sidestep
+  quoting entirely: write the LaTeX to a scratch file with a quoted heredoc
+  (`<< 'EOF'`), which expands nothing, and pass the file:
 
   ```
-  cat > tex.tmp << 'EOF'
+  mkdir -p .forge/scratch/<SECTION>
+cat > .forge/scratch/<SECTION>/tex.tmp << 'EOF'
   ...your LaTeX, exactly as you mean it...
   EOF
-  uv run forge units set <UNIT-ID> --tex "$(cat tex.tmp)"
+  uv run --no-sync forge units set <UNIT-ID> --tex "$(cat .forge/scratch/<SECTION>/tex.tmp)"
   ```
 
   After recording anything containing `array`, `matrix`, `bmatrix`, `cases`
   or `aligned`, read it back and check the separators survived:
 
   ```
-  uv run forge units --id <UNIT-ID> --json
+  uv run --no-sync forge units --id <UNIT-ID> --json
   ```
 
 - **A block of prose is transcribed, not skipped.** Parts of a source explain
-  rather than assert -- "If A is real and symmetric, the eigenvalues are
+  rather than assert, as in "If A is real and symmetric, the eigenvalues are
   real", a bullet list of properties, a sentence defining a term. Record it:
 
   ```
-  uv run forge units set <UNIT-ID> --tex '\text{The inverse of an orthogonal matrix is orthogonal too.}'
+  uv run --no-sync forge units set <UNIT-ID> --tex '\text{The inverse of an orthogonal matrix is orthogonal too.}'
   ```
 
   Wrap it in `\text{...}`. Bare prose passes the gate but renders as a
@@ -114,12 +115,12 @@ transcriber.
   the unit circle}`.
 
   Whether it becomes a card is triage's decision, not yours. An untranscribed
-  unit cannot be triaged at all -- it is a picture of some words.
+  unit cannot be triaged at all. It is a picture of some words.
 
 - **Do not guess.** If a crop is unreadable, cut off, or contains two
   equations, annotate it and move on:
   ```
-  uv run forge units note <UNIT-ID> 'crop is cut off on the left'
+  uv run --no-sync forge units note <UNIT-ID> 'crop is cut off on the left'
   ```
 
   A missing transcription is a small problem. A confident wrong one is a bad
@@ -127,7 +128,7 @@ transcriber.
 
 - **Watch for split and merged crops.** Segmentation is heuristic. A crop
   holding two numbered equations, or holding only part of one, is a finding
-  worth annotating — `uv run forge audit` flags many of these already.
+  worth annotating — `uv run --no-sync forge audit` flags many of these already.
 
 ## Reporting back
 
@@ -136,3 +137,17 @@ how many transcribed, how many refused by the gate and why, and every unit you
 annotated with the reason. Name anything that looked systematically wrong —
 if ten crops in a row are cut off, that is a segmentation bug and the human
 needs to know before you transcribe another two hundred.
+
+## Remarks
+
+If the tool or these instructions got in your way, say so once, where the
+person planning the work will read it, and not only in your report:
+
+```
+uv run --no-sync forge remarks add '<what got in the way, and what you would change>' --by transcriber --project <name>
+```
+
+A brief that arrived cut off, a rule that made a card worse, a command that
+refused without saying why. About the tool and these instructions, not about
+a card: a fault in one card is a note on that card. One remark each, with the
+evidence (the unit id, the line), and nothing when nothing got in your way.

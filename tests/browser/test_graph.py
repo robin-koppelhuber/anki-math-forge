@@ -149,7 +149,7 @@ def test_deleting_a_card_that_has_an_arrow_says_why(page, live) -> None:  # type
 
 def test_the_close_button_closes_it(page, live) -> None:  # type: ignore[no-untyped-def]
     """It set `open` to false and the panel stayed on screen, over the canvas,
-    with the keyboard still going to it: `.gallery.adder { display: flex }`
+    with the keyboard still going to it: `.gallery.finder { display: flex }`
     outranks the browser's own `dialog:not([open]) { display: none }`.
 
     Only a real browser shows that. The markup was right and the JavaScript ran.
@@ -157,11 +157,11 @@ def test_the_close_button_closes_it(page, live) -> None:  # type: ignore[no-unty
     open_graph(page, live)
     page.keyboard.press("+")
     page.wait_for_timeout(200)
-    assert page.is_visible("#add-card")
-    page.click("#add-close")
+    assert page.is_visible("#finder")
+    page.click("#finder-close")
     page.wait_for_timeout(200)
-    assert page.eval_on_selector("#add-card", "d => d.open") is False
-    assert not page.is_visible("#add-card")
+    assert page.eval_on_selector("#finder", "d => d.open") is False
+    assert not page.is_visible("#finder")
 
 
 def test_escape_closes_it_too(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -170,7 +170,7 @@ def test_escape_closes_it_too(page, live) -> None:  # type: ignore[no-untyped-de
     page.wait_for_timeout(200)
     page.keyboard.press("Escape")
     page.wait_for_timeout(200)
-    assert not page.is_visible("#add-card")
+    assert not page.is_visible("#finder")
 
 
 def test_the_search_is_empty_every_time_it_opens(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -180,16 +180,16 @@ def test_the_search_is_empty_every_time_it_opens(page, live) -> None:  # type: i
     open_graph(page, live)
     page.keyboard.press("+")
     page.wait_for_timeout(200)
-    everything = page.eval_on_selector_all(".add-row", "e => e.length")
-    page.fill("#add-search", "adjugate")
+    everything = page.eval_on_selector_all(".find-row", "e => e.length")
+    page.fill("#finder-search", "adjugate")
     page.wait_for_timeout(200)
-    assert page.eval_on_selector_all(".add-row", "e => e.length") < everything
-    page.click("#add-close")
+    assert page.eval_on_selector_all(".find-row", "e => e.length") < everything
+    page.click("#finder-close")
     page.wait_for_timeout(200)
     page.keyboard.press("+")
     page.wait_for_timeout(200)
-    assert page.input_value("#add-search") == ""
-    assert page.eval_on_selector_all(".add-row", "e => e.length") == everything
+    assert page.input_value("#finder-search") == ""
+    assert page.eval_on_selector_all(".find-row", "e => e.length") == everything
 
 
 def test_the_keyboard_comes_back_after_the_picker_closes(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -218,8 +218,8 @@ def test_dropping_an_arrow_on_nothing_offers_the_cards_not_drawn(page, live) -> 
     page.mouse.move(src["right"]["x"] + 180, src["right"]["y"] + 240, steps=6)
     page.mouse.up()
     page.wait_for_timeout(400)
-    assert page.is_visible("#add-card")
-    assert "connect" in page.inner_text("#add-count")
+    assert page.is_visible("#finder")
+    assert "connect" in page.inner_text("#finder-count")
 
 
 def test_picking_one_there_adds_it_and_draws_the_arrow(page, live) -> None:  # type: ignore[no-untyped-def]
@@ -231,9 +231,9 @@ def test_picking_one_there_adds_it_and_draws_the_arrow(page, live) -> None:  # t
     page.mouse.move(src["right"]["x"] + 180, src["right"]["y"] + 240, steps=6)
     page.mouse.up()
     page.wait_for_timeout(400)
-    page.click(".add-row")
+    page.click(".find-row")
     page.wait_for_timeout(1200)
-    assert not page.is_visible("#add-card")
+    assert not page.is_visible("#finder")
     assert page.evaluate("data.edges.length") == before + 1
 
 
@@ -242,7 +242,7 @@ def test_a_click_on_a_dot_that_never_moved_opens_nothing(page, live) -> None:  #
     nodes = open_graph(page, live)
     page.mouse.click(nodes[0]["right"]["x"], nodes[0]["right"]["y"])
     page.wait_for_timeout(300)
-    assert not page.is_visible("#add-card")
+    assert not page.is_visible("#finder")
 
 
 # -- the way in and out -----------------------------------------------------

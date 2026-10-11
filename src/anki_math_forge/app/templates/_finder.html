@@ -1,0 +1,19 @@
+{# The find palette, shared. `finder.js` fills it: what the title says, where
+   the rows come from and what taking one does are the caller's. The graph
+   uses it to choose a card to put on the canvas and the review page to jump
+   to a card. #}
+<dialog class="gallery finder" id="finder" aria-label="find">
+  <header class="gallery-head">
+    <div class="gallery-title">
+      <h2 id="finder-title"></h2>
+      <p class="gallery-totals" id="finder-count"></p>
+    </div>
+    <input type="search" class="gallery-search" id="finder-search"
+           autocomplete="off" spellcheck="false">
+    <button type="button" class="gallery-close" id="finder-close"
+            title="close (esc)">&times;</button>
+  </header>
+  <div class="find-list" id="finder-list"></div>
+  <p class="gallery-empty" id="finder-empty" hidden></p>
+  <p class="rail-more settings-foot" id="finder-foot" hidden></p>
+</dialog>

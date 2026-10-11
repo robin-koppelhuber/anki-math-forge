@@ -95,6 +95,8 @@
       {{ runs(commands) }}
     </details>
   </aside>
+  <div class="splitter shelf-splitter" data-splitter="shelfRail"
+       title="drag to resize · double-click to reset"></div>
 
   <div class="shelf-main">
     <div class="gallery-grid" id="shelf-grid">
@@ -103,7 +105,9 @@
          data-find="{{ row.name }} {{ row.title }} {{ row.citation }}"
          href="{{ filter_url('/units', {}, project=row.name, state='new') }}">
         <span class="gsource-head">
-          <span class="gsource-name">{{ row.name }}</span>
+          {# The title is what you call it; the folder name, in every unit id,
+             stays below it for when you need to type it. #}
+          <span class="gsource-name">{{ row.title.split() | join(' ') if row.title else row.name }}</span>
           {% if row.origin %}
           <span class="gsource-origin o-{{ row.origin }}">{{
             material_label(row.origin) }}</span>
@@ -115,7 +119,7 @@
                 title="nothing to segment here: its units are proposed">no document</span>
           {% endif %}
         </span>
-        <span class="gsource-title">{{ row.title }}</span>
+        <span class="gsource-title">{{ row.name }}</span>
         {% if row.tags %}
         <span class="gsource-tags">{% for t in row.tags %}<i>{{ t }}</i>{% endfor %}</span>
         {% endif %}

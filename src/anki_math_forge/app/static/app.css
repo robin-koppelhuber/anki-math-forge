@@ -14,7 +14,7 @@
 /* And a closed dialog must win for the same reason, one element down.
 
    The browser's own `dialog:not([open]) { display: none }` is a UA rule, so any
-   class rule that sets `display` outranks it. `.gallery.adder { display: flex }`
+   class rule that sets `display` outranks it. `.gallery.finder { display: flex }`
    did: the card picker's close button set `open` to false and the panel stayed
    on screen, over the canvas, with the keyboard still going to it. Measured in
    a real browser -- `dialog.open = false` and `display = flex` at the same
@@ -79,7 +79,7 @@ footer.bar { border-bottom: 0; border-top: 1px solid var(--line); margin-top: au
   gap: 0.4rem;
 }
 .project-pick:hover { border-color: var(--accent); }
-.project-pick-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-pick-name { max-width: 22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .chip {
   color: var(--muted);
@@ -286,7 +286,40 @@ pre.code {
 }
 
 .card-body { min-width: 0; }
-.sec { margin-bottom: 1.3rem; overflow-x: auto; }
+.sec { margin-bottom: 1.3rem; overflow-x: auto; position: relative; padding-right: 2rem; }
+/* The editor from the card itself. A pencil on every section, faint until the
+   pointer is over the section and plain on a screen with no pointer, and one
+   labelled button above the card for the whole of it. */
+.card-tools { display: flex; justify-content: flex-end; margin-bottom: 0.3rem; }
+.card-edit-button {
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.card-edit-button:hover { color: var(--accent); border-color: var(--accent); }
+.sec-edit {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0.25rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0.4;
+}
+.sec:hover .sec-edit, .sec-edit:focus-visible { opacity: 1; }
+.sec-edit:hover { color: var(--accent); border-color: var(--line); }
+@media (hover: none) { .sec-edit { opacity: 1; } }
 .sec h2 {
   font-size: 11px;
   letter-spacing: 0.09em;
@@ -315,31 +348,28 @@ pre.code {
 
 /* The history of what was asked of this card. Quiet: it is a record rather
    than something to do, and the open notes above it are the things to do. */
-.settled-notes { margin: 0.6rem 0; font-size: 12px; color: var(--muted); }
-.settled-notes > summary {
-  cursor: pointer;
-  list-style: none;
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-  padding: 0.2rem 0;
+.settled-notes { margin: 0.6rem 0 0; font-size: 12px; color: var(--muted); }
+.settled-head { margin: 0; }
+.settled-latest {
+  margin: 0.25rem 0;
+  padding: 0.35rem 0.5rem;
+  border-left: 2px solid var(--accent);
+  white-space: pre-wrap;
+  line-height: 1.45;
+  color: var(--ink);
 }
-.settled-notes > summary::-webkit-details-marker { display: none; }
-.settled-notes > summary::before {
-  content: "▸";
-  order: -1;
-  font-size: 9px;
-}
-.settled-notes[open] > summary::before { content: "▾"; }
-.settled-notes > summary:hover { color: var(--ink); }
-.settled-hint { opacity: 0.7; }
-.settled-notes ul { list-style: none; margin: 0.2rem 0 0; padding: 0 0 0 0.9rem; }
-.settled-notes li {
+.settled-older > summary { cursor: pointer; padding: 0.2rem 0; }
+.settled-older > summary:hover { color: var(--ink); }
+.settled-older ul { list-style: none; margin: 0.2rem 0 0; padding: 0 0 0 0.9rem; }
+.settled-older li {
   padding: 0.25rem 0;
   border-top: 1px solid var(--line);
   white-space: pre-wrap;
   line-height: 1.45;
 }
+.reader-passage { display: block; color: var(--muted); font-size: 11.5px; }
+.reader-comment { color: var(--ink); white-space: pre-wrap; }
+.panel blockquote { margin: 0.3rem 0; padding: 0.2rem 0 0.2rem 0.6rem; border-left: 2px solid var(--accent); font-size: 12.5px; }
 
 /* Who is talking. The rows below are a machine reading the card, stacked in
    the same column as the lines a person wrote on it, and the only thing that
@@ -1074,9 +1104,6 @@ body.guide-off .guide { transform: translateX(100%); }
   font-variant-numeric: tabular-nums;
 }
 .fsm.mini .count.small { font-size: 13px; }
-/* Counting everything, these are the rail's numbers a second time; see
-   `_fsm_mini.html`. The machine's shape stays. */
-.fsm.mini:not(.counted) .count { display: none; }
 .fsm.mini .state.out .name,
 .fsm.mini .state.out .count { fill: var(--muted); }
 .fsm.mini .state.ok .name, .fsm.mini .state.ok .count { fill: var(--accent); }
@@ -1392,7 +1419,10 @@ body.filters-off .rail-grip.left, body.guide-off .rail-grip.right { display: non
   display: flex; flex-direction: column; gap: 2px; font: inherit; color: inherit;
 }
 .filter-list.runs button.run:hover { border-color: var(--accent); }
-.filter-list.runs .run-label { font-size: 11px; opacity: 0.7; }
+/* The headline is the command in a word or two, so it is the thing to read
+   first; its detail (scope, or how many are waiting) is quieter beside it. */
+.filter-list.runs .run-label { font-size: 12.5px; font-weight: 600; }
+.filter-list.runs .run-scope { font-weight: 400; font-size: 11.5px; color: var(--muted); margin-left: 0.25rem; }
 /* What the pass actually does, in one sentence. The label says which one and
    how much is waiting; it does not say what the pass *is*, and these are
    commands you run rarely enough to have forgotten between times. */
@@ -2175,13 +2205,19 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
    An inherited one is dimmed, because it names the unit's subject rather than
    this card's, and a unit that became two cards gives both the same words. */
 .meta .gist {
-  display: block;
-  margin: 0 0 0.5rem;
+  flex: 1;
+  min-width: 0;
   font-size: 14px;
   line-height: 1.35;
   color: var(--ink);
   cursor: help;
 }
+/* The head of a card's aside: status, what it is, and whether it is sound. */
+.meta-head { margin-bottom: 0.6rem; }
+.meta-head .row { align-items: baseline; margin-bottom: 0.2rem; }
+.meta-sub { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0; font-size: 12px; color: var(--muted); }
+.meta-sub .checks-ok { color: var(--accent); margin: 0; }
+.meta-sub .check-count { color: var(--warn); }
 .meta .gist.inherited { color: var(--muted); font-style: italic; }
 
 /* The caption beside a dependency's uid. The uid is the thing you paste and
@@ -2581,11 +2617,11 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
 
 /* The card picker: which card to put on the canvas. Narrower than the source
    gallery, because a row is one line of text rather than a tile with counts. */
-.gallery.adder[open] {
+.gallery.finder[open] {
   display: flex;
   flex-direction: column;
 }
-.gallery.adder {
+.gallery.finder {
   max-width: 44rem;
   /* The source gallery is deliberately the window: choosing what to work on
      next is its own task. This is a list of one-line rows answering one
@@ -2593,16 +2629,16 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   height: auto;
   max-height: min(80vh, 44rem);
 }
-.gallery.adder .add-list { flex: 1; min-height: 0; }
+.gallery.finder .find-list { flex: 1; min-height: 0; }
 
-.add-list {
+.find-list {
   overflow-y: auto;
   padding: 0.4rem 0.6rem;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.add-row {
+.find-row {
   display: flex;
   align-items: baseline;
   gap: 0.7rem;
@@ -2617,12 +2653,12 @@ button.badge.context:hover { color: var(--ink); border-color: var(--accent); }
   text-align: left;
   cursor: pointer;
 }
-.add-row:hover { border-color: var(--accent); background: var(--panel); }
-.add-name { flex: 1; }
+.find-row:hover, .find-row.active { border-color: var(--accent); background: var(--panel); }
+.find-name { flex: 1; }
 /* The gap, shown as a gap. A caption built from the filename slug would be a
    transliteration of the LaTeX, which is what a caption exists to spare you. */
-.add-name.unnamed { color: var(--muted); font-style: italic; }
-.add-where {
+.find-name.unnamed { color: var(--muted); font-style: italic; }
+.find-where {
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
@@ -2978,58 +3014,28 @@ body.bare .deck-column { padding: 0; max-width: none; }
    the other is what you are reading. */
 .setup {
   display: grid;
-  grid-template-columns:
-    var(--split-setup-runs, 14.5rem) 14px
-    var(--split-setup-panel, 18rem) 14px
-    minmax(0, 1fr);
+  grid-template-columns: var(--split-setup-panel, 18rem) 14px minmax(0, 1fr);
   height: calc(100vh - var(--header-h, 2.6rem) - var(--footer-h, 0px));
   max-width: none;
   margin: 0;
   padding: 0;
 }
-/* Folded away entirely, handle and all: a zero-width track with a live
-   splitter in it is a column you can drag out of nowhere. Three tracks and
-   not five with two collapsed, because `display: none` takes an item out of
-   the grid altogether and the rest slide up into the tracks it left. */
-.setup.runs-off {
-  grid-template-columns: var(--split-setup-panel, 18rem) 14px minmax(0, 1fr);
-}
-.setup.runs-off > .setup-runs,
-.setup.runs-off > [data-splitter="setupRuns"] { display: none; }
 .setup > .splitter { min-height: 0; }
-.setup-runs {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-height: 0;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
-}
-.setup-runs-scroll { overflow-y: auto; min-height: 0; padding: 0 0.5rem 1rem; }
-.setup-runs .rail-head { padding: 0.45rem 0.5rem 0.3rem 0.7rem; }
-/* Room for the tab that replaces it. Without this the first list item sits
-   under the tab the moment the column is folded and unfolded again. */
-.setup.runs-off > .setup-panel { padding-left: 1.5rem; }
-/* The tab that brings it back. At the top of the panel beside it, not
-   floating at the middle of the window: the two rails' tabs sit against a
-   full-height fixed panel and this one has a column starting under the
-   header, so a centred tab reads as a control belonging to nothing.
 
-   Out of the grid flow, so the three columns stay three items. */
-.setup > .rail-tab.left {
-  position: absolute;
-  top: 0.55rem;
-  left: 0;
-  transform: none;
-  height: 1.9rem;
-  width: 1.2rem;
-  border-radius: 0 5px 5px 0;
+/* What to run next for the selected pane: one column beside it, or, when
+   the two do not fit side by side, a strip of tiles above it with each
+   description cut to a line, so the pane still starts on the first screen. */
+.setup-next .runs-half { margin-bottom: 0.3rem; }
+.setup-next .runs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.35rem 0.6rem;
 }
-.setup { position: relative; }
-.setup.runs-off > .rail-tab.left { display: block; }
 .setup-panel {
   display: grid;
-  /* The project, the two lists, and the one thing that is neither. */
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* The project, its inbox, the two lists, and the one thing that
+     is neither. */
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-height: 0;
   height: 100%;
   padding: 0.5rem 0.4rem;
@@ -3160,23 +3166,85 @@ body.bare .deck-column { padding: 0; max-width: none; }
 }
 
 /* The panel. One pane at a time with the script running, every pane stacked
-   without it. */
+   without it.
+
+   Two columns where there is room: the pane you picked, and beside it what
+   to run for it, which stays in view while the pane scrolls. The pane's
+   width is measured in characters, so a wide window centres the pair rather
+   than stretching the prose. Where there is less room, one column, the
+   commands first. "Room" is the width of this box, which moves when the
+   list beside it is dragged, so it is a container query, not a media one. */
 .setup-detail {
   min-width: 0;
   overflow-y: auto;
   height: 100%;
-  padding: 1.3rem 1.6rem 3rem;
+  padding: 1.3rem 1.8rem 3rem;
+  container: setup-detail / inline-size;
 }
-/* The column stays readable while the page is the window: prose measured in
-   characters, not in pixels of screen somebody happens to have. */
-.setup-pane { max-width: 48em; }
-.setup-pane + .setup-pane { margin-top: 2.5rem; }
+.setup-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 52rem) minmax(15rem, 19rem);
+  column-gap: 2.4rem;
+  align-items: start;
+  align-content: start;
+  justify-content: center;
+}
+.setup-columns > .setup-pane { grid-column: 1; }
+.setup-columns > .setup-next {
+  grid-column: 2;
+  grid-row: 1 / span 99;
+  position: sticky;
+  top: 0;
+}
+@container setup-detail (max-width: 50rem) {
+  .setup-columns { grid-template-columns: minmax(0, 1fr); justify-content: stretch; }
+  .setup-columns > .setup-next {
+    grid-column: 1;
+    grid-row: 1;
+    position: static;
+    margin-bottom: 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .setup-next .runs { grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); }
+  .setup-next .filter-list.runs .run-why { -webkit-line-clamp: 1; line-clamp: 1; }
+}
+/* Narrow: the list above the pane, and no handle to drag between them. */
+@media (max-width: 860px) {
+  .setup { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .setup > .splitter { display: none; }
+  .setup-panel { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--line); }
+  .setup-detail { padding: 1rem; }
+}
+/* One label width for every list of settings on a pane, so the facts, the
+   settings and the repo-wide values line up down the page. */
+.setup-pane { --setup-label: 12rem; }
+.setup-pane:not([hidden]) ~ .setup-pane:not([hidden]) { margin-top: 2.5rem; }
 .pane-head { margin: 0 0 1rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--line); }
+.pane-title { display: flex; align-items: baseline; gap: 0.8rem; }
+.pane-title-form { display: flex; align-items: center; gap: 0.5rem; }
+.pane-title-form input {
+  flex: 1;
+  font: inherit;
+  font-size: 18px;
+  padding: 0.2rem 0.5rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
 .pane-head h2 { margin: 0; font-size: 20px; }
 .pane-what { margin: 0.3rem 0 0; font-size: 13px; color: var(--muted); line-height: 1.55; }
 .pane-cap {
-  margin: 1.8rem 0 0.4rem; font-size: 10.5px; letter-spacing: 0.09em;
+  margin: 1.8rem 0 0.5rem; font-size: 10.5px; letter-spacing: 0.09em;
   text-transform: uppercase; color: var(--muted);
+}
+/* A heading on a pane opens a section of it: a rule above, the same space
+   every time, so the pane reads as parts rather than as one long column. */
+.setup-pane > .pane-cap,
+.setup-pane > details > summary.pane-cap {
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
 }
 .pane-next { margin: 1rem 0 0; font-size: 13px; color: var(--muted); }
 /* The way over to the other two views, carrying what is selected. Always
@@ -3248,7 +3316,12 @@ body.bare .deck-column { padding: 0; max-width: none; }
   cursor: pointer;
 }
 .work-chip:hover { border-color: var(--accent); color: var(--accent); }
-.setup-facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.3rem 1.2rem; margin: 0; }
+.setup-facts {
+  display: grid;
+  grid-template-columns: var(--setup-label) minmax(0, 1fr);
+  gap: 0.35rem 1.2rem;
+  margin: 0;
+}
 .setup-facts dt { color: var(--muted); font-size: 13px; }
 .setup-facts dd { margin: 0; font-size: 13px; }
 /* Where a value was settled. Muted and trailing, because the value is the
@@ -3394,7 +3467,7 @@ body.bare .deck-column { padding: 0; max-width: none; }
    recommending. */
 .form-go.quiet { background: transparent; color: var(--muted); border-color: var(--line); }
 .form-go.quiet:hover { color: var(--bad); border-color: var(--bad); filter: none; }
-.pane-open .form-go { margin-top: 0; }
+.pane-open .form-go, .pane-title-form .form-go, .inbox-add-foot .form-go { margin-top: 0; }
 .source-note { max-width: 34rem; }
 /* A checkbox and its label on one line, which a `.setup-form` label is
    not: those are the small caps heading above a field. */
@@ -3510,14 +3583,14 @@ body.bare .deck-column { padding: 0; max-width: none; }
 /* One track width, used twice: the bar takes the same first column as the
    grid below it, so the rail starts where the bar's first cell ends and the
    two read as one frame rather than as a panel under a stripe. */
-body.bare { --shelf-rail: minmax(200px, 17rem); }
+body.bare { --shelf-rail: var(--split-shelf-rail, 17rem); }
 
 /* The bar, on the one screen that is not about a project. Everywhere else
    it says which project you are on and what to do with it; here choosing
    one is the whole page, so it carries the control instead. */
 header.bar.shelf-bar {
   display: grid;
-  grid-template-columns: var(--shelf-rail) minmax(0, 1fr);
+  grid-template-columns: var(--shelf-rail) minmax(0, 1fr) auto;
   align-items: center;
   gap: 0;
   padding: 0;
@@ -3647,42 +3720,31 @@ header.bar.shelf-bar {
   color: var(--muted);
 }
 .run-who.claude { border-color: var(--accent); color: var(--accent); }
-/* This one does not go anywhere: it runs here, in the background, and the
-   panel below fills in when it is done. Only a command that shows you
-   something ever gets it (ROADMAP.md §12). */
+/* This one does not go anywhere: it runs here, in the background, and
+   reports in a notification and the runs window (ROADMAP.md §12). */
 .run-who.here { border-color: var(--accent); color: var(--accent); }
 .run.running { opacity: 0.7; cursor: progress; }
 .run.run-failed .run-who.here { border-color: var(--bad); color: var(--bad); }
 
-/* What a run came back with. Under the button that asked for it, because
-   it is the answer to that row and not to the panel. */
-.run-result {
-  margin: 0.35rem 0 0.2rem;
-  padding: 0.35rem 0.5rem;
-  font-size: 11.5px;
-  color: var(--muted);
-  border-left: 2px solid var(--line);
-  overflow-x: auto;
-}
-.run-result .run-head { margin: 0; color: var(--ink); }
-.run-result .run-said { margin: 0.2rem 0 0; color: var(--bad); white-space: pre-wrap; }
-.run-result .run-cap {
-  margin: 0.4rem 0 0.1rem;
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
+/* What the generic renderer draws: the `data` block, and any command
+   `run_views.py` has no view for. */
 .run-lines { list-style: none; margin: 0.2rem 0 0; padding: 0; }
 .run-lines > li { overflow-wrap: anywhere; }
 .run-none { margin: 0.2rem 0 0; opacity: 0.7; }
-.run-table { border-collapse: collapse; margin: 0.2rem 0 0; font-size: 11px; }
-.run-table td { padding: 1px 0.5rem 1px 0; vertical-align: top; }
-.run-table tr:first-child td {
-  color: var(--ink);
+.run-table { border-collapse: collapse; margin: 0.2rem 0 0; font-size: 12px; }
+.run-table td, .run-table th {
+  padding: 2px 0.7rem 2px 0;
+  vertical-align: top;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.run-table th,
+.run-table tr:first-child td:not(tbody td) {
+  color: var(--muted);
+  font-weight: 600;
   border-bottom: 1px solid var(--line);
-  text-transform: uppercase;
-  font-size: 9.5px;
-  letter-spacing: 0.06em;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
 }
 
 /* What a work's marks mean, and which of them become units. Editable here
@@ -3730,21 +3792,6 @@ header.bar.shelf-bar {
 
 /* The list of runs. Functional only: wide enough to read a result in, and
    a dot that says how each one went. The look is open. */
-.runs-dialog {
-  width: min(52rem, 92vw);
-  max-height: 80vh;
-  background: var(--panel);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-}
-.runs-dialog::backdrop { background: var(--scrim); }
-.runs-dialog form { text-align: right; }
-.runs-list { list-style: none; margin: 0; padding: 0; }
-.runs-list > li { border-bottom: 1px solid var(--line); padding: 0.3rem 0; }
-.runs-list > li[data-state="failed"] summary { color: var(--bad); }
-.runs-list > li[data-state="running"] summary { color: var(--muted); }
-[data-runs-open][data-running]:not([data-running="0"]) { color: var(--accent); }
 
 /* The new-unit dialog: the prompt's look, with several fields. Layout
    only; the look is the prompt's. */
@@ -3761,9 +3808,24 @@ header.bar.shelf-bar {
 }
 .new-unit textarea { font-family: ui-monospace, monospace; resize: vertical; }
 
-/* The card editor: the same layout as the new-unit dialog. */
-.card-edit form { display: grid; gap: 0.5rem; min-width: min(40rem, 92vw); }
-.card-edit label { display: grid; gap: 0.2rem; margin: 0; }
+/* The card editor: one field per section, the preview under each, and the
+   dialog scrolling as a whole when a card has many. */
+.card-edit { max-height: 90vh; overflow-y: auto; }
+.card-edit form { display: grid; gap: 0.5rem; min-width: min(44rem, 92vw); }
+.card-edit-head { margin: 0 0 0.3rem; font-size: 15px; font-weight: 600; }
+.card-edit-fields { display: grid; gap: 0.8rem; }
+.card-edit-field { display: grid; gap: 0.25rem; }
+.card-edit-field label { display: grid; gap: 0.2rem; margin: 0; }
+.card-edit-name {
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--muted);
+}
+.card-edit-hint { font-size: 11.5px; color: var(--muted); }
+.card-edit-more { margin: 0; font-size: 12.5px; color: var(--muted); }
+.card-edit-more .link-button { margin-left: 0.6rem; }
 .card-edit textarea {
   font: inherit;
   font-family: ui-monospace, monospace;
@@ -3778,16 +3840,570 @@ header.bar.shelf-bar {
 .card-edit .card-edit-ask input[type="checkbox"] { width: auto; }
 .card-edit .card-edit-ask input[name="note"] { flex: 1; }
 
-/* What moved on a card since the last decision. Layout only. */
-.changes { font-size: 12px; margin: 0.4rem 0; }
-.changes summary { cursor: pointer; color: var(--muted); }
-.changes[open] summary { color: var(--ink); }
-.change-list, .change-history { margin: 0.3rem 0 0; padding-left: 1.1rem; }
+/* The way into the find palette, at the top of the review rail, and the
+   query when one has been kept as a filter. */
+.card-search { display: flex; align-items: center; gap: 0.5rem; margin: 0 0 0.8rem; }
+.find-open {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  font: inherit;
+  font-size: 13px;
+  padding: 0.3rem 0.5rem;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.find-open:hover { color: var(--ink); border-color: var(--accent); }
+.find-active { font-size: 12px; color: var(--accent); white-space: nowrap; }
+
+/* The aside's panels: a title you click to fold and a grip you drag to move.
+   A folded panel keeps its header, and the count beside the title says what
+   is inside, so folding never hides that something is there. */
+.panels { display: grid; gap: 0.6rem; }
+.panel { border: 1px solid var(--line); border-radius: 5px; background: var(--panel); }
+.panel[data-moved] { border-color: var(--accent); }
+.panel.dragging { opacity: 0.45; }
+.panel-head { display: flex; align-items: center; gap: 0.2rem; padding: 0 0.3rem; }
+.panel-grip { cursor: grab; color: var(--muted); font-size: 12px; line-height: 1; padding: 0.35rem 0.2rem; user-select: none; }
+.panel-grip:hover { color: var(--ink); }
+.panel-toggle {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: var(--ink);
+  background: none;
+  border: 0;
+  padding: 0.35rem 0;
+  cursor: pointer;
+}
+.panel-title { font-weight: 600; }
+.panel[data-moved] .panel-title { color: var(--accent); }
+.panel-count { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-toggle::after { content: "▾"; margin-left: auto; font-size: 9px; color: var(--muted); }
+.panel.folded .panel-toggle::after { content: "▸"; }
+.panel-body { padding: 0 0.6rem 0.5rem; font-size: 12.5px; }
+.panel.folded .panel-body { display: none; }
+.panel-empty { margin: 0.2rem 0; color: var(--muted); font-size: 12px; }
+.annotations:not(:empty) + .panel-empty { display: none; }
+.change-since { margin: 0.2rem 0 0.3rem; color: var(--muted); font-size: 12px; }
+.change-entries { list-style: none; margin: 0.2rem 0; padding: 0; display: grid; gap: 0.45rem; }
+.change-entry { padding-left: 0.5rem; border-left: 2px solid var(--accent); }
+.change-entry-head { margin: 0; font-size: 11.5px; color: var(--muted); }
+.change-list, .change-history { margin: 0.2rem 0 0; padding-left: 1.1rem; }
+.change-list { list-style: none; padding-left: 0; }
 .change-list li { margin: 0.15rem 0; overflow-wrap: anywhere; }
 .change-history { color: var(--muted); }
+.change-notes { margin: 0.15rem 0 0; padding-left: 1rem; font-size: 11.5px; }
+.card-edit-preview:empty { display: none; }
 .card-edit-preview {
   min-height: 1.5em;
   padding: 0.3rem 0.5rem;
   border-left: 2px solid var(--line);
   overflow-x: auto;
 }
+
+/* -- the controls every page has, at the end of the bar ----------------- */
+.bar-global { display: inline-flex; align-items: center; gap: 0.35rem; }
+.shelf-bar .bar-global { padding-right: 1rem; }
+/* No deck on the shelf, so nothing to count through. */
+.shelf-bar .position { display: none; }
+[data-runs-open][data-running]:not([data-running="0"]) { color: var(--accent); }
+
+/* The shelf's rail, dragged from its right edge. A cell of its own would
+   push the grid off the bar's first column, so the handle sits over the
+   rail's border instead. */
+.shelf-splitter {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: end;
+  width: 15px;
+  margin-right: -7px;
+  z-index: 3;
+}
+.shelf-splitter::before { opacity: 0; }
+.shelf-splitter:hover::before,
+.shelf-splitter.dragging::before { opacity: 1; }
+
+/* -- a run reporting, bottom right -------------------------------------- */
+.run-notices {
+  position: fixed;
+  right: 1rem;
+  /* Above the key legend, which is the one thing at the bottom of every
+     view you read while working. */
+  bottom: calc(var(--footer-h, 0px) + 0.8rem);
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: min(26rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+.run-notice {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-areas: "what open close" "said open close";
+  align-items: center;
+  gap: 0.15rem 0.5rem;
+  padding: 0.5rem 0.6rem 0.5rem 0.8rem;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px var(--shadow);
+  font-size: 12.5px;
+}
+.run-notice[data-state="ok"] { border-left-color: var(--accent); }
+.run-notice[data-tone="warn"] { border-left-color: var(--warn); }
+.run-notice[data-state="failed"],
+.run-notice[data-tone="bad"] { border-left-color: var(--bad); }
+.run-notice-what {
+  grid-area: what;
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-notice-said { grid-area: said; color: var(--muted); overflow-wrap: anywhere; }
+.run-notice[data-state="running"] .run-notice-said::before {
+  content: "";
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-right: 0.4em;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: run-spin 0.8s linear infinite;
+  vertical-align: -0.05em;
+}
+@keyframes run-spin { to { transform: rotate(360deg); } }
+.run-notice button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.45rem;
+  cursor: pointer;
+}
+.run-notice button:hover { color: var(--ink); border-color: var(--accent); }
+.run-notice-open { grid-area: open; }
+.run-notice-close { grid-area: close; border: 0 !important; }
+
+/* -- the runs window ----------------------------------------------------- */
+.runs-dialog { display: none; flex-direction: column; overflow: hidden; }
+.runs-dialog[open] { display: flex; }
+.runs-shell {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--split-runs-side, 300px) 15px minmax(0, 1fr);
+}
+/* The builder above the run you picked, the divider between them dragged
+   to say how much room the builder gets. */
+.runs-main {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: var(--split-runs-builder, auto) auto minmax(0, 1fr);
+}
+.runs-cap { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+.runs-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  padding: 0.7rem;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+}
+.runs-filter { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.runs-filter button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  cursor: pointer;
+}
+.runs-filter button[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); }
+.runs-clear {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.6rem;
+  cursor: pointer;
+}
+.runs-search {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 0.3rem 0.5rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.runs-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.runs-list > li { border-bottom: 1px solid var(--line); }
+.runs-pick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.1rem 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.3rem;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+.runs-pick:hover { background: var(--hover); }
+.runs-list > li[aria-current="true"] .runs-pick { background: var(--hover); border-left-color: var(--accent); }
+.runs-when { color: var(--muted); font-variant-numeric: tabular-nums; }
+.runs-what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.runs-said { grid-column: 2; color: var(--muted); overflow-wrap: anywhere; }
+.runs-list > li[data-state="failed"] .runs-said,
+.runs-list > li[data-tone="bad"] .runs-said { color: var(--bad); }
+.runs-list > li[data-tone="warn"] .runs-said { color: var(--warn); }
+.runs-none, .runs-empty { color: var(--muted); padding: 0.6rem 0.3rem; font-size: 12.5px; }
+
+.runs-detail { min-height: 0; overflow-y: auto; padding: 0.8rem 1.3rem 2rem; }
+
+/* -- the builder --------------------------------------------------------- */
+.runs-builder {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.7rem 1.3rem 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.builder-head { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.builder-pick,
+.builder-field input[type="text"],
+.builder-field select {
+  font: inherit;
+  font-size: 13px;
+  padding: 0.25rem 0.5rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.builder-pick { font-weight: 600; }
+.builder-what { color: var(--muted); font-size: 12.5px; }
+.builder-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.5rem 1rem;
+}
+.builder-field { display: grid; gap: 0.15rem; font-size: 12.5px; }
+/* A switch is not a labelled input: its sentence can be long, so each one
+   takes a full row of the form and the sentence wraps beside the box,
+   instead of overflowing a 14rem column or sitting off the inputs' line. */
+.builder-field.flag { display: flex; align-items: baseline; gap: 0.5rem; grid-column: 1 / -1; }
+.builder-field.flag input { flex: none; margin: 0; }
+.builder-label { color: var(--muted); font-size: 11.5px; }
+/* The line and its two buttons one height, whether the line is empty, one
+   line or wrapped: an empty `<code>` collapsed to its padding beside two
+   full-height buttons. */
+.builder-run { display: flex; align-items: stretch; gap: 0.5rem; }
+.builder-line {
+  flex: 1;
+  min-width: 0;
+  min-height: 2rem;
+  display: flex;
+  align-items: center;
+  padding: 0.35rem 0.6rem;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.builder-line.refused { color: var(--bad); }
+.builder-line.missing { color: var(--muted); font-style: italic; }
+.builder-copy,
+.builder-go {
+  font: inherit;
+  font-size: 13px;
+  padding: 0.3rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.builder-copy { border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.builder-go { border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); }
+.builder-go[data-effect="repo"],
+.builder-go[data-effect="anki"] { background: var(--warn); border-color: var(--warn); color: var(--on-warn); }
+.builder-go:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* A quick pick on a rail, and the way into the builder beside it. */
+.runs > li { display: flex; align-items: stretch; gap: 0.2rem; }
+.runs > li > .run { flex: 1; min-width: 0; }
+.run-tune {
+  flex: none;
+  width: 1.6rem;
+  font: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.run-tune:hover { color: var(--ink); border-color: var(--accent); }
+.run-detail-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.2rem 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--line);
+}
+.run-detail-what { font-size: 13.5px; overflow-wrap: anywhere; }
+.run-detail-facts { grid-column: 1; margin: 0; color: var(--muted); font-size: 12px; }
+.run-detail-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 0.5rem; align-items: start; }
+.run-detail-actions button {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 0.25rem 0.8rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.run-detail-actions button:hover { border-color: var(--accent); }
+.run-summary { margin: 0.8rem 0 0.4rem; font-size: 15px; }
+.run-detail[data-tone="bad"] .run-summary { color: var(--bad); }
+.run-detail[data-tone="warn"] .run-summary { color: var(--warn); }
+.run-said {
+  margin: 0.3rem 0 0.6rem;
+  padding: 0.4rem 0.6rem;
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: var(--bad);
+  border-left: 2px solid var(--bad);
+  background: var(--panel);
+}
+.run-block { margin: 0.9rem 0 0; }
+.run-block-title {
+  margin: 0 0 0.3rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.run-block[data-tone="bad"] .run-block-title { color: var(--bad); }
+.run-block[data-tone="warn"] .run-block-title { color: var(--warn); }
+.run-stats { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.run-stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 5.5rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.run-stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.run-stat span { font-size: 11.5px; color: var(--muted); }
+.run-stat[data-tone="ok"] b { color: var(--accent); }
+.run-stat[data-tone="warn"] b { color: var(--warn); }
+.run-stat[data-tone="bad"] b { color: var(--bad); }
+.run-more { margin: 0.3rem 0 0; color: var(--muted); font-size: 12px; }
+.run-raw { margin-top: 1.2rem; font-size: 12px; color: var(--muted); }
+.run-raw summary { cursor: pointer; }
+.run-raw pre { max-height: 24rem; overflow: auto; font-size: 11.5px; color: var(--ink); }
+@media (max-width: 760px) {
+  .runs-shell { grid-template-columns: 1fr; grid-template-rows: auto auto minmax(0, 1fr); }
+  .runs-side { max-height: 40vh; border-right: 0; border-bottom: 1px solid var(--line); }
+}
+/* Placed, because the handle above claims the first cell explicitly and
+   would otherwise push the rail into the second. */
+.shelf > .shelf-rail { grid-column: 1; grid-row: 1; }
+.shelf > .shelf-main { grid-column: 2; grid-row: 1; }
+
+/* How a source is read: label, control, whose answer, and what it means
+   under the control. One grid for every row, so the columns line up. */
+.read-table {
+  display: grid;
+  grid-template-columns: var(--setup-label) minmax(0, 20rem) minmax(0, 1fr);
+  column-gap: 1.2rem;
+  font-size: 13px;
+}
+.read-row { display: contents; }
+.read-row > * { padding-top: 0.55rem; }
+.read-label { color: var(--muted); align-self: center; }
+.read-control { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.read-control select,
+.read-control input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 0.2rem 0.45rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.read-row.own .read-control select,
+.read-row.own .read-control input { border-color: var(--accent); }
+.read-unit { color: var(--muted); font-size: 12px; }
+.read-from { align-self: center; color: var(--muted); font-size: 12px; }
+.read-from .link-button { margin-left: 0.4rem; font-size: 12px; }
+.read-what {
+  grid-column: 2 / -1;
+  padding: 0.15rem 0 0.55rem !important;
+  color: var(--muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.read-row > .read-label { border-bottom: 1px solid var(--line); grid-row: span 2; align-self: stretch; }
+/* Where the pane is narrow, the label goes above its control instead of
+   beside it, and the control keeps its whose-answer column. Three columns
+   in 36rem squeezed "set here" off the edge. The pane's own width, since a
+   pane beside the commands column is narrow in a wide window too. */
+.setup-pane { container: setup-pane / inline-size; }
+@container setup-pane (max-width: 44rem) {
+  .read-table { grid-template-columns: minmax(0, 1fr) auto; }
+  .read-row > .read-label { grid-column: 1 / -1; grid-row: auto; border-bottom: 0; padding-top: 0.8rem; }
+  .read-what { grid-column: 1 / -1; }
+}
+/* The last row of a table you can add to: a key and its value, on one line,
+   with no sentence under it. */
+.read-add > .read-label { grid-row: auto; border-bottom: 0; align-self: center; }
+.read-add > * { padding-bottom: 0.55rem; }
+.read-outline { margin-top: 0.8rem; }
+.scheme-waiting { margin: 0.3rem 0 0.6rem; font-size: 13px; color: var(--warn); }
+.scheme-waiting .scheme-import {
+  margin-left: 0.5rem;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 0.15rem 0.7rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.read-outline summary { cursor: pointer; }
+.read-chapters { border-collapse: collapse; font-size: 12.5px; margin-top: 0.4rem; }
+.read-chapters th { text-align: left; color: var(--muted); font-weight: 600; font-size: 11px; }
+.read-chapters td, .read-chapters th { padding: 2px 1rem 2px 0; }
+.read-chapters .read-part td { padding-top: 0.6rem; color: var(--muted); font-weight: 600; }
+.read-chapters tr.large td:last-child { color: var(--warn); }
+.set-edit input,
+.set-edit select {
+  font: inherit;
+  font-size: 12px;
+  width: 11rem;
+  padding: 0.15rem 0.4rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+
+/* What the context size comes to for the unit on screen. */
+/* On a line of its own at the end of the head row, so a long chapter name
+   never pushes the web chip off it. The full sentence is its tooltip. */
+.ctx-span {
+  order: 99;
+  flex-basis: 100%;
+  margin-top: -0.3rem;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ctx-span.large { color: var(--warn); }
+
+/* Notes to place: what you add, and where each went once sorted. */
+.setup-inbox { margin-top: 0.3rem; }
+.inbox-add { display: grid; gap: 0.4rem; margin: 0.6rem 0 1rem; max-width: 46rem; }
+.inbox-add textarea {
+  font: inherit;
+  font-size: 13.5px;
+  padding: 0.5rem 0.6rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  resize: vertical;
+}
+.inbox-add-foot { display: flex; align-items: center; gap: 1rem; }
+.inbox-add-foot .form-note { font-size: 12px; color: var(--muted); margin: 0 0 0 auto; }
+/* How a dump is placed: two boxes, both ticked meaning both. */
+.mode-boxes { display: inline-flex; align-items: center; gap: 0.9rem; font-size: 13px; }
+.mode-boxes label { display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
+.inbox-mode { display: inline-flex; }
+/* How a dump is placed once sorted: a label, in the accent where it can edit
+   a card. A waiting dump shows its boxes instead. */
+span.dump-mode:not([data-dump-mode]) {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+}
+span.dump-mode.write:not([data-dump-mode]),
+span.dump-mode.both:not([data-dump-mode]) { color: var(--accent); border-color: var(--accent); }
+.dump-mode[data-dump-mode] { font-size: 12px; }
+.dump {
+  max-width: 46rem;
+  margin: 0 0 0.7rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--muted);
+  border-radius: var(--radius);
+}
+.dump[data-state="sorted"] { border-left-color: var(--accent); }
+.dump-head { display: flex; gap: 0.7rem; align-items: baseline; font-size: 12px; }
+.dump-when { color: var(--muted); font-variant-numeric: tabular-nums; }
+.dump-head .link-button { margin-left: auto; }
+.dump-text { margin: 0.35rem 0 0; white-space: pre-wrap; font-size: 13.5px; }
+.dump-brief { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 12.5px; }
+.dump-brief li { margin: 0.15rem 0; }
+.dump-brief a { color: var(--accent); }
+.dump-open { margin: 0.4rem 0 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.dump-open .chip { font-size: 11.5px; padding: 0.05rem 0.5rem; }
+.dump-list { max-width: 46rem; margin-top: 0.8rem; }
+.dump-list > summary { cursor: pointer; margin-bottom: 0.4rem; }
+.dump-count { margin-left: 0.4rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dump-went { margin-top: 0.4rem; }
+.dump-went > summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+
+/* The page you are on, among the items that are on every page. */
+#topbar [aria-current="page"] { color: var(--accent); border-color: var(--accent); }
+/* Between the project and what you can do with it. */
+.bar-sep { width: 1px; align-self: stretch; margin: 0.15rem 0.1rem; background: var(--line); }

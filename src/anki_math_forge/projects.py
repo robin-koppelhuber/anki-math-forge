@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -116,6 +117,158 @@ class Removal:
         with a `project.toml` and nothing else is a decision you can make
         again in one command."""
         return not self.units and not self.cards
+
+
+def set_title(config: Config, name: str, title: str) -> str:
+    """Rename a project as it is shown, and return the name written.
+
+    The folder name stays: it is in every unit id, and renaming it would
+    orphan every unit and card. The title is what the picker, the shelf and
+    the setup stage call it, and it is the top-level `title` of
+    `project.toml`, edited line by line so the file keeps its comments.
+    """
+    shown = " ".join(title.split())
+    if not shown:
+        raise ConfigError("a project needs a name to be shown by")
+    path = config.projects_dir / name / PROJECT_TOML
+    if not path.exists():
+        raise ConfigError(
+            f"{name} is configured in forge.toml rather than in its own "
+            f"{PROJECT_TOML}; rename it there"
+        )
+    lines = path.read_text(encoding="utf-8").splitlines()
+    # The first `title` before the first table: a source's own title, under
+    # `[[sources]]`, is a different key that happens to share the name.
+    head = next((n for n, line in enumerate(lines) if line.lstrip().startswith("[")), len(lines))
+    at = next(
+        (n for n in range(head) if lines[n].split("=", 1)[0].strip() == "title"), None
+    )
+    written = f"title = {model.toml_string(shown)}"
+    if at is None:
+        lines.insert(0, written)
+        at = 0
+    else:
+        lines[at] = written
+    # A project reading Zotero with no `deck` of its own files its cards under
+    # a deck named after its title, so a rename would move them. Pin the deck
+    # it has now, once, so a name is only a name.
+    spec = config.projects.get(name)
+    head = next((n for n, line in enumerate(lines) if line.lstrip().startswith("[")), len(lines))
+    declares_deck = any(lines[n].split("=", 1)[0].strip() == "deck" for n in range(head))
+    from_title = spec is not None and not spec.deck and any(w.zotero_key for w in spec.sources)
+    if from_title and not declares_deck:
+        lines.insert(at + 1, f"deck = {model.toml_string(config.deck_for(name))}")
+    text = "\n".join(lines).rstrip("\n") + "\n"
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:  # pragma: no cover - a bug, not a state
+        raise ConfigError(f"refusing to write a {PROJECT_TOML} that will not parse: {exc}") from exc
+    model.write_atomic(path, text)
+    return shown
+
+
+#: A key TOML reads bare. Anything else, a tag with a dot or a space in
+#: it, is written quoted.
+_BARE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def toml_key(key: str) -> str:
+    return key if _BARE.match(key) else model.toml_string(key)
+
+
+def _is_key_line(line: str, key: str) -> bool:
+    """`key = ...` or `"key" = ...`, not a comment and not another key that
+    happens to start with the same letters."""
+    naked = line.lstrip()
+    for spelling in (key, model.toml_string(key)):
+        if naked.startswith(spelling):
+            rest = naked[len(spelling) :].lstrip()
+            if rest.startswith("="):
+                return True
+    return False
+
+
+def _without(lines: list[str], key: str) -> list[str]:
+    """`lines` with `key`'s line taken out, an array across lines included."""
+    out: list[str] = []
+    skipping = False
+    for line in lines:
+        if skipping:
+            if "]" in line:
+                skipping = False
+            continue
+        if _is_key_line(line, key):
+            value = line.split("=", 1)[1]
+            if "[" in value and "]" not in value:
+                skipping = True
+            continue
+        out.append(line)
+    return out
+
+
+def _after_last_key(body: list[str]) -> int:
+    """Where a new key goes: after the last one there, or first."""
+    keys = [n for n, text in enumerate(body) if "=" in text and not text.lstrip().startswith("#")]
+    return keys[-1] + 1 if keys else 0
+
+
+def set_setting(
+    config: Config, name: str, key: str, literal: str | None, *, table: str = ""
+) -> None:
+    """Write one `key = <literal>` into a project's own `project.toml`.
+
+    At the top, before the first table, or inside `[table]` when one is
+    named (`conventions`, `decks.by_tag`). `None` takes the key out, so the
+    project inherits again. `literal` is TOML already: the caller decides
+    whether a value is a quoted string, a number or a list.
+
+    Line by line, like `set_title` and the marking scheme, so the comments
+    a generated file carries stay where they are. A table that is not there
+    yet is added at the end. The result is parsed before it is written, and
+    a file that would not parse is refused.
+    """
+    path = config.projects_dir / name / PROJECT_TOML
+    if not path.exists():
+        raise ConfigError(
+            f"{name} is configured in forge.toml rather than in its own "
+            f"{PROJECT_TOML}; change it there"
+        )
+    lines = path.read_text(encoding="utf-8").splitlines()
+    line = None if literal is None else f"{toml_key(key)} = {literal}"
+    if not table:
+        head = next(
+            (n for n, text in enumerate(lines) if text.lstrip().startswith("[")), len(lines)
+        )
+        body = _without(lines[:head], key)
+        if line is not None:
+            # After the last key at the top, so a new one joins the others
+            # rather than landing above the comment that opens the file.
+            body.insert(_after_last_key(body), line)
+        lines = body + lines[head:]
+    else:
+        header = f"[{table}]"
+        start = next((n for n, text in enumerate(lines) if text.strip() == header), None)
+        if start is None:
+            if line is None:
+                return
+            while lines and not lines[-1].strip():
+                lines.pop()
+            lines += ["", header, line]
+        else:
+            end = next(
+                (n for n in range(start + 1, len(lines)) if lines[n].lstrip().startswith("[")),
+                len(lines),
+            )
+            body = _without(lines[start + 1 : end], key)
+            if line is not None:
+                body.insert(_after_last_key(body), line)
+            lines = lines[: start + 1] + body + lines[end:]
+    text = "\n".join(lines).rstrip("\n") + "\n"
+    try:
+        tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"refusing to write a {PROJECT_TOML} that will not parse: {exc}") from exc
+    model.write_atomic(path, text)
 
 
 def _counts(config: Config, name: str) -> tuple[int, int, int]:

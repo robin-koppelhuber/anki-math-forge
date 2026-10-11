@@ -150,7 +150,22 @@ def test_a_note_does_not_repeat_itself(config: Config) -> None:
     found = context.assemble(config, "demo:2.2:61")
 
     assert found is not None
-    assert found.marks[0]["comment"] == ""
+    assert (found.marks[0]["text"], found.marks[0]["comment"]) == ("", "a thought")
+    assert found.format().count("a thought") == 1
+
+
+def test_a_long_note_reaches_the_card_writer_whole(config: Config) -> None:
+    """Notes are where instructions are written, and the mark column cuts at
+    76 characters: a request for a second card was lost past the cut."""
+    asked = (
+        "Create one card for Bayesian smoothing and one card with the equations"
+        " for Kalman smoothing, analogous to the previous section"
+    )
+    _seed(config, marks=marked(asked, kind="note"))
+
+    said = context.assemble(config, "demo:2.2:61").format()
+
+    assert "> " + asked in said
 
 
 def test_a_mark_spanning_a_line_break_keeps_the_column(config: Config) -> None:
@@ -285,7 +300,8 @@ def test_the_chapter_runs_to_where_the_next_one_starts(config: Config) -> None:
     found = _chapter(config)
 
     assert found.pages == list(range(12, 30))
-    assert found.window == 'the chapter it was printed in, "2" (pages 12 to 29)'
+    assert found.window.startswith('the chapter it was printed in, "2" (pages 12-29; 18 pages')
+    assert "section labels" in found.window, "it says the outline was not there to read"
 
 
 def test_the_last_chapter_runs_to_the_end_of_the_document(config: Config) -> None:
@@ -341,7 +357,7 @@ def test_the_window_names_itself_in_the_heading(config: Config) -> None:
 
     said = _chapter(config).format()
 
-    assert '## the chapter it was printed in, "2" (pages 12 to 29)' in said
+    assert '## the chapter it was printed in, "2" (pages 12-29; 18 pages' in said
 
 
 def test_the_chapter_stays_inside_one_document(config: Config) -> None:
@@ -406,3 +422,64 @@ def test_a_window_that_is_neither_is_refused(repo: Path) -> None:
     )
     with pytest.raises(config_mod.ConfigError):
         config_mod.load(repo)
+
+
+def test_the_review_page_shows_what_the_reader_wrote(config: Config) -> None:
+    """Word for word, beside the card, read from the ledger. A pass that
+    acted on a comment wrote what it did in its own words, and those were
+    the only trace of yours left on the card."""
+    from fastapi.testclient import TestClient
+
+    from anki_math_forge.app import create_app
+
+    asked = "Create one card for smoothing and one for the Kalman equations"
+    _seed(config, marks=marked(asked))
+    card = config.cards_dir / "demo" / "abc123-x.md"
+    card.parent.mkdir(parents=True, exist_ok=True)
+    card.write_text(
+        "---\nuid: abc123\ntype: identity\nstatus: draft\nsource: Demo\n"
+        'unit: "demo:2.2:61"\n---\n\n## front\n\n$a$\n\n## back\n\n$b$\n\n'
+        "## notes\n\nThe reader asked for two cards.\n",
+        encoding="utf-8",
+    )
+
+    page = TestClient(create_app(config)).get("/review?project=demo&status=all").text
+
+    assert "you wrote in Zotero" in page
+    assert asked in page and "a passage" in page
+
+
+def test_the_marks_handed_over_are_the_ones_in_the_window(config: Config) -> None:
+    """The text window decides, not a fixed neighbourhood: a writer given a
+    wider window gets what the reader marked across it, a colour that made no
+    unit and a unit that was skipped included, each saying what came of it."""
+    from anki_math_forge.extract import cache_document_marks
+
+    own = Mark(key="61", kind="highlight", colour="green", text="mine", page=20)
+    _seed(config, marks=[own], context_pages=1)
+    rejected = Mark(key="19m", kind="highlight", colour="orange", text="rejected one", page=19)
+    led = Ledger.load(config.units_path("demo"))
+    led.units.append(
+        Unit(id="demo:19m", state="skipped", locator=Locator(page=19), marks=[rejected])
+    )
+    led.save()
+    cache_document_marks(
+        config,
+        "demo",
+        "",
+        [
+            rejected,
+            Mark(key="21p", kind="highlight", colour="pink", text="no unit from this", page=21),
+            Mark(key="22f", kind="note", colour="yellow", comment="far away", page=22),
+            own,
+        ],
+    )
+
+    said = context.assemble(config, "demo:2.2:61").format()
+
+    assert "rejected one" in said and "(skipped)" in said, "a skipped unit is still noticed"
+    assert "no unit from this" in said, "a colour that makes no unit is still context"
+    assert "far away" not in said, "page 22 is outside one page either side"
+
+    wider = context.assemble(config, "demo:2.2:61", spread=3).format()
+    assert "far away" in wider, "the window moved and so did the marks"

@@ -37,7 +37,7 @@ instructions. **The vocabulary** fixes what each object is called, because rule
    pattern in miniature.
 6. **No unwitnessed quantifiers.** "Several", "many", "most", "usually" name
    at least one instance the reader can check, or the claim is cut. This repo
-   measures things, so the witness is usually already to hand: "25 of §8.2's
+   measures things, so a witness is already to hand: "25 of §8.2's
    36 units" rather than "most of them".
 7. **No scaffolding prose.** A sentence whose subject is the exposition
    ("this section explains…", "stating it this way lets…") either names a
@@ -90,14 +90,14 @@ read by a person, which is the honest description of a prose rule.
 
 ## The vocabulary
 
-One concept, one name. The "do not call it" column is the working half: most
-of these words are confusable with a neighbour, and the confusion is what the
+One concept, one name. The "do not call it" column is the working half: each
+of these words is confusable with a neighbour, and the confusion is what the
 entry exists to stop.
 
 | Term | What it is | Do not call it |
 |---|---|---|
 | **project** | a folder under `projects/`: one ledger, one deck, one `conventions.md`, one graph. It reads one source or several | source, deck |
-| **source** | one work a project reads: a book, a paper, a website. Declared in a `[[sources]]` table, and what `Card.source` names | project, work, document |
+| **source** | one book, paper or website a project reads. Declared in a `[[sources]]` table, and what `Card.source` names | project, work, document |
 | **document** | one PDF inside a source. An item routinely carries a paper and its preprint | source, file |
 | **unit** | a located region of a source: document, page, bbox, section, label. Geometry, never an image file | item, region, equation, annotation |
 | **locator** | where a unit is. Carries the document, so re-filing never renames a unit | position, coordinates |
@@ -110,32 +110,39 @@ entry exists to stop.
 | **note** | what a card becomes *in Anki*. Anki's word, used only about Anki | card |
 | **mark** | one Zotero annotation as the reader made it: kind, colour, covered text, comment, box | highlight (one kind of mark), annotation |
 | **scheme** | what each `kind/colour` pair means, declared in `[zotero.meanings]` | legend, palette, mapping |
-| **annotation** | a `@claude` or `@me` line in `## notes`. Blocks sync wherever it sits | note, comment, mark |
+| **annotation** | a `@claude` or `@me` line in `## notes`. Blocks `anki push` wherever it sits | note, comment, mark |
 | **brief** | the `@claude` annotation on a unit: the only instruction `/extract-cards` gets | note, prompt |
+| **remark** | what a pass says about the tool or its own instructions rather than about a card: one entry in `projects/remarks.md`, added by `forge remarks add` | complaint, suggestion, feedback |
 | **gist** | a few words naming what something is about. On a unit, what a card from it would be about; on a card, what the card is. Read as a caption, never as instructions | summary, description, title |
 | **suggestion** | a state `units classify` proposed. Never applied on its own | decision, skip |
 | **triage** | the unit stage. Is this worth a card, and roughly about what | review, sorting |
 | **review** | the card stage. Is the content right | triage, checking |
 | **demotion** | why an approval is not holding: `edited` or `annotated`. The file still says `approved` | un-approval, rejection |
+| **inbox** | `projects/<name>/inbox.md`: things you want in the deck without knowing where, waiting for `/sort-notes` | notes, queue |
+| **dump** | one entry in the inbox: a dated heading, what you typed, how it is placed (propose, modify existing cards, or both), and once sorted, where each piece went. It is unsorted or sorted, and nothing else | note, entry |
+| **action** | a command with no model behind it, as a form in the commands window: fields in, a command line out | button, job |
 
 ### Banned and dangerous words
 
-- **"note" on its own — dangerous.** Three objects answer to it: an Anki note,
+- **"note" on its own: dangerous.** Three objects answer to it: an Anki note,
   a `@claude`/`@me` annotation, and a Zotero sticky note (one kind of mark).
   Say which.
-- **"annotation" on its own — dangerous.** It is a `## notes` line here and a
+- **"annotation" on its own: dangerous.** It is a `## notes` line here and a
   Zotero mark in the Zotero literature, and both appear on the same screen.
   Use **mark** for the reader's, **annotation** for ours.
-- **"work" — say source.** The setup stage says work for the object the rest
-  of the tool calls a source: `Card.source`, `[[sources]]` and
-  `forge sources` all use the one name, so that is the name.
-- **"subject" — dangerous.** It names a topic on the command line
+- **"work": say source.** The setup stage used to say work for a source.
+  `Card.source`, `[[sources]]` and `forge sources` all use the one name, so
+  that is the name. The interface and the docs say source. The code still
+  says `work` in variable names and in comments, `setup.js` among them.
+- **"subject": dangerous.** It names a topic on the command line
   (`forge topic add 'a subject'`) and it names what a tag says a card is
   about. Say **topic** for the first and **tag** for the second.
-- **"knob", "what this buys", "escape hatch", "this is structural" — banned.**
-  Mechanism metaphors and empty emphasis. Name the thing being changed and
-  state what changes.
-- **"just" and "simply" — banned.** They assert the reader's experience.
+- **"knob", "what this buys", "escape hatch", "this is structural": banned
+  in this repo's prose.** Mechanism metaphors and empty emphasis. Name the
+  thing being changed and state what changes. A card is a different case: it
+  may use an image when the image is the intuition and says what it stands
+  for, and the card-writing skill's rules 12 and 13 say how.
+- **"just" and "simply": banned.** They assert the reader's experience.
 
 ## Changed from the source, and why
 
@@ -153,10 +160,11 @@ entry exists to stop.
 
 ## Dropped from the source
 
-- **"Don't add artificial line breaks."** Every markdown file and docstring
-  here is hard-wrapped at 79 columns, and rewrapping them would produce one
-  enormous diff and no reader benefit. A wrap width is a project convention,
-  not a portable rule.
+- **"Don't add artificial line breaks."** CLAUDE.md, CONTRACT.md, VERBS.md,
+  STYLE.md, ROADMAP.md and the docstrings are hard-wrapped at 79 columns, and
+  rewrapping them would produce one enormous diff and no reader benefit.
+  DESIGN.md and the READMEs are not wrapped. A wrap width is a project
+  convention, not a portable rule.
 - **Environment discipline** (definition / lemma / remark / problem). LaTeX
   environments, with no analogue here. Its principle survives as rule 13: the
   statement and the reasoning behind it live apart, and the short one may not
